@@ -60,8 +60,8 @@ const maxPort = 65535
 var identifier = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
 // PortEnvName is the environment variable carrying the named service's port to the launch, to
-// later services, to reset and to `run` expects: PHOTON_PORT_ followed by the name upper-cased,
-// with each - turned into _.
+// later services, to `run` expects and to on_success (not to reset, which runs before the services
+// start): PHOTON_PORT_ followed by the name upper-cased, with each - turned into _.
 func PortEnvName(service string) string {
 	return portEnvPrefix + strings.ToUpper(strings.ReplaceAll(service, "-", "_"))
 }

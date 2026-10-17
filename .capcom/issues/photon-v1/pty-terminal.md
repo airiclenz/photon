@@ -28,6 +28,6 @@ check, render) works.
 
 ## Acceptance
 
-- `internal/terminal` records a fixture TUI built from `testdata`: a test types into it,
-  waits for its repaint, quits it, and finds the expected snapshots in the take.
+- `internal/terminal` records the fixture TUI built from `internal/testkit/fixturetui`: a test
+  types into it, waits for its repaint, quits it, and finds the expected snapshots in the take.
 - It builds and passes vet on Windows, where recording returns the "needs a unix pty" error.
