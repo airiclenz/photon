@@ -1,9 +1,11 @@
 ---
 title: Raster text goldens checked only on arm64
-status: open
+status: done
 type: bug
 priority: 2
 created: 2026-10-17T12:24:02Z
+closed: 2026-10-17T12:53:52Z
+reason: "CI run 39034145942: internal/raster tests pass on ubuntu-latest (amd64), macos-latest (arm64) and windows-latest; the per-channel tolerance of 16 holds"
 ---
 
 The raster text goldens are compared with a per-channel tolerance of 16
