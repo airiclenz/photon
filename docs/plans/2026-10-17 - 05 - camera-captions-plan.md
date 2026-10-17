@@ -356,7 +356,11 @@ the clip, an unknown beat, a size out of bounds, fades longer than the caption; 
 - `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run 'Lint|README'`
 **Commit:** `feat(storyboard): declare and validate captions`
 
-## 11. Caption package: timing, placement and drawing
+## 11. Caption package: timing, placement and drawing — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): consequential edit — .capcom/knowledge/package-layout.md: made necessary by adding the internal/caption package (new package-map row, imports storyboard and fonts, placed above compose, which will import it)
+NOTES (2026-10-17): the shipped em follows the Regression guard (caption size × designScale 2 × unit), not the Approach's raster source-pixel size; designScale is a local constant in internal/caption mirroring compose's, since caption cannot import compose
+NOTES (2026-10-17): layout constants chosen as edge margin 24, box padding 16×8 design pixels; line spacing is the face's line height; a positioned caption (no align) aligns its lines left; the box is clamped to the frame edges, not to the margin
 
 Depends on items 9 and 10.
 **What:**

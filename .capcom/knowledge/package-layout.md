@@ -23,6 +23,7 @@ imports upward, and there are no cycles.
 | `internal/schedule` | laying the beats onto section durations, holds and cuts | `storyboard`, `take` |
 | `internal/fonts` | the embedded faces and their OFL licences, or an override dir | — |
 | `internal/raster` | a snapshot's cells to pixels; box drawing drawn, not looked up | `take`, `fonts`, `config` |
+| `internal/caption` | a storyboard's captions laid out, timed and drawn over a shipped frame, in output space | `storyboard`, `fonts` |
 | `internal/compose` | camera and drawn cursor over each frame | `schedule`, `target`, `take`, `storyboard` |
 | `internal/render` | the render run: frames through ffmpeg, then gifsicle | `clip`, `schedule`, `raster`, `compose`, `fonts`, `target`, `storyboard`, `take` |
 | `internal/yamledit` | YAML source splicing: replace, insert or remove one scalar or key, leaving the rest of the bytes as written | — |
