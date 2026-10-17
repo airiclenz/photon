@@ -26,8 +26,9 @@ type Terminal interface {
 }
 
 // Engine performs a storyboard's beats against a live [Terminal]: it types, presses keys, clicks
-// on-screen targets with real SGR mouse reports and waits on the screen, logging every beat
-// start, action start and end, resolved target and click into the terminal's take. It reads the
+// and drags on-screen targets with real SGR mouse reports and waits on the screen, logging every
+// beat start, action start and end, resolved target, click and drag cell into the terminal's
+// take. It reads the
 // screen only through [Terminal.Current] and [Terminal.Match] and writes only through
 // [Terminal.Send], so what it sees is what the take records and what it sends is what the
 // program reads.
@@ -36,7 +37,7 @@ type Engine struct {
 	resolver target.Resolver
 }
 
-// New returns an engine driving term, resolving click targets with resolver.
+// New returns an engine driving term, resolving click and drag targets with resolver.
 func New(term Terminal, resolver target.Resolver) *Engine {
 	return &Engine{term: term, resolver: resolver}
 }

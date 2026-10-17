@@ -68,7 +68,12 @@ internal/clip/clip.go — namedAreas, crossCheck; internal/clip/clip_test.go —
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard ./internal/clip ./cmd/photon -run 'TestLoad|TestLint|TestREADME'` passes.
 **Commit:** `feat(storyboard): drag action with from, to and steps; lint validates it`
 
-## 3. The engine performs a drag
+## 3. The engine performs a drag — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): `dragPath` returns `[]dragMove` (cell plus the 1-based step it lands on) rather than `[]take.Point`, so the send loop can sleep every step's gap while sending only the steps that change cell, as the approach requires; the deduplicated cells are exactly the plan's path.
+NOTES (2026-10-17): both target ends resolve on one `Current()` snapshot taken at the start of the drag, which is also the grid the end cells clamp to.
+NOTES (2026-10-17): consequential edit — internal/engine/engine.go: made necessary by the drag form (the `Engine` and `New` doc comments named only clicks).
+NOTES (2026-10-17): a cancelled context or a failed send between the press and the release leaves the program's button held; the run ends at that failure anyway, so no release is sent on the failure path.
 
 Depends on items 1 and 2.
 

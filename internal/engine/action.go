@@ -18,6 +18,9 @@ const (
 	// clickHoldGap parts a click's press from its release: a program that acts on the release
 	// must read the two as two reports, never one read.
 	clickHoldGap = 40 * time.Millisecond
+	// dragStepGap precedes each of a drag's steps and its release, so every motion report
+	// reaches the program as its own read and the eased path plays out at even time gaps.
+	dragStepGap = 40 * time.Millisecond
 	// clickRepeatGap parts one click's release from the next click's press, so `times: 2` is two
 	// clicks rather than a double-click.
 	clickRepeatGap = 250 * time.Millisecond
@@ -34,6 +37,7 @@ const (
 	formType  = "type"
 	formKey   = "key"
 	formClick = "click"
+	formDrag  = "drag"
 	formWait  = "wait"
 	formPause = "pause"
 )
@@ -50,6 +54,8 @@ func formOf(action storyboard.Action) string {
 		return formKey
 	case action.Click != nil:
 		return formClick
+	case action.Drag != nil:
+		return formDrag
 	case action.Wait != nil:
 		return formWait
 	case action.Pause != nil:
@@ -69,7 +75,8 @@ func textOf(action storyboard.Action) string {
 	return ""
 }
 
-// perform runs one action; step is its action event, which a click's own events extend.
+// perform runs one action; step is its action event, which a click's or a drag's own events
+// extend.
 func (e *Engine) perform(ctx context.Context, step take.Event, action storyboard.Action) error {
 	switch {
 	case action.Type != nil:
@@ -78,6 +85,8 @@ func (e *Engine) perform(ctx context.Context, step take.Event, action storyboard
 		return e.pressKey(ctx, *action.Key)
 	case action.Click != nil:
 		return e.click(ctx, step, *action.Click)
+	case action.Drag != nil:
+		return e.drag(ctx, step, *action.Drag)
 	case action.Wait != nil:
 		return e.wait(ctx, *action.Wait)
 	case action.Pause != nil:
@@ -137,7 +146,7 @@ func (e *Engine) click(ctx context.Context, step take.Event, action storyboard.C
 	resolved.Box = &box
 	e.logStep(take.EventTarget, resolved)
 
-	centre := take.Point{X: box.X + (box.W-1)/2, Y: box.Y + (box.H-1)/2}
+	centre := centreOf(box)
 	for press := range max(action.Times, 1) {
 		if press > 0 {
 			if err := sleepContext(ctx, clickRepeatGap); err != nil {
@@ -152,6 +161,12 @@ func (e *Engine) click(ctx context.Context, step take.Event, action storyboard.C
 		}
 	}
 	return nil
+}
+
+// centreOf is the cell a click or a drag aims at in box: its middle cell, the upper-left of the
+// middle pair on an even side.
+func centreOf(box take.Box) take.Point {
+	return take.Point{X: box.X + (box.W-1)/2, Y: box.Y + (box.H-1)/2}
 }
 
 // sendClick sends one left click at cell: the press, clickHoldGap, then the release.
