@@ -24,7 +24,7 @@ imports upward, and there are no cycles.
 | `internal/fonts` | the embedded faces and their OFL licences, or an override dir | — |
 | `internal/raster` | a snapshot's cells to pixels; box drawing drawn, not looked up | `take`, `fonts`, `config` |
 | `internal/compose` | zoom and drawn cursor over each frame | `schedule`, `target`, `take`, `storyboard` |
-| `internal/render` | the render run: frames through ffmpeg, then gifsicle | `clip`, `schedule`, `raster`, `compose` |
+| `internal/render` | the render run: frames through ffmpeg, then gifsicle | `clip`, `schedule`, `raster`, `compose`, `fonts`, `target`, `storyboard`, `take` |
 | `internal/testkit` | test support: doc-map check, fixture TUI build, polling | — |
 | `cmd/photon` | the Cobra commands and the exit-code mapping only | the packages above |
 

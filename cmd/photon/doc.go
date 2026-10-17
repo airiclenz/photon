@@ -13,5 +13,6 @@
 //     with the terminal's "needs a unix pty" error before touching the rig.
 //   - check.go: `photon check`, which judges a take against its storyboard's expects and prints
 //     the table.
+//   - render.go: `photon render`, which renders a take to the shipped GIF and prints its summary.
 //   - exit.go: the exit codes, and the wrapping that tells a failed run from a bad command line.
 package main
