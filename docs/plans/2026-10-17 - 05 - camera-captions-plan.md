@@ -108,7 +108,10 @@ a schedule test asserting every section's `OutStart` equals `ClipTime({beat: id}
 - `GOMEMLIMIT=2GiB go test ./internal/storyboard/ ./internal/schedule/`
 **Commit:** `feat(storyboard): add moments on the clip's output clock`
 
-## 3. Golden of a beat zoom's crops
+## 3. Golden of a beat zoom's crops — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): each golden line leads with the frame's output time in milliseconds (`<ms> X Y W H`, the rect at `%.6f`) so a mismatch names its frame; the time is compared exactly, the rect to 1e-6.
+NOTES (2026-10-17): the board has two idle beats around the two zoomed ones (beat 2: explicit 2×, 5 s of ramps shrunk into its 3 s section; beat 4: auto-fit 1.59× on a snapshot-resolved target at columns 30-47, clamped against the right edge), so the crop returns to the full frame between and after the zooms.
 
 **What:** test-only. Pin today's beat-zoom framing before the camera replaces its mechanism.
 Add `internal/compose/zoom_golden_test.go`: a board with two zoomed beats (one explicit factor,
