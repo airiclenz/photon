@@ -1,8 +1,9 @@
 # Releasing photon
 
 A release is cut locally, from a clone of this repository, on Linux, macOS or Windows. The
-judgment work (the release notes and the version to cut) is the maintainer's, or a release skill's
-driving the tool; everything deterministic is done by `go run ./cmd/release`, which builds,
+judgment work (the release notes and the version to cut) is the maintainer's, or the agent
+skills' in `.agents/skills/`: `release-notes-photon` drafts the notes and `release-photon` cuts
+and publishes; everything deterministic is done by `go run ./cmd/release`, which builds,
 publishes and checks. The tool is a dev tool in `cmd/release`: it is never shipped in a release.
 
 One release publishes to three channels:
