@@ -356,7 +356,12 @@ Manual: run `photon tune examples/hello/hello.yaml` on a recorded take, edit a d
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/` ; `go vet ./internal/tune/`
 **Commit:** `feat(tune): add the preview, inspector and transport page`
 
-## 10. Page: timeline lanes
+## 10. Page: timeline lanes — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): consequential edit — internal/tune/page_test.go: made necessary by adding page/timeline.js; pageFileNames enumerates the page's files, so the asset test now also requires the file embedded, non-empty and loaded by index.html.
+NOTES (2026-10-17): lane descriptors take (section, state) rather than (section), since the zoom lane reads the beat's zoom from state.beats; the playhead and the selection marks follow tune.time() and tune.selected() on each animation frame, because select() and seek() fire no onState.
+NOTES (2026-10-17): a too-fast section is flagged from the schedule's own `beat <id> …` warning (as item 9's report row does), not a 6× threshold copied into the page; the hold lane also shows the stretch after the hold with its speed; zoom ramps show shrunk as the compositor runs them, and a ramp drag stops at 50ms since 0 would mean the default ramp; a duration drag stays above the hold, a hold drag below the duration.
+NOTES (2026-10-17): checked in headless chromium with a stubbed window.tune (scratch harness, not committed): lanes, ticks, cut marker, selection and playhead render; synthetic drags of duration, hold, zoom.in and zoom.out send one 50ms-snapped edit each, and an axis press seeks. The manual drag-and-undo step on the hello clip waits on item 12's `photon tune` command.
 
 Depends on item 9.
 

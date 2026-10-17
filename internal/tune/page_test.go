@@ -12,7 +12,7 @@ import (
 )
 
 // pageFileNames are the files the page is made of, each embedded under page/.
-var pageFileNames = []string{"index.html", "style.css", "app.js"}
+var pageFileNames = []string{"index.html", "style.css", "app.js", "timeline.js"}
 
 // tuneContract lists every member of the window.tune object app.js exposes to the lanes and
 // the target picker.

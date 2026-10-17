@@ -1,4 +1,5 @@
-/* photon tune: preview top-left, inspector top-right, the transport bar under both. */
+/* photon tune: preview top-left, inspector top-right, the transport bar under both and the
+   timeline lanes under that. */
 
 :root {
   color-scheme: light dark;
@@ -13,6 +14,13 @@
   --danger-surface: #fbe9e8;
   --warning-surface: #fdf3d8;
   --stage: #111111;
+  --lane-block: #e4ebf7;
+  --lane-hold: #d9d9d4;
+  --lane-zoom: #cfe3d4;
+  --lane-hatch: #9a9a94;
+  --lane-name-width: 56px;
+  --lane-height: 26px;
+  --cut-marker-width: 10px;
   --gap: 12px;
   --radius: 6px;
   font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -31,6 +39,10 @@
     --danger-surface: #3a1e1c;
     --warning-surface: #3a321a;
     --stage: #000000;
+    --lane-block: #263449;
+    --lane-hold: #34342f;
+    --lane-zoom: #23392a;
+    --lane-hatch: #6b6b66;
   }
 }
 
@@ -92,7 +104,8 @@ select {
   grid-template-columns: minmax(0, 1fr) 340px;
   grid-template-areas:
     "preview inspector"
-    "transport transport";
+    "transport transport"
+    "timeline timeline";
   gap: var(--gap);
   padding: var(--gap) 16px;
 }
@@ -103,6 +116,7 @@ select {
     grid-template-areas:
       "preview"
       "transport"
+      "timeline"
       "inspector";
   }
 }
@@ -241,4 +255,191 @@ select {
 
 .status.failed {
   color: var(--danger);
+}
+
+.timeline {
+  grid-area: timeline;
+  padding: 8px var(--gap);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.timeline-rows {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lane {
+  display: grid;
+  grid-template-columns: var(--lane-name-width) minmax(0, 1fr);
+  align-items: center;
+}
+
+.lane-name {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lane-track {
+  position: relative;
+  height: var(--lane-height);
+}
+
+.lane-track.axis {
+  border-bottom: 1px solid var(--border);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.tick {
+  position: absolute;
+  bottom: 2px;
+  padding-left: 3px;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.block {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  padding: 0 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--lane-block);
+  font-size: 12px;
+  line-height: calc(var(--lane-height) - 6px);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.block .label {
+  pointer-events: none;
+}
+
+.block.hold {
+  background: var(--lane-hold);
+}
+
+.block.stretch {
+  background: transparent;
+  color: var(--muted);
+}
+
+.block.zoomed {
+  background: var(--lane-zoom);
+  border-radius: 0;
+}
+
+.block.ramp-in {
+  background: linear-gradient(to right, transparent, var(--lane-zoom));
+  border-right: 0;
+  border-radius: 3px 0 0 3px;
+}
+
+.block.ramp-out {
+  background: linear-gradient(to left, transparent, var(--lane-zoom));
+  border-left: 0;
+  border-radius: 0 3px 3px 0;
+}
+
+.block.too-fast {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.block.beat.too-fast {
+  background: var(--danger-surface);
+}
+
+.block.selected,
+.cut-marker.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.cut-marker {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: var(--cut-marker-width);
+  border: 1px solid var(--lane-hatch);
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--lane-hatch) 0 2px,
+    transparent 2px 5px
+  );
+  cursor: pointer;
+}
+
+.handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 1;
+}
+
+.handle::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: 0;
+}
+
+.handle:hover::after,
+.handle.dragging::after {
+  opacity: 1;
+  background: var(--accent);
+}
+
+.drag-ghost {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 1px dashed var(--accent);
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: 11px;
+  line-height: var(--lane-height);
+  padding: 0 4px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.playhead-column {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--lane-name-width);
+  right: 0;
+  pointer-events: none;
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--danger);
 }
