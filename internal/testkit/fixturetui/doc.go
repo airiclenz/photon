@@ -16,6 +16,8 @@
 //
 // The file map:
 //   - doc.go: this package comment and file map.
-//   - main.go: the fixture: terminal setup, the DA1 query, input parsing and the screen.
-//   - mouse.go: SGR mouse report parsing, the click's item selection and the drag in progress.
+//   - main.go: the fixture: terminal setup, the DA1 query, input parsing, the screen and the
+//     click's item selection.
+//   - mouse.go: SGR mouse report parsing, the press, motion and release handling and the drag in
+//     progress.
 package main
