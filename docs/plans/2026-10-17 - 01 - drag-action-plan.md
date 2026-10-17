@@ -36,7 +36,9 @@ rendered cursor follows it.
 - 6: guard folded (decision: `dragged: 4,2 to 16,2` inside `frame.cols`; ffmpeg skip via `exec.LookPath`)
 - 7: guard folded (wider missed-site grep, render help and doc, beat.go comment; doc-map clause dropped)
 
-## 1. SGR motion report and the drag event kinds
+## 1. SGR motion report and the drag event kinds — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the drag events join the shared `sampleTake` fixture (documented as holding every event kind) rather than a separate take, so TestFile_SaveLoadRoundTrip and TestWrite_HeaderNamesFormatAndVersion together prove the round trip at version 1.
 
 **What:**
 **Goal:** `keys.Motion(x, y)` returns `ESC [ < 32 ; x+1 ; y+1 M`, and package `take` declares `EventPress` (`"press"`), `EventMove` (`"move"`) and `EventRelease` (`"release"`); a take holding them round-trips through `Write`/`Read` at `FormatVersion` 1.

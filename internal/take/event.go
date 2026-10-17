@@ -13,18 +13,26 @@ const (
 	EventActionStart EventKind = "action-start"
 	// EventActionEnd marks that action finishing.
 	EventActionEnd EventKind = "action-end"
-	// EventTarget records the Box a click's target resolved to.
+	// EventTarget records the Box a click's or a drag's target resolved to.
 	EventTarget EventKind = "target"
 	// EventClick records the Cell a click was sent to.
 	EventClick EventKind = "click"
+	// EventPress records the Cell a drag pressed the left button at; its Form is `drag`.
+	EventPress EventKind = "press"
+	// EventMove records one Cell a drag moved the held button onto; its Form is `drag`.
+	EventMove EventKind = "move"
+	// EventRelease records the Cell a drag released the button at; its Form is `drag`.
+	EventRelease EventKind = "release"
 )
 
 // Event is one thing photon did during the take, stamped on the same clock as the snapshots.
-// Every event names its Beat (the storyboard beat id); action, target and click events also
-// name the Action (its 0-based index in the beat's action list) and its Form (`type`, `key`,
-// `click`, `wait`, `pause`). Text is the event's free text — a beat-start's title, an action's
-// typed string or key name. A target event carries the resolved Box, a click event the Cell it
-// clicked; both are nil on every other kind.
+// Every event names its Beat (the storyboard beat id); action, target, click, press, move and
+// release events also name the Action (its 0-based index in the beat's action list) and its Form
+// (`type`, `key`, `click`, `drag`, `wait`, `pause`). Text is the event's free text — a
+// beat-start's title, an action's typed string or key name, and on a drag's two target events
+// `from` or `to`, naming which end of the drag the Box is. A target event carries the resolved
+// Box; a click, press, move or release event the Cell it was sent to; both are nil on every
+// other kind.
 type Event struct {
 	At     time.Duration `json:"at"`
 	Kind   EventKind     `json:"kind"`

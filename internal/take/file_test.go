@@ -54,6 +54,14 @@ func sampleTake() *Take {
 				Box: &Box{X: 0, Y: 1, W: 2, H: 1}},
 			{At: 310 * time.Millisecond, Kind: EventClick, Beat: 1, Action: 1, Form: "click",
 				Cell: &Point{X: 0, Y: 1}},
+			{At: 400 * time.Millisecond, Kind: EventTarget, Beat: 1, Action: 2, Form: "drag", Text: "from",
+				Box: &Box{X: 0, Y: 0, W: 1, H: 1}},
+			{At: 410 * time.Millisecond, Kind: EventPress, Beat: 1, Action: 2, Form: "drag",
+				Cell: &Point{X: 0, Y: 0}},
+			{At: 420 * time.Millisecond, Kind: EventMove, Beat: 1, Action: 2, Form: "drag",
+				Cell: &Point{X: 1, Y: 0}},
+			{At: 430 * time.Millisecond, Kind: EventRelease, Beat: 1, Action: 2, Form: "drag",
+				Cell: &Point{X: 2, Y: 0}},
 		},
 	}
 }

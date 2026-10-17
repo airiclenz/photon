@@ -131,3 +131,27 @@ func TestClickAndReleaseEncodeAnSGRReportAtTheCell(t *testing.T) {
 		})
 	}
 }
+
+func TestMotionEncodesAHeldButtonSGRReportAtTheCell(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		x, y int
+		want string
+	}{
+		{name: "top-left cell", x: 0, y: 0, want: "\x1b[<32;1;1M"},
+		{name: "column 9 row 4", x: 9, y: 4, want: "\x1b[<32;10;5M"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := Motion(tc.x, tc.y)
+
+			if string(got) != tc.want {
+				t.Errorf("Motion(%d, %d) = %q, want %q", tc.x, tc.y, got, tc.want)
+			}
+		})
+	}
+}

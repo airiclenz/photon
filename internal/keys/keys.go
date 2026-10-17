@@ -58,8 +58,12 @@ const (
 	releaseFinal = 'm'
 )
 
-// leftButton is the SGR button code of the left mouse button.
-const leftButton = 0
+// SGR button codes: leftButton is the left mouse button, and motionButton the same button held
+// while the pointer moves — the left button's code plus the motion bit (32).
+const (
+	leftButton   = 0
+	motionButton = 32
+)
 
 // Lookup returns the bytes a terminal sends for the named key, and false when the name is not
 // one photon accepts. Names are matched exactly: they are lowercase, and modifiers are joined
@@ -90,14 +94,20 @@ func Names() []string {
 //
 // The press and its [Release] are separate because a terminal sends them separately: a program
 // that ends a drag or a selection on release would be left mid-gesture by a press alone.
-func Click(x, y int) []byte { return sgrMouse(x, y, pressFinal) }
+func Click(x, y int) []byte { return sgrMouse(leftButton, x, y, pressFinal) }
 
 // Release returns the release that ends the click [Click] began at the same zero-based cell:
 // the same report, ending in `m`.
-func Release(x, y int) []byte { return sgrMouse(x, y, releaseFinal) }
+func Release(x, y int) []byte { return sgrMouse(leftButton, x, y, releaseFinal) }
 
-// sgrMouse is the one place the report's shape is written: the left button, the one-based column
-// and row, and the final byte that tells a press from a release.
-func sgrMouse(x, y int, final rune) []byte {
-	return fmt.Appendf(nil, "\x1b[<%d;%d;%d%c", leftButton, x+1, y+1, final)
+// Motion returns the report of the pointer moving onto a zero-based cell with the left button
+// held, as a terminal in SGR mouse mode with button-event tracking (1002) sends it between a
+// [Click] and its [Release]: `ESC [ < 32 ; col ; row M`. Like [Click], it takes the zero-based
+// cell and writes the one-based report; both must be non-negative.
+func Motion(x, y int) []byte { return sgrMouse(motionButton, x, y, pressFinal) }
+
+// sgrMouse is the one place the report's shape is written: the button code, the one-based column
+// and row, and the final byte that tells a press or a motion from a release.
+func sgrMouse(button, x, y int, final rune) []byte {
+	return fmt.Appendf(nil, "\x1b[<%d;%d;%d%c", button, x+1, y+1, final)
 }
