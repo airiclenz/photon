@@ -79,8 +79,8 @@ func (r *Rasterizer) Size() image.Point {
 	)
 }
 
-// Resolves reports whether ru draws as something: a glyph in Source Code Pro or one of its
-// fallbacks.
+// Resolves reports whether ru draws as something: a box-drawing or block-element rune
+// (U+2500–259F, drawn procedurally), or a glyph in Source Code Pro or one of its fallbacks.
 func (r *Rasterizer) Resolves(ru rune) bool {
 	return r.glyphs.resolves(ru)
 }

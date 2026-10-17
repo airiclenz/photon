@@ -114,23 +114,36 @@ func newFace(f *sfnt.Font, size float64) (font.Face, error) {
 	return face, nil
 }
 
-// resolves reports whether any face in the chain has a glyph for ru.
+// resolves reports whether ru draws as something: procedurally, or from a face in the chain.
 func (g *glyphs) resolves(ru rune) bool {
+	if isProcedural(ru) {
+		return true
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.fontForLocked(ru, styleRegular) != nil
 }
 
 // mask returns the coverage mask for ru drawn in style, centred in a cell span pixels wide and
-// one line high, or nil when no face draws it. Masks are cached.
+// one line high, or nil when no face draws it. A box-drawing or block-element rune is drawn
+// procedurally across the whole span, in one weight whatever the style. Masks are cached.
 func (g *glyphs) mask(ru rune, style fontStyle, span int) *image.Alpha {
+	procedural := isProcedural(ru)
+	if procedural {
+		style = styleRegular
+	}
 	key := glyphKey{r: ru, style: style, span: span}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if mask, ok := g.masks[key]; ok {
 		return mask
 	}
-	mask := g.drawLocked(ru, style, span)
+	var mask *image.Alpha
+	if procedural {
+		mask = proceduralGlyph(ru, span, g.lineHeight, lightStroke(g.cellWidth))
+	} else {
+		mask = g.drawLocked(ru, style, span)
+	}
 	g.masks[key] = mask
 	return mask
 }
