@@ -321,7 +321,12 @@ concurrently; foreign Host 403; form POST 415; a pick POST on the fixture return
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/` ; `go vet ./internal/tune/`
 **Commit:** `feat(tune): serve the tuning session on 127.0.0.1`
 
-## 9. Page: preview, inspector and transport
+## 9. Page: preview, inspector and transport — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the inspector shows only frame.width and frame.fps with values; State reports no cols, rows, padding, font_size, line_height, scale or max_colors, so the page names them as read-only without their values (state.go is outside this item's files).
+NOTES (2026-10-17): a beat's report row turns red when one of State.Warnings starts with `beat <id> ` (the schedule's own >6× warning), not by a speed threshold copied into the page; a "Clip frame / beat N" select in the inspector picks the beat until item 10's lanes call select(id).
+NOTES (2026-10-17): frame requests use the first whole ms at or after frame i (ceil(i*1000/fps)), as /api/frame takes whole ms; play advances by performance.now() on each animation frame; Space keyup is suppressed so it never also presses the focused button.
+NOTES (2026-10-17): checked in headless chromium against the fixture session through a throwaway harness test (deleted): state loads, frame shows, select/edit/refusal/seek/arrow and Shift+arrow keys/section jumps/play/undo/revert/frame.fps edit behave; no console errors. The manual `photon tune examples/hello/hello.yaml` step waits on item 12's command.
 
 Depends on item 8.
 

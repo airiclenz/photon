@@ -4,9 +4,40 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>photon tune</title>
+<link rel="stylesheet" href="/assets/style.css">
+<script src="/assets/app.js" defer></script>
 </head>
 <body>
-<h1>photon tune</h1>
-<p>The tuning session is served; its API is under <code>/api/</code>.</p>
+<div id="banner" class="banner" hidden>
+  <span id="banner-text"></span>
+  <button id="reload" type="button" hidden>Reload</button>
+</div>
+<main class="workspace">
+  <section class="preview" aria-label="Preview">
+    <div id="stage" class="stage">
+      <img id="frame" alt="The composed frame at the playhead">
+    </div>
+    <p id="frame-message" class="frame-message" hidden></p>
+  </section>
+  <aside class="inspector" aria-label="Inspector">
+    <label class="inspector-pick">
+      <span>Inspect</span>
+      <select id="beat-select"></select>
+    </label>
+    <div id="inspector-body"></div>
+  </aside>
+  <nav class="transport" aria-label="Transport">
+    <button id="previous" type="button" title="Previous section start">&#x23EE;</button>
+    <button id="play" type="button" title="Play or pause (Space)">&#x25B6;</button>
+    <button id="next" type="button" title="Next section start">&#x23ED;</button>
+    <output id="time" class="time">0:00.000</output>
+    <span class="transport-gap"></span>
+    <span id="status" class="status" role="status"></span>
+    <button id="undo" type="button">Undo</button>
+    <button id="redo" type="button">Redo</button>
+    <button id="revert" type="button" title="Drop every unsaved edit">Revert</button>
+    <button id="save" type="button" class="primary">Save</button>
+  </nav>
+</main>
 </body>
 </html>
