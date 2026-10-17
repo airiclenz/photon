@@ -139,7 +139,13 @@ escape; insert-block into a `beats[i]` mapping.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/yamledit/` ; `go vet ./internal/yamledit/`
 **Commit:** `feat(yamledit): splice scalar, insert and delete edits into YAML source`
 
-## 4. tune: storyboard edits
+## 4. tune: storyboard edits — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the signature is `apply(src []byte, path string, edit Edit) ([]byte, *storyboard.Storyboard, error)`, not the assumed `apply(src, edit) ([]byte, error)`. The Goal asks for the bytes and the parsed board together, and `storyboard.Parse` needs the storyboard's path (for error names and resolving Ship). `Edit` has JSON tags `beat`, `field`, `value`, matching the binding wire contract.
+NOTES (2026-10-17): added internal/tune/value.go, which the plan's Files line does not name. It holds the value-spelling parsers (ms, frame integer, target flow text) and the duration formatters, because edit.go alone ran to 453 lines and the house limit is about 400. doc.go's file map names it.
+NOTES (2026-10-17): a `zoom.target` edit on a block `zoom:` whose only key is `target` deletes the whole zoom and inserts it again as `zoom: {target: …}` in beat field order. The planned Delete + Insert(zoom, "target") would leave `zoom:` empty (null), and yamledit cannot insert into a null value. Block zooms with other keys, and all flow zooms, use Delete + Insert as planned.
+NOTES (2026-10-17): "defaults never inserted" is enforced: setting a duration or ramp to the default of a key that is absent (hold 0, duration 0, zoom.in/zoom.out 1s) changes no bytes. `cut false` and `zoom.factor auto` on an absent key also change nothing. A key that is present is always set, even to its default.
+NOTES (2026-10-17): `zoom.factor "0"` is refused as a spelling error (auto is spelled "auto"). Factors are written in Go's shortest decimal form ("1.80" is written as 1.8). A target value must be a one-line, braced flow mapping with no comment, and must decode strictly into storyboard.Target. Misspelled values give `<beat N: >field: want …`. Validation refusals wrap *storyboard.ValidationError.
 
 Depends on items 1 and 3.
 

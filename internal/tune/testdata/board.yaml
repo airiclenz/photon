@@ -1,0 +1,48 @@
+# A storyboard the tune tests edit: comments, a flow frame and every timing form.
+clip: tune
+ship: out/tune.gif
+frame: {cols: 60, rows: 12, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+beats:
+  # the opening beat, timed in milliseconds
+  - id: 1
+    title: open
+    duration: 1800ms # kept in ms
+    do:
+      - wait: {screen: 'ready', timeout: 5s}
+
+  - id: 2
+    title: type
+    why: seconds stay seconds
+    do:
+      - type: {text: 'hello'}
+    duration: 2s
+    hold: 500ms
+    zoom:
+      target: {text: 'hello', area: status}
+      factor: 1.5
+    expect:
+      - seen: 'hello'
+
+  - id: 3
+    title: skipped
+    cut: true
+    do:
+      - key: {name: enter}
+
+  - id: 4
+    title: flow zoom
+    duration: 1m30s
+    zoom: {target: {text: 'beta', nth: 2}, factor: 2}
+
+  - id: 5
+    title: plain
+    duration: 3s
+    do:
+      - pause: {for: 1s}
+
+  - id: 6
+    title: target only
+    duration: 2s
+    zoom:
+      target:
+        text: 'gamma'
