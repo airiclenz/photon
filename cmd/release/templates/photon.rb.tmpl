@@ -6,6 +6,9 @@ class Photon < Formula
   version "{{.Version}}"
   license "MIT"
 
+  # `photon render` encodes the GIF with ffmpeg; gifsicle, which only shrinks it, stays optional.
+  depends_on "ffmpeg"
+
   # Installs the prebuilt binary for this platform rather than compiling, so no Go
   # toolchain is needed. The tree is CGO-free, so all six release targets come off
   # one `cmd/release dist` in the project repo.

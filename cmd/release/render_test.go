@@ -41,6 +41,7 @@ type renderedScoopManifest struct {
 	Description   string                               `json:"description"`
 	Homepage      string                               `json:"homepage"`
 	License       string                               `json:"license"`
+	Depends       string                               `json:"depends"`
 	Architecture  map[string]renderedScoopArchitecture `json:"architecture"`
 	Bin           string                               `json:"bin"`
 	Checkver      string                               `json:"checkver"`
@@ -61,7 +62,7 @@ func goldenSums() string {
 }
 
 // TestRenderFormulaMatchesTheGoldenFormula renders goldenVersion, tagged and bare, and expects
-// testdata/photon-0.0.0.rb byte for byte.
+// testdata/photon-0.0.0.rb byte for byte, with its ffmpeg dependency.
 func TestRenderFormulaMatchesTheGoldenFormula(t *testing.T) {
 	t.Parallel()
 	want := readTestFile(t, filepath.Join("testdata", "photon-"+goldenVersion+".rb"))
@@ -74,11 +75,15 @@ func TestRenderFormulaMatchesTheGoldenFormula(t *testing.T) {
 		if got != want {
 			t.Errorf("renderFormula(%q) differs from testdata/photon-%s.rb:\n%s", version, goldenVersion, got)
 		}
+		if !strings.Contains(got, "\n  depends_on \"ffmpeg\"\n") {
+			t.Errorf("renderFormula(%q) does not depend on ffmpeg:\n%s", version, got)
+		}
 	}
 }
 
 // TestRenderScoopManifest asserts the rendered manifest field by field: version, homepage,
-// description, license, bin, checkver, both Windows architectures and their autoupdate entries.
+// description, license, the ffmpeg dependency, bin, checkver, both Windows architectures and their
+// autoupdate entries.
 func TestRenderScoopManifest(t *testing.T) {
 	t.Parallel()
 
@@ -110,6 +115,9 @@ func TestRenderScoopManifest(t *testing.T) {
 	}
 	if manifest.Description != "Record, check and render a terminal app's demo clip from its storyboard" || manifest.License != "MIT" {
 		t.Errorf("description %q / license %q; want photon's description and MIT", manifest.Description, manifest.License)
+	}
+	if manifest.Depends != "ffmpeg" {
+		t.Errorf("depends = %q; want ffmpeg", manifest.Depends)
 	}
 	if manifest.Bin != "photon.exe" || manifest.Checkver != "github" {
 		t.Errorf("bin = %q, checkver = %q; want photon.exe and github", manifest.Bin, manifest.Checkver)

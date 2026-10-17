@@ -154,7 +154,7 @@ cmd/release/publish_test.go — rebuiltSums, rebuiltAssetContent; cmd/release/me
 **Acceptance:** `GOMEMLIMIT=2GiB go test -run Dist ./cmd/release/`; `GOMEMLIMIT=2GiB go test ./cmd/release/`; `T=$(mktemp -d); go run ./cmd/release dist --out "$T" && test -s "$T/SHA256SUMS" && tar -tzf "$T"/photon_*_linux_amd64.tar.gz | grep -q SourceCodePro-OFL.txt`; `go vet ./cmd/release/`; `go test -c -o /dev/null ./cmd/release/`; `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(sed -n 's/^GOLANGCI_LINT_VERSION := //p' Makefile) run ./cmd/release/`; forbidden grep on `cmd/release`.
 **Commit:** `feat(release): archives carry the font licences`
 
-## 7. Formula and manifest pull in ffmpeg
+## 7. Formula and manifest pull in ffmpeg — ✅ DONE (2026-10-17)
 
 Depends on items 2 and 4 (both edit `cmd/release/render_test.go`).
 
