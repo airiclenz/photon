@@ -80,7 +80,10 @@ port source .github/workflows/tag-on-version-bump.yml — github-script getRef/c
 **Acceptance:** `go run ./cmd/release --help` lists `dist`, `status`, `prepare`, `publish`, `smoke`; `go vet ./cmd/release/`; `go test -c -o /dev/null ./cmd/release/`; `GOMEMLIMIT=2GiB go test ./cmd/release/`; `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(sed -n 's/^GOLANGCI_LINT_VERSION := //p' Makefile) run ./cmd/release/`; `bash -n .github/scripts/version-bump.sh`; `test -x .github/scripts/version-bump.sh`; `W=.github/workflows/tag-on-version-bump.yml; grep -q getRef $W && grep -q createTag $W && grep -q 'fetch-depth: 0' $W && grep -q 'contents: write' $W`; `grep -qx '/dist/' .gitignore`; `! grep -rni 'issue tracker' cmd/release`; forbidden grep on `cmd/release .github`.
 **Commit:** `feat(release): port the release tool and the tag-on-version-bump workflow`
 
-## 3. Layout docs admit cmd/release
+## 3. Layout docs admit cmd/release — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): AGENTS.md's opening paragraph now also names the module root package (it named only `cmd/photon` and `internal/`), so it states the full package set the Goal lists; the last two lines of that paragraph were rewrapped.
+NOTES (2026-10-17): cmd/release tests also import gopkg.in/yaml.v3 besides internal/testkit; the prose keeps the plan's mandated wording "its tests use `internal/testkit`", which does not claim exclusivity.
 
 Depends on item 2.
 

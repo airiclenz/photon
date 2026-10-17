@@ -1,7 +1,10 @@
 // Package photon holds the version of photon, read from the VERSION file beside this one. It is
-// the only package outside internal/ and cmd/photon, because go:embed reaches no file above a
-// package's own directory and VERSION sits at the module root. It is not an API: it exists so
-// the binary, however it is built, reports the version VERSION names.
+// the only library package outside internal/, because go:embed reaches no file above a package's
+// own directory and VERSION sits at the module root; the other packages outside internal/ are
+// the binaries cmd/photon and cmd/release. cmd/release is the release tool, a self-contained
+// package main never shipped in an archive: its non-test code imports only the standard library
+// and cobra, and its tests use internal/testkit. It is not an API: it exists so the binary,
+// however it is built, reports the version VERSION names.
 package photon
 
 import (

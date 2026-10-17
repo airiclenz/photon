@@ -28,8 +28,11 @@ imports upward, and there are no cycles.
 | `internal/testkit` | test support: doc-map check, fixture TUI build, polling | — |
 | `cmd/photon` | the Cobra commands and the exit-code mapping only | the packages above |
 | `photon` (module root) | `Version()`, embedded from the root `VERSION` file, photon's one version source | — |
+| `cmd/release` | the release tool, a self-contained `package main` never shipped in an archive: `dist`, `status`, `prepare`, `publish`, `smoke` | non-test code imports only the standard library and cobra; its tests use `internal/testkit` |
 
-Rules: `cmd/photon` holds no logic beyond flags and wiring. An interface type appears only where
+Rules: `cmd/photon` holds no logic beyond flags and wiring. `cmd/release` is a dev tool run as
+`go run ./cmd/release <verb>`: no shipped package imports it, it imports no photon package
+outside its tests, and its files never land in a release archive. An interface type appears only where
 two adapters exist, e.g. the engine's `Terminal` (the pty terminal plus a test fake); `engine`
 never imports `terminal`. A domain package (`storyboard`, `config`, `take`, `clip`) imports no
 process, pty or image code; the emulator-cell conversion lives in `terminal`, palette resolution

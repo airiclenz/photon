@@ -9,7 +9,9 @@ shape this repository from its first commit:
 - **Layout.** `cmd/photon` holds the Cobra commands and nothing else: parse flags, call one
   `internal/` package, map the error to an exit code. Every other package is under `internal/`
   (Note `extension-model`: photon exports no Go API), but for the root package that embeds
-  `VERSION`. One package per directory, named by what it owns, short and lowercase. The package
+  `VERSION` and `cmd/release`, the release tool: a self-contained `package main`, never shipped
+  in an archive, whose non-test code imports only the standard library and cobra (its tests use
+  `internal/testkit`). One package per directory, named by what it owns, short and lowercase. The package
   map and dependency direction are Note `package-layout`.
 - **Formatting.** `gofmt`/`goimports` only, no divider comments. `golangci-lint` runs in CI with
   the config committed at the repo root.

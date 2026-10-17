@@ -1,10 +1,13 @@
 # **photon** - agent guide
 
 photon records a terminal app's demo clip from a storyboard, checks the take, and renders the
-shipped GIF. It is a standalone Go CLI: the binary is built from `cmd/photon` and every other
-package lives under `internal/`, so photon has no Go API to keep stable. A project plugs its own
-pieces in through its photon config and storyboards — commands it runs, services it starts —
-never through Go code (Note `extension-model`).
+shipped GIF. It is a standalone Go CLI: the binary is built from `cmd/photon`, the module root
+package only embeds `VERSION`, and every other package lives under `internal/`, so photon has no
+Go API to keep stable. Beside them, `cmd/release` is the release tool: a self-contained
+`package main` whose non-test code imports only the standard library and cobra (its tests use
+`internal/testkit`), run with `go run ./cmd/release` and never shipped in an archive. A project
+plugs its own pieces in through its photon config and storyboards — commands it runs, services
+it starts — never through Go code (Note `extension-model`).
 
 Project knowledge lives in capcom's Knowledge tree (listed at the end of this file). Before
 starting work, run `capcom know tree --depth 2`, then `capcom know show <id>` on every Note whose
