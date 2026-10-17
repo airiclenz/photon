@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"image/color"
 	"io/fs"
 	"os"
@@ -66,6 +67,18 @@ func writeConfig(t *testing.T, body string) string {
 		t.Fatalf("write config: %v", err)
 	}
 	return path
+}
+
+// writeFontFile writes a stand-in font file at path, creating its dir. Load checks a caption font
+// file is readable, not that it parses.
+func writeFontFile(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("create %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte("a font"), 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
 }
 
 func TestLoadEveryField(t *testing.T) {
@@ -196,6 +209,53 @@ func TestLoadKeepsAbsolutePaths(t *testing.T) {
 	}
 	if config.Work != absolute || config.Launch.Dir != absolute {
 		t.Errorf("want both kept as %q, got work %q, launch.dir %q", absolute, config.Work, config.Launch.Dir)
+	}
+}
+
+// captionFontConfig is a minimal config whose caption_font names regular and bold.
+const captionFontConfig = `name: demo-app
+launch: {command: ./bin/app}
+caption_font: {regular: %q, bold: %q}
+`
+
+// TestLoadResolvesCaptionFontAgainstTheConfigDir runs from a working dir other than the config's,
+// so a relative caption font file is found only if it is resolved against the config's dir. It
+// changes the process's working dir and so cannot run in parallel.
+func TestLoadResolvesCaptionFontAgainstTheConfigDir(t *testing.T) {
+	t.Chdir(t.TempDir())
+	absolute := filepath.Join(t.TempDir(), "caption-bold.ttf")
+	writeFontFile(t, absolute)
+	path := writeConfig(t, fmt.Sprintf(captionFontConfig, "fonts/caption.ttf", absolute))
+	dir := filepath.Dir(path)
+	writeFontFile(t, filepath.Join(dir, "fonts", "caption.ttf"))
+
+	config, err := Load(path)
+
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := CaptionFont{Regular: filepath.Join(dir, "fonts", "caption.ttf"), Bold: absolute}
+	if config.CaptionFont != want {
+		t.Errorf("caption_font: want %+v, got %+v", want, config.CaptionFont)
+	}
+}
+
+func TestLoadRejectsAnUnreadableCaptionFont(t *testing.T) {
+	t.Parallel()
+	path := writeConfig(t, fmt.Sprintf(captionFontConfig, "", "missing.ttf"))
+
+	_, err := Load(path)
+
+	var invalid *ValidationError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("want a *ValidationError, got %v", err)
+	}
+	if len(invalid.Problems) != 1 || !strings.Contains(err.Error(), "caption_font.bold: ") ||
+		!strings.Contains(err.Error(), filepath.Join(filepath.Dir(path), "missing.ttf")) {
+		t.Errorf("want one problem naming caption_font.bold and its resolved path, got:\n%v", err)
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("want fs.ErrNotExist in the chain, got %v", err)
 	}
 }
 

@@ -27,6 +27,7 @@ const (
 	testCodeOFL     = "the source code pro licence\n"
 	testMathOFL     = "the noto sans math licence\n"
 	testSymbolsOFL  = "the noto sans symbols licence\n"
+	testSansOFL     = "the source sans licence\n"
 	testCommitTime  = "1760000000\n"
 )
 
@@ -38,6 +39,7 @@ var testDocuments = map[string]string{
 	"internal/fonts/SourceCodePro-OFL.txt":   testCodeOFL,
 	"internal/fonts/NotoSansMath-OFL.txt":    testMathOFL,
 	"internal/fonts/NotoSansSymbols-OFL.txt": testSymbolsOFL,
+	"internal/fonts/SourceSans3-OFL.txt":     testSansOFL,
 }
 
 // writeTestDocuments writes testDocuments into the source tree at dir.
@@ -208,6 +210,7 @@ func TestDistArchivesHoldTheBinaryAndDocsUnderTheStem(t *testing.T) {
 			{name: stem + "/NotoSansSymbols-OFL.txt", mode: 0o644, content: testSymbolsOFL},
 			{name: stem + "/README.md", mode: 0o644, content: testReadme},
 			{name: stem + "/SourceCodePro-OFL.txt", mode: 0o644, content: testCodeOFL},
+			{name: stem + "/SourceSans3-OFL.txt", mode: 0o644, content: testSansOFL},
 			{name: stem + "/" + target.binaryFile(), mode: 0o755, content: binary},
 		}
 

@@ -26,29 +26,40 @@ import (
 // project. Work is the rig's work dir. Setup builds the rig and Reset restores its stage before
 // every take; both run by `sh -c` in Dir. Launch is the program filmed, Services the helpers a
 // take starts and Profiles the variants of them. End is how a take ends, Areas the named bands
-// of the screen targets are searched in, Theme the colours the raster draws with, and Fonts an
-// optional dir of faces that replace the embedded ones.
+// of the screen targets are searched in, Theme the colours the raster draws with, Fonts an
+// optional dir of faces that replace the embedded terminal ones, and CaptionFont optional font
+// files that replace the embedded caption faces.
 //
-// [Load] is the only way to get one: a Config in hand has passed validation, its Work, Fonts
-// and Launch.Dir are resolved against Dir, and its defaults are filled. Work is left empty when
+// [Load] is the only way to get one: a Config in hand has passed validation, its Work, Fonts,
+// CaptionFont files and Launch.Dir are resolved against Dir, each CaptionFont file it names is
+// readable, and its defaults are filled. Work is left empty when
 // the file gives none; the default work dir is the caller's to derive.
 type Config struct {
 	// Path is the absolute path of the file Load read.
 	Path string `yaml:"-"`
 	// Dir is the directory Path sits in: the dir setup, reset and services run in, and the one
 	// relative paths in the file are written against.
-	Dir      string             `yaml:"-"`
-	Name     string             `yaml:"name"`
-	Work     string             `yaml:"work"`
-	Setup    string             `yaml:"setup"`
-	Reset    string             `yaml:"reset"`
-	Launch   Launch             `yaml:"launch"`
-	Services map[string]Service `yaml:"services"`
-	Profiles map[string]Profile `yaml:"profiles"`
-	End      End                `yaml:"end"`
-	Areas    map[string]Area    `yaml:"areas"`
-	Theme    Theme              `yaml:"theme"`
-	Fonts    string             `yaml:"fonts"`
+	Dir         string             `yaml:"-"`
+	Name        string             `yaml:"name"`
+	Work        string             `yaml:"work"`
+	Setup       string             `yaml:"setup"`
+	Reset       string             `yaml:"reset"`
+	Launch      Launch             `yaml:"launch"`
+	Services    map[string]Service `yaml:"services"`
+	Profiles    map[string]Profile `yaml:"profiles"`
+	End         End                `yaml:"end"`
+	Areas       map[string]Area    `yaml:"areas"`
+	Theme       Theme              `yaml:"theme"`
+	Fonts       string             `yaml:"fonts"`
+	CaptionFont CaptionFont        `yaml:"caption_font"`
+}
+
+// CaptionFont names the font files captions are drawn with: Regular and Bold, each a path
+// relative to the config's dir or absolute. A style left empty keeps the embedded Source Sans 3
+// face.
+type CaptionFont struct {
+	Regular string `yaml:"regular"`
+	Bold    string `yaml:"bold"`
 }
 
 // Launch is the program filmed: Command, run as `sh -c '<command>'` in Dir (relative to the
@@ -170,6 +181,11 @@ func Load(file string) (*Config, error) {
 	loaded.Path = absolute
 	loaded.Dir = filepath.Dir(absolute)
 	loaded.resolvePaths()
+	// Readability is checked on the resolved paths, so a relative file is found against the
+	// config's dir whatever the process's working dir is.
+	if problems := loaded.CaptionFont.validateFiles(); len(problems) > 0 {
+		return nil, &ValidationError{Path: file, Problems: problems}
+	}
 	loaded.applyDefaults()
 	return &loaded, nil
 }
@@ -177,7 +193,7 @@ func Load(file string) (*Config, error) {
 // resolvePaths joins each relative path the file gives to Dir, and sets an omitted launch dir to
 // Dir itself.
 func (c *Config) resolvePaths() {
-	for _, field := range []*string{&c.Work, &c.Fonts} {
+	for _, field := range []*string{&c.Work, &c.Fonts, &c.CaptionFont.Regular, &c.CaptionFont.Bold} {
 		if *field != "" && !filepath.IsAbs(*field) {
 			*field = filepath.Join(c.Dir, *field)
 		}
@@ -305,6 +321,25 @@ func (t Theme) validate(report reporter) {
 	for index, ansi := range t.ANSI {
 		validateColor(fmt.Sprintf("ansi[%d]", index), ansi, report)
 	}
+}
+
+// validateFiles reports every caption font file named that cannot be opened for reading.
+func (f CaptionFont) validateFiles() []error {
+	var problems []error
+	for _, file := range []struct{ name, path string }{{"regular", f.Regular}, {"bold", f.Bold}} {
+		if file.path == "" {
+			continue
+		}
+		opened, err := os.Open(file.path)
+		if err != nil {
+			problems = append(problems, fmt.Errorf("caption_font.%s: %w", file.name, err))
+			continue
+		}
+		if err := opened.Close(); err != nil {
+			problems = append(problems, fmt.Errorf("caption_font.%s: %w", file.name, err))
+		}
+	}
+	return problems
 }
 
 // validateColor reports a set colour that is not written `#rrggbb`.

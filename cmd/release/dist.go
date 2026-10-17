@@ -47,6 +47,7 @@ var documentFiles = []string{
 	"internal/fonts/SourceCodePro-OFL.txt",
 	"internal/fonts/NotoSansMath-OFL.txt",
 	"internal/fonts/NotoSansSymbols-OFL.txt",
+	"internal/fonts/SourceSans3-OFL.txt",
 }
 
 // distTarget is one platform a release ships a binary for.
@@ -116,7 +117,7 @@ func newDistCommand(commands runner) *cobra.Command {
 		Use:   "dist",
 		Short: "Build the six release archives and SHA256SUMS",
 		Long: "dist cross-builds photon for linux, darwin and windows on amd64 and arm64, packs\n" +
-			"each binary with LICENSE, README.md and the font licences (the three\n" +
+			"each binary with LICENSE, README.md and the font licences (the four\n" +
 			"internal/fonts/*-OFL.txt texts) into photon_<version>_<os>_<arch>.tar.gz\n" +
 			"(.zip on windows), and writes SHA256SUMS beside them. The archives are byte-identical\n" +
 			"across runs over the same commit. --out is emptied first.",

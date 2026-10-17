@@ -287,7 +287,11 @@ every new yaml tag in backticks, including `beat` if Moment carries that tag.
 - `capcom check`
 **Commit:** `docs: describe the camera`
 
-## 9. Embedded caption faces and the config's `caption_font`
+## 9. Embedded caption faces and the config's `caption_font` — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): fonts are from the adobe-fonts/source-sans 3.052R release (TTF zip); the licence text is that tag's LICENSE.md, with its CRLF line endings converted to LF to match the other OFL texts and .gitattributes.
+NOTES (2026-10-17): loadFace was split into loadFace + parseFace so LoadCaption can parse a file read by path; the caption_font readability check returns a *ValidationError from Load after resolvePaths, separate from the schema validation pass.
+NOTES (2026-10-17): consequential edit — docs/releasing.md: made necessary by cmd/release/dist.go now packing four font licences, not three
 
 **What:**
 **Goal:** `fonts` embeds Source Sans 3 Regular and Bold with their OFL text and loads them as a

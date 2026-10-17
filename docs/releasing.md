@@ -69,7 +69,7 @@ release. Keep the notes file outside the repository, so it never dirties the tre
 - `dist [--src DIR] [--out DIR]` cross-builds photon for linux, darwin and windows on amd64 and
   arm64 into `photon_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows) plus `SHA256SUMS`, by
   default under `dist/` (ignored by git; `--out` is emptied first). Each archive holds the binary,
-  `LICENSE`, `README.md` and the three font licences from `internal/fonts/`. The archives are
+  `LICENSE`, `README.md` and the four font licences from `internal/fonts/`. The archives are
   byte-identical across runs over the same commit. `publish` runs the same build itself, in a
   fresh clone at the tag.
 - `status [vX.Y.Z] [--json]` is read-only apart from fetching origin. It reports the gate, the

@@ -290,7 +290,9 @@ fonts: fonts/
 | `theme` | The colours used to draw frames. |
 | `theme.fg`, `theme.bg` | The default foreground and background, `#rrggbb`. Default `#cdd6f4` on `#0e1117`. |
 | `theme.ansi` | The 16 ANSI colours, normal then bright: all 16 or none. Default: Catppuccin Mocha. Colours 16-255 use the standard xterm palette. Truecolor is drawn as is. |
-| `fonts` | A folder of fonts that replaces the built-in ones. See [Fonts and licences](#fonts-and-licences). |
+| `fonts` | A folder of fonts that replaces the built-in terminal fonts. See [Fonts and licences](#fonts-and-licences). |
+| `caption_font` | Font files that replace the built-in caption font. See [Fonts and licences](#fonts-and-licences). |
+| `caption_font.regular`, `caption_font.bold` | The regular and bold caption font files, relative to the config's folder. Each must be readable. A style left out keeps Source Sans 3. |
 
 Every command (`setup`, `reset`, `launch.command`, a service's `command`, `on_success`, a `run`
 expect) is one string run by `sh -c`, with the `PHOTON_*` variables set. photon expands
@@ -637,14 +639,27 @@ has to install or ship fonts:
 - **Source Code Pro** (regular, bold, italic): the terminal font.
 - **Noto Sans Symbols 2**, **Noto Sans Math** and **Noto Sans Symbols**: tried in that order for
   a character Source Code Pro lacks. A fallback glyph wider than its cell is scaled down to fit.
+- **Source Sans 3** (regular, bold): the caption font.
 
-All six use the **SIL Open Font License 1.1**. The licence texts sit next to the font files in
-`internal/fonts/`: `SourceCodePro-OFL.txt`, `NotoSansMath-OFL.txt`, and `NotoSansSymbols-OFL.txt`
-for both Noto Sans Symbols families. They must travel with the fonts.
+All eight use the **SIL Open Font License 1.1**. The licence texts sit next to the font files in
+`internal/fonts/`: `SourceCodePro-OFL.txt`, `NotoSansMath-OFL.txt`, `NotoSansSymbols-OFL.txt`
+for both Noto Sans Symbols families, and `SourceSans3-OFL.txt`. They must travel with the fonts.
 
-To use your own fonts, set the config's `fonts` folder. It must hold all six files under the same
-names: `SourceCodePro-Regular.ttf`, `SourceCodePro-Bold.ttf`, `SourceCodePro-It.ttf`,
-`NotoSansSymbols2-Regular.ttf`, `NotoSansMath-Regular.ttf` and `NotoSansSymbols-Regular.ttf`.
+To use your own terminal fonts, set the config's `fonts` folder. It must hold all six terminal
+files under the same names: `SourceCodePro-Regular.ttf`, `SourceCodePro-Bold.ttf`,
+`SourceCodePro-It.ttf`, `NotoSansSymbols2-Regular.ttf`, `NotoSansMath-Regular.ttf` and
+`NotoSansSymbols-Regular.ttf`.
+
+To use your own caption font, name its files in the config's `caption_font`:
+
+```yaml
+caption_font:
+  regular: fonts/Inter-Regular.ttf
+  bold: fonts/Inter-Bold.ttf
+```
+
+Each path is relative to the config's folder. A style left out keeps Source Sans 3. The `fonts`
+folder does not change the caption font.
 
 ## FAQ
 

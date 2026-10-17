@@ -53,7 +53,7 @@ func TestLoadFallbackOrder(t *testing.T) {
 
 func TestEveryFaceHasAnEmbeddedLicence(t *testing.T) {
 	covered := map[string]bool{}
-	for _, file := range slices.Concat(primaryFiles[:], fallbackFiles) {
+	for _, file := range slices.Concat(primaryFiles[:], fallbackFiles, captionFiles[:]) {
 		covered[file.name] = true
 		text, err := fs.ReadFile(embedded, file.licence)
 		if err != nil {
@@ -125,6 +125,81 @@ func TestLoadOverrideDirFailures(t *testing.T) {
 				t.Errorf("want an error naming %q in %s, got %v", tc.wantErr, dir, err)
 			}
 			if !tc.corrupt && !errors.Is(err, fs.ErrNotExist) {
+				t.Errorf("want fs.ErrNotExist in the chain, got %v", err)
+			}
+		})
+	}
+}
+
+func TestLoadCaptionEmbeddedParsesBothFaces(t *testing.T) {
+	set, err := LoadCaption("", "")
+	if err != nil {
+		t.Fatalf("LoadCaption: %v", err)
+	}
+
+	for _, tc := range []struct {
+		face     Face
+		wantName string
+	}{
+		{set.Regular, fileCaptionRegular},
+		{set.Bold, fileCaptionBold},
+	} {
+		if tc.face.Name != tc.wantName {
+			t.Errorf("want face %s, got %s", tc.wantName, tc.face.Name)
+		}
+		if tc.face.Font == nil || tc.face.Font.NumGlyphs() == 0 {
+			t.Errorf("%s: want a parsed font with glyphs, got %v", tc.face.Name, tc.face.Font)
+		}
+	}
+}
+
+func TestLoadCaptionPathReplacesOneStyle(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "Caption.ttf")
+	// Source Code Pro under the bold role proves the bold face came from the path.
+	copyEmbedded(t, fileRegular, path)
+
+	set, err := LoadCaption("", path)
+	if err != nil {
+		t.Fatalf("LoadCaption: %v", err)
+	}
+
+	if set.Regular.Name != fileCaptionRegular {
+		t.Errorf("regular face: want the embedded %s, got %s", fileCaptionRegular, set.Regular.Name)
+	}
+	got, err := set.Bold.Font.Name(nil, sfnt.NameIDFull)
+	if err != nil {
+		t.Fatalf("read the bold face's name: %v", err)
+	}
+	if set.Bold.Name != "Caption.ttf" || got != "Source Code Pro" {
+		t.Errorf("bold face: want Caption.ttf holding Source Code Pro, got %s holding %q", set.Bold.Name, got)
+	}
+}
+
+func TestLoadCaptionPathFailures(t *testing.T) {
+	cases := []struct {
+		name      string
+		isCorrupt bool
+		wantErr   string
+	}{
+		{"missing", false, "read "},
+		{"unparsable", true, "parse "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "Caption.ttf")
+			if tc.isCorrupt {
+				writeFile(t, path, []byte("not a font"))
+			}
+
+			_, err := LoadCaption(path, "")
+
+			if err == nil {
+				t.Fatal("want an error, got none")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) || !strings.Contains(err.Error(), path) {
+				t.Errorf("want an error naming %q and %s, got %v", tc.wantErr, path, err)
+			}
+			if !tc.isCorrupt && !errors.Is(err, fs.ErrNotExist) {
 				t.Errorf("want fs.ErrNotExist in the chain, got %v", err)
 			}
 		})
