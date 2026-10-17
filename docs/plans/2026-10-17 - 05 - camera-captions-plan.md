@@ -202,7 +202,9 @@ and TestComposeZoomAimsAtADragsLoggedBox the pan-track centre, TestZoomRampsShri
 - `git diff --exit-code -- internal/compose/testdata/` (the golden is not rewritten)
 **Commit:** `refactor(compose): drive the crop from a two-track camera`
 
-## 6. Compose: a smooth pan path through waypoints
+## 6. Compose: a smooth pan path through waypoints — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the waypoints and ease ride on the shared `move[V]` as `Via []V` and `Ease storyboard.Ease` (empty means smooth), so `newCamera`'s signature and zoom.go's beat-zoom moves stay unchanged. `newCamera` turns each pan into a `panSegment` that holds its path, starting where the pan track rests or the previous pan ended. `trackAt` now takes any entry that exposes its `move` and applies the ease, which means a zoom move's `Ease: linear` also takes effect once item 7 sets it.
 
 Depends on item 5.
 **What:**

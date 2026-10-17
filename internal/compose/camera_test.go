@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/airiclenz/photon/internal/storyboard"
 )
 
 // cameraLayout is a 1000 × 600 frame whose camera rests on its centre, (500, 300).
@@ -91,6 +93,58 @@ func TestCameraTracksHoldBetweenMoves(t *testing.T) {
 			}
 			if got := clipCamera.centreAt(tc.at); got != tc.wantCentre {
 				t.Errorf("centre at %s: want %+v, got %+v", tc.at, tc.wantCentre, got)
+			}
+		})
+	}
+}
+
+func TestCameraPanFollowsItsPath(t *testing.T) {
+	t.Parallel()
+	rest, peak, side := pointF{X: 500, Y: 300}, pointF{X: 700, Y: 100}, pointF{X: 900, Y: 300}
+	for _, tc := range []struct {
+		name string
+		pans []move[pointF]
+		at   time.Duration
+		want pointF
+	}{
+		{
+			name: "half-way by length is the waypoint of a symmetric path",
+			pans: []move[pointF]{{Start: sec, Over: 2 * sec, Via: []pointF{peak}, To: side}},
+			at:   2 * sec,
+			want: peak,
+		},
+		{
+			name: "a linear ease keeps an even pace",
+			pans: []move[pointF]{{Start: 0, Over: 4 * sec, To: side, Ease: storyboard.EaseLinear}},
+			at:   sec,
+			want: pointF{X: 600, Y: 300},
+		},
+		{
+			name: "a smooth ease starts slow",
+			pans: []move[pointF]{{Start: 0, Over: 4 * sec, To: side, Ease: storyboard.EaseSmooth}},
+			at:   sec,
+			want: lerp(rest, side, easeInOut(0.25)),
+		},
+		{
+			name: "a pan starts where the previous one ended",
+			pans: []move[pointF]{{Start: 3 * sec, Over: 2 * sec, To: rest}, {Start: 0, Over: sec, To: side}},
+			at:   4 * sec,
+			want: pointF{X: 700, Y: 300},
+		},
+		{
+			name: "a pan to the centre it holds stays still",
+			pans: []move[pointF]{{Start: 0, Over: 2 * sec, Via: []pointF{rest}, To: rest}},
+			at:   sec,
+			want: rest,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			clipCamera := newCamera(cameraLayout, nil, tc.pans)
+
+			got := clipCamera.centreAt(tc.at)
+
+			if math.Abs(got.X-tc.want.X) > 1e-6 || math.Abs(got.Y-tc.want.Y) > 1e-6 {
+				t.Errorf("centre at %s: want %+v, got %+v", tc.at, tc.want, got)
 			}
 		})
 	}
