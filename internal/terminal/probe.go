@@ -116,8 +116,8 @@ func probeReport(tty *os.File) string {
 
 // probeLaunches runs `true` on tty three ways, with no attributes, with Setsid, and with Setsid
 // and Setctty, after first listing the processes that hold tty as their controlling terminal, so
-// the list shows the pty as the refused launch found it. The Setctty launch runs first: on macOS
-// it is refused with EBADF on a pty that other launches have already run on.
+// the list shows the pty as the refused launch found it. The Setctty launch runs last: on macOS
+// the pty is revoked once that controlling process exits, so a pty is probed only once.
 func probeLaunches(tty *os.File) launchProbe {
 	probe := launchProbe{tty: tty.Name()}
 	probe.owners, probe.ownersErr = ttyOwners(tty)
@@ -132,9 +132,9 @@ func probeLaunches(tty *os.File) launchProbe {
 		cmd.SysProcAttr = attrs
 		return cmd.Run()
 	}
-	probe.setctty = run(&syscall.SysProcAttr{Setsid: true, Setctty: true})
 	probe.plain = run(nil)
 	probe.setsid = run(&syscall.SysProcAttr{Setsid: true})
+	probe.setctty = run(&syscall.SysProcAttr{Setsid: true, Setctty: true})
 	return probe
 }
 

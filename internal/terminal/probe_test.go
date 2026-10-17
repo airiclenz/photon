@@ -148,7 +148,8 @@ func TestProbeLaunches_OnAHealthyPTY(t *testing.T) {
 	if len(probe.owners) != 0 {
 		t.Errorf("owners = %q, want none on a fresh pty", probe.owners)
 	}
-	if report := probeReport(tty); !strings.Contains(report, "true+setsid+setctty ok") {
+	// The report is this probe's: a second probe of the same pty finds it revoked on macOS.
+	if report := probe.String(); !strings.Contains(report, "true+setsid+setctty ok") {
 		t.Errorf("report = %q, want every launch ok", report)
 	}
 }
