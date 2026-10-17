@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `photon tune`: a target picker on the preview. Press ⌖ Pick and drag across the cells of one row on the paused frame. The page proposes a target that the resolver has checked and draws its box. You can set it as the selected beat's zoom target, or copy it as click, seen, drag-from or drag-to YAML.
+- `photon tune <storyboard> [<take>]` serves a timing editor on `127.0.0.1` (`--port`, default any free port) and prints its address. The page previews the take frame for frame as `photon render` composes it. You can edit each beat's `duration`, `hold`, `cut` and `zoom` and the clip's `frame.width` and `frame.fps`, with undo, redo and revert. Save writes only the edited values back into the storyboard, so comments and layout stay. Ctrl-C stops it.
+
 ## [0.1.0] - 2026-10-17
 
 - `photon record <storyboard>` runs your terminal app in a pty, performs the storyboard's beats (humanized typing, named keys, real mouse clicks and drags, waits) and saves every screen change as a take, so a re-record after the UI changes is one command instead of a hand performance.
