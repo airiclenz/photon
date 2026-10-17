@@ -31,7 +31,19 @@ show). Everything project-specific is a shell command photon runs or a service i
 go install github.com/airiclenz/photon/cmd/photon@latest
 ```
 
-This needs Go 1.26 or newer. photon also runs two external programs:
+This needs Go 1.26 or newer, and it is the way to install photon until its first release is
+published. From the first published release on, photon also installs without Go:
+
+- **Homebrew** (macOS and Linux): `brew install airiclenz/tap/photon`. This pulls in ffmpeg.
+- **Scoop** (Windows): `scoop bucket add airiclenz https://github.com/airiclenz/scoop-bucket`, then
+  `scoop install airiclenz/photon`. This pulls in ffmpeg.
+- **Release archives**: each release on
+  [GitHub releases](https://github.com/airiclenz/photon/releases) carries a
+  `photon_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows) for linux, darwin and windows on
+  amd64 and arm64, with `SHA256SUMS` beside them. Unpack it and put `photon` on your `PATH`;
+  install ffmpeg yourself, as below.
+
+photon also runs two external programs:
 
 - **ffmpeg** (required by `photon render`): encodes the GIF with a per-clip palette. Install it
   from your package manager (`apt install ffmpeg`, `brew install ffmpeg`, ...).

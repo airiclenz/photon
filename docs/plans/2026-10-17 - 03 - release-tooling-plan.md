@@ -168,7 +168,9 @@ cmd/release/scoop.go — renderScoopManifest (json.Valid); cmd/release/homebrew.
 **Acceptance:** `GOMEMLIMIT=2GiB go test -run Render ./cmd/release/`; `grep -q 'depends_on "ffmpeg"' cmd/release/templates/photon.rb.tmpl`; `grep -q '"depends": "ffmpeg"' cmd/release/templates/scoop.json.tmpl`; `go vet ./cmd/release/`; `go test -c -o /dev/null ./cmd/release/`; `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(sed -n 's/^GOLANGCI_LINT_VERSION := //p' Makefile) run ./cmd/release/`; forbidden grep on `cmd/release`.
 **Commit:** `feat(release): the formula and manifest pull in ffmpeg`
 
-## 8. Release docs and install instructions
+## 8. Release docs and install instructions — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): docs/releasing.md lists brew as the optional prerequisite for the Homebrew smoke but says the Scoop smoke needs no scoop on the host, since smoke reads the bucket's manifest through gh (smoke.go/scoop.go never run scoop); the Goal's "brew/scoop for their smokes" is met for brew and corrected for scoop.
 
 Depends on items 1 and 4.
 
