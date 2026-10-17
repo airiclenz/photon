@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `photon tune`: the inspector's Clip frame panel now shows the values of `cols`, `rows`, `padding`, `font_size`, `line_height`, `scale` and `max_colors`. They stay read-only.
+- A storyboard may declare a top-level `camera:` list of zoom and pan moves placed on the clip's clock; `photon lint` reports every bad move, overlapping moves on one track and undeclared pan areas.
+- Storyboards take a top-level `camera` list of zoom and pan moves placed on the clip's timeline (`at` a clip time or `{beat, offset}`, `over`, `ease`); a pan aims at a target or a `cell`, in a straight line or along a smooth `via` path, and a beat's `zoom` is now a shorthand for camera moves.
+- Source Sans 3 Regular and Bold (SIL Open Font License) are built in as the caption font, and the config's `caption_font: {regular, bold}` can name other font files instead; release archives also carry `SourceSans3-OFL.txt`.
+- A storyboard may declare a top-level `captions:` list: text placed on the clip's clock (`at`, then `for` or `until`) with a font size and weight, a place and alignment or a position, colours, a background box and fades. `photon lint` reports every bad caption, such as a stop before its start, a time outside the clip, an unknown beat, a size out of bounds or fades longer than the caption.
+- `photon render` and `photon tune` draw the storyboard's captions over every frame, on top of the cursor and in output space, so a zoom or pan never moves or scales them; they are drawn in the config's `caption_font` faces, or the built-in Source Sans 3.
+- Storyboards can declare `captions`: text drawn over the shipped GIF on the clip's clock, with a font size and weight, a place or position, colours, a background box and fades. Captions use the built-in Source Sans 3 font, or the font files the config's `caption_font` names.
+- `photon tune`'s timeline shows the storyboard's camera moves and captions as bars on `camera zoom`, `pan` and `captions` lanes under the beats; clicking a bar, or choosing it in the Inspect list, shows that entry's fields read-only in the inspector.
+- `photon tune`'s inspector now edits a selected camera move's `at`, `over`, `ease` and `to`, and a selected caption's `text`, `at`, `for` or `until`, `place` and `align`; a pick can be set as the selected pan's `to`.
 - `photon tune`: a target picker on the preview. Press ⌖ Pick and drag across the cells of one row on the paused frame. The page proposes a target that the resolver has checked and draws its box. You can set it as the selected beat's zoom target, or copy it as click, seen, drag-from or drag-to YAML.
 - `photon tune <storyboard> [<take>]` serves a timing editor on `127.0.0.1` (`--port`, default any free port) and prints its address. The page previews the take frame for frame as `photon render` composes it. You can edit each beat's `duration`, `hold`, `cut` and `zoom` and the clip's `frame.width` and `frame.fps`, with undo, redo and revert. Save writes only the edited values back into the storyboard, so comments and layout stay. Ctrl-C stops it.
 
