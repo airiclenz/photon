@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/airiclenz/photon/internal/render"
 	"github.com/airiclenz/photon/internal/schedule"
@@ -11,13 +13,15 @@ import (
 )
 
 // State is everything the page shows of a session, as `/api/state` sends it. Durations are
-// whole milliseconds, the spelling an [Edit] takes. Beats come from the current storyboard;
-// Sections, Warnings and Length from its schedule, or from the last good pipeline's while the
-// current bytes do not schedule. Version rises on every change, so a page that saw it already
+// whole milliseconds, the spelling an [Edit] takes. Beats, Camera and Captions come from the
+// current storyboard; Sections, Warnings and Length from its schedule, or from the last good
+// pipeline's while the current bytes do not schedule. Version rises on every change, so a page that saw it already
 // has nothing new to draw.
 type State struct {
 	Version  int            `json:"version"`
 	Beats    []BeatState    `json:"beats"`
+	Camera   []CameraState  `json:"camera"`
+	Captions []CaptionState `json:"captions"`
 	Sections []SectionState `json:"sections"`
 	Warnings []string       `json:"warnings"`
 	LengthMS int64          `json:"length_ms"`
@@ -69,6 +73,60 @@ type TargetState struct {
 	Area string `json:"area"`
 }
 
+// CameraState is one camera move, in storyboard order: its Index in the storyboard's camera
+// list, its Kind (zoom or pan), where it starts and ends on the output clock, and its fields.
+// Factor is a zoom's destination magnification. A pan to aims at its Target or its Cell, one of
+// the two; a via pan has neither and reports ViaCount, the points of its path, instead, which
+// photon tune shows but does not edit.
+type CameraState struct {
+	Index    int          `json:"index"`
+	Kind     string       `json:"kind"`
+	StartMS  int64        `json:"start_ms"`
+	EndMS    int64        `json:"end_ms"`
+	At       MomentState  `json:"at"`
+	OverMS   int64        `json:"over_ms"`
+	Ease     string       `json:"ease"`
+	Factor   float64      `json:"factor,omitempty"`
+	Target   *TargetState `json:"target,omitempty"`
+	Cell     *CellState   `json:"cell,omitempty"`
+	ViaCount int          `json:"via_count"`
+}
+
+// The spellings of CameraState's Kind.
+const (
+	cameraKindZoom = "zoom"
+	cameraKindPan  = "pan"
+)
+
+// CellState is one cell of the terminal grid a pan aims at: column X and row Y, both 0-based.
+type CellState struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
+// CaptionState is one caption, in storyboard order: its Index in the storyboard's captions
+// list, its text, where it starts and stops on the output clock, and its timing and placement.
+// It ends after ForMS or at Until, exactly one of the two. Place and Align are empty for a
+// caption set by position.
+type CaptionState struct {
+	Index   int          `json:"index"`
+	Text    string       `json:"text"`
+	StartMS int64        `json:"start_ms"`
+	StopMS  int64        `json:"stop_ms"`
+	At      MomentState  `json:"at"`
+	ForMS   int64        `json:"for_ms,omitempty"`
+	Until   *MomentState `json:"until,omitempty"`
+	Place   string       `json:"place"`
+	Align   string       `json:"align"`
+}
+
+// MomentState is a moment on the clip's output clock as the storyboard spells it: OffsetMS
+// after the start of beat Beat, or, with Beat 0, after the clip's first frame.
+type MomentState struct {
+	Beat     int   `json:"beat"`
+	OffsetMS int64 `json:"offset_ms"`
+}
+
 // SectionState is one scheduled beat on the output clock: where it starts and for how long,
 // its hold, the speed its stretch after the hold plays at, and render's summary row for it.
 type SectionState struct {
@@ -91,6 +149,10 @@ type Problem struct {
 // beatMention finds the beat an error message is about: `beat 2: hold: …`.
 var beatMention = regexp.MustCompile(`\bbeat (\d+)\b`)
 
+// clipLevelPrefixes start the messages of problems filed under a camera move or a caption, which
+// are on the clip as a whole even when they mention a beat.
+var clipLevelPrefixes = []string{"camera[", "captions["}
+
 // State reports the session as the page shows it.
 func (s *Session) State() State {
 	s.mu.Lock()
@@ -107,6 +169,8 @@ func (s *Session) State() State {
 	return State{
 		Version:    s.version,
 		Beats:      beatStates(board),
+		Camera:     cameraStates(board),
+		Captions:   captionStates(board),
 		Sections:   sectionStates(clipSchedule),
 		Warnings:   append([]string{}, clipSchedule.Warnings...),
 		LengthMS:   clipSchedule.Length.Milliseconds(),
@@ -150,6 +214,87 @@ func beatStates(board *storyboard.Storyboard) []BeatState {
 		beats = append(beats, state)
 	}
 	return beats
+}
+
+// cameraStates lists board's camera moves in storyboard order.
+func cameraStates(board *storyboard.Storyboard) []CameraState {
+	moves := make([]CameraState, 0, len(board.Camera))
+	for index, move := range board.Camera {
+		var state CameraState
+		switch {
+		case move.Zoom != nil:
+			zoom := move.Zoom
+			state = movedState(board, cameraKindZoom, zoom.At, zoom.Over, zoom.Ease)
+			state.Factor = zoom.To
+		case move.Pan != nil:
+			pan := move.Pan
+			state = movedState(board, cameraKindPan, pan.At, pan.Over, pan.Ease)
+			state.ViaCount = len(pan.Via)
+			if to := pan.To; to != nil && to.Cell != nil {
+				state.Cell = &CellState{X: to.Cell.X, Y: to.Cell.Y}
+			} else if to != nil {
+				state.Target = &TargetState{Text: to.Text, Nth: int(to.Nth), Area: to.Area}
+			}
+		}
+		state.Index = index
+		moves = append(moves, state)
+	}
+	return moves
+}
+
+// movedState is the part of a camera move's state every form shares: its kind, its timing as
+// the storyboard spells it, and where it starts and ends on board's output clock.
+func movedState(board *storyboard.Storyboard, kind string, at storyboard.Moment, over time.Duration, ease storyboard.Ease) CameraState {
+	start := clipMS(board, at)
+	return CameraState{
+		Kind:    kind,
+		StartMS: start,
+		EndMS:   start + over.Milliseconds(),
+		At:      momentState(at),
+		OverMS:  over.Milliseconds(),
+		Ease:    string(ease),
+	}
+}
+
+// captionStates lists board's captions in storyboard order.
+func captionStates(board *storyboard.Storyboard) []CaptionState {
+	captions := make([]CaptionState, 0, len(board.Captions))
+	for index, caption := range board.Captions {
+		start := clipMS(board, caption.At)
+		state := CaptionState{
+			Index:   index,
+			Text:    caption.Text,
+			StartMS: start,
+			StopMS:  start + caption.For.Milliseconds(),
+			At:      momentState(caption.At),
+			ForMS:   caption.For.Milliseconds(),
+			Place:   string(caption.Place),
+			Align:   string(caption.Align),
+		}
+		if until := caption.Until; until != nil {
+			state.StopMS = clipMS(board, *until)
+			untilState := momentState(*until)
+			state.Until = &untilState
+		}
+		captions = append(captions, state)
+	}
+	return captions
+}
+
+// momentState spells moment as the page reads it.
+func momentState(moment storyboard.Moment) MomentState {
+	return MomentState{Beat: moment.Beat, OffsetMS: moment.Offset.Milliseconds()}
+}
+
+// clipMS resolves moment on board's output clock, in whole milliseconds. Every board State
+// reports passed validation, which resolves each of its moments, so a moment that does not
+// resolve cannot arise; were one to, it reports the clip's start.
+func clipMS(board *storyboard.Storyboard, moment storyboard.Moment) int64 {
+	at, err := board.ClipTime(moment)
+	if err != nil {
+		return 0
+	}
+	return at.Milliseconds()
 }
 
 // pausesOf lists how long each of beat's pause actions idles, in action order.
@@ -198,8 +343,12 @@ func problemsOf(err error, board *storyboard.Storyboard) []Problem {
 }
 
 // beatNamed returns the id of the beat of board that message names first, or 0 when it names
-// none board has.
+// none board has or is about a camera move or a caption, whose problems are on the clip as a
+// whole.
 func beatNamed(message string, board *storyboard.Storyboard) int {
+	if slices.ContainsFunc(clipLevelPrefixes, func(prefix string) bool { return strings.HasPrefix(message, prefix) }) {
+		return 0
+	}
 	match := beatMention.FindStringSubmatch(message)
 	if match == nil || board == nil {
 		return 0

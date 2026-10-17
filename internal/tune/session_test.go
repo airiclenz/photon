@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -39,6 +40,19 @@ beats:
     zoom: {target: {text: 'PASS'}}
 `
 
+// cameraCaptionsStoryboard is sessionStoryboard with a camera of one zoom and three pans — a via
+// path and a pan to a target and to a cell — inside beat 1, and two captions: one set by for in
+// beat 1, one by until in beat 2.
+const cameraCaptionsStoryboard = sessionStoryboard + `camera:
+  - zoom: {to: 2, at: 100ms, over: 300ms}
+  - pan: {via: [{cell: {x: 2, y: 1}}, {text: 'failing'}], at: {beat: 1, offset: 200ms}, over: 600ms, ease: linear}
+  - pan: {to: {text: 'tests', nth: last}, at: 800ms, over: 100ms}
+  - pan: {to: {cell: {x: 3, y: 2}}, at: 900ms, over: 100ms}
+captions:
+  - {text: 'Watch this', at: {beat: 1, offset: 100ms}, for: 700ms, place: top, align: left}
+  - {text: "All green\n", at: {beat: 2}, until: {beat: 2, offset: 1200ms}}
+`
+
 // The session fixture's own values, as sessionStoryboard and sessionTake set them.
 const (
 	fixtureCols = 20
@@ -58,14 +72,21 @@ type sessionFixture struct {
 	takePath  string
 }
 
-// newSessionFixture writes the config, the storyboard and a take into a fresh project dir and
+// newSessionFixture writes the config, sessionStoryboard and a take into a fresh project dir and
 // starts a session on them.
 func newSessionFixture(t *testing.T) sessionFixture {
+	t.Helper()
+	return newSessionFixtureOf(t, sessionStoryboard)
+}
+
+// newSessionFixtureOf writes the config, board as the storyboard and a take into a fresh project
+// dir and starts a session on them.
+func newSessionFixtureOf(t *testing.T, board string) sessionFixture {
 	t.Helper()
 	project := t.TempDir()
 	writeTestFile(t, filepath.Join(project, "photon.yaml"), sessionConfig)
 	boardPath := filepath.Join(project, "tuned.yaml")
-	writeTestFile(t, boardPath, sessionStoryboard)
+	writeTestFile(t, boardPath, board)
 	if err := os.Chmod(boardPath, boardMode); err != nil {
 		t.Fatalf("chmod: %v", err)
 	}
@@ -240,6 +261,73 @@ func TestSession_State_ReportsTheReadOnlyFrame(t *testing.T) {
 	frame := []any{state.Cols, state.Rows, state.Padding, state.FontSize, state.LineHeight, state.Scale, state.MaxColors}
 	if want := []any{fixtureCols, 4, 4, 10.0, 1.2, 2, 16}; !slices.Equal(frame, want) {
 		t.Errorf("cols, rows, padding, font_size, line_height, scale, max_colors %v, want %v", frame, want)
+	}
+}
+
+func TestSession_State_ReportsCameraMovesAndCaptions(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
+
+	state := f.session.State()
+
+	wantCamera := []CameraState{
+		{Index: 0, Kind: "zoom", StartMS: 100, EndMS: 400, At: MomentState{0, 100}, OverMS: 300, Ease: "smooth", Factor: 2},
+		{Index: 1, Kind: "pan", StartMS: 200, EndMS: 800, At: MomentState{1, 200}, OverMS: 600, Ease: "linear", ViaCount: 2},
+		{
+			Index: 2, Kind: "pan", StartMS: 800, EndMS: 900, At: MomentState{0, 800}, OverMS: 100, Ease: "smooth",
+			Target: &TargetState{Text: "tests", Nth: -1},
+		},
+		{
+			Index: 3, Kind: "pan", StartMS: 900, EndMS: 1000, At: MomentState{0, 900}, OverMS: 100, Ease: "smooth",
+			Cell: &CellState{X: 3, Y: 2},
+		},
+	}
+	if !reflect.DeepEqual(state.Camera, wantCamera) {
+		t.Errorf("camera\n got %+v\nwant %+v", state.Camera, wantCamera)
+	}
+	wantCaptions := []CaptionState{
+		{
+			Index: 0, Text: "Watch this", StartMS: 100, StopMS: 800, At: MomentState{1, 100}, ForMS: 700,
+			Place: "top", Align: "left",
+		},
+		{
+			Index: 1, Text: "All green", StartMS: 1000, StopMS: 2200, At: MomentState{2, 0},
+			Until: &MomentState{2, 1200}, Place: "bottom", Align: "middle",
+		},
+	}
+	if !reflect.DeepEqual(state.Captions, wantCaptions) {
+		t.Errorf("captions\n got %+v\nwant %+v", state.Captions, wantCaptions)
+	}
+}
+
+func TestSession_State_CaptionTimesFollowABeatDuration(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
+
+	f.apply(t, Edit{1, fieldDuration, "1200"})
+
+	caption := f.session.State().Captions[1]
+	if caption.StartMS != 1200 || caption.StopMS != 2400 {
+		t.Errorf("caption 1 from %dms to %dms, want 1200ms to 2400ms", caption.StartMS, caption.StopMS)
+	}
+}
+
+func TestSession_Refresh_CameraProblemNamingABeat_IsOnTheClip(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixture(t)
+	writeTestFile(t, f.boardPath, sessionStoryboard+"camera:\n  - zoom: {to: 2, at: 1200ms, over: 300ms}\n")
+
+	if err := f.session.Refresh(); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	errs := f.session.State().Errors
+	isOnTheClip := slices.ContainsFunc(errs, func(problem Problem) bool {
+		return problem.Beat == 0 && strings.HasPrefix(problem.Message, "camera[0]:") &&
+			strings.Contains(problem.Message, "beat 2")
+	})
+	if !isOnTheClip {
+		t.Errorf("errors %+v, want camera[0]'s problem naming beat 2 on beat 0", errs)
 	}
 }
 

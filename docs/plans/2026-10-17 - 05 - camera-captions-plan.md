@@ -450,7 +450,7 @@ internal/compose/doc.go; internal/storyboard/doc.go
 - `GOMEMLIMIT=2GiB go test ./cmd/photon/ ./internal/compose/ ./internal/storyboard/ -run 'README|DocMap'`
 **Commit:** `docs: describe captions`
 
-## 14. Tune state reports camera moves and captions
+## 14. Tune state reports camera moves and captions — ✅ DONE (2026-10-17)
 
 Depends on items 4 and 10.
 **What:**
