@@ -1,0 +1,63 @@
+# Every action, target form, zoom, cut and expect kind the schema has, in one valid storyboard.
+clip: every-form
+ship: out/every-form.gif
+frame:
+  cols: 80
+  rows: 24
+  padding: 16
+  font_size: 14
+  line_height: 1.2
+  scale: 2
+  width: 600
+  fps: 24
+  max_colors: 128
+expect:
+  - seen: 'Goodbye'
+  - run: test -f "$PHOTON_WORK/saved.txt"
+beats:
+  - id: 1
+    title: open
+    why: the first paint shows the list
+    notes: no hold, so the section plays at its own speed throughout
+    duration: 2s
+    do:
+      - wait: {screen: 'Items', timeout: 5s}
+    expect:
+      - seen: 'Items'
+  - id: 2
+    title: pick an item
+    duration: 4s
+    hold: 1s
+    zoom:
+      target: {text: 'Item \d', nth: last, area: list}
+      factor: 1.5
+    do:
+      - click: {target: {text: 'Item 2', nth: first, area: list}, times: 2}
+      - click: {target: {text: 'Item', nth: 3, area: any}}
+      - click: {target: {text: 'Save'}}
+    expect:
+      - seen: 'Item 2 selected'
+        area: status
+      - run: grep -q 'Item 2' "$PHOTON_WORK/saved.txt"
+  - id: 3
+    title: type a note
+    duration: 6s
+    zoom:
+      target: {text: 'Note:'}
+      in: 500ms
+      out: 250ms
+    do:
+      - type: {text: 'hello there'}
+      - type: {text: 'fast', humanize: false}
+      - key: {name: enter}
+      - key: {name: down, repeat: 3}
+      - wait: {screen: 'Saving', gone: true, timeout: 3m}
+      - pause: {for: 800ms}
+    expect:
+      - seen: 'Saved'
+        area: any
+  - id: 4
+    title: quit
+    cut: true
+    do:
+      - key: {name: ctrl+c}
