@@ -123,7 +123,9 @@ internal/compose/doc.go — package comment; internal/compose/compose.go — Com
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/compose` passes; `go vet ./internal/compose`.
 **Commit:** `feat(compose): the cursor follows a drag; zoom aims at a drag's box`
 
-## 6. A recorded drag passes record, check and render
+## 6. A recorded drag passes record, check and render — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the drag beat follows its drag with `wait: {screen: 'dragged: 4,2 to 16,2', timeout: 5s}` so the beat-end expect does not race the fixture's status redraw; the storyboard opens with the usual ready-wait beat, and the take assertion also pins the press cell (4,2) and the release cell (16,2).
 
 Depends on items 4 and 5.
 
