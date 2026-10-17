@@ -19,6 +19,9 @@
 // ([ErrInvalid]). [Session.State] reports everything the page shows, and [Session.Frame] the
 // PNG of the frame `photon render` composes at an output time, from the last good pipeline, its
 // rasterized snapshots kept in a cache bounded at 1 GiB that a new rasterizer starts afresh.
+// [Session.Pick] turns cells picked on that frame into a [Proposal]: the picked text, escaped, as
+// a target the resolver resolves back onto them, with its area and nth, and its YAML for a zoom,
+// a click, a seen expect and either end of a drag.
 //
 // The file map:
 //   - cache.go: the bounded, least-recently-used cache of a rasterizer's snapshots.
@@ -26,6 +29,7 @@
 //   - edit.go: the [Edit] and applying one to storyboard source, key by key.
 //   - frame.go: [Session.Frame], one composed frame of the preview as a PNG.
 //   - history.go: a session's storyboard versions, for undo and redo.
+//   - pick.go: [Session.Pick], a resolver-checked target [Proposal] from picked cells.
 //   - session.go: the [Session]: its pipelines, history, refresh from disk and guarded save.
 //   - state.go: the [State] a session reports and the errors attributed to beats.
 //   - value.go: reading an edit's value spellings and writing a duration in its old unit.

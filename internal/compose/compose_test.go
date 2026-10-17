@@ -503,3 +503,64 @@ func TestZoomRampsShrinkToFitTheSection(t *testing.T) {
 		t.Errorf("ramps: want in 1.5s out 2.5s, got in %s out %s", zoom.In, zoom.Out)
 	}
 }
+
+func TestCompositorCell(t *testing.T) {
+	t.Parallel()
+	board, recorded := zoomClickTake(take.Box{X: 30, Y: 7, W: 1, H: 1})
+	compositor, _ := newTestCompositor(t, board, recorded)
+	tests := []struct {
+		name    string
+		at      time.Duration
+		pixel   image.Point
+		wantCol int
+		wantRow int
+		wantOK  bool
+	}{
+		{name: "unzoomed, first cell", at: 1 * sec, pixel: image.Pt(5, 5), wantCol: 0, wantRow: 0, wantOK: true},
+		{name: "unzoomed, frame centre", at: 1 * sec, pixel: image.Pt(250, 150), wantCol: 24, wantRow: 7, wantOK: true},
+		{name: "mid-ramp, top-left corner", at: 2*sec + 500*time.Millisecond, pixel: image.Pt(0, 0), wantCol: 12, wantRow: 2, wantOK: true},
+		{name: "fully zoomed, top-left corner", at: 4 * sec, pixel: image.Pt(0, 0), wantCol: 18, wantRow: 3, wantOK: true},
+		{name: "fully zoomed, frame centre on the target", at: 4 * sec, pixel: image.Pt(250, 150), wantCol: 30, wantRow: 7, wantOK: true},
+		{name: "on the padding", at: 1 * sec, pixel: image.Pt(0, 0), wantCol: 0, wantRow: 0, wantOK: false},
+		{name: "left of the frame", at: 1 * sec, pixel: image.Pt(-3, 150), wantCol: 0, wantRow: 7, wantOK: false},
+		{name: "right of the frame", at: 1 * sec, pixel: image.Pt(testWidth+4, 150), wantCol: testCols - 1, wantRow: 7, wantOK: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			col, row, ok := compositor.Cell(test.at, test.pixel)
+
+			if col != test.wantCol || row != test.wantRow || ok != test.wantOK {
+				t.Errorf("Cell(%s, %v): want (%d, %d, %t), got (%d, %d, %t)",
+					test.at, test.pixel, test.wantCol, test.wantRow, test.wantOK, col, row, ok)
+			}
+		})
+	}
+}
+
+func TestCompositorRect(t *testing.T) {
+	t.Parallel()
+	box := take.Box{X: 30, Y: 7, W: 1, H: 1}
+	board, recorded := zoomClickTake(box)
+	compositor, _ := newTestCompositor(t, board, recorded)
+	tests := []struct {
+		name string
+		at   time.Duration
+		want image.Rectangle
+	}{
+		{name: "unzoomed", at: 1 * sec, want: image.Rect(305, 145, 315, 165)},
+		{name: "fully zoomed", at: 4 * sec, want: image.Rect(240, 130, 260, 170)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := compositor.Rect(test.at, box)
+
+			if got != test.want {
+				t.Errorf("Rect(%s, %+v): want %v, got %v", test.at, box, test.want, got)
+			}
+		})
+	}
+}

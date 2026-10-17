@@ -54,6 +54,11 @@ func (l Layout) cellCentre(x, y int) pointF {
 	}
 }
 
+// grid is the number of whole columns and rows of cells the frame holds inside its padding.
+func (l Layout) grid() image.Point {
+	return image.Pt((l.Size.X-2*l.Padding)/l.CellWidth, (l.Size.Y-2*l.Padding)/l.LineHeight)
+}
+
 // home is where the very first cursor appears: the frame's centre column, on the last row.
 func (l Layout) home() pointF {
 	return pointF{
@@ -158,6 +163,51 @@ func (c *Compositor) toOutput(p pointF, crop rectF) pointF {
 		X: (p.X - crop.X) * float64(c.out.X) / crop.W,
 		Y: (p.Y - crop.Y) * float64(c.out.Y) / crop.H,
 	}
+}
+
+// fromOutput maps a pixel of the shipped frame back through the crop onto the source frame: the
+// inverse of [Compositor.toOutput].
+func (c *Compositor) fromOutput(p pointF, crop rectF) pointF {
+	return pointF{
+		X: crop.X + p.X*crop.W/float64(c.out.X),
+		Y: crop.Y + p.Y*crop.H/float64(c.out.Y),
+	}
+}
+
+// Cell returns the terminal cell under p, a pixel of the shipped frame at output time t: the
+// pixel's centre is mapped back through the scale to the shipped width and the zoom's crop at t,
+// so a pick on a zoomed frame lands on the cell the frame shows there. ok is false when p lies
+// outside the shipped frame or its centre falls on the padding around the grid; col and row are
+// then the nearest cell, clamped into the grid, so a drag that runs off the grid still spans the
+// cells up to its edge.
+func (c *Compositor) Cell(t time.Duration, p image.Point) (col, row int, ok bool) {
+	source := c.fromOutput(pointF{X: float64(p.X) + 0.5, Y: float64(p.Y) + 0.5}, c.crop(t))
+	column := math.Floor((source.X - float64(c.layout.Padding)) / float64(c.layout.CellWidth))
+	line := math.Floor((source.Y - float64(c.layout.Padding)) / float64(c.layout.LineHeight))
+	grid := c.layout.grid()
+	isOnGrid := column >= 0 && line >= 0 && int(column) < grid.X && int(line) < grid.Y
+	ok = p.In(image.Rectangle{Max: c.out}) && isOnGrid
+	col = min(max(int(column), 0), grid.X-1)
+	row = min(max(int(line), 0), grid.Y-1)
+	return col, row, ok
+}
+
+// Rect returns the pixel rectangle of the shipped frame at output time t that the cell box b
+// covers, through the zoom's crop at t and the scale to the shipped width, rounded outwards to
+// whole pixels and clipped to the frame; a box the crop leaves out entirely is the empty
+// rectangle.
+func (c *Compositor) Rect(t time.Duration, b take.Box) image.Rectangle {
+	crop := c.crop(t)
+	covered := c.layout.boxRect(b)
+	topLeft := c.toOutput(pointF{X: covered.X, Y: covered.Y}, crop)
+	bottomRight := c.toOutput(pointF{X: covered.X + covered.W, Y: covered.Y + covered.H}, crop)
+	rect := image.Rect(
+		int(math.Floor(topLeft.X)),
+		int(math.Floor(topLeft.Y)),
+		int(math.Ceil(bottomRight.X)),
+		int(math.Ceil(bottomRight.Y)),
+	)
+	return rect.Intersect(image.Rectangle{Max: c.out})
 }
 
 // unit is how many shipped pixels one design pixel spans: the source frame's scale against

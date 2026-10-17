@@ -249,7 +249,13 @@ from the pre-edit frame. LRU evicts past a small test cap (cap injectable via an
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/` ; `go vet ./internal/tune/`
 **Commit:** `feat(tune): serve composed frames with a bounded raster cache`
 
-## 7. tune: target proposal from picked cells
+## 7. tune: target proposal from picked cells — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): consequential edit — internal/compose/doc.go: made necessary by the new Compositor.Cell and Compositor.Rect in compose.go (file-map line names them)
+NOTES (2026-10-17): Compositor.Cell returns the nearest cell clamped into the grid along with ok=false off the grid, so Pick spans a drag whose `to` end runs off the grid up to its edge; only `from` must be on the grid
+NOTES (2026-10-17): Pick wraps ErrNoProposal (new sentinel) for off-screen, blank and unresolvable picks, and ErrOutsideClip for a time outside the clip, so item 8 can map them to a status
+NOTES (2026-10-17): snippet keys are unexported constants (snippetZoom … snippetDragTo, values exactly zoom/click/seen/drag-from/drag-to); area names are quoted with yamledit.Quote like the text; the seen snippet is `seen: '…'`, or the flow mapping `{seen: '…', area: '…'}` with an area, and never carries nth
+NOTES (2026-10-17): areas are tried through the public Resolver.Rows and Resolver.Target (nth counted up until ErrNotOnScreen) rather than a new matches API in target; Proposal.Box is the box the resolver returns for the proposed target
 
 Depends on item 5.
 

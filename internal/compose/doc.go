@@ -29,7 +29,8 @@
 //
 // The file map:
 //   - doc.go: this package comment and file map.
-//   - compose.go: [New], the [Compositor], its [Layout], cropping and drawing the cursor.
+//   - compose.go: [New], the [Compositor], its [Layout], cropping, drawing the cursor and mapping
+//     between shipped pixels and cells ([Compositor.Cell], [Compositor.Rect]).
 //   - zoom.go: zoom plans, the zoom box, the auto-fit factor and the smootherstep ease.
 //   - cursor.go: the cursor's track of clicks and drags, its position, opacity and ring, and
 //     painting it.
