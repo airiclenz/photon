@@ -230,11 +230,9 @@ func TestComposeZoomAimsAtADragsLoggedBox(t *testing.T) {
 			}
 			compositor, _ := newTestCompositor(t, board, recorded)
 
-			if len(compositor.zooms) != 1 {
-				t.Fatalf("zooms: want 1, got %d", len(compositor.zooms))
-			}
-			if want := testLayout.boxRect(tc.want).centre(); compositor.zooms[0].Centre != want {
-				t.Errorf("zoom centre: want the logged box's centre %+v, got %+v", want, compositor.zooms[0].Centre)
+			want := testLayout.boxRect(tc.want).centre()
+			if got := beatZoomAim(t, compositor); got != want {
+				t.Errorf("pan centre: want the logged box's centre %+v, got %+v", want, got)
 			}
 		})
 	}

@@ -165,7 +165,9 @@ TestLoadEveryForm; internal/storyboard/testdata/every-form.yaml (beats 2-3 zoom 
 - `GOMEMLIMIT=2GiB go test ./internal/storyboard/ ./internal/clip/ ./cmd/photon/ -run 'Lint|Camera|Parse|Load|README'`
 **Commit:** `feat(storyboard): declare and validate camera moves`
 
-## 5. Compose: a two-track camera behind the crop
+## 5. Compose: a two-track camera behind the crop — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the two tracks share one generic `move[V]` type and one `trackAt` evaluator (the zoom track blends in log space, the pan track with `lerp`) rather than two separate segment types; TestZoomRampScalesGeometrically moved from compose_test.go to camera_test.go and now drives a camera's push and pull moves.
 
 Depends on item 3.
 **What:**

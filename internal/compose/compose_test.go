@@ -86,6 +86,26 @@ func zoomClickTake(box take.Box) (*storyboard.Storyboard, *take.Take) {
 	return board, recorded
 }
 
+// beatZoomAim is where the pan track of compositor's camera aims, failing unless one beat zoom
+// set it.
+func beatZoomAim(t *testing.T, compositor *Compositor) pointF {
+	t.Helper()
+	if len(compositor.camera.pan) != 1 {
+		t.Fatalf("pan track: want one beat zoom's aim, got %+v", compositor.camera.pan)
+	}
+	return compositor.camera.pan[0].To
+}
+
+// beatZoomRamps is the push and the pull on the zoom track of compositor's camera, failing
+// unless one beat zoom planned them.
+func beatZoomRamps(t *testing.T, compositor *Compositor) (push, pull move[float64]) {
+	t.Helper()
+	if len(compositor.camera.zoom) != 2 {
+		t.Fatalf("zoom track: want one beat zoom's push and pull, got %+v", compositor.camera.zoom)
+	}
+	return compositor.camera.zoom[0], compositor.camera.zoom[1]
+}
+
 // screen is a blank testCols × testRows snapshot at source time at, with text written into the
 // rows lines names.
 func screen(at time.Duration, lines map[int]string) take.Snapshot {
@@ -321,19 +341,17 @@ func TestComposeZoomResolvesItsTargetOnTheSnapshot(t *testing.T) {
 
 	compositor, _ := newTestCompositor(t, board, recorded)
 
-	if len(compositor.zooms) != 1 {
-		t.Fatalf("zooms: want one, got %+v", compositor.zooms)
+	want := testLayout.boxRect(take.Box{X: 5, Y: 3, W: 7, H: 1}).centre()
+	if got := beatZoomAim(t, compositor); got != want {
+		t.Errorf("pan centre: want the resolved box's %+v, got %+v", want, got)
 	}
-	zoom := compositor.zooms[0]
-	if want := testLayout.boxRect(take.Box{X: 5, Y: 3, W: 7, H: 1}).centre(); zoom.Centre != want {
-		t.Errorf("zoom centre: want the resolved box's %+v, got %+v", want, zoom.Centre)
-	}
-	if zoom.In != storyboard.DefaultZoomRamp || zoom.Out != storyboard.DefaultZoomRamp {
-		t.Errorf("ramps: want the %s default, got in %s out %s", storyboard.DefaultZoomRamp, zoom.In, zoom.Out)
+	push, pull := beatZoomRamps(t, compositor)
+	if push.Over != storyboard.DefaultZoomRamp || pull.Over != storyboard.DefaultZoomRamp {
+		t.Errorf("ramps: want the %s default, got in %s out %s", storyboard.DefaultZoomRamp, push.Over, pull.Over)
 	}
 	// Auto-fit: (7 + 4) cells × 20 px = 220 px filling 70 % of 1000 px is 3.18×, clamped to 2.5.
-	if zoom.Factor != autoFitMax {
-		t.Errorf("auto-fit factor: want %g, got %g", autoFitMax, zoom.Factor)
+	if push.To != autoFitMax {
+		t.Errorf("auto-fit factor: want %g, got %g", autoFitMax, push.To)
 	}
 }
 
@@ -368,8 +386,8 @@ func TestComposeZoomBoxWalksBackThroughTheBeat(t *testing.T) {
 
 			compositor, _ := newTestCompositor(t, board, recorded)
 
-			if len(compositor.zooms) != 1 || compositor.zooms[0].Centre != wantCentre {
-				t.Errorf("zooms: want one centred on %+v, got %+v", wantCentre, compositor.zooms)
+			if got := beatZoomAim(t, compositor); got != wantCentre {
+				t.Errorf("pan centre: want %+v, got %+v", wantCentre, got)
 			}
 		})
 	}
@@ -467,30 +485,6 @@ func TestEaseInOutSettlesAtBothEnds(t *testing.T) {
 	}
 }
 
-func TestZoomRampScalesGeometrically(t *testing.T) {
-	t.Parallel()
-	zoom := zoomPlan{Start: 0, End: 10 * sec, In: 2 * sec, Out: 2 * sec, Factor: 4}
-	for _, tc := range []struct {
-		name string
-		at   time.Duration
-		want float64
-	}{
-		{name: "before the section", at: -sec, want: 1},
-		{name: "at the section's start", at: 0, want: 1},
-		{name: "half-way up the push", at: sec, want: 2},
-		{name: "at the top of the ramp", at: 2 * sec, want: 4},
-		{name: "held", at: 5 * sec, want: 4},
-		{name: "half-way down the pull", at: 9 * sec, want: 2},
-		{name: "at the section's end", at: 10 * sec, want: 1},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := zoom.factorAt(tc.at); math.Abs(got-tc.want) > 1e-9 {
-				t.Errorf("factor at %s: want %g, got %g", tc.at, tc.want, got)
-			}
-		})
-	}
-}
-
 func TestZoomRampsShrinkToFitTheSection(t *testing.T) {
 	t.Parallel()
 	board, recorded := zoomClickTake(take.Box{X: 20, Y: 6, W: 3, H: 1})
@@ -499,8 +493,8 @@ func TestZoomRampsShrinkToFitTheSection(t *testing.T) {
 	compositor, _ := newTestCompositor(t, board, recorded)
 
 	// 8 s of ramps in a 4 s section keep their 3:5 share.
-	if zoom := compositor.zooms[0]; zoom.In != 1500*time.Millisecond || zoom.Out != 2500*time.Millisecond {
-		t.Errorf("ramps: want in 1.5s out 2.5s, got in %s out %s", zoom.In, zoom.Out)
+	if push, pull := beatZoomRamps(t, compositor); push.Over != 1500*time.Millisecond || pull.Over != 2500*time.Millisecond {
+		t.Errorf("ramps: want in 1.5s out 2.5s, got in %s out %s", push.Over, pull.Over)
 	}
 }
 

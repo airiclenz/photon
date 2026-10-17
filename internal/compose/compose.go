@@ -76,7 +76,7 @@ type Compositor struct {
 	layout     Layout
 	out        image.Point
 	background color.RGBA
-	zooms      []zoomPlan
+	camera     camera
 	cursor     cursorTrack
 }
 
@@ -104,7 +104,7 @@ func New(
 	height := max(1, int(math.Round(float64(layout.Size.Y)*float64(width)/float64(layout.Size.X))))
 
 	planner := zoomPlanner{board: board, recorded: recorded, resolver: resolver, layout: layout}
-	zooms, err := planner.plan(clipSchedule)
+	clipCamera, err := planner.plan(clipSchedule)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func New(
 		layout:     layout,
 		out:        image.Pt(width, height),
 		background: background,
-		zooms:      zooms,
+		camera:     clipCamera,
 		cursor:     trackCursor(recorded, clipSchedule, layout),
 	}, nil
 }
@@ -137,24 +137,23 @@ func (c *Compositor) Compose(t time.Duration, src *image.RGBA) *image.RGBA {
 	return dst
 }
 
-// crop is the source rectangle shown at output time t: the whole frame when nothing zooms, else
-// a frame-shaped rectangle 1/factor its size centred on the target and clamped inside the frame.
+// crop is the source rectangle the camera shows at output time t: the whole frame at a factor of
+// 1, else a frame-shaped rectangle 1/factor its size centred on the camera's centre and clamped
+// inside the frame.
 func (c *Compositor) crop(t time.Duration) rectF {
 	full := rectF{W: float64(c.layout.Size.X), H: float64(c.layout.Size.Y)}
-	for _, zoom := range c.zooms {
-		factor := zoom.factorAt(t)
-		if factor <= 1 {
-			continue
-		}
-		w, h := full.W/factor, full.H/factor
-		return rectF{
-			X: math.Min(math.Max(zoom.Centre.X-w/2, 0), full.W-w),
-			Y: math.Min(math.Max(zoom.Centre.Y-h/2, 0), full.H-h),
-			W: w,
-			H: h,
-		}
+	factor := c.camera.factorAt(t)
+	if factor <= 1 {
+		return full
 	}
-	return full
+	centre := c.camera.centreAt(t)
+	w, h := full.W/factor, full.H/factor
+	return rectF{
+		X: math.Min(math.Max(centre.X-w/2, 0), full.W-w),
+		Y: math.Min(math.Max(centre.Y-h/2, 0), full.H-h),
+		W: w,
+		H: h,
+	}
 }
 
 // toOutput maps a source pixel through the crop onto the shipped frame.

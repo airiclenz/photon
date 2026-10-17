@@ -4,10 +4,13 @@
 // the frame [Layout]; [Compositor.Compose] is then a pure function of the output time and the
 // source frame.
 //
-// A zoomed beat pushes in over its `in` ramp from the start of its section, holds, and eases back
-// out over its `out` ramp before the section ends; ramps that together outrun the section shrink
-// in proportion. Each ramp runs smootherstep on the factor's exponent, so every frame scales by
-// the same ratio at the same eased pace. With no `factor`, the zoom fits the target: the target
+// The crop comes from a camera of two tracks, each holding its last state between moves: a zoom
+// track of the magnification, at rest at 1, and a pan track of the crop's centre, at rest at the
+// frame's centre. A zoomed beat is planned as moves on both: its section's start aims the pan
+// track at the zoom box's centre, the zoom pushes in over its `in` ramp from there, holds, and
+// eases back out over its `out` ramp, ending as the section ends; ramps that together outrun the
+// section shrink in proportion. Each zoom move runs smootherstep on the factor's exponent, so
+// every frame scales by the same ratio at the same eased pace. With no `factor`, the zoom fits the target: the target
 // box plus two cells either side fills 70 percent of the frame width, clamped to [1.25, 2.5]. The
 // zoom box is the one the take logged for a click of the same beat on the identical target, or
 // for a drag of the same beat whose `from` or `to` target is identical, else
@@ -31,7 +34,9 @@
 //   - doc.go: this package comment and file map.
 //   - compose.go: [New], the [Compositor], its [Layout], cropping, drawing the cursor and mapping
 //     between shipped pixels and cells ([Compositor.Cell], [Compositor.Rect]).
-//   - zoom.go: zoom plans, the zoom box, the auto-fit factor and the smootherstep ease.
+//   - camera.go: the camera's zoom and pan tracks of moves, and their factor and centre at a time.
+//   - zoom.go: planning a beat's zoom onto the camera, the zoom box, the auto-fit factor and the
+//     smootherstep ease.
 //   - cursor.go: the cursor's track of clicks and drags, its position, opacity and ring, and
 //     painting it.
 package compose

@@ -28,33 +28,6 @@ const (
 	dragToText   = "to"
 )
 
-// zoomPlan is one section's push into its target, on the output clock: the section's [Start,
-// End), the ramps In and Out, the full Factor and the Centre the push aims at, in source pixels.
-type zoomPlan struct {
-	Start, End time.Duration
-	In, Out    time.Duration
-	Factor     float64
-	Centre     pointF
-}
-
-// factorAt is the magnification at output time t: 1 outside the section, eased up over In from
-// its start, held, and eased back to 1 over Out before its end. The ease runs on the factor's
-// exponent, so each frame of a ramp scales by the same ratio at the same eased pace — a linear
-// factor would rush the start of a push-in and crawl at its end.
-func (z zoomPlan) factorAt(t time.Duration) float64 {
-	if t < z.Start || t >= z.End {
-		return 1
-	}
-	rise, fall := 1.0, 1.0
-	if z.In > 0 {
-		rise = easeInOut(float64(t-z.Start) / float64(z.In))
-	}
-	if z.Out > 0 {
-		fall = easeInOut(float64(z.End-t) / float64(z.Out))
-	}
-	return math.Pow(z.Factor, min(rise, fall))
-}
-
 // zoomPlanner plans the zooms of one clip from its parts.
 type zoomPlanner struct {
 	board    *storyboard.Storyboard
@@ -63,15 +36,16 @@ type zoomPlanner struct {
 	layout   Layout
 }
 
-// plan plans every kept section's zoom: its target box, the factor given or auto-fit, and its
-// ramps — zero means [storyboard.DefaultZoomRamp] — shrunk in proportion when together they
-// outrun the section.
-func (p zoomPlanner) plan(clipSchedule *schedule.Schedule) ([]zoomPlan, error) {
+// plan plans every kept section's zoom onto the camera's tracks: its target box, the factor
+// given or auto-fit, and its ramps — zero means [storyboard.DefaultZoomRamp] — shrunk in
+// proportion when together they outrun the section.
+func (p zoomPlanner) plan(clipSchedule *schedule.Schedule) (camera, error) {
 	sections := make(map[int]schedule.Section, len(clipSchedule.Sections))
 	for _, section := range clipSchedule.Sections {
 		sections[section.Beat] = section
 	}
-	var plans []zoomPlan
+	var zooms []move[float64]
+	var pans []move[pointF]
 	for _, beat := range p.board.Beats {
 		section, isScheduled := sections[beat.ID]
 		if beat.Zoom == nil || !isScheduled || section.Cut {
@@ -79,32 +53,39 @@ func (p zoomPlanner) plan(clipSchedule *schedule.Schedule) ([]zoomPlan, error) {
 		}
 		box, err := p.zoomBox(beat, section)
 		if err != nil {
-			return nil, fmt.Errorf("compose: beat %d: zoom: %w", beat.ID, err)
+			return camera{}, fmt.Errorf("compose: beat %d: zoom: %w", beat.ID, err)
 		}
-		plans = append(plans, p.planSection(beat.Zoom, section, box))
+		push, pull, aim := p.planSection(beat.Zoom, section, box)
+		zooms = append(zooms, push, pull)
+		pans = append(pans, aim)
 	}
-	return plans, nil
+	return newCamera(p.layout, zooms, pans), nil
 }
 
-// planSection is the zoom of one section onto box.
-func (p zoomPlanner) planSection(zoom *storyboard.Zoom, section schedule.Section, box take.Box) zoomPlan {
-	plan := zoomPlan{
-		Start:  section.OutStart,
-		End:    section.OutStart + section.Duration,
-		In:     cmp.Or(zoom.In, storyboard.DefaultZoomRamp),
-		Out:    cmp.Or(zoom.Out, storyboard.DefaultZoomRamp),
-		Factor: zoom.Factor,
-		Centre: p.layout.boxRect(box).centre(),
-	}
-	if plan.Factor == 0 {
-		plan.Factor = autoFitFactor(box, p.layout)
-	}
-	if ramps := plan.In + plan.Out; ramps > section.Duration {
+// planSection is the zoom of one section onto box as camera moves: aim sets the pan track to the
+// box's centre at the section's start, push zooms from 1 to the factor over the in ramp from
+// there, and pull zooms back to 1 over the out ramp, ending as the section ends.
+func (p zoomPlanner) planSection(
+	zoom *storyboard.Zoom,
+	section schedule.Section,
+	box take.Box,
+) (push, pull move[float64], aim move[pointF]) {
+	start, end := section.OutStart, section.OutStart+section.Duration
+	in := cmp.Or(zoom.In, storyboard.DefaultZoomRamp)
+	out := cmp.Or(zoom.Out, storyboard.DefaultZoomRamp)
+	if ramps := in + out; ramps > section.Duration {
 		share := float64(section.Duration) / float64(ramps)
-		plan.In = time.Duration(float64(plan.In) * share)
-		plan.Out = time.Duration(float64(plan.Out) * share)
+		in = time.Duration(float64(in) * share)
+		out = time.Duration(float64(out) * share)
 	}
-	return plan
+	factor := zoom.Factor
+	if factor == 0 {
+		factor = autoFitFactor(box, p.layout)
+	}
+	push = move[float64]{Start: start, Over: in, To: factor}
+	pull = move[float64]{Start: end - out, Over: out, To: 1}
+	aim = move[pointF]{Start: start, To: p.layout.boxRect(box).centre()}
+	return push, pull, aim
 }
 
 // zoomBox finds the beat's zoom target: the box a click or a drag of the same beat resolved on
