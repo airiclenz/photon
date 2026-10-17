@@ -1,11 +1,13 @@
 ---
 title: "A drag action: press, move and release the mouse across the screen"
-status: open
+status: done
 type: feature
 priority: 2
 labels: [storyboard]
 plan: 2026-10-17 - 01 - drag-action-plan
 created: 2026-10-17T13:25:28Z
+closed: 2026-10-17T14:26:55Z
+reason: "Resolved by plan 2026-10-17 - 01 - drag-action-plan (archived in b21dab0): drag action, lint, engine, fixture, cursor/zoom, record/check/render test, docs."
 ---
 
 A storyboard can click but not drag. `click` sends one SGR press and its release on the same
