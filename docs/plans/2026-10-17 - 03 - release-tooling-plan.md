@@ -97,7 +97,13 @@ Depends on item 2.
 **Acceptance:** `test -z "$(grep -L 'cmd/release' AGENTS.md version.go .capcom/knowledge/{package-layout,coding-conventions,extension-model}.md)"`; ``grep -q '^| `cmd/release`' .capcom/knowledge/package-layout.md``; `capcom check`; `GOMEMLIMIT=2GiB go test .`
 **Commit:** `docs: name cmd/release in the package layout`
 
-## 4. Drop the winget channel
+## 4. Drop the winget channel — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): TestPublishWingetConvergesFromRemoteStateOnceTheTagExists was recast as TestPublishChannelsConvergeFromRemoteStateOnceTheTagExists (pending tap, dirty tree, VERSION moved on: publish pushes only the formula and never main) instead of dropped, so the channel steps' resume-without-the-gate coverage survives.
+NOTES (2026-10-17): runChannelPublish was removed rather than stripped of its getenv: without the token it duplicated runTestPublish, which its remaining callers now use; publishFake.respond now refuses unexpected commands itself (respondTools, fakeChannels and publishFake.mu removed with komac).
+NOTES (2026-10-17): winget-only test scaffolding also removed: memChannelRepo's dirs/pulls fields, methodListDirs/methodOpenPulls, probes_test's unparsable var, the OpenPulls-only `commands` field of TestExecChannelReposTellsANoFromABrokenCommand, and render_test's gopkg.in/yaml.v3 import (cmd/release tests now import only internal/testkit beyond the stdlib).
+NOTES (2026-10-17): comments that named komac or `gh auth token` (runner.go seam comment, doc.go seam paragraph) and the seam's "file or directory" wording in channelrepos.go now describe the tap and bucket only.
+NOTES (2026-10-17): setupPendingError (channels.go) and publish.go's errors.As branch for it are kept although no converge returns one now that winget is gone; a generic mechanism outside this item's file list, left as a candidate cleanup.
 
 Depends on item 2.
 

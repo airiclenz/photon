@@ -11,7 +11,6 @@ const (
 	stepRelease  = "release"
 	stepHomebrew = "homebrew"
 	stepScoop    = "scoop"
-	stepWinget   = "winget"
 	stepSmoke    = "smoke"
 )
 
@@ -26,8 +25,7 @@ const (
 	// statePending: publish has the step to do.
 	statePending stepState = "pending"
 	// stateSetupPending: the channel's one-time setup — its tap or bucket repository — has not
-	// landed; publish skips the step. publish also reports winget so when its first `komac
-	// submit` fails, keeping the rendered manifests for a human to submit.
+	// landed; publish skips the step.
 	stateSetupPending stepState = "setup-pending"
 	// stateUnknown: the probe could not run, or found the remote in a state publish cannot
 	// converge from; the detail names which.
@@ -46,8 +44,8 @@ type stepReport struct {
 type stepProbe func(ctx context.Context, env probeEnv, version releaseVersion) stepReport
 
 // probeEnv is what the probes read the remotes through: photon's own checkout and GitHub
-// repository through repo, and the package channels' repositories — the tap, the bucket,
-// winget-pkgs — through channels.
+// repository through repo, and the package channels' repositories — the tap and the bucket —
+// through channels.
 type probeEnv struct {
 	repo     repo
 	channels channelRepos
@@ -71,7 +69,7 @@ type publishStep struct {
 
 // publishSteps are the steps publish runs, in the order it runs them. status and publish both
 // read this one table, so what status reports done is exactly what publish skips. The channel
-// steps (homebrew.go, scoop.go, winget.go) run after the release, whose SHA256SUMS they render
+// steps (homebrew.go, scoop.go) run after the release, whose SHA256SUMS they render
 // from, and the smoke step (smoke.go) runs last, over everything the others published; the smoke
 // verb runs the channels' smoke checks in this table's order.
 var publishSteps = []publishStep{
@@ -81,8 +79,6 @@ var publishSteps = []publishStep{
 		smoke: func(ctx context.Context, run *smokeRun) { run.checkHomebrew(ctx) }},
 	{name: stepScoop, probe: probeScoop, describe: describeScoop, converge: convergeScoop,
 		smoke: func(ctx context.Context, run *smokeRun) { run.checkScoop(ctx) }},
-	{name: stepWinget, probe: probeWinget, describe: describeWinget, converge: convergeWinget,
-		doneDetail: wingetSubmittedDetail},
 	{name: stepSmoke, probe: probeSmoke, describe: describeSmoke, converge: convergeSmoke,
 		doneDetail: smokePassedDetail},
 }

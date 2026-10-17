@@ -17,11 +17,11 @@
 // three seams carry the tests' fakes. What it asks of the photon
 // checkout and its GitHub repository goes through the repo seam (repo.go): the verbs' tests hold
 // that state in memRepo and never fake an own-repo command by argv, which only execRepo's own
-// tests pin. What it asks of the package channels' repositories — the tap, the bucket and
-// winget-pkgs — goes through the channelRepos seam (channelrepos.go) the same way: the verbs'
-// tests hold them in memChannelRepos, and only execChannelRepos' own tests pin its argv. The
-// runner's fakes answer the toolchain, dist's read of its source tree's commit time, komac,
-// `gh auth token`, brew and the released binaries the smoke test runs.
+// tests pin. What it asks of the package channels' repositories — the tap and the bucket — goes
+// through the channelRepos seam (channelrepos.go) the same way: the verbs' tests hold them in
+// memChannelRepos, and only execChannelRepos' own tests pin its argv. The runner's fakes answer
+// the toolchain, dist's read of its source tree's commit time, brew and the released binaries the
+// smoke test runs.
 //
 // It is a dev tool, never a release asset: dist does not ship it, and its production code imports
 // nothing from photon's internal packages (only docmap_test.go uses internal/testkit).
@@ -31,7 +31,7 @@
 // Every non-test file of the package, with its responsibility. TestDocMap (docmap_test.go) fails
 // when a file is missing from this map.
 //
-//   - `channelrepos.go` — the channelRepos seam over the tap, bucket and winget-pkgs repositories, and execChannelRepos
+//   - `channelrepos.go` — the channelRepos seam over the tap and bucket repositories, and execChannelRepos
 //   - `channels.go` — the helpers the package channels share: publishing a generated file to a channel repository, judging the version it pins
 //   - `dist.go` — release dist: builds the archives for every release platform and SHA256SUMS
 //   - `doc.go` — the package comment and this file map
@@ -50,5 +50,4 @@
 //   - `steps.go` — the publish step table status and publish both read, and the step states
 //   - `tag.go` — the tag step: probe, describe, and converge by pushing main and waiting for the CI-made annotated tag
 //   - `version.go` — the release version: parsing, ordering, its bare form and the highest release tag
-//   - `winget.go` — the winget channel: its probe, describe, converge by komac, and manifest rendering
 package main

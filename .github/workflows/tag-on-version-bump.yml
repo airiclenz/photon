@@ -5,7 +5,7 @@ name: tag-on-version-bump
 # this creates is `v` + VERSION, and it IS the release tag: a release cut ends with its
 # VERSION bump (the CHANGELOG rollup lands first) and never tags by hand. It creates a
 # git tag only — it does not publish a GitHub Release, build binaries, or touch the
-# Homebrew tap, Scoop bucket or winget; `go run ./cmd/release publish` does those on top
+# Homebrew tap or Scoop bucket; `go run ./cmd/release publish` does those on top
 # of the tag, locally. Re-runs are harmless: an existing tag is left exactly as it is.
 #
 # Tags created with GITHUB_TOKEN do not trigger other workflows. That is what keeps this

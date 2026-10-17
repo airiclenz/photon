@@ -38,8 +38,6 @@ type publishOptions struct {
 	tagTimeout   time.Duration
 	pollInterval time.Duration
 	sleep        func(ctx context.Context, duration time.Duration) error
-	// getenv reads the environment: the winget step takes its GitHub token from it first.
-	getenv func(key string) string
 	// smoke runs the smoke verb over options: the last step, run whatever the probes say.
 	smoke func(ctx context.Context, output io.Writer, options smokeOptions) error
 	// openRepo opens the checkout's repo; nil opens the execRepo over the run's runner.
@@ -71,10 +69,6 @@ type publishRun struct {
 	// against. Both stay empty when this run builds nothing.
 	buildDir string
 	distDir  string
-	// isWingetPackageListed is whether winget-pkgs already has the package, resolved once before
-	// any step runs while the winget step is pending: the winget step updates a listed package
-	// with `komac update` and submits the first manifests of an unlisted one with `komac submit`.
-	isWingetPackageListed bool
 }
 
 // newPublishCommand builds the publish verb.
@@ -84,7 +78,6 @@ func newPublishCommand(commands runner, openRepo repoOpener, channels channelRep
 		tagTimeout:   defaultTagTimeout,
 		pollInterval: tagPollInterval,
 		sleep:        sleepContext,
-		getenv:       os.Getenv,
 		openRepo:     openRepo,
 		channels:     channels,
 	}
@@ -109,14 +102,9 @@ func newPublishCommand(commands runner, openRepo repoOpener, channels channelRep
 			"after checking the rebuilt sums against its SHA256SUMS, then publishes a draft an\n" +
 			"interrupted run left; a draft release is never done. The homebrew and scoop steps render the formula\n" +
 			"and the manifest from the release's SHA256SUMS and commit `photon X.Y.Z` straight to\n" +
-			"the tap and the bucket, pushing only when the file changes. The winget step submits\n" +
-			"with komac (GITHUB_TOKEN, else `gh auth token`): `komac update` once winget-pkgs has\n" +
-			"the package, and before that `komac submit` of the three manifests it renders from the\n" +
-			"SHA256SUMS; either pull request merges later, so the release is submitted to winget,\n" +
-			"not published there. A channel whose one-time setup is pending — a missing tap or\n" +
-			"bucket repository — is skipped and named; a first `komac submit` that fails leaves\n" +
-			"winget setup-pending, naming the kept manifest directory and the command to rerun.\n" +
-			"Either way the run still succeeds. Last, the smoke step checks the published release from the outside, as\n" +
+			"the tap and the bucket, pushing only when the file changes. A channel whose one-time\n" +
+			"setup is pending — a missing tap or bucket repository — is skipped and named, and the\n" +
+			"run still succeeds. Last, the smoke step checks the published release from the outside, as\n" +
 			"the smoke verb does, comparing its SHA256SUMS with this run's build when it made one; a\n" +
 			"failed check fails the run. It never prompts or reads stdin, and exits 1 after\n" +
 			"printing the step table when anything fails. --dry-run runs the gate and the probes\n" +
@@ -161,9 +149,6 @@ func runPublish(ctx context.Context, commands runner, output io.Writer, options 
 	steps := run.probe(ctx)
 	var gate string
 	gate, refusals = run.checkGateFor(ctx, steps, refusals)
-	if err := run.resolveWingetPackage(ctx, steps); err != nil {
-		refusals = append(refusals, err)
-	}
 	for _, step := range steps {
 		if step.State == stateUnknown {
 			refusals = append(refusals, fmt.Errorf("could not tell where the %s step stands: %s", step.Name, step.Detail))

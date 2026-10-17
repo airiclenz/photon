@@ -68,7 +68,7 @@ func newStatusCommand(commands runner, openRepo repoOpener, channels channelRepo
 			"origin/main contained in HEAD, and a successful ci.yml run — naming each condition that\n" +
 			"blocks it; the baseline (the latest published release and the commits since, or the\n" +
 			"whole history while no release is published); and the highest release tag. It probes\n" +
-			"each publish step (tag, release, homebrew, scoop, winget, smoke) for the version: done,\n" +
+			"each publish step (tag, release, homebrew, scoop, smoke) for the version: done,\n" +
 			"pending, setup-pending or unknown. The version defaults to VERSION, whose steps are\n" +
 			"probed only when it is above the baseline or no release is published yet; a bare X.Y.Z\n" +
 			"reads as vX.Y.Z. It exits 0 when the gate clears and 1 when it is blocked or a check or\n" +

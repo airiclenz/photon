@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"gopkg.in/yaml.v3"
 )
 
 // goldenVersion is the release the golden package files under testdata are rendered for.
@@ -21,8 +19,8 @@ const (
 	formulaLinuxAmd64Hash  = "4444444444444444444444444444444444444444444444444444444444444444"
 )
 
-// The fixture hashes the Scoop and winget tests read, one per Windows archive plus one for an
-// archive neither installs.
+// The fixture hashes the Scoop tests read, one per Windows archive plus one for an archive the
+// manifest does not install.
 const (
 	scoopAmd64Hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	scoopArm64Hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -141,37 +139,6 @@ func TestRenderScoopManifest(t *testing.T) {
 	}
 }
 
-// TestRenderWingetManifestsMatchTheGoldenManifests renders goldenVersion's three winget
-// manifests, tagged and bare, and expects each file under testdata/winget byte for byte, under
-// komac's file names and as valid YAML.
-func TestRenderWingetManifestsMatchTheGoldenManifests(t *testing.T) {
-	t.Parallel()
-	wantNames := []string{"AiricLenz.Photon.yaml", "AiricLenz.Photon.installer.yaml", "AiricLenz.Photon.locale.en-US.yaml"}
-
-	for _, version := range []string{"v" + goldenVersion, goldenVersion} {
-		manifests, err := renderWingetManifests(version, goldenSums())
-		if err != nil {
-			t.Fatalf("renderWingetManifests(%q) = %v", version, err)
-		}
-		if len(manifests) != len(wantNames) {
-			t.Fatalf("renderWingetManifests(%q) rendered %d manifests; want %d", version, len(manifests), len(wantNames))
-		}
-		for i, manifest := range manifests {
-			if manifest.name != wantNames[i] {
-				t.Errorf("manifest %d is named %q; want %q", i, manifest.name, wantNames[i])
-			}
-			want := readTestFile(t, filepath.Join("testdata", "winget", wantNames[i]))
-			if manifest.content != want {
-				t.Errorf("renderWingetManifests(%q): %s differs from testdata/winget:\n%s", version, wantNames[i], manifest.content)
-			}
-			var parsed map[string]any
-			if err := yaml.Unmarshal([]byte(manifest.content), &parsed); err != nil {
-				t.Errorf("%s is not valid YAML: %v", manifest.name, err)
-			}
-		}
-	}
-}
-
 // TestChecksumForReadsBothLineForms reads a hash from the text and the binary SHA256SUMS line
 // forms, and lower-cases an upper-case one.
 func TestChecksumForReadsBothLineForms(t *testing.T) {
@@ -216,14 +183,9 @@ func TestRenderRefusesABadOrMissingHash(t *testing.T) {
 		formulaLinuxArm64Hash + "  photon_1.2.3_linux_arm64.tar.gz\n" +
 		formulaLinuxAmd64Hash + "  photon_1.2.3_linux_amd64.tar.gz\n"
 	amd64Sums := scoopAmd64Hash + "  " + windowsAmd64 + "\n"
-	renderWinget := func(version, sums string) (string, error) {
-		_, err := renderWingetManifests(version, sums)
-		return "", err
-	}
 	render := map[string]func(string, string) (string, error){
 		"formula": renderFormula,
 		"scoop":   renderScoopManifest,
-		"winget":  renderWinget,
 	}
 
 	tests := map[string]struct {
@@ -238,8 +200,6 @@ func TestRenderRefusesABadOrMissingHash(t *testing.T) {
 		"scoop: archive missing":   {file: "scoop", sums: amd64Sums, wantErr: errNoChecksum, archive: windowsArm64},
 		"scoop: long hash":         {file: "scoop", sums: amd64Sums + scoopArm64Hash + "b  " + windowsArm64 + "\n", wantErr: errMalformedChecksum, archive: windowsArm64},
 		"scoop: empty sums":        {file: "scoop", sums: "", wantErr: errNoChecksum, archive: windowsAmd64},
-		"winget: archive missing":  {file: "winget", sums: amd64Sums, wantErr: errNoChecksum, archive: windowsArm64},
-		"winget: empty sums":       {file: "winget", sums: "", wantErr: errNoChecksum, archive: windowsAmd64},
 	}
 	for label, tc := range tests {
 		t.Run(label, func(t *testing.T) {
@@ -267,9 +227,6 @@ func TestRenderRefusesABadVersion(t *testing.T) {
 		if _, err := renderScoopManifest(version, ""); err == nil || !strings.Contains(err.Error(), "not a release version") {
 			t.Errorf("renderScoopManifest(%q) = %v; want a not-a-release-version error", version, err)
 		}
-		if _, err := renderWingetManifests(version, ""); err == nil || !strings.Contains(err.Error(), "not a release version") {
-			t.Errorf("renderWingetManifests(%q) = %v; want a not-a-release-version error", version, err)
-		}
 	}
 }
 
@@ -281,16 +238,5 @@ func TestPackageDataRefusesAnUnknownTarget(t *testing.T) {
 	data := packageData{Version: "1.2.3", tag: "v1.2.3", sums: scoopAmd64Hash + "  photon_1.2.3_freebsd_amd64.tar.gz\n"}
 	if _, err := data.Archive("freebsd", "amd64"); err == nil || !strings.Contains(err.Error(), "not a release target") {
 		t.Errorf("Archive(freebsd, amd64) = %v; want a not-a-release-target error", err)
-	}
-}
-
-// TestPackageDataReleaseURL pins the release page the winget locale manifest links: the tagged
-// release on photon's GitHub repository.
-func TestPackageDataReleaseURL(t *testing.T) {
-	t.Parallel()
-
-	data := packageData{Version: "1.2.3", tag: "v1.2.3"}
-	if got, want := data.ReleaseURL(), "https://github.com/airiclenz/photon/releases/tag/v1.2.3"; got != want {
-		t.Errorf("ReleaseURL() = %q; want %q", got, want)
 	}
 }

@@ -13,8 +13,6 @@ import (
 const (
 	methodExists      = "Exists"
 	methodReadFile    = "ReadFile"
-	methodListDirs    = "ListDirs"
-	methodOpenPulls   = "OpenPulls"
 	methodPublishFile = "PublishFile"
 )
 
@@ -22,10 +20,9 @@ const (
 // record.
 const channelsCallName = "channels"
 
-// memChannelRepos is the in-memory channelRepos: the tap, the bucket and winget-pkgs held as
-// plain state — which repositories exist, the files and directories each holds, its open pull
-// requests — and the error each method fails with on each repository, so a test states what the
-// channel repositories hold instead of what gh prints. Its zero value holds no repository: every
+// memChannelRepos is the in-memory channelRepos: the tap and the bucket held as plain state —
+// which repositories exist and the files each holds — and the error each method fails with on
+// each repository, so a test states what the channel repositories hold instead of what gh prints. Its zero value holds no repository: every
 // read answers "no", and PublishFile is refused.
 type memChannelRepos struct {
 	// repos are the repositories that exist, by name.
@@ -39,12 +36,10 @@ type memChannelRepos struct {
 	record *memChannelRecord
 }
 
-// memChannelRepo is one channel repository: its files and the directories under each path, both
-// by path on its default branch, and its open pull requests. An empty repository holds no file.
+// memChannelRepo is one channel repository: its files, by path on its default branch. An empty
+// repository holds no file.
 type memChannelRepo struct {
 	files map[string]string
-	dirs  map[string][]string
-	pulls []pullRequest
 }
 
 // memChannelCall is one method called on one repository.
@@ -141,25 +136,6 @@ func (c memChannelRepos) ReadFile(_ context.Context, repo, path string) (string,
 	}
 	content, isFound := c.file(repo, path)
 	return content, isFound, nil
-}
-
-// ListDirs returns the directories the repository holds under path.
-func (c memChannelRepos) ListDirs(_ context.Context, repo, path string) ([]string, bool, error) {
-	if err := c.read(methodListDirs, repo); err != nil {
-		return nil, false, err
-	}
-	dirs, isFound := c.repos[repo].dirs[path]
-	return slices.Clone(dirs), isFound, nil
-}
-
-// OpenPulls returns every open pull request the repository holds, whatever the query: the
-// probes judge each pull request's title themselves, as they must of the viewer's pull requests
-// the production adapter adds unsearched.
-func (c memChannelRepos) OpenPulls(_ context.Context, repo, _ string) ([]pullRequest, error) {
-	if err := c.read(methodOpenPulls, repo); err != nil {
-		return nil, err
-	}
-	return slices.Clone(c.repos[repo].pulls), nil
 }
 
 // PublishFile records the write in record and its log and pushes it — reporting true — only when

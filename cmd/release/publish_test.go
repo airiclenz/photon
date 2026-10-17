@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -36,13 +35,11 @@ var mutatingCommands = []string{
 	repoCallName + " " + methodUndraftRelease,
 	channelsCallName + " " + methodPublishFile,
 	"go build",
-	"komac update",
-	"komac submit",
 }
 
 // publishFake is what publish meets: photon's checkout and GitHub repository held in repo, the
-// tap, the bucket and winget-pkgs held in remote, and the commands the runner answers the way go,
-// komac and gh would.
+// tap and the bucket held in remote, and the commands the runner answers the way go and git
+// would.
 type publishFake struct {
 	repo memRepo
 	// remote is where the channel repositories stand.
@@ -54,17 +51,13 @@ type publishFake struct {
 	// commit it is on.
 	tagKind   string
 	tagCommit string
-	// channels is the komac and gh installs the winget step meets.
-	channels fakeChannels
-
-	mu sync.Mutex
 }
 
 // newPublishFake is a first run of publishVersion: HEAD is the VERSION bump, one commit ahead of
 // origin/main, whose feature commit CI passed; nothing is tagged or released yet, and the
 // workflow tags the bump on the third poll after the push. The tap's formula already pins the
-// version, the Scoop bucket's repository is not there yet (setup pending) and an open winget-pkgs
-// pull request already submits the version, so the channel steps change nothing.
+// version and the Scoop bucket's repository is not there yet (setup pending), so the channel steps
+// change nothing.
 func newPublishFake() *publishFake {
 	fake := &publishFake{
 		repo: memRepo{
@@ -78,10 +71,7 @@ func newPublishFake() *publishFake {
 			files:        map[string]string{versionFile: strings.TrimPrefix(publishVersion, "v") + "\n"},
 			publish:      &memPublish{},
 		},
-		remote: channelReposOf(
-			tapHolding(testFormula),
-			wingetHolding(nil, komacPull(301234, "New version", strings.TrimPrefix(publishVersion, "v"))),
-		),
+		remote:          tapHolding(testFormula),
 		tagAppearsAfter: 2,
 		tagKind:         gitObjectTag,
 		tagCommit:       bumpCommit,
@@ -124,17 +114,19 @@ func (f *publishFake) opener() repoOpener {
 	return func(string) repo { return f.repo }
 }
 
-// respond answers one command.
+// respond answers one command; any command but the build and its commit-time read is
+// unexpected.
 func (f *publishFake) respond(call recordedCall) (string, error) {
 	args := call.args
-	switch command := call.name + " " + strings.Join(args, " "); {
+	command := call.name + " " + strings.Join(args, " ")
+	switch {
 	case command == "git log -1 --format=%ct HEAD":
 		return testCommitTime, nil
 	case call.name == "go" && len(args) > 0 && args[0] == "build":
 		output := args[slices.Index(args, "-o")+1]
 		return "", os.WriteFile(output, []byte(stubBinary(call.env)), 0o755)
 	}
-	return f.respondTools(call)
+	return "", fmt.Errorf("unexpected command %s", command)
 }
 
 // requireFiles fails when an absolute path among args names no file: gh would refuse to upload
@@ -202,8 +194,7 @@ func runTestPublish(t *testing.T, fake *publishFake, isDryRun bool) publishRunRe
 
 // runTestPublishWith runs publish of publishVersion over fake with options, filling in the
 // version, the test poll timing, a counting sleep and, unless options has them, the fake's channel
-// repositories, an environment with nothing set and a smoke step that records what it was asked
-// to check and passes.
+// repositories and a smoke step that records what it was asked to check and passes.
 func runTestPublishWith(t *testing.T, fake *publishFake, options publishOptions) publishRunResult {
 	t.Helper()
 	result := publishRunResult{commands: fake.runner(), notesPath: options.notesFile}
@@ -212,9 +203,6 @@ func runTestPublishWith(t *testing.T, fake *publishFake, options publishOptions)
 	}
 	if options.channels == nil {
 		options.channels = fake.remote
-	}
-	if options.getenv == nil {
-		options.getenv = func(string) string { return "" }
 	}
 	if options.smoke == nil {
 		options.smoke = func(_ context.Context, _ io.Writer, smoke smokeOptions) error {
@@ -864,55 +852,6 @@ func TestPublishRefusesUploadedArchivesTheRebuildDoesNotMatch(t *testing.T) {
 	}
 	if index := lineIndex(commandLines(result.commands), "repo UploadAssets"); index >= 0 {
 		t.Errorf("uploaded assets beside an archive the rebuild does not match")
-	}
-}
-
-// laterListingFailing is channel repositories whose ListDirs answers its first call and fails
-// with err from its second on: the winget probe's listing reads, and the package lookup's read
-// after it does not, which a memChannelRepos' per-repository failure cannot tell apart.
-type laterListingFailing struct {
-	memChannelRepos
-	err   error
-	calls *atomic.Int32
-}
-
-// ListDirs fails with err once it has been called before, and reads through otherwise.
-func (c laterListingFailing) ListDirs(ctx context.Context, repo, path string) ([]string, bool, error) {
-	if c.calls.Add(1) > 1 {
-		return nil, false, c.err
-	}
-	return c.memChannelRepos.ListDirs(ctx, repo, path)
-}
-
-// TestPublishWingetRefusesAnUnreadablePackageListing pins resolveWingetPackage's error: with the
-// winget step pending and the package unlisted, a listing read that fails after the probe's
-// succeeded refuses the run, naming the listing it could not read, and runs no komac command.
-func TestPublishWingetRefusesAnUnreadablePackageListing(t *testing.T) {
-	t.Parallel()
-	listingErr := errors.New("listing unreadable")
-	fake := newPublishFake()
-	channels := laterListingFailing{
-		memChannelRepos: channelReposOf(tapHolding(testFormula), wingetHolding(nil)),
-		err:             listingErr,
-		calls:           &atomic.Int32{},
-	}
-	notesPath := filepath.Join(t.TempDir(), "notes.md")
-	writeTestFile(t, notesPath, "## What's new\n\n- A release.\n")
-
-	result := runTestPublishWith(t, fake, publishOptions{notesFile: notesPath, channels: channels})
-
-	if !errors.Is(result.err, listingErr) {
-		t.Fatalf("publish error = %v, want it to wrap %v\n%s", result.err, listingErr, result.output)
-	}
-	const want = "could not tell whether " + wingetRepo + " has " + wingetManifestDir
-	if !strings.Contains(result.err.Error(), want) {
-		t.Errorf("publish error = %v, want it to contain %q", result.err, want)
-	}
-	if calls := channels.calls.Load(); calls != 2 {
-		t.Errorf("ListDirs called %d times, want 2: the probe's, then the package lookup's", calls)
-	}
-	if calls := result.commands.recorded("komac"); len(calls) > 0 {
-		t.Errorf("ran komac %v after the listing failed", calls)
 	}
 }
 
