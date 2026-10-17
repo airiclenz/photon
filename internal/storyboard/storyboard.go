@@ -17,10 +17,10 @@ import (
 // beat plays in the clip (Duration, Hold, Cut, Zoom) and what a keeper take must show (Expect).
 // Expect at the top level holds what the take as a whole must show.
 //
-// [Load] is the only way to get one: a Storyboard in hand has passed validation, its Ship is
-// resolved against the file's directory, and its zoom ramps carry their defaults.
+// [Load] and [Parse] are the only ways to get one: a Storyboard in hand has passed validation,
+// its Ship is resolved against the file's directory, and its zoom ramps carry their defaults.
 type Storyboard struct {
-	// Path is the storyboard file Load read, as the caller named it.
+	// Path is the storyboard file Load read or Parse was handed, as the caller named it.
 	Path string `yaml:"-"`
 	Clip string `yaml:"clip"`
 	// Ship is written relative to the storyboard's own directory and resolved by Load, so a
@@ -47,16 +47,25 @@ type Frame struct {
 	MaxColors  int     `yaml:"max_colors"`
 }
 
-// Load reads and validates a storyboard. The decode is strict — an unknown field is an error —
-// and every validation rule the file breaks is reported at once, in a *[ValidationError], so one
-// lint pass fixes the file in one round. An area name is checked for its spelling only; whether
-// the config declares it is the caller's cross-check.
+// Load reads and validates the storyboard at path, exactly as [Parse] does with the file's bytes.
+// A file that cannot be read is an error wrapping the read's own, so errors.Is reaches
+// fs.ErrNotExist.
 func Load(path string) (*Storyboard, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read storyboard: %w", err)
 	}
-	decoder := yaml.NewDecoder(bytes.NewReader(raw))
+	return Parse(raw, path)
+}
+
+// Parse decodes and validates a storyboard from data, the contents of the file at path. path
+// names the storyboard in errors, becomes its Path and is the base a relative Ship resolves
+// against; Parse never reads it. The decode is strict — an unknown field is an error — and every
+// validation rule the storyboard breaks is reported at once, in a *[ValidationError], so one lint
+// pass fixes the file in one round. An area name is checked for its spelling only; whether the
+// config declares it is the caller's cross-check.
+func Parse(data []byte, path string) (*Storyboard, error) {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	var board Storyboard
 	// An empty file decodes to io.EOF; it is an empty storyboard, which validation then reports

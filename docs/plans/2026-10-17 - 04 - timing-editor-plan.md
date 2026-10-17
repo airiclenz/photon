@@ -60,7 +60,7 @@ A target picker on the preview proposes targets checked by the one resolver.
 - 9: rejected — item 9 sends durations as `<n>ms` and factor `0` for auto; item 4's binding spellings are a bare ms integer (`"1850"`) and `"auto"`
 - 11 (decision): recast — the picker draws the resolved box from the response's `rect`, scaled by the displayed/natural size ratio
 
-## 1. Storyboard from bytes and a clip with a replaced storyboard
+## 1. Storyboard from bytes and a clip with a replaced storyboard — ✅ DONE (2026-10-17)
 
 **What:**
 **Goal:** `storyboard.Parse(data []byte, path string) (*Storyboard, error)` decodes, validates

@@ -1,7 +1,8 @@
 // Package storyboard holds a clip's Storyboard — the YAML file that says what photon performs,
 // how long each beat plays in the clip, where it zooms, and what a keeper take must show — and
-// the strict loader that is the only way to get one. [Load] refuses an unknown field and reports
-// every rule the file breaks at once, in a [ValidationError].
+// the strict loaders that are the only ways to get one. [Load] reads a file and [Parse] takes
+// its bytes; both refuse an unknown field and report every rule the file breaks at once, in a
+// [ValidationError].
 //
 // It imports only keys, to check that a `key` action names a key photon can send. Whether an
 // area a target or expect names is declared in the config is checked where the storyboard and
@@ -12,7 +13,7 @@
 //
 // The file map:
 //   - doc.go: this package comment and file map.
-//   - storyboard.go: the [Storyboard] and its [Frame], [Load] and [ValidationError].
+//   - storyboard.go: the [Storyboard] and its [Frame], [Load], [Parse] and [ValidationError].
 //   - beat.go: a [Beat], its [Zoom], [Action] forms, [Target] and [Nth], and [Expect].
 //   - validate.go: every validation rule, each reporting its problem under the field's path.
 package storyboard

@@ -350,3 +350,46 @@ func TestLoadResolvesShip(t *testing.T) {
 		})
 	}
 }
+
+func TestParseMatchesLoad(t *testing.T) {
+	t.Parallel()
+	everyForm, err := os.ReadFile(filepath.Join("testdata", "every-form.yaml"))
+	if err != nil {
+		t.Fatalf("read the every-form fixture: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		body string
+		// isValid marks a storyboard both must accept; every other row both must refuse.
+		isValid bool
+	}{
+		{"valid", string(everyForm), true},
+		{"unknown key", strings.Replace(validBase, "clip: base", "clip: base\ntape: old.tape", 1), false},
+		{"empty", "", false},
+		{"invalid zoom", strings.Replace(validBase, "factor: 2", "factor: 4", 1), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := writeStoryboard(t, tc.body)
+
+			parsed, parseErr := Parse([]byte(tc.body), path)
+			loaded, loadErr := Load(path)
+
+			if tc.isValid != (parseErr == nil) {
+				t.Fatalf("Parse: want valid = %v, got error %v", tc.isValid, parseErr)
+			}
+			if !reflect.DeepEqual(parsed, loaded) {
+				t.Errorf("storyboard: Parse gave %+v, Load gave %+v", parsed, loaded)
+			}
+			if (parseErr == nil) != (loadErr == nil) || parseErr != nil && parseErr.Error() != loadErr.Error() {
+				t.Errorf("error: Parse gave %v, Load gave %v", parseErr, loadErr)
+			}
+			var parseInvalid, loadInvalid *ValidationError
+			if errors.As(parseErr, &parseInvalid) != errors.As(loadErr, &loadInvalid) {
+				t.Errorf("error type: Parse gave %T, Load gave %T", parseErr, loadErr)
+			}
+		})
+	}
+}

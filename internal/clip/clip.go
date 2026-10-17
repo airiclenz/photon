@@ -27,8 +27,8 @@ const (
 // project, with the work dir the rig lives in and the take path the clip's take is written to and
 // read from.
 //
-// [Load] is the only way to get one: a Clip in hand has a storyboard and a config that each
-// passed validation and that agree with each other. Its work dir and take path resolve on demand
+// [Load] and [Clip.WithStoryboard] are the only ways to get one: a Clip in hand has a storyboard
+// and a config that each passed validation and that agree with each other. Its work dir and take path resolve on demand
 // ([Clip.Work], [Clip.Take]), so a command that needs neither, such as lint, never fails on them.
 type Clip struct {
 	Storyboard *storyboard.Storyboard
@@ -57,6 +57,17 @@ func Load(storyboardPath, configFlag, workFlag string) (*Clip, error) {
 		return nil, &ValidationError{Path: storyboardPath, Problems: problems}
 	}
 	return &Clip{Storyboard: board, Config: project, workFlag: workFlag}, nil
+}
+
+// WithStoryboard returns a clip of board with c's config and `--work` flag, cross-checked as
+// [Load] does: every area board names that the config does not declare is reported in a
+// *[ValidationError] under board's Path. board must come from [storyboard.Load] or
+// [storyboard.Parse]; c itself is left as it was.
+func (c *Clip) WithStoryboard(board *storyboard.Storyboard) (*Clip, error) {
+	if problems := crossCheck(board, c.Config); len(problems) > 0 {
+		return nil, &ValidationError{Path: board.Path, Problems: problems}
+	}
+	return &Clip{Storyboard: board, Config: c.Config, workFlag: c.workFlag}, nil
 }
 
 // Work resolves the rig's work dir, always absolute: the `--work` flag, else [WorkEnv], else the

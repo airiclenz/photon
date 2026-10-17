@@ -202,3 +202,69 @@ func TestLoad_ConfigFlagWinsOverTheNearestConfig(t *testing.T) {
 		t.Errorf("Config.Path = %q, want the flag's %s", loaded.Config.Path, flag)
 	}
 }
+
+func TestWithStoryboard_UndeclaredAreaFailsNamingIt(t *testing.T) {
+	t.Setenv(WorkEnv, "")
+	loaded, err := Load(validStoryboard, "", "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	undeclaredPath := filepath.Join("testdata", "undeclared", "demo.yaml")
+	undeclared, err := storyboard.Load(undeclaredPath)
+	if err != nil {
+		t.Fatalf("load the undeclared storyboard: %v", err)
+	}
+
+	_, err = loaded.WithStoryboard(undeclared)
+
+	var crossCheckErr *ValidationError
+	if !errors.As(err, &crossCheckErr) {
+		t.Fatalf("WithStoryboard error = %v, want a *ValidationError", err)
+	}
+	for _, fragment := range []string{undeclaredPath, `"sidebar" is not declared`} {
+		if !strings.Contains(err.Error(), fragment) {
+			t.Errorf("error %q does not mention %q", err, fragment)
+		}
+	}
+}
+
+func TestWithStoryboard_KeepsTheConfigAndWorkFlag(t *testing.T) {
+	t.Setenv(WorkEnv, "")
+	flagWork := filepath.Join(t.TempDir(), "flag")
+	loaded, err := Load(validStoryboard, "", flagWork)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	raw, err := os.ReadFile(validStoryboard)
+	if err != nil {
+		t.Fatalf("read the storyboard: %v", err)
+	}
+	edited := strings.Replace(string(raw), "duration: 4s", "duration: 5s", 1)
+	board, err := storyboard.Parse([]byte(edited), validStoryboard)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	replaced, err := loaded.WithStoryboard(board)
+
+	if err != nil {
+		t.Fatalf("WithStoryboard: %v", err)
+	}
+	if replaced.Storyboard != board || replaced.Config != loaded.Config {
+		t.Errorf("WithStoryboard kept storyboard %p and config %p, want %p and %p",
+			replaced.Storyboard, replaced.Config, board, loaded.Config)
+	}
+	if loaded.Storyboard == board {
+		t.Errorf("WithStoryboard changed the original clip's storyboard")
+	}
+	for _, accessor := range []struct {
+		name string
+		get  func(*Clip) (string, error)
+	}{{"Work", (*Clip).Work}, {"Take", (*Clip).Take}} {
+		want, wantErr := accessor.get(loaded)
+		got, gotErr := accessor.get(replaced)
+		if wantErr != nil || gotErr != nil || got != want {
+			t.Errorf("%s = %q (%v), want %q (%v)", accessor.name, got, gotErr, want, wantErr)
+		}
+	}
+}
