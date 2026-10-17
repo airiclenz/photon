@@ -17,5 +17,6 @@ func newRootCommand() *cobra.Command {
 		Args:          cobra.NoArgs,
 	}
 	cmd.AddCommand(newLintCommand())
+	cmd.AddCommand(newCheckCommand())
 	return cmd
 }

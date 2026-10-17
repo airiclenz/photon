@@ -7,5 +7,7 @@
 //   - main.go: the entry point, and execute, which prints every error and returns the exit status.
 //   - root.go: the root command.
 //   - lint.go: `photon lint`, which loads a clip and reports every problem or ok.
+//   - check.go: `photon check`, which judges a take against its storyboard's expects and prints
+//     the table.
 //   - exit.go: the exit codes, and the wrapping that tells a failed run from a bad command line.
 package main
