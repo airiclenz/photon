@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-17
+
 - `photon record <storyboard>` runs your terminal app in a pty, performs the storyboard's beats (humanized typing, named keys, real mouse clicks and drags, waits) and saves every screen change as a take, so a re-record after the UI changes is one command instead of a hand performance.
 - `photon check <storyboard> [<take>]` judges a take against the storyboard's expects and prints a check table; `record` checks every take it writes and exits 0 only when every beat and expect passed, so `until photon record ...; do :; done` is the whole retake loop.
 - `photon render <storyboard> [<take>]` turns a take into the shipped GIF: each beat becomes a section of exactly its `duration`, played at 1×, held or sped up to fit, and a `cut` beat is dropped from the clip. `--dry-run` prints the ffmpeg command lines instead, and memory stays flat however long the clip.
