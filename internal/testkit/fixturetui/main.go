@@ -16,8 +16,8 @@ import (
 const (
 	enterAltScreen  = "\x1b[?1049h"
 	leaveAltScreen  = "\x1b[?1049l"
-	enableSGRMouse  = "\x1b[?1000h\x1b[?1006h"
-	disableSGRMouse = "\x1b[?1006l\x1b[?1000l"
+	enableSGRMouse  = "\x1b[?1002h\x1b[?1006h"
+	disableSGRMouse = "\x1b[?1006l\x1b[?1002l"
 	clearScreen     = "\x1b[H\x1b[2J"
 	queryDA1        = "\x1b[c"
 )
@@ -44,12 +44,14 @@ const (
 	fallbackRows  = 24
 )
 
-// Status texts; typedPrefix and selectedPrefix lead the row after an enter and a click.
+// Status texts; typedPrefix, selectedPrefix and draggedPrefix lead the row after an enter, a
+// click and a drag.
 const (
 	statusAnswered = "ready, terminal answered"
 	statusSilent   = "ready, terminal silent"
 	typedPrefix    = "you typed: "
 	selectedPrefix = "selected: "
+	draggedPrefix  = "dragged: "
 )
 
 // inputLogEnv names the file each input chunk is appended to, one Go-quoted chunk per line.
@@ -117,6 +119,7 @@ type screen struct {
 	selected int
 	pending  []byte
 	hasPick  bool
+	drag     gesture
 }
 
 // consume handles one chunk of input, logging it and repainting, and reports whether it asked the
@@ -172,19 +175,22 @@ func (s *screen) handle(chunk []byte) bool {
 	return false
 }
 
-// handleSequence acts on one complete escape sequence: an SGR left-button press on an item
-// selects it, and every other sequence is ignored.
+// handleSequence acts on one complete escape sequence: an SGR mouse report goes to
+// handleMouse, and every other sequence is ignored.
 func (s *screen) handleSequence(sequence []byte) {
-	column, row, isPress := parseSGRPress(sequence)
-	if !isPress {
-		return
+	if report, isMouse := parseSGR(sequence); isMouse {
+		s.handleMouse(report)
 	}
-	index := row - firstListRow
+}
+
+// selectAt selects the list item whose text covers at, if any.
+func (s *screen) selectAt(at cell) {
+	index := at.row - firstListRow
 	if index < 0 || index >= len(listItems) {
 		return
 	}
 	start := len(listIndent)
-	if column < start || column >= start+len(listItems[index]) {
+	if at.column < start || at.column >= start+len(listItems[index]) {
 		return
 	}
 	s.selected = index
@@ -244,25 +250,6 @@ func sequenceLength(data []byte) (int, bool) {
 	default:
 		return 1, true
 	}
-}
-
-// parseSGRPress reads an SGR mouse report and returns its 0-based cell and whether it is a
-// left-button press. Releases, other buttons, motion and any other sequence report false.
-func parseSGRPress(sequence []byte) (column, row int, isPress bool) {
-	body, isSGR := bytes.CutPrefix(sequence, []byte("\x1b[<"))
-	if !isSGR || len(body) == 0 || body[len(body)-1] != 'M' {
-		return 0, 0, false
-	}
-	fields := strings.Split(string(body[:len(body)-1]), ";")
-	if len(fields) != 3 || fields[0] != "0" {
-		return 0, 0, false
-	}
-	x, errX := strconv.Atoi(fields[1])
-	y, errY := strconv.Atoi(fields[2])
-	if errX != nil || errY != nil {
-		return 0, 0, false
-	}
-	return x - 1, y - 1, true
 }
 
 // awaitAnswer asks the terminal who it is (DA1) and waits up to answerWait for the reply. It

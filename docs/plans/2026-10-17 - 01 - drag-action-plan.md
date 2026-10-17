@@ -87,7 +87,10 @@ internal/target/resolver.go — Resolver.Target; internal/engine/doc.go — file
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/engine -run 'Drag|TestDocMap'` passes; `go vet ./internal/engine`.
 **Commit:** `feat(engine): perform a drag with eased motion reports`
 
-## 4. The fixture TUI receives a drag
+## 4. The fixture TUI receives a drag — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): handleSequence in main.go now only parses (parseSGR) and hands the report to screen.handleMouse in mouse.go, which tracks the gesture (press cell, move count) and sets the status on release; the item selection moved out of handleSequence into screen.selectAt (main.go), called on press. main.go is 380 lines.
+NOTES (2026-10-17): the engine fixture test also pins the drag's press cell (alpha's centre 4,2) and release cell (16,2), beyond the plan's counts-and-order check.
 
 Depends on item 3.
 

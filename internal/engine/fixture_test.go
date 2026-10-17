@@ -32,11 +32,18 @@ const (
 // than hanging it.
 const fixtureWait = 5 * time.Second
 
-// The fixture's list rows: alpha, beta and gamma sit on rows 2-4, indented two columns, so beta's
-// centre is (3, 3) and gamma's (4, 4).
+// The fixture's list rows: alpha, beta and gamma sit on rows 2-4, indented two columns, so
+// alpha's centre is (4, 2), beta's (3, 3) and gamma's (4, 4).
 var (
+	alphaCentre = take.Point{X: 4, Y: 2}
 	betaCentre  = take.Point{X: 3, Y: 3}
 	gammaCentre = take.Point{X: 4, Y: 4}
+)
+
+// The fixture beats' drag: from alpha's centre dragOffset columns to the right in dragSteps steps.
+const (
+	dragOffset = 12
+	dragSteps  = 6
 )
 
 func waitFor(screen string) storyboard.Action {
@@ -67,7 +74,25 @@ func fixtureBeats() []storyboard.Beat {
 			{Pause: &storyboard.PauseAction{For: 50 * time.Millisecond}},
 			{Wait: &storyboard.WaitAction{Screen: "selected: beta", Gone: true, Timeout: fixtureWait}},
 		}},
+		{ID: 4, Title: "drag", Do: []storyboard.Action{
+			dragFromAlpha(),
+			waitFor("dragged: 4,2 to 16,2"),
+		}},
 	}
+}
+
+func dragFromAlpha() storyboard.Action {
+	steps := dragSteps
+	return storyboard.Action{Drag: &storyboard.DragAction{
+		From:  storyboard.Target{Text: "alpha"},
+		To:    storyboard.DragEnd{Offset: &storyboard.Offset{X: dragOffset}},
+		Steps: &steps,
+	}}
+}
+
+// dragEnd is the cell the fixture beats' drag releases at.
+func dragEnd() take.Point {
+	return take.Point{X: alphaCentre.X + dragOffset, Y: alphaCentre.Y}
 }
 
 func TestEngine_Run_FixtureTUI(t *testing.T) {
@@ -98,8 +123,13 @@ func assertFixtureInput(t *testing.T, inputLog string) {
 	press := func(cell take.Point) string {
 		return string(keys.Click(cell.X, cell.Y)) + string(keys.Release(cell.X, cell.Y))
 	}
+	drag := string(keys.Click(alphaCentre.X, alphaCentre.Y))
+	for _, move := range dragPath(alphaCentre, dragEnd(), dragSteps) {
+		drag += string(keys.Motion(move.cell.X, move.cell.Y))
+	}
+	drag += string(keys.Release(dragEnd().X, dragEnd().Y))
 	want := "hello xy" + strings.Repeat(keyBytes(t, "backspace"), 3) + keyBytes(t, "enter") +
-		press(betaCentre) + press(gammaCentre) + press(gammaCentre)
+		press(betaCentre) + press(gammaCentre) + press(gammaCentre) + drag
 
 	if got := readInputLog(t, inputLog); got != want {
 		t.Errorf("the fixture read %q, want %q", got, want)
@@ -125,7 +155,8 @@ func readInputLog(t *testing.T, path string) string {
 }
 
 // assertFixtureEvents checks the take's event log: every beat started, every action started and
-// ended, and the clicks landed on the cells the targets resolved to.
+// ended, the clicks landed on the cells the targets resolved to, and the drag pressed, moved and
+// released in that order.
 func assertFixtureEvents(t *testing.T, events []take.Event, beats []storyboard.Beat) {
 	t.Helper()
 	counts := map[take.EventKind]int{}
@@ -148,10 +179,41 @@ func assertFixtureEvents(t *testing.T, events []take.Event, beats []storyboard.B
 		t.Errorf("%d action-start and %d action-end events, want %d of each",
 			counts[take.EventActionStart], counts[take.EventActionEnd], actions)
 	}
-	if counts[take.EventTarget] != 2 {
-		t.Errorf("%d target events, want 2", counts[take.EventTarget])
+	if counts[take.EventTarget] != 3 {
+		t.Errorf("%d target events, want 3", counts[take.EventTarget])
 	}
 	if want := []take.Point{betaCentre, gammaCentre, gammaCentre}; !slices.Equal(cells, want) {
 		t.Errorf("clicked %v, want %v", cells, want)
+	}
+	assertDragOrder(t, events)
+}
+
+// assertDragOrder checks that the log holds one press at alpha's centre, then at least one move,
+// then one release at the drag's end, with no other gesture event between them.
+func assertDragOrder(t *testing.T, events []take.Event) {
+	t.Helper()
+	var gesture []take.Event
+	for _, event := range events {
+		switch event.Kind {
+		case take.EventPress, take.EventMove, take.EventRelease:
+			gesture = append(gesture, event)
+		}
+	}
+
+	if len(gesture) < 3 {
+		t.Fatalf("%d press, move and release events, want a press, at least one move and a release",
+			len(gesture))
+	}
+	first, last := gesture[0], gesture[len(gesture)-1]
+	if first.Kind != take.EventPress || *first.Cell != alphaCentre {
+		t.Errorf("the drag began with %s at %v, want press at %v", first.Kind, *first.Cell, alphaCentre)
+	}
+	if last.Kind != take.EventRelease || *last.Cell != dragEnd() {
+		t.Errorf("the drag ended with %s at %v, want release at %v", last.Kind, *last.Cell, dragEnd())
+	}
+	for _, move := range gesture[1 : len(gesture)-1] {
+		if move.Kind != take.EventMove {
+			t.Errorf("%s between the press and the release, want only moves", move.Kind)
+		}
 	}
 }
