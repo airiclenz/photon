@@ -1,11 +1,13 @@
 ---
 title: "photon check: seen and run expects"
-status: open
+status: done
 type: feature
 priority: 2
 deps: [take-format, declarative-areas]
 plan: 2026-10-17 - 00 - photon-v1-plan
 created: 2026-10-17T08:54:41Z
+closed: 2026-10-17T12:25:04Z
+reason: Resolved by plan "2026-10-17 - 00 - photon-v1-plan" (archived in bae9f7a)
 ---
 
 A take must be judged before it ships, and re-judged by hand after a render tweak.

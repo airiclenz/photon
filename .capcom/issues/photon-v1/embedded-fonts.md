@@ -1,11 +1,13 @@
 ---
 title: Embed the raster fonts with their OFL licences
-status: open
+status: done
 type: feature
 priority: 2
 deps: [scaffold]
 plan: 2026-10-17 - 00 - photon-v1-plan
 created: 2026-10-17T08:54:41Z
+closed: 2026-10-17T12:25:04Z
+reason: Resolved by plan "2026-10-17 - 00 - photon-v1-plan" (archived in bae9f7a)
 ---
 
 A clip should render the same on every machine and for every project, without each project

@@ -1,11 +1,13 @@
 ---
 title: "photon render: schedule, raster, compose, encode"
-status: open
+status: done
 type: feature
 priority: 2
 deps: [take-format, storyboard-schema, project-config, declarative-areas, embedded-fonts]
 plan: 2026-10-17 - 00 - photon-v1-plan
 created: 2026-10-17T08:54:41Z
+closed: 2026-10-17T12:25:04Z
+reason: Resolved by plan "2026-10-17 - 00 - photon-v1-plan" (archived in bae9f7a)
 ---
 
 `photon render <storyboard> [<take>]` turns a take into the shipped GIF. Each stage is its own
@@ -29,3 +31,7 @@ and length and one speed row per beat, and `--dry-run` prints the ffmpeg command
 - A render test on a small fixture take produces a GIF of the expected size and length; it
   skips when ffmpeg is absent.
 - `--dry-run` is tested without ffmpeg.
+
+## Log
+
+- 2026-10-17 Airic Lenz: Deferred by plan 2026-10-17 - 00 - photon-v1-plan (bae9f7a): raster text goldens compare per channel within a tolerance of 16 and were only run on arm64; amd64 CI may need a wider tolerance or per-architecture goldens

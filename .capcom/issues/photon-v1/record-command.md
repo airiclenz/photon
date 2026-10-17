@@ -1,11 +1,13 @@
 ---
 title: "photon record and setup: one take end to end"
-status: open
+status: done
 type: feature
 priority: 2
 deps: [beat-engine, take-services, check-command]
 plan: 2026-10-17 - 00 - photon-v1-plan
 created: 2026-10-17T08:54:41Z
+closed: 2026-10-17T12:25:04Z
+reason: Resolved by plan "2026-10-17 - 00 - photon-v1-plan" (archived in bae9f7a)
 ---
 
 `photon record <storyboard>` runs one take end to end, so a re-record is one command and a

@@ -1,11 +1,13 @@
 ---
 title: Areas declared in config; one target resolver
-status: open
+status: done
 type: feature
 priority: 2
 deps: [storyboard-schema, project-config, take-format]
 plan: 2026-10-17 - 00 - photon-v1-plan
 created: 2026-10-17T08:54:41Z
+closed: 2026-10-17T12:25:04Z
+reason: Resolved by plan "2026-10-17 - 00 - photon-v1-plan" (archived in bae9f7a)
 ---
 
 Clicks, zooms and `seen` expects often need to look in one part of the screen only: a footer,

@@ -1,11 +1,13 @@
 ---
 title: "Per-project photon.yaml: rig, launch, env, end of take, theme"
-status: open
+status: done
 type: feature
 priority: 2
 deps: [scaffold]
 plan: 2026-10-17 - 00 - photon-v1-plan
 created: 2026-10-17T08:54:41Z
+closed: 2026-10-17T12:25:04Z
+reason: Resolved by plan "2026-10-17 - 00 - photon-v1-plan" (archived in bae9f7a)
 ---
 
 Everything about how a project's app is filmed — how its rig is built and reset, what is

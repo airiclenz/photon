@@ -1,11 +1,13 @@
 ---
 title: Services and profiles started for a take
-status: open
+status: done
 type: feature
 priority: 2
 deps: [project-config]
 plan: 2026-10-17 - 00 - photon-v1-plan
 created: 2026-10-17T08:54:41Z
+closed: 2026-10-17T12:25:04Z
+reason: Resolved by plan "2026-10-17 - 00 - photon-v1-plan" (archived in bae9f7a)
 ---
 
 Some apps need a backend while they are filmed, and a demo must not depend on a live one (an
