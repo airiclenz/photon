@@ -4,6 +4,7 @@ status: open
 type: feature
 priority: 2
 deps: [storyboard-schema, project-config, take-format]
+plan: 2026-10-17 - 00 - photon-v1-plan
 created: 2026-10-17T08:54:41Z
 ---
 
