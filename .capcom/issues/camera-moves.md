@@ -1,10 +1,12 @@
 ---
 title: "Camera moves: zoom and pan as independent, overlapping tracks"
-status: open
+status: done
 type: feature
 priority: 2
 labels: [storyboard]
 created: 2026-10-17T18:33:47Z
+closed: 2026-10-17T22:01:25Z
+reason: Resolved by the camera-captions plan (2026-10-17 - 05), archived in 3beb6aa (items 2-8)
 ---
 
 A beat's `zoom` is the only camera move a clip has. It pushes into one target, holds still and

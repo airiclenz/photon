@@ -1,10 +1,12 @@
 ---
 title: Captions that explain what the clip shows
-status: open
+status: done
 type: feature
 priority: 3
 labels: [storyboard, render]
 created: 2026-10-17T17:28:47Z
+closed: 2026-10-17T22:01:25Z
+reason: Resolved by the camera-captions plan (2026-10-17 - 05), archived in 3beb6aa (items 9-13)
 ---
 
 A clip can show what the app does but cannot say why. A viewer who does not know the app sees
