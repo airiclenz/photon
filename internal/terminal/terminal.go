@@ -16,6 +16,7 @@ import (
 
 	"github.com/charmbracelet/x/vt"
 	"github.com/creack/pty"
+	"golang.org/x/sys/unix"
 
 	"github.com/airiclenz/photon/internal/take"
 )
@@ -186,7 +187,8 @@ func Start(name string, args []string, opts Options) (*Terminal, error) {
 // startUnderPTY launches name on a fresh opts-sized pty. It opens the pair itself rather than
 // through pty.StartWithAttrs, which closes both ends when the launch fails: the slave is handed
 // back open on success and on failure alike, so a refused launch can be probed on the very pty
-// it was refused on. [launch.keep] and [launch.discard] close what it hands back.
+// it was refused on. The master it hands back is pollable. [launch.keep] and [launch.discard]
+// close what it hands back.
 func startUnderPTY(name string, args []string, opts Options) launch {
 	master, tty, err := pty.Open()
 	if err != nil {
@@ -196,12 +198,37 @@ func startUnderPTY(name string, args []string, opts Options) launch {
 	if err := pty.Setsize(master, size); err != nil {
 		return launch{master: master, tty: tty, err: fmt.Errorf("size the pty: %w", err)}
 	}
+	master, err = pollable(master)
+	if err != nil {
+		return launch{master: master, tty: tty, err: err}
+	}
 	cmd := exec.Command(name, args...)
 	cmd.Env = append(slices.Clone(opts.Env), termVariable, colorTermVariable)
 	cmd.Dir = opts.Dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = tty, tty, tty
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true}
 	return launch{cmd: cmd, master: master, tty: tty, err: cmd.Start()}
+}
+
+// pollable hands back a duplicate of master that the runtime poller serves, and closes master.
+// creack/pty reaches the master through its Fd, which puts it in blocking mode for good: a read
+// blocked on it then outlives the master's close, and [Terminal.Close] would wait for as long as
+// anything still holds the slave. A non-blocking duplicate is a file whose blocked read its close
+// ends. Whatever it hands back is open, on success and on failure alike, and the caller's to close.
+// Nothing may call the duplicate's Fd: that would make it blocking again.
+func pollable(master *os.File) (*os.File, error) {
+	fd, err := unix.FcntlInt(master.Fd(), unix.F_DUPFD_CLOEXEC, 0)
+	if err != nil {
+		return master, fmt.Errorf("duplicate the pty master: %w", err)
+	}
+	if err := unix.SetNonblock(fd, true); err != nil {
+		return master, errors.Join(fmt.Errorf("make the pty master non-blocking: %w", err), unix.Close(fd))
+	}
+	duplicate := os.NewFile(uintptr(fd), master.Name())
+	if err := master.Close(); err != nil {
+		return duplicate, fmt.Errorf("close the blocking pty master: %w", err)
+	}
+	return duplicate, nil
 }
 
 // abandon kills a program Start started but cannot record, with its whole process group, and
@@ -294,7 +321,8 @@ func (t *Terminal) Close() *take.Take {
 		<-t.exited
 		// The output pump ends by itself once the last holder of the slave is gone and its buffer
 		// is read. Something the program left behind holding the slave never lets that happen;
-		// its bytes were pumped long ago, so after drainTimeout closing the master ends the pump.
+		// its bytes were pumped long ago, so after drainTimeout closing the master ends the pump:
+		// the master is pollable, so the close ends the read the pump is blocked in.
 		drain := time.NewTimer(drainTimeout)
 		select {
 		case <-t.outputDone:

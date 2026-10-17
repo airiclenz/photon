@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"os/exec"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -30,6 +33,11 @@ const (
 	fixtureStatusRow = fixtureRows - 3
 	testFPS          = 30
 )
+
+// escapeScript starts a process in a session of its own that still holds the pty as its output,
+// has it print its pid on row 0, and waits. Killing the program's process group leaves that
+// process running with the slave open, so reading the master never ends by itself.
+const escapeScript = `setsid sh -c 'echo "escaped $$"; exec sleep 600' & wait`
 
 // The fixture's texts the tests wait for.
 const (
@@ -191,6 +199,48 @@ func TestTerminal_CloseKillsARunningProgram(t *testing.T) {
 	}
 	if code := term.ExitCode(); code != signalExitCode {
 		t.Errorf("exit code of a killed program = %d, want %d", code, signalExitCode)
+	}
+}
+
+func TestTerminal_CloseReturnsWhileAnEscapedProcessHoldsThePTY(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("setsid"); err != nil {
+		t.Skip("no setsid to start a process outside the program's session")
+	}
+	term := startShell(t, escapeScript)
+	var escaped int
+	testkit.Eventually(t, testTimeout, func() error {
+		row := rowText(term.Current(), 0)
+		pid, isCut := strings.CutPrefix(row, "escaped ")
+		if !isCut {
+			return fmt.Errorf("row 0 reads %q, want the escaped process's pid", row)
+		}
+		parsed, err := strconv.Atoi(pid)
+		if err != nil {
+			return fmt.Errorf("row 0 reads %q: %w", row, err)
+		}
+		escaped = parsed
+		return nil
+	})
+	// Registered after startShell's cleanup, so it runs first: a Close stuck on the escaped
+	// process's slave returns once that process is gone, and the suite does not hang on it.
+	t.Cleanup(func() { _ = syscall.Kill(escaped, syscall.SIGKILL) })
+	if group, err := syscall.Getpgid(escaped); err != nil || group == term.cmd.Process.Pid {
+		t.Fatalf("process group of the escaped process = %d (%v), want one apart from %d", group, err, term.cmd.Process.Pid)
+	}
+
+	closed := make(chan struct{})
+	go func() {
+		term.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(testTimeout):
+		t.Fatalf("Close did not return within %s while the escaped process %d held the pty", testTimeout, escaped)
+	}
+	if err := syscall.Kill(escaped, 0); err != nil {
+		t.Errorf("the escaped process %d is gone (kill 0: %v), so the pty was not held through Close", escaped, err)
 	}
 }
 
