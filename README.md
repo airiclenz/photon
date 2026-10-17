@@ -86,9 +86,9 @@ To film your own project, copy the two files from `examples/hello` next to your 
 
 ## The commands
 
-Every command takes the storyboard as its first argument. Each finds the project's config the
-same way: `--config <file>` when given, else the nearest `photon.yaml` at or above the
-storyboard's directory. Each command's `--help` repeats what is said here.
+Every command but `photon version` takes the storyboard as its first argument. Each finds the
+project's config the same way: `--config <file>` when given, else the nearest `photon.yaml` at or
+above the storyboard's directory. Each command's `--help` repeats what is said here.
 
 | Command | What it does |
 | --- | --- |
@@ -97,6 +97,7 @@ storyboard's directory. Each command's `--help` repeats what is said here.
 | `photon record <storyboard>` | Records one take, writes it to `<work>/<clip>.take`, checks it and prints the check table. |
 | `photon check <storyboard> [<take>]` | Judges a take (default `<work>/<clip>.take`) against the storyboard's expects and prints the check table. |
 | `photon render <storyboard> [<take>]` | Renders a take (default `<work>/<clip>.take`) to the GIF at the storyboard's `ship` path. |
+| `photon version` | Prints photon's version, such as `1.0.0`; `photon --version` prints the same. |
 
 Flags:
 

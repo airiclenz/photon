@@ -18,3 +18,7 @@ decided then.
 - `go install github.com/airiclenz/photon/cmd/photon@v1.0.0` works, and `photon version` prints
   `1.0.0`.
 - A release has notes and binaries for the three OSes.
+
+## Log
+
+- 2026-10-17 Airic Lenz: VERSION at the repo root is the one version source, embedded by the root package's Version(); photon version and --version print it. A release updates VERSION only.

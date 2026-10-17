@@ -49,7 +49,8 @@ func TestREADMEDocumentsEveryCommand(t *testing.T) {
 	readme := readREADME(t)
 	for _, cmd := range newRootCommand().Commands() {
 		t.Run(cmd.Name(), func(t *testing.T) {
-			if !strings.Contains(readme, "`"+programName+" "+cmd.Name()+" ") {
+			usage := "`" + programName + " " + cmd.Name()
+			if !strings.Contains(readme, usage+" ") && !strings.Contains(readme, usage+"`") {
 				t.Errorf("README.md does not document `%s %s`", programName, cmd.Name())
 			}
 			for _, match := range flagName.FindAllStringSubmatch(cmd.Flags().FlagUsages(), -1) {

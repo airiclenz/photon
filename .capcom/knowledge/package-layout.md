@@ -27,9 +27,14 @@ imports upward, and there are no cycles.
 | `internal/render` | the render run: frames through ffmpeg, then gifsicle | `clip`, `schedule`, `raster`, `compose`, `fonts`, `target`, `storyboard`, `take` |
 | `internal/testkit` | test support: doc-map check, fixture TUI build, polling | — |
 | `cmd/photon` | the Cobra commands and the exit-code mapping only | the packages above |
+| `photon` (module root) | `Version()`, embedded from the root `VERSION` file, photon's one version source | — |
 
 Rules: `cmd/photon` holds no logic beyond flags and wiring. An interface type appears only where
 two adapters exist, e.g. the engine's `Terminal` (the pty terminal plus a test fake); `engine`
 never imports `terminal`. A domain package (`storyboard`, `config`, `take`, `clip`) imports no
 process, pty or image code; the emulator-cell conversion lives in `terminal`, palette resolution
 in `raster`.
+
+The root package exists only because `go:embed` reaches no file above a package's directory and
+`VERSION` sits at the module root; it holds `Version()` and nothing else. A release updates
+`VERSION` and nothing in Go code.
