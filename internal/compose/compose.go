@@ -71,9 +71,9 @@ func (l Layout) home() pointF {
 
 // Compositor turns each scheduled snapshot, rasterized, into a shipped frame: it pushes into
 // the section's zoom target, scales to the shipped width, draws the cursor of the clicks and
-// drags on top at constant size and the storyboard's captions over everything. Everything it needs is fixed at construction, so composing is a
-// pure function of the output time and the source frame, and a Compositor is safe for
-// concurrent use.
+// drags on top at constant size and the storyboard's captions over everything. Everything it
+// needs is fixed at construction, so composing is a pure function of the output time and the
+// source frame, and a Compositor is safe for concurrent use.
 type Compositor struct {
 	layout     Layout
 	out        image.Point

@@ -1,8 +1,8 @@
 // Package compose turns each rasterized frame of a clip into the shipped frame: it pushes into
 // the beat's zoom target, scales to the storyboard's `frame.width`, draws a cursor over the
-// clicks and drags on top and the storyboard's captions over everything. [New] plans everything from the storyboard, the take, its schedule and
-// the frame [Layout]; [Compositor.Compose] is then a pure function of the output time and the
-// source frame.
+// clicks and drags on top and the storyboard's captions over everything. [New] plans everything
+// from the storyboard, the take, its schedule, the frame [Layout] and the caption faces;
+// [Compositor.Compose] is then a pure function of the output time and the source frame.
 //
 // The crop comes from a camera of two tracks, each holding its last state between moves: a zoom
 // track of the magnification, at rest at 1, and a pan track of the crop's centre, at rest at the
@@ -13,10 +13,10 @@
 // every frame scales by the same ratio at the same eased pace. A pan move carries the centre
 // along a centripetal Catmull-Rom path from where the track holds it, through any waypoints, to
 // its end, walked by arc length, so it turns without a corner at a waypoint; its progress runs
-// smootherstep, or straight when its ease is linear. With no `factor`, the zoom fits the target: the target
-// box plus two cells either side fills 70 percent of the frame width, clamped to [1.25, 2.5]. The
-// zoom box is the one the take logged for a click of the same beat on the identical target, or
-// for a drag of the same beat whose `from` or `to` target is identical, else
+// smootherstep, or straight when its ease is linear. With no `factor`, the zoom fits the target:
+// the target box plus two cells either side fills 70 percent of the frame width, clamped to
+// [1.25, 2.5]. The zoom box is the one the take logged for a click of the same beat on the
+// identical target, or for a drag of the same beat whose `from` or `to` target is identical, else
 // the target resolved on the latest snapshot inside the beat's span that shows it, walking back
 // to the snapshot in effect at the beat's start. The storyboard's `camera` moves join the tracks
 // beside the beat zooms, each at its `at` on the output clock for its `over`: a zoom move eases
