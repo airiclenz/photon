@@ -85,7 +85,7 @@ photon uses two external programs:
   `gifsicle -O3` pass.
 
 Recording needs a unix pty. `photon setup` and `photon record` run on Linux and macOS only.
-`photon lint`, `photon check` and `photon render` run everywhere.
+`photon lint`, `photon check`, `photon render` and `photon tune` run everywhere.
 
 ## Quick start
 
@@ -142,6 +142,7 @@ storyboard's folder. Each command's `--help` says the same as this section.
 | `photon record <storyboard>` | Records one take to `<work>/<clip>.take`, checks it and prints the check table. |
 | `photon check <storyboard> [<take>]` | Checks a take (default `<work>/<clip>.take`) against the storyboard's expects and prints the check table. |
 | `photon render <storyboard> [<take>]` | Renders a take (default `<work>/<clip>.take`) to the GIF at the storyboard's `ship` path. |
+| `photon tune <storyboard> [<take>]` | Serves a page on `127.0.0.1` to tune the storyboard's timing, zoom and frame against a take (default `<work>/<clip>.take`), and saves the edits back into the storyboard. Runs until Ctrl-C. |
 | `photon version` | Prints photon's version, such as `1.0.0`. `photon --version` does the same. |
 
 Flags:
@@ -149,22 +150,33 @@ Flags:
 | Flag | Commands | Meaning |
 | --- | --- | --- |
 | `--config <file>` | all | Use this config instead of the nearest `photon.yaml`. |
-| `--work <dir>` | setup, record, check, render | The work dir. |
+| `--work <dir>` | setup, record, check, render, tune | The work dir. |
 | `--profile <name>` | record | The profile to record with (its services and `on_success`). |
 | `-o`, `--output <file>` | render | Write the GIF here instead of the `ship` path. Its folder is created. |
 | `--dry-run` | render | Print both ffmpeg command lines, palette pass first, and exit without rendering. |
+| `--port <n>` | tune | Serve the page on this port of `127.0.0.1`. The default, `0`, picks any free port. |
 
 **The work dir** is the first of: `--work`, `$PHOTON_WORK`, the config's `work`, and
 `~/.cache/<name>-photon` (`<name>` is the config's `name`). It holds what `setup` builds, every
 take, each service's log (`<work>/<service>.log`), and the clip's palette
 (`<work>/<clip>.palette.png`) while `render` runs.
 
+**Tuning** with `photon tune` prints the page's address, such as
+`photon tune: http://127.0.0.1:41234/`, and never opens a browser. The page previews the take
+frame for frame as `photon render` composes it. Its timeline edits each beat's `duration`,
+`hold`, `cut` and `zoom`, and its inspector the clip's `frame.width` and `frame.fps`. A pick on
+the paused preview proposes a target for the picked cells, ready to use as a zoom target or
+to copy as a `click`, `seen` or `drag` end. `pause` and the `do` actions show read-only:
+changing them needs a new `photon record`. Save writes the storyboard in place and changes only
+the edited values, so comments and layout stay. It is refused while an edit leaves the
+storyboard invalid, or when the file changed on disk since it was loaded.
+
 **Exit status** is the same for every command:
 
 | Status | Meaning |
 | --- | --- |
-| `0` | Success: the clip is clean (lint), setup ran, every beat and expect passed (record, check), the GIF was written (render). |
-| `1` | The run failed: a problem in a file, a failed command, beat or expect, or a take that could not be recorded or rendered. |
+| `0` | Success: the clip is clean (lint), setup ran, every beat and expect passed (record, check), the GIF was written (render), the page was served until Ctrl-C (tune). |
+| `1` | The run failed: a problem in a file, a failed command, beat or expect, or a take that could not be recorded, rendered or tuned, or a page that could not be served. |
 | `2` | A bad command line, such as an unknown flag or a missing argument. The usage text is printed. |
 
 Errors go to stderr as `photon: <error>`.
@@ -586,7 +598,7 @@ Yes, on Linux or macOS. `photon lint` checks storyboards without recording.
 `photon record` exits non-zero on a bad take, so a job can retake or fail.
 
 **Does it work on Windows?**
-`lint`, `check` and `render` do. `setup` and `record` need a unix pty, so record on Linux or
+`lint`, `check`, `render` and `tune` do. `setup` and `record` need a unix pty, so record on Linux or
 macOS.
 
 ## License

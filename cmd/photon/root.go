@@ -33,6 +33,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newRecordCommand())
 	cmd.AddCommand(newCheckCommand())
 	cmd.AddCommand(newRenderCommand())
+	cmd.AddCommand(newTuneCommand())
 	cmd.AddCommand(newVersionCommand())
 	return cmd
 }

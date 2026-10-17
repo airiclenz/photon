@@ -410,7 +410,10 @@ set as zoom target, Save, `git diff` shows only the zoom line.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/` ; `go vet ./internal/tune/`
 **Commit:** `feat(tune): pick targets from the preview`
 
-## 12. `photon tune` command and docs
+## 12. `photon tune` command and docs — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): README also gains `photon tune` in the two "runs everywhere" lines (Install's platform note and the Windows FAQ), since tune needs no pty, and a short **Tuning** paragraph in `## Commands` beside the work-dir paragraph describing the page, what is editable and the Save refusals.
+NOTES (2026-10-17): beyond the item's two named tests, tune_test.go adds TestTuneServesUntilStopped: it runs tune on a synthetic take with `--port` left at 0, cancels the context once the `photon tune: http://127.0.0.1:` line is printed, and asserts exit 0, the Ctrl-C path through signal.NotifyContext.
 
 Depends on item 8.
 
