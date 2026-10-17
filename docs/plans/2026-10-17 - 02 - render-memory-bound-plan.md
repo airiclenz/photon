@@ -51,7 +51,7 @@ internal/clip/clip.go — Clip.Work; internal/render/render_test.go — TestRunD
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/render` passes; `go vet ./internal/render`; `grep -n 'split' internal/render/encode.go` prints nothing.
 **Commit:** `fix(render): encode in two ffmpeg passes so memory stays flat`
 
-## 2. Peak-memory test for both passes
+## 2. Peak-memory test for both passes — ✅ DONE (2026-10-17)
 
 Depends on item 1.
 
