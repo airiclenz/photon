@@ -23,24 +23,23 @@ const (
 	takeExtension = ".take"
 )
 
-// Clip is one clip ready to record, check or render: its Storyboard, the Config of its project,
-// the Work dir the rig lives in and the Take path the clip's take is written to and read from.
+// Clip is one clip ready to record, check or render: its Storyboard and the Config of its
+// project, with the work dir the rig lives in and the take path the clip's take is written to and
+// read from.
 //
 // [Load] is the only way to get one: a Clip in hand has a storyboard and a config that each
-// passed validation and that agree with each other, and an absolute Work and Take.
+// passed validation and that agree with each other. Its work dir and take path resolve on demand
+// ([Clip.Work], [Clip.Take]), so a command that needs neither, such as lint, never fails on them.
 type Clip struct {
 	Storyboard *storyboard.Storyboard
 	Config     *config.Config
-	// Work is the rig's work dir: the `--work` flag, else [WorkEnv], else the config's `work`,
-	// else ~/.cache/<name>-photon.
-	Work string
-	// Take is `<Work>/<clip>.take`.
-	Take string
+	// workFlag is the `--work` flag; empty when unset.
+	workFlag string
 }
 
-// Load loads the storyboard at storyboardPath and the config it uses, and derives the clip's work
-// dir and take path. configFlag and workFlag are the `--config` and `--work` flags; an empty one
-// is unset.
+// Load loads the storyboard at storyboardPath and the config it uses. configFlag and workFlag are
+// the `--config` and `--work` flags; an empty one is unset. workFlag is only kept for
+// [Clip.Work]: Load itself never resolves the work dir.
 //
 // The config is configFlag when set, else the nearest photon.yaml at or above the storyboard's
 // directory ([config.Find]). Every problem the storyboard and the config have is reported at
@@ -57,17 +56,23 @@ func Load(storyboardPath, configFlag, workFlag string) (*Clip, error) {
 	if problems := crossCheck(board, project); len(problems) > 0 {
 		return nil, &ValidationError{Path: storyboardPath, Problems: problems}
 	}
+	return &Clip{Storyboard: board, Config: project, workFlag: workFlag}, nil
+}
 
-	work, err := workDir(workFlag, project)
+// Work resolves the rig's work dir, always absolute: the `--work` flag, else [WorkEnv], else the
+// config's `work`, else ~/.cache/<name>-photon. It fails only when the default is needed and the
+// home dir cannot be found.
+func (c *Clip) Work() (string, error) {
+	return workDir(c.workFlag, c.Config)
+}
+
+// Take resolves the clip's take path: `<work>/<clip>.take`, with the work dir of [Clip.Work].
+func (c *Clip) Take() (string, error) {
+	work, err := c.Work()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return &Clip{
-		Storyboard: board,
-		Config:     project,
-		Work:       work,
-		Take:       filepath.Join(work, board.Clip+takeExtension),
-	}, nil
+	return filepath.Join(work, c.Storyboard.Clip+takeExtension), nil
 }
 
 // loadConfig finds and loads the config a storyboard in storyboardDir uses.

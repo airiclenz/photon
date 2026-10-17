@@ -1,0 +1,9 @@
+# Declares the two areas every-form.yaml names; it gives no work dir.
+name: lint-valid
+launch:
+  command: ./app --demo
+areas:
+  list:
+    bottom: {match: '^─+$'}
+  status:
+    top: {match: '^─+$', pick: last, offset: 1}

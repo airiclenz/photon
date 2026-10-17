@@ -8,7 +8,7 @@ const programName = "photon"
 // newRootCommand builds the command tree. Errors are silenced here and printed by execute; usage
 // still prints for a bad command line, because that is the one failure the usage text answers.
 func newRootCommand() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   programName,
 		Short: "Record, check and render a terminal app's demo clip from its storyboard",
 		Long: "photon records a terminal app's demo clip from a storyboard, checks the take, and\n" +
@@ -16,4 +16,6 @@ func newRootCommand() *cobra.Command {
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
 	}
+	cmd.AddCommand(newLintCommand())
+	return cmd
 }

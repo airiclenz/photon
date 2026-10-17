@@ -1,0 +1,6 @@
+# Breaks two storyboard rules: the clip name is missing and the only beat has no title.
+ship: out/demo.gif
+frame: {cols: 80, rows: 24, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+beats:
+  - id: 1
+    duration: 4s

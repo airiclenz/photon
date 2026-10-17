@@ -53,13 +53,39 @@ func TestLoad_WorkDirPrecedence(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			if loaded.Work != test.want {
-				t.Errorf("Work = %q, want %q", loaded.Work, test.want)
+			work, err := loaded.Work()
+			if err != nil {
+				t.Fatalf("Work: %v", err)
 			}
-			if wantTake := filepath.Join(test.want, "demo.take"); loaded.Take != wantTake {
-				t.Errorf("Take = %q, want %q", loaded.Take, wantTake)
+			if work != test.want {
+				t.Errorf("Work = %q, want %q", work, test.want)
+			}
+			take, err := loaded.Take()
+			if err != nil {
+				t.Fatalf("Take: %v", err)
+			}
+			if wantTake := filepath.Join(test.want, "demo.take"); take != wantTake {
+				t.Errorf("Take = %q, want %q", take, wantTake)
 			}
 		})
+	}
+}
+
+func TestLoad_WithoutAHomeDirStillLoadsAndDefersTheWorkDirFailure(t *testing.T) {
+	t.Setenv(WorkEnv, "")
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+
+	loaded, err := Load(validStoryboard, "", "")
+
+	if err != nil {
+		t.Fatalf("Load: %v, want the clip loaded without resolving its work dir", err)
+	}
+	if _, err := loaded.Work(); err == nil {
+		t.Error("Work: no error, want the missing home dir reported")
+	}
+	if _, err := loaded.Take(); err == nil {
+		t.Error("Take: no error, want the missing home dir reported")
 	}
 }
 

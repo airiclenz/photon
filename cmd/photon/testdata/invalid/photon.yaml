@@ -1,0 +1,2 @@
+# Breaks one config rule: launch.command is missing.
+name: lint-invalid

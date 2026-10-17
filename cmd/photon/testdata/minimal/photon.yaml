@@ -1,0 +1,4 @@
+# The smallest config photon accepts: a project name and the one command it films.
+name: minimal
+launch:
+  command: ./app --demo
