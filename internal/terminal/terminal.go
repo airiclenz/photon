@@ -49,6 +49,13 @@ const (
 // signalExitCode is the exit code [Terminal.ExitCode] reports for a program a signal ended.
 const signalExitCode = -1
 
+// startAttempts and startRetryGap bound how [Start] retries a launch the kernel refused with
+// EPERM (see startRetryingEPERM).
+const (
+	startAttempts = 3
+	startRetryGap = 100 * time.Millisecond
+)
+
 // Options is the terminal a program runs in.
 type Options struct {
 	// Cols and Rows are the terminal's size in cells, each within 1..4096.
@@ -61,6 +68,11 @@ type Options struct {
 	Env []string
 	// Dir is the program's working directory; "" is photon's own.
 	Dir string
+	// FromFirstPaint starts the take at the program's first paint rather than at its launch:
+	// nothing is recorded until the terminal is on the alternate screen with something drawn on
+	// it, and the take's clock starts there. Whatever ran before, a wrapper script's output or a
+	// shell's banner, never reaches the take.
+	FromFirstPaint bool
 }
 
 // validate reports an Options no terminal can be started with.
@@ -91,6 +103,14 @@ type Terminal struct {
 	cursorVisible bool
 	dirty         bool
 	take          *take.Take
+	// awaitingPaint is true while a FromFirstPaint take has not seen its first paint; painted
+	// closes when it has (at once for a take that records from launch).
+	awaitingPaint bool
+	painted       chan struct{}
+	// frozen is true once [Terminal.Freeze] has ended the take: from then on nothing reaches it.
+	frozen bool
+	// lastOutput is when the program last wrote anything: what [Terminal.Settle] waits on.
+	lastOutput time.Time
 
 	// writeMu serialises the two writers of the master, photon's input and the emulator's
 	// replies, so a reply is never spliced into the middle of a key's sequence.
@@ -110,8 +130,12 @@ type Terminal struct {
 }
 
 // Start runs name with args under an opts.Cols × opts.Rows pty and begins recording: the take
-// opens on the blank screen at 0 s. The program is a session leader with the pty as its
-// controlling terminal. Close the terminal to end the recording and get the take.
+// opens on the blank screen at 0 s, or with opts.FromFirstPaint on the first paint. The program
+// is a session leader with the pty as its controlling terminal, so its process group holds
+// everything it starts: a shell between the pty and the app (`sh -c '. env.sh && app'`) is in
+// the group the terminal signals, and so is the app. A launch the kernel refuses with EPERM is
+// retried; the last refusal's error carries a probe of which launch step was refused and which
+// processes hold the pty. Close the terminal to end the recording and get the take.
 func Start(name string, args []string, opts Options) (*Terminal, error) {
 	if err := opts.validate(); err != nil {
 		return nil, err
@@ -122,6 +146,8 @@ func Start(name string, args []string, opts Options) (*Terminal, error) {
 		opts:          opts,
 		emulator:      emulator,
 		cursorVisible: true,
+		awaitingPaint: opts.FromFirstPaint,
+		painted:       make(chan struct{}),
 		replies:       newReplyQueue(),
 		exited:        make(chan struct{}),
 		stopSampling:  make(chan struct{}),
@@ -133,16 +159,21 @@ func Start(name string, args []string, opts Options) (*Terminal, error) {
 	// The callback runs inside emulator.Write, which only ever runs with mu held.
 	emulator.SetCallbacks(vt.Callbacks{CursorVisibility: func(visible bool) { t.cursorVisible = visible }})
 
-	cmd, master, err := startUnderPTY(name, args, opts)
+	cmd, master, err := startRetryingEPERM(func() launch { return startUnderPTY(name, args, opts) },
+		probeReport, startAttempts, startRetryGap)
 	if err != nil {
 		return nil, fmt.Errorf("start %s under a pty: %w", name, err)
 	}
 	t.cmd, t.master = cmd, master
 	t.start = time.Now()
+	t.lastOutput = t.start
 	t.take = &take.Take{Cols: opts.Cols, Rows: opts.Rows, FPS: opts.FPS, Started: t.start.UTC().Round(0)}
-	t.mu.Lock()
-	t.sampleLocked(0)
-	t.mu.Unlock()
+	if !opts.FromFirstPaint {
+		t.mu.Lock()
+		t.sampleLocked(0)
+		t.mu.Unlock()
+		close(t.painted)
+	}
 
 	go t.pumpOutput()
 	go t.pumpReplies()
@@ -152,34 +183,25 @@ func Start(name string, args []string, opts Options) (*Terminal, error) {
 	return t, nil
 }
 
-// startUnderPTY launches name on a fresh opts-sized pty and returns the running command and the
-// pty's master. The parent's copy of the slave is closed either way, so once the program and
-// everything it started are gone, reading the master ends.
-func startUnderPTY(name string, args []string, opts Options) (*exec.Cmd, *os.File, error) {
+// startUnderPTY launches name on a fresh opts-sized pty. It opens the pair itself rather than
+// through pty.StartWithAttrs, which closes both ends when the launch fails: the slave is handed
+// back open on success and on failure alike, so a refused launch can be probed on the very pty
+// it was refused on. [launch.keep] and [launch.discard] close what it hands back.
+func startUnderPTY(name string, args []string, opts Options) launch {
 	master, tty, err := pty.Open()
 	if err != nil {
-		return nil, nil, fmt.Errorf("open a pty: %w", err)
+		return launch{err: fmt.Errorf("open a pty: %w", err)}
 	}
 	size := &pty.Winsize{Rows: uint16(opts.Rows), Cols: uint16(opts.Cols)}
 	if err := pty.Setsize(master, size); err != nil {
-		return nil, nil, errors.Join(fmt.Errorf("size the pty: %w", err), tty.Close(), master.Close())
+		return launch{master: master, tty: tty, err: fmt.Errorf("size the pty: %w", err)}
 	}
 	cmd := exec.Command(name, args...)
 	cmd.Env = append(slices.Clone(opts.Env), termVariable, colorTermVariable)
 	cmd.Dir = opts.Dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = tty, tty, tty
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true}
-
-	startErr := cmd.Start()
-	ttyErr := tty.Close()
-	if startErr != nil {
-		return nil, nil, errors.Join(startErr, ttyErr, master.Close())
-	}
-	if ttyErr != nil {
-		return nil, nil, errors.Join(fmt.Errorf("close the parent's end of the pty: %w", ttyErr),
-			abandon(cmd), master.Close())
-	}
-	return cmd, master, nil
+	return launch{cmd: cmd, master: master, tty: tty, err: cmd.Start()}
 }
 
 // abandon kills a program Start started but cannot record, with its whole process group, and
@@ -205,10 +227,14 @@ func (t *Terminal) Send(p []byte) error {
 }
 
 // Event logs event into the take, stamped now on the take's clock: whatever At it carries is
-// replaced.
+// replaced. An event logged before a FromFirstPaint take's first paint lands at 0 s; one logged
+// after [Terminal.Freeze] is dropped.
 func (t *Terminal) Event(event take.Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.frozen {
+		return
+	}
 	event.At = time.Since(t.start)
 	t.take.Events = append(t.take.Events, event)
 }
@@ -225,7 +251,8 @@ func (t *Terminal) Current() take.Snapshot {
 // screen into the take, stamped now. The sampler takes one snapshot a frame, so a screen photon
 // waited on could otherwise come and go between two samples, and what the take shows is what a
 // check later judges. Matching and recording happen under one lock: the screen recorded is
-// exactly the screen that matched.
+// exactly the screen that matched. Before a FromFirstPaint take's first paint, and after
+// [Terminal.Freeze], a match is reported and nothing is recorded.
 func (t *Terminal) Match(match func(take.Snapshot) bool) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -233,8 +260,10 @@ func (t *Terminal) Match(match func(take.Snapshot) bool) bool {
 	if !match(screen) {
 		return false
 	}
-	t.dirty = false
-	addSnapshot(t.take, screen)
+	if t.recordingLocked() {
+		t.dirty = false
+		addSnapshot(t.take, screen)
+	}
 	return true
 }
 
@@ -249,8 +278,9 @@ func (t *Terminal) ExitCode() int {
 }
 
 // Close ends the recording and returns the take. A program still running is killed with its whole
-// process group; whatever it painted before it went is flushed into the take first. Close waits
-// for every goroutine the terminal started, and a second call returns the same take.
+// process group: [Terminal.Quit] is the gentle way out, Close the sure one. Whatever it painted
+// before it went is flushed into the take first, unless [Terminal.Freeze] ended the take earlier.
+// Close waits for every goroutine the terminal started, and a second call returns the same take.
 func (t *Terminal) Close() *take.Take {
 	t.closing.Do(func() {
 		select {
@@ -311,6 +341,10 @@ func (t *Terminal) paint(output []byte) bool {
 		return false
 	}
 	t.dirty = true
+	t.lastOutput = time.Now()
+	if t.awaitingPaint && !t.frozen && t.emulator.IsAltScreen() && t.screenDrawnLocked() {
+		t.startAtPaintLocked()
+	}
 	return true
 }
 

@@ -3,7 +3,9 @@
 package terminal
 
 import (
+	"context"
 	"errors"
+	"time"
 
 	"github.com/airiclenz/photon/internal/take"
 )
@@ -19,10 +21,11 @@ const noExitCode = -1
 
 // Options is the terminal a program runs in; see the unix build for what each field means.
 type Options struct {
-	Cols, Rows int
-	FPS        int
-	Env        []string
-	Dir        string
+	Cols, Rows     int
+	FPS            int
+	Env            []string
+	Dir            string
+	FromFirstPaint bool
 }
 
 // Terminal is the type and nothing else on Windows: [Start] never returns one.
@@ -49,6 +52,22 @@ func (*Terminal) Done() <-chan struct{} {
 	close(done)
 	return done
 }
+
+// Painted is already closed: there is no paint to wait for.
+func (*Terminal) Painted() <-chan struct{} {
+	painted := make(chan struct{})
+	close(painted)
+	return painted
+}
+
+// Freeze does nothing: there is no take to end.
+func (*Terminal) Freeze() {}
+
+// Settle reports true at once, as for a program already gone: there is nothing to wait on.
+func (*Terminal) Settle(context.Context, time.Duration, time.Duration) bool { return true }
+
+// Quit reports true at once, as for a program already gone: nothing types and nothing runs.
+func (*Terminal) Quit([][]byte, time.Duration, time.Duration) bool { return true }
 
 // ExitCode is -1: nothing ran.
 func (*Terminal) ExitCode() int { return noExitCode }

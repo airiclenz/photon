@@ -27,20 +27,27 @@ func (t *Terminal) sample() {
 	}
 }
 
-// sampleIfDirty records the screen when output arrived since the last sample.
+// sampleIfDirty records the screen when output arrived since the last sample and the take is
+// recording.
 func (t *Terminal) sampleIfDirty() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.dirty {
+	if t.dirty && t.recordingLocked() {
 		t.sampleLocked(time.Since(t.start))
 	}
 }
 
 // sampleLocked adds the screen as it stands, stamped at, to the take unless it shows the same
-// picture as the last snapshot. The caller holds mu.
+// picture as the last snapshot. The caller holds mu and has checked the take is recording.
 func (t *Terminal) sampleLocked(at time.Duration) {
 	t.dirty = false
 	addSnapshot(t.take, t.snapshotLocked(at))
+}
+
+// recordingLocked reports whether a screen reaches the take now: not before a FromFirstPaint
+// take's first paint, and not after [Terminal.Freeze]. The caller holds mu.
+func (t *Terminal) recordingLocked() bool {
+	return !t.awaitingPaint && !t.frozen
 }
 
 // snapshotLocked reads the emulator into a snapshot stamped at. The caller holds mu.

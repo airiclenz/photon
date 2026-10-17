@@ -51,10 +51,12 @@ type Config struct {
 	Fonts    string             `yaml:"fonts"`
 }
 
-// Launch is the program filmed: Command, run as `sh -c 'exec <command>'` in Dir (relative to
-// the config's dir, and that dir when omitted) with Env added. Strip lists globs of the
-// operator's environment variable names removed before the launch, such as `MYAPP_*`, so the
-// operator's own settings cannot steer the app away from the rig.
+// Launch is the program filmed: Command, run as `sh -c '<command>'` in Dir (relative to the
+// config's dir, and that dir when omitted) with Env added. No `exec` is prefixed, so a compound
+// command such as `. env.sh && exec app` works; a shell left between the pty and the app shares
+// the app's process group, which is what the terminal kills. Strip lists globs of the operator's
+// environment variable names removed before the launch, such as `MYAPP_*`, so the operator's own
+// settings cannot steer the app away from the rig.
 type Launch struct {
 	Command string            `yaml:"command"`
 	Dir     string            `yaml:"dir"`
