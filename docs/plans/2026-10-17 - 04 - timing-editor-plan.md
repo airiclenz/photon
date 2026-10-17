@@ -179,7 +179,16 @@ spelling per kind refused with a message naming the field.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/` ; `go vet ./internal/tune/`
 **Commit:** `feat(tune): apply timing and zoom edits to storyboard source`
 
-## 5. tune: session state, history and save
+## 5. tune: session state, history and save — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the history type sits in its own internal/tune/history.go (not in the item's Files) — one primary type per file, and it keeps session.go near the ~400-line limit; doc.go maps it.
+NOTES (2026-10-17): the on-disk baseline is the storyboard's bytes compared with bytes.Equal rather than a hash: the same check, and Revert needs the bytes anyway; the mode is read from the file at save time.
+NOTES (2026-10-17): a rewritten take is read again and rebuilt on in Refresh whether or not edits are unsaved (it cannot conflict with them); only a changed storyboard turns a dirty session stale, and an unreadable or mis-sized take stands as a clip error (beat 0) that blocks Save until the take is rewritten.
+NOTES (2026-10-17): an edit apply() refuses (misspelled, missing beat, invalid result) is returned by Apply and changes nothing — no history entry, no standing error; only a build failure on accepted bytes (schedule, compositor, cross-check) stands as an error and keeps the last good pipeline.
+NOTES (2026-10-17): Revert pushes the on-disk bytes as a new version, so Undo brings the discarded edits back; with nothing unsaved it does nothing.
+NOTES (2026-10-17): NewSession fails when the first build fails (as render would), so a session always has a good pipeline for items 6 and 7; the pipeline struct (board, clip, take, schedule, rasterizer, compositor) is what Frame/Pick will copy under the lock.
+NOTES (2026-10-17): State's JSON carries durations as whole ms in `*_ms` fields; sections also carry start/duration/hold/cut for the lanes; problems are split per validation rule and attributed to a beat only when the beat the message names exists.
+NOTES (2026-10-17): golangci-lint is not installed on this host, so only gofmt and go vet ran.
 
 Depends on items 2 and 4.
 

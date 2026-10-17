@@ -9,8 +9,20 @@
 // factor to auto removes the key. The result is parsed again with the storyboard's own strict
 // loader, so an edit that leaves the storyboard invalid is refused with the problems it causes.
 //
+// A [Session] holds one clip and take being tuned. Every applied edit, undo, redo or revert
+// rebuilds the schedule and the compositor on the new bytes, as `photon render` builds them,
+// reusing the rasterizer while the take and the frame's raster geometry stay; a build that fails
+// leaves its error standing on the beat or the clip it names, and the last good pipeline stays
+// the preview's. [Session.Refresh] takes in outside writes — a rewritten take is read again, a
+// changed storyboard is loaded when nothing is unsaved and turns the session stale otherwise —
+// and [Session.Save] writes in place, refused while stale ([ErrStale]) or while an error stands
+// ([ErrInvalid]). [Session.State] reports everything the page shows.
+//
 // The file map:
 //   - doc.go: this package comment and file map.
 //   - edit.go: the [Edit] and applying one to storyboard source, key by key.
+//   - history.go: a session's storyboard versions, for undo and redo.
+//   - session.go: the [Session]: its pipelines, history, refresh from disk and guarded save.
+//   - state.go: the [State] a session reports and the errors attributed to beats.
 //   - value.go: reading an edit's value spellings and writing a duration in its old unit.
 package tune
