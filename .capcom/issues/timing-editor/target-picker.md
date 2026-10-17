@@ -1,12 +1,14 @@
 ---
 title: Pick a target by clicking cells in the editor's preview
-status: open
+status: done
 type: feature
 priority: 3
 labels: [render]
 deps: [timing-editor]
 plan: 2026-10-17 - 04 - timing-editor-plan
 created: 2026-10-17T17:28:47Z
+closed: 2026-10-17T19:51:09Z
+reason: Resolved by the timing-editor plan (2026-10-17 - 04 - timing-editor-plan), archived at 207e422
 ---
 
 Writing a target means guessing a regular expression and an area, then recording or rendering to

@@ -1,11 +1,13 @@
 ---
 title: A visual timing editor that previews edits against the take
-status: open
+status: done
 type: feature
 priority: 3
 labels: [render]
 plan: 2026-10-17 - 04 - timing-editor-plan
 created: 2026-10-17T17:28:47Z
+closed: 2026-10-17T19:51:09Z
+reason: Resolved by the timing-editor plan (2026-10-17 - 04 - timing-editor-plan), archived at 207e422
 ---
 
 Tuning a clip's timing is slow. Every change ("20% slower", "the opening is too long", "the
@@ -54,3 +56,7 @@ Open before planning:
   original except for the edited scalars (round-trip test).
 - The server listens on 127.0.0.1 only, and the page requests nothing from outside it.
 - `go vet ./...` and `go test ./...` pass.
+
+## Log
+
+- 2026-10-17 Airic Lenz: Known gap deferred by the plan run: /api/state does not report cols/rows/padding/font_size/line_height/scale/max_colors, so the inspector names them read-only without values
