@@ -50,7 +50,9 @@ GitHub release, the Homebrew formula and the Scoop manifest, reports status and 
 - winget, npm or any other channel; Makefile release targets.
 - Repo-local release skills (the global `cut-release` / `release-notes` skills drive the tool).
 
-## 1. Seed CHANGELOG.md
+## 1. Seed CHANGELOG.md — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the only version numbers in the file are the Keep a Changelog 1.1.0 and SemVer 2.0.0 links in the verbatim preamble; the font licence is named without its version so no other number appears.
 
 **What:**
 **Goal:** `CHANGELOG.md` at the repo root follows Keep a Changelog 1.1.0 + SemVer: the `# Changelog` title, the format paragraph, and `## [Unreleased]` holding flat plain-language bullets for what photon does today; no release heading.
