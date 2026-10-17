@@ -252,17 +252,19 @@ func TestJudge_RunInAMissingWorkDirCreatesIt(t *testing.T) {
 	t.Parallel()
 	work := filepath.Join(t.TempDir(), "not", "yet")
 	board := fixtureBoard()
-	board.Beats[0].Expect = []storyboard.Expect{{Run: `pwd -P; printf %s "$PHOTON_WORK" >&2`}}
+	// The shell compares the two dirs itself: Git Bash on Windows spells `pwd` as /c/... while
+	// PHOTON_WORK reads C:\...
+	board.Beats[0].Expect = []storyboard.Expect{{
+		Run: `[ "$(pwd -P)" = "$(cd "$PHOTON_WORK" && pwd -P)" ] && printf %s "$PHOTON_WORK"`,
+	}}
 
 	row := onlyRow(t, judge(t, board, work, fixtureTakePath, Options{}))
 
-	resolved, err := filepath.EvalSymlinks(work)
-	if err != nil {
+	if _, err := os.Stat(work); err != nil {
 		t.Fatalf("the work dir was not created: %v", err)
 	}
-	want := resolved + "\n" + work
-	if row.Verdict != Pass || row.Detail != want {
-		t.Errorf("row = %+v, want a PASS run in the work dir reading %q", row, want)
+	if row.Verdict != Pass || row.Detail != work {
+		t.Errorf("row = %+v, want a PASS run in the work dir reading %q", row, work)
 	}
 }
 
