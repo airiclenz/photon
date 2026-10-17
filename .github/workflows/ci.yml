@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: vet / test / lint (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # Git Bash on Windows, so every step reads the same on all three runners.
+        shell: bash
+    steps:
+      # Actions are pinned by commit SHA with the release tag beside it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./...
+      - name: golangci-lint
+        # The same command as `make lint`, with the version read from the Makefile so it is pinned
+        # in one place; make itself is not on every runner.
+        run: |
+          version="$(sed -n 's/^GOLANGCI_LINT_VERSION := //p' Makefile)"
+          test -n "$version"
+          go run "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${version}" run ./...

@@ -21,6 +21,7 @@ func execute(ctx context.Context, cmd *cobra.Command, args []string, stderr io.W
 	cmd.SetErr(stderr)
 	err := cmd.ExecuteContext(ctx)
 	if err != nil {
+		//nolint:errcheck // stderr is where a failure is reported; a failed write there has nowhere left to go.
 		fmt.Fprintf(stderr, "%s: %v\n", programName, err)
 	}
 	return exitCodeFor(err)
