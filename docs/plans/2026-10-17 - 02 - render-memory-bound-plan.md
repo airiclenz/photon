@@ -66,7 +66,9 @@ os/exec — Cmd.ProcessState.SysUsage, syscall.Rusage.Maxrss; internal/testkit/d
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/render -run TestEncodePeakMemory -v` passes and logs the six peaks.
 **Commit:** `test(render): ffmpeg peak memory stays flat as the clip grows`
 
-## 3. Describe the two-pass encode
+## 3. Describe the two-pass encode — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): internal/render/render.go needs no edit: item 1 already wrote Run's doc comment ("prints the two ffmpeg command lines instead, the palette pass first, one per line"), so it is absent from FILES.
 
 Depends on item 1.
 

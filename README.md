@@ -107,11 +107,12 @@ Flags:
 | `--work <dir>` | setup, record, check, render | The rig's work dir. |
 | `--profile <name>` | record | The profile whose services and `on_success` the take runs with. |
 | `-o`, `--output <file>` | render | The GIF to write instead of the storyboard's `ship` path; its directory is created. |
-| `--dry-run` | render | Print the ffmpeg command line and exit without rendering. |
+| `--dry-run` | render | Print both ffmpeg command lines, the palette pass first, one per line, and exit without rendering. |
 
 **The work dir** is the first of: `--work`, `$PHOTON_WORK`, the config's `work`, and
 `~/.cache/<name>-photon` (where `<name>` is the config's `name`). It holds whatever `setup`
-builds, every take, and each service's log (`<work>/<service>.log`).
+builds, every take, each service's log (`<work>/<service>.log`), and, while `render` runs, the
+clip's palette (`<work>/<clip>.palette.png`).
 
 **Exit status**, the same for every command:
 
@@ -491,8 +492,10 @@ release; a move never rings. Its size is fixed in design pixels and does not gro
 click or drag inside a cut beat draws nothing.
 
 The render rasterizes every frame at `frame.scale`, composes the zoom and the cursor, downscales
-to `frame.width`, and streams the frames into ffmpeg for a per-clip palette of `max_colors`
-entries with no dithering. Box-drawing and block-element characters are drawn as shapes rather
+to `frame.width`, and streams the frames through ffmpeg twice: pass 1 builds a per-clip palette
+of `max_colors` entries into `<work>/<clip>.palette.png`, pass 2 maps the frames onto it with no
+dithering into the GIF, and the palette file is removed after. No frame is kept between the
+passes, so memory stays flat however long the clip. Box-drawing and block-element characters are drawn as shapes rather
 than taken from a font, so lines and blocks meet their neighbours exactly.
 
 ## Environment variables

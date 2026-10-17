@@ -18,12 +18,13 @@ func newRenderCommand() *cobra.Command {
 		Long: "render lays each beat of the take onto its section's duration — the hold at 1×, the\n" +
 			"rest sped up to fit or frozen on its last frame — rasterizes every frame at the\n" +
 			"storyboard's frame, composes the zooms and the cursor over the clicks and drags, and\n" +
-			"streams the frames into ffmpeg for a per-clip palette encode, then shrinks the GIF with\n" +
-			"gifsicle -O3 when that is on PATH. It prints the GIF's path, size and length and one\n" +
-			"speed row per beat.\n" +
+			"streams the frames through ffmpeg twice for a per-clip palette encode: pass 1 writes the\n" +
+			"palette to <work>/<clip>.palette.png, pass 2 maps the frames onto it into the GIF, and\n" +
+			"the palette is removed after. It then shrinks the GIF with gifsicle -O3 when that is on\n" +
+			"PATH, and prints the GIF's path, size and length and one speed row per beat.\n" +
 			"The take defaults to <work>/<clip>.take; the work dir is --work, else $" + clip.WorkEnv + ",\n" +
 			"else the config's work, else ~/.cache/<name>-photon. The GIF defaults to the storyboard's\n" +
-			"ship path. --dry-run prints the ffmpeg command line instead of rendering.\n" +
+			"ship path. --dry-run prints both ffmpeg command lines instead of rendering.\n" +
 			"Exit status: 0 when the GIF was written; 1 when the take could not be rendered;\n" +
 			"2 for a bad command line.",
 		Args: cobra.RangeArgs(1, 2),
@@ -39,8 +40,8 @@ func newRenderCommand() *cobra.Command {
 		}),
 	}
 	cmd.Flags().StringVarP(&options.Out, "output", "o", "", "the GIF to write (default: the storyboard's ship path)")
-	cmd.Flags().BoolVar(&options.DryRun, "dry-run", false, "print the ffmpeg command line and exit without rendering")
+	cmd.Flags().BoolVar(&options.DryRun, "dry-run", false, "print both ffmpeg command lines, palette pass first, and exit without rendering")
 	cmd.Flags().StringVar(&configPath, configFlag, "", "the photon config to use instead of the nearest photon.yaml")
-	cmd.Flags().StringVar(&workPath, workFlag, "", "the rig's work dir, where the take is read from")
+	cmd.Flags().StringVar(&workPath, workFlag, "", "the rig's work dir, where the take is read and the palette written")
 	return cmd
 }
