@@ -1,0 +1,10 @@
+# valid/photon.yaml with a work dir, relative to this file's directory.
+name: clip-demo
+work: rig
+launch:
+  command: ./app --demo
+areas:
+  list:
+    bottom: {match: '^─+$'}
+  status:
+    top: {match: '^─+$', pick: last, offset: 1}

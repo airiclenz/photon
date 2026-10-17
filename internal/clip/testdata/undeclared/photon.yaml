@@ -1,0 +1,9 @@
+# The same areas as valid/photon.yaml: list and status, nothing else.
+name: clip-demo
+launch:
+  command: ./app --demo
+areas:
+  list:
+    bottom: {match: '^─+$'}
+  status:
+    top: {match: '^─+$', pick: last, offset: 1}

@@ -1,0 +1,2 @@
+# Breaks one config rule: launch.command is missing. Declares no areas at all.
+name: clip-demo

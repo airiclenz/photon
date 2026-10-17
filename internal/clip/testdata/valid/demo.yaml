@@ -1,0 +1,20 @@
+# Names every area field the schema has, each declared in photon.yaml or the whole screen.
+clip: demo
+ship: out/demo.gif
+frame: {cols: 80, rows: 24, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+expect:
+  - seen: 'Saved'
+    area: status
+beats:
+  - id: 1
+    title: pick an item
+    duration: 4s
+    zoom:
+      target: {text: 'Item 2', area: list}
+    do:
+      - click: {target: {text: 'Item 2', area: list}}
+      - click: {target: {text: 'Save', area: any}}
+    expect:
+      - seen: 'Item 2 selected'
+        area: status
+      - seen: 'Item'
