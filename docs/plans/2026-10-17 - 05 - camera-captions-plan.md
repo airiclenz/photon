@@ -4,7 +4,7 @@
 the clip's timeline, with a beat's `zoom` kept as a shorthand; let a storyboard declare captions
 drawn over the composed frame; show the read-only frame values in the `photon tune` inspector.
 **Date:** 2026-10-17
-**Status:** draft — regression check pending
+**Status:** unexecuted
 **sized for:** ~200k-context host
 **base:** a55b7d1
 **Closes:** (per item)
@@ -39,6 +39,23 @@ caption YAML keys use `color` as `max_colors` does; caption placement words are
 - In `photon tune`: adding, removing or reordering camera moves or captions; editing a pan's `via`, a caption's font, colours, box, fade, offset or position (edit the YAML).
 - Camera moves inside a cut beat; per-character caption styling; caption text wrapping.
 
+**Regression check (2026-10-17, a55b7d1):**
+- 2: guard folded (writer's decision)
+- 4: guard folded
+- 5: guard folded
+- 6: guard folded
+- 8: guard folded (writer's decision)
+- 9: guard folded (writer's decision on Acceptance)
+- 10: guard folded
+- 11: guard folded
+- 12: guard folded; supersedes internal/compose/doc.go's imports sentence (item 13 rewrites it)
+- 13: guard folded (writer's decision)
+- 14: guard folded
+- 15: guard folded (writer's decision on Replace)
+- 16: guard folded (writer's decision)
+- 17: guard folded; supersedes the internal/tune/page/timeline.js lane-model header
+- 18: guard folded (writer's decision on Acceptance)
+
 ## 1. Tune inspector shows the read-only frame values
 
 **Closes:** tune-frame-readonly-values
@@ -51,6 +68,9 @@ read-only.
 `board.Frame`. In `internal/tune/page/app.js` replace the `READ_ONLY_FRAME_FIELDS` sentence with
 one read-only row per field (`name value`), keeping the existing `read-only` class.
 **Files:** internal/tune/state.go, internal/tune/session_test.go, internal/tune/page/app.js, internal/tune/page_test.go
+**Read first:** internal/tune/state.go — State, (*Session).State; internal/tune/page/app.js — framePanel,
+READ_ONLY_FRAME_FIELDS, fieldRow; internal/tune/session_test.go — sessionStoryboard, newSessionFixture;
+internal/storyboard/storyboard.go — Frame; internal/tune/server_test.go — decodeResponse
 **Tests:** a session test asserting the seven values from the test storyboard's frame; extend the
 page test if it pins the panel's text.
 **Acceptance:**
@@ -70,8 +90,13 @@ with a custom `UnmarshalYAML` (scalar parsed by `time.ParseDuration`; mapping st
 before beat N in storyboard order and adds the offset; errors for an unknown beat or a cut beat.
 `(*Storyboard).Length()` sums the kept beats' durations. The rig runs beats in storyboard order,
 so this equals `schedule.Section.OutStart`. No validation wiring here; items 4 and 10 use it.
+**Regression guard.** `Moment` has exported fields `Beat int` and `Offset time.Duration` so Go code (compose and tune tests) can build one; Beat 0 means a bare clip time whose value is Offset (beat ids are ≥1 per validateIDs); its UnmarshalYAML rejects an unknown mapping key itself (yaml.v3 Node.Decode is non-strict), with a test for `{beat: 2, ofset: 1s}`.
 **Files:** internal/storyboard/moment.go, internal/storyboard/moment_test.go, internal/storyboard/doc.go, internal/schedule/schedule_test.go
-**Tests:** table tests for both decode forms, negative offset, unknown and cut beat, a bad scalar;
+**Read first:** internal/storyboard/beat.go — Nth.UnmarshalYAML, nodeKindName, Beat; internal/storyboard/storyboard.go — Storyboard,
+Parse (KnownFields), applyDefaults; internal/schedule/schedule.go — New, Section.OutStart, Schedule.Length; internal/schedule/schedule_test.go —
+recording, mustSchedule, beat; internal/storyboard/validate.go — validateIDs; internal/storyboard/doc.go — file map
+**Tests:** table tests for both decode forms, negative offset, unknown and cut beat, a bad scalar,
+an unknown mapping key (`{beat: 2, ofset: 1s}`) rejected;
 a schedule test asserting every section's `OutStart` equals `ClipTime({beat: id})` and
 `Schedule.Length` equals `Length()`.
 **Acceptance:**
@@ -88,6 +113,9 @@ the crop clamps), composed with the existing test helpers (`newTestCompositor`, 
 each rect, to 1e-6, against `internal/compose/testdata/beat-zoom-crops.golden` (one line per
 frame, `%.6f`). An `-update` flag rewrites it, as `internal/raster`'s tests do.
 **Files:** internal/compose/zoom_golden_test.go, internal/compose/testdata/beat-zoom-crops.golden
+**Read first:** internal/compose/compose.go — (*Compositor).crop, rectF; internal/compose/zoom.go — zoomPlanner.planSection,
+zoomPlan.factorAt, autoFitFactor, zoomBox; internal/compose/compose_test.go — newTestCompositor, screen, clickAt, beatStart,
+zoomClickTake, testLayout; internal/raster/raster_test.go — update flag
 **Tests:** the golden test itself; it passes at the base.
 **Acceptance:**
 - `GOMEMLIMIT=2GiB go test ./internal/compose/ -run Golden`
@@ -110,11 +138,19 @@ target regex and area spelling as `Target.validate` does; per track, sorted inte
 [start, start+over) must not overlap each other nor any kept beat's `zoom` section (which occupies
 both tracks), the problem naming both. Extend `clip.namedAreas` with `camera[i]: pan.…area` fields.
 Add a camera to `testdata/every-form.yaml`.
-**Files:** internal/storyboard/camera.go, internal/storyboard/storyboard.go, internal/storyboard/validate.go, internal/storyboard/storyboard_test.go, internal/storyboard/testdata/every-form.yaml, internal/storyboard/doc.go, internal/clip/clip.go, internal/clip/clip_test.go, cmd/photon/lint_test.go
-**Tests:** table tests per rule; a clip test for an undeclared camera area; a `photon lint` case
-rejecting an unknown area, `over: 0`, `to: 3.5`, a start past the clip, and two overlapping zooms.
+**Regression guard.** Adding `Camera` turns TestREADMEDocumentsEveryField/storyboard red, so this item adds every new
+yaml tag to README.md's Storyboard reference in backticks (`camera`, `pan`, `via`, `at`, `over`, `ease`, `cell`, and `beat` if
+Moment carries it), item 8 writing the reference around them, and runs `README` in cmd/photon. `clip.Load` cross-checks areas only
+when the storyboard loads clean, so the lint case is two fixtures: `invalid/camera.yaml` and `invalid/camera-area.yaml`.
+**Files:** internal/storyboard/camera.go, internal/storyboard/storyboard.go, internal/storyboard/validate.go, internal/storyboard/storyboard_test.go, internal/storyboard/testdata/every-form.yaml, internal/storyboard/doc.go, internal/clip/clip.go, internal/clip/clip_test.go, cmd/photon/lint_test.go, cmd/photon/testdata/invalid/camera.yaml, cmd/photon/testdata/invalid/camera-area.yaml, README.md
+**Read first:** internal/storyboard/validate.go — validate, reporter, Target.validate, validateArea, minZoomFactor; internal/storyboard/storyboard.go —
+Storyboard, Parse, applyDefaults; internal/clip/clip.go — namedAreas, crossCheck, Load; internal/storyboard/storyboard_test.go — validBase, TestLoadRejects,
+TestLoadEveryForm; internal/storyboard/testdata/every-form.yaml (beats 2-3 zoom [2s,12s), so any camera move must sit in beat 1's [0,2s)); cmd/photon/lint_test.go — TestLint, runLint; cmd/photon/readme_test.go — TestREADMEDocumentsEveryField, yamlTags
+**Tests:** table tests per rule; a clip test for an undeclared camera area; two `photon lint` cases:
+`invalid/camera.yaml` rejecting `over: 0`, `to: 3.5`, a start past the clip, and two overlapping zooms, and
+`invalid/camera-area.yaml` (with `--config` validConfig) rejecting an unknown area; the README test passes.
 **Acceptance:**
-- `GOMEMLIMIT=2GiB go test ./internal/storyboard/ ./internal/clip/ ./cmd/photon/ -run 'Lint|Camera|Parse|Load'`
+- `GOMEMLIMIT=2GiB go test ./internal/storyboard/ ./internal/clip/ ./cmd/photon/ -run 'Lint|Camera|Parse|Load|README'`
 **Commit:** `feat(storyboard): declare and validate camera moves`
 
 ## 5. Compose: a two-track camera behind the crop
@@ -134,9 +170,19 @@ instant pan to its box's centre at the section start, a zoom 1→factor over `In
 factor→1 ending at the section end over `Out` (ramps shrunk as `planSection` does). `crop` reads
 factor and centre at t and clamps as today. `zoomPlan.factorAt` and the `zooms` field go; the
 box-finding (`zoomBox`, `loggedBox`, `autoFitFactor`) stays in `zoom.go`.
-**Files:** internal/compose/camera.go, internal/compose/zoom.go, internal/compose/compose.go, internal/compose/compose_test.go, internal/compose/camera_test.go, internal/compose/doc.go
+**Regression guard.** Every reader of `compositor.zooms` is rewritten against the camera, not only `factorAt` callers:
+cursor_test.go's TestComposeZoomAimsAtADragsLoggedBox (reads `zooms[0].Centre`) and compose_test.go's
+TestZoomRampScalesGeometrically, TestComposeZoomResolvesItsTargetOnTheSnapshot, TestComposeZoomBoxWalksBackThroughTheBeat and
+TestZoomRampsShrinkToFitTheSection keep their coverage on the camera's tracks.
+**Files:** internal/compose/camera.go, internal/compose/zoom.go, internal/compose/compose.go, internal/compose/compose_test.go, internal/compose/cursor_test.go, internal/compose/camera_test.go, internal/compose/doc.go
+**Read first:** internal/compose/zoom.go — zoomPlan, factorAt, zoomPlanner.plan, planSection, zoomBox, easeInOut; internal/compose/compose.go — Compositor, New,
+crop, Compose, Cell, Rect; internal/compose/compose_test.go — newTestCompositor, zoomClickTake, TestZoomRampScalesGeometrically, TestZoomRampsShrinkToFitTheSection,
+TestComposeZoomResolvesItsTargetOnTheSnapshot; internal/compose/cursor_test.go — TestComposeZoomAimsAtADragsLoggedBox; internal/compose/doc.go — file map
 **Tests:** camera unit tests: hold between moves, log-space zoom midpoint, pan midpoint; existing
-zoom tests (move any that call `factorAt` to the camera); the item 3 golden unchanged.
+zoom tests moved to the camera, each keeping what it asserts: TestZoomRampScalesGeometrically the log-space ramp,
+TestComposeZoomResolvesItsTargetOnTheSnapshot the pan-track centre and auto-fit factor, TestComposeZoomBoxWalksBackThroughTheBeat
+and TestComposeZoomAimsAtADragsLoggedBox the pan-track centre, TestZoomRampsShrinkToFitTheSection the zoom segments' 1.5 s and
+2.5 s ramps; the item 3 golden unchanged.
 **Acceptance:**
 - `GOMEMLIMIT=2GiB go test ./internal/compose/`
 - `git diff --exit-code -- internal/compose/testdata/` (the golden is not rewritten)
@@ -154,10 +200,16 @@ Catmull-Rom (alpha 0.5), phantom end points by reflection (`2·P0−P1`, `2·Pn�
 arc-length table of a named constant number of samples per span, built once; position at e is
 the point at `e·total` length. Two points degenerate to the straight line. Pan segments in
 `camera.go` hold a path instead of two endpoints; `ease` linear skips `easeInOut`.
-**Files:** internal/compose/path.go, internal/compose/path_test.go, internal/compose/camera.go, internal/compose/doc.go
+**Regression guard.** A zero centripetal knot interval (a `to` or `via` point equal to the one before it, e.g. a pan to the
+centre a beat zoom just set) divides 0/0 into a NaN crop: the path drops consecutive coincident points and holds still when one
+distinct point remains. Pan segments change from two endpoints to a path, so `camera_test.go` changes with them.
+**Files:** internal/compose/path.go, internal/compose/path_test.go, internal/compose/camera.go, internal/compose/camera_test.go, internal/compose/doc.go
+**Read first:** internal/compose/camera.go — pan segment (item 5); internal/compose/zoom.go — easeInOut, clamp01;
+internal/compose/cursor.go — lerp; internal/compose/compose.go — pointF; internal/compose/doc.go — file map
 **Tests:** endpoints exact; passes through each waypoint (within a pixel); over 400 samples the
 heading changes by < 10° between consecutive samples everywhere, including at waypoints; equal
-arc-length steps for linear e (within 2%); two points give the line.
+arc-length steps for linear e (within 2%); two points give the line; coincident consecutive points
+give no NaN, and one distinct point holds still.
 **Acceptance:**
 - `GOMEMLIMIT=2GiB go test ./internal/compose/ -run 'Path|Camera'`
 **Commit:** `feat(compose): pan along a smooth path through waypoints`
@@ -177,6 +229,9 @@ path starts at the pan track's centre at the move's start. A target never shown 
 `compose: camera[i]: pan: …`, wrapping `target.ErrNotOnScreen`. The drawn cursor needs no change:
 it maps through `crop`.
 **Files:** internal/compose/camera.go, internal/compose/camera_test.go, internal/compose/compose.go, internal/compose/doc.go
+**Read first:** internal/compose/zoom.go — zoomBox, loggedBox (the walk-back to copy); internal/schedule/schedule.go — Schedule.Source, Schedule.Length,
+Section.OutStart; internal/compose/compose.go — New, Layout.cellCentre, crop, drawCursor, toOutput; internal/render/render.go — NewCompositor (doc says it fails only on
+an area or zoom target); internal/compose/compose_test.go — newTestCompositor, screen, beatStart, TestNewRefusesAZoomTargetTheBeatNeverShows, TestComposeZoomedCursorMapsToTheZoomedTarget
 **Tests:** the issue's scenario (zoom-in; pan starting during it; a `via` pan; a zoom-out starting
 during that pan; across ≥ 2 beats) asserting factor and centre at start, middle and end of each
 move; a target resolved on the end screen; a never-shown target refused; cursor position maps
@@ -197,10 +252,14 @@ between moves, that the crop clamps at the edges and the cursor follows the came
 `package-layout`'s `compose` row ("camera and drawn cursor over each frame") via
 `.capcom/knowledge/package-layout.md` and run `capcom check`. CHANGELOG line under Unreleased
 travels in the sidecar.
+**Regression guard.** Acceptance uses `-run README` (the tests are TestREADME…, -run is case-sensitive). The README names
+every new yaml tag in backticks, including `beat` if Moment carries that tag.
 **Files:** README.md, .capcom/knowledge/package-layout.md
+**Read first:** README.md — "Storyboard reference", "Sections, zoom and cursor"; cmd/photon/readme_test.go — TestREADMEDocumentsEveryField, yamlTags;
+.capcom/knowledge/package-layout.md — `internal/compose` row
 **Tests:** the README test in `cmd/photon` passes.
 **Acceptance:**
-- `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run Readme`
+- `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run README`
 - `capcom check`
 **Commit:** `docs: describe the camera`
 
@@ -218,11 +277,20 @@ path is the embedded face. The `fonts` override dir stays terminal-only. `config
 `CaptionFont struct{Regular, Bold string}` (`caption_font`), each resolved against `Dir` like
 `Fonts` and checked readable by validation. Add the OFL text to the licence list in
 `cmd/release/dist.go` and its help text.
-**Files:** internal/fonts/fonts.go, internal/fonts/fonts_test.go, internal/fonts/SourceSans3-Regular.ttf, internal/fonts/SourceSans3-Bold.ttf, internal/fonts/SourceSans3-OFL.txt, internal/config/config.go, internal/config/config_test.go, cmd/release/dist.go, README.md
+**Regression guard.** It edits README, so Acceptance adds `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run README`; README
+documents `caption_font` with `regular` and `bold` (photon.yaml table row). The caption faces get their own `fontFile` table
+(name + SourceSans3-OFL.txt), added to TestEveryFaceHasAnEmbeddedLicence's `slices.Concat`; dist_test.go's `testDocuments` and
+archive want list gain the OFL text; the readability check runs after `resolvePaths`; fonts/doc.go names the new faces and API.
+**Files:** internal/fonts/fonts.go, internal/fonts/fonts_test.go, internal/fonts/doc.go, internal/fonts/SourceSans3-Regular.ttf, internal/fonts/SourceSans3-Bold.ttf, internal/fonts/SourceSans3-OFL.txt, internal/config/config.go, internal/config/config_test.go, cmd/release/dist.go, cmd/release/dist_test.go, README.md
+**Read first:** internal/fonts/fonts.go — Load, loadFace, primaryFiles, fallbackFiles, embedded; internal/fonts/fonts_test.go — TestEveryFaceHasAnEmbeddedLicence,
+writeOverride; internal/config/config.go — Load, validate, resolvePaths; cmd/release/dist.go — documentFiles, newDistCommand; cmd/release/dist_test.go — testDocuments,
+TestDistArchivesHoldTheBinaryAndDocsUnderTheStem; cmd/photon/readme_test.go — TestREADMEDocumentsEveryField; internal/fonts/doc.go
 **Tests:** `LoadCaption("", "")` parses both; a path override; a missing file names it; config
-resolves and rejects an unreadable `caption_font` file; dist test lists the new licence.
+resolves and rejects an unreadable `caption_font` file, and accepts a relative one with the cwd elsewhere; the licence
+test covers the caption table; dist test lists the new licence; the README test passes.
 **Acceptance:**
 - `GOMEMLIMIT=2GiB go test ./internal/fonts/ ./internal/config/ ./cmd/release/`
+- `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run README`
 **Commit:** `feat(fonts): embed Source Sans 3 as the caption face`
 
 ## 10. Storyboard `captions`: schema and validation
@@ -241,11 +309,19 @@ of `for` (> 0) and `until` (Moment), `font: {size, weight: regular|bold}` (size 
 in [0, 1]), `fade: {in, out}` (≥ 0, in+out ≤ the caption's length). Times resolve through item 2:
 start in [0, Length), stop after start and ≤ Length; a cut or unknown beat is a problem.
 Problems read `captions[i]: …`. Add a caption to `testdata/every-form.yaml`.
-**Files:** internal/storyboard/caption.go, internal/storyboard/storyboard.go, internal/storyboard/validate.go, internal/storyboard/storyboard_test.go, internal/storyboard/testdata/every-form.yaml, internal/storyboard/doc.go, cmd/photon/lint_test.go
+**Regression guard.** This item adds every new caption tag to README.md's Storyboard reference in backticks (`captions`,
+`until`, `font`, `size`, `weight`, `place`, `align`, `position`, `color`, `box`, `opacity`, `fade`), item 13 writing the
+reference around them, so TestREADMEDocumentsEveryField stays green. The lint case uses a new fixture `invalid/captions.yaml`,
+linted with `--config` validConfig; `./internal/storyboard/` runs unfiltered so TestLoadEveryForm and TestLoadRejects run.
+**Files:** internal/storyboard/caption.go, internal/storyboard/storyboard.go, internal/storyboard/validate.go, internal/storyboard/storyboard_test.go, internal/storyboard/testdata/every-form.yaml, internal/storyboard/doc.go, cmd/photon/lint_test.go, cmd/photon/testdata/invalid/captions.yaml, README.md
+**Read first:** internal/storyboard/storyboard.go — Storyboard, Parse, applyDefaults; internal/storyboard/validate.go — validate, prefixed, validateHeader;
+internal/storyboard/storyboard_test.go — validBase, TestLoadRejects, TestLoadEveryForm, TestParseMatchesLoad; cmd/photon/lint_test.go — TestLint, validConfig;
+internal/storyboard/testdata/every-form.yaml; cmd/photon/readme_test.go — TestREADMEDocumentsEveryField, yamlTags
 **Tests:** table tests per rule; a `photon lint` case rejecting a stop before start, a time past
-the clip, an unknown beat, a size out of bounds, fades longer than the caption.
+the clip, an unknown beat, a size out of bounds, fades longer than the caption; the README test passes.
 **Acceptance:**
-- `GOMEMLIMIT=2GiB go test ./internal/storyboard/ ./cmd/photon/ -run 'Lint|Caption|Parse'`
+- `GOMEMLIMIT=2GiB go test ./internal/storyboard/`
+- `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run 'Lint|README'`
 **Commit:** `feat(storyboard): declare and validate captions`
 
 ## 11. Caption package: timing, placement and drawing
@@ -263,10 +339,18 @@ and box padding in design pixels, times `unit`), clamps it inside `out`, and err
 cannot fit. `(*Layer).Draw(dst *image.RGBA, t)` paints the box then the text, alpha = box/text
 opacity × fade (linear ramps; 1 between; 0 outside). Immutable after `New`, safe for concurrent
 use. Add `doc.go`. Imports `storyboard` and `fonts` only.
-**Files:** internal/caption/doc.go, internal/caption/caption.go, internal/caption/layout.go, internal/caption/caption_test.go, internal/caption/layout_test.go
+**Regression guard.** `New` rasterizes each caption's text to an alpha mask so `Draw` only composites: tune serves frames
+concurrently on one Compositor and an opentype `font.Face` is not safe for concurrent use. The shipped em is caption size ×
+designScale (2) × `unit` pixels — the shipped terminal text's em at size = `frame.font_size` — not `internal/raster`'s
+source-pixel size. `internal/caption/docmap_test.go` calls `testkit.CheckDocMap`, as every package's does.
+**Files:** internal/caption/doc.go, internal/caption/caption.go, internal/caption/layout.go, internal/caption/caption_test.go, internal/caption/layout_test.go, internal/caption/docmap_test.go
+**Read first:** internal/compose/compose.go — Compositor.unit, Compose; internal/compose/cursor.go — designScale; internal/raster/glyph.go — newFace, glyphs.mu,
+pixelsPerPoint; internal/render/render.go — NewRasterizer; internal/tune/frame.go — Session.Frame; internal/fonts/fonts.go — Face, Set;
+internal/testkit/docmap.go — CheckDocMap
 **Tests:** timing per anchor form; fade alpha at 0, mid and end of each ramp; placement for each
 `place`×`align`, offset and `position`; clamping; too-wide refused; pixels of text colour appear
-inside the box and none outside it.
+inside the box and none outside it; a caption at size = `frame.font_size` has the shipped terminal text's em; concurrent
+`Draw` calls on one layer.
 **Acceptance:**
 - `GOMEMLIMIT=2GiB go test ./internal/caption/`
 **Commit:** `feat(caption): lay out and draw a clip's captions`
@@ -283,8 +367,15 @@ builds the layer with `caption.New(board, faces, c.out, c.unit())`; `Compose` dr
 `tune` reaches it through `render.NewCompositor` unchanged. Update every `compose.New` caller
 (tests included). Update Note `package-layout`: add the `internal/caption` row and `caption`,
 `fonts` to `compose`'s imports; run `capcom check`.
+**Regression guard.** `caption.New` with no captions returns an empty layer without reading the frame or the faces, so
+existing callers (boards with `Frame.FontSize` 0) may pass `fonts.CaptionSet{}`. The zoom test sets box opacity 1 and compares
+the box rectangle: a 0.6 box blends over the zoomed frame. Superseded: internal/compose/doc.go's "It imports schedule, target,
+take and storyboard"; item 13 rewrites it with `caption` and `fonts`.
 **Files:** internal/compose/compose.go, internal/compose/compose_test.go, internal/compose/cursor_test.go, internal/render/render.go, internal/render/render_test.go, .capcom/knowledge/package-layout.md
-**Tests:** a zoomed section leaves a caption's pixels identical to the unzoomed frame's; a
+**Read first:** internal/compose/compose.go — New, Compositor, Compose, unit; internal/render/render.go — NewCompositor, NewRasterizer; internal/tune/session.go —
+Session.build, rasterizerFor; internal/compose/compose_test.go — newTestCompositor; internal/tune/frame_test.go; internal/render/render_test.go —
+TestRunWritesAGIFOfTheScheduledLength, loadRenderClip; .capcom/knowledge/package-layout.md
+**Tests:** a zoomed section leaves a caption's box rectangle (box opacity 1) identical to the unzoomed frame's; a
 caption drawn over the cursor; a render test (skips without ffmpeg) with two captions, one faded,
 checking each appears and disappears at its times; changing a beat's `duration` moves a
 beat-anchored caption.
@@ -302,10 +393,14 @@ the anchor forms shared with the camera, lint checks, output-space behaviour, on
 needed after an edit) with an example; in "Fonts and licences" the caption faces and
 `caption_font` (if item 9 left it out); `photon.yaml` reference row for `caption_font`. Update the
 `compose` and `storyboard` doc maps for captions. CHANGELOG line travels in the sidecar.
+**Regression guard.** Acceptance uses `-run 'README|DocMap'`. internal/compose/doc.go's imports sentence gains `caption`
+and `fonts` (item 12 made it stale).
 **Files:** README.md, internal/compose/doc.go, internal/storyboard/doc.go
+**Read first:** README.md — Storyboard reference, Fonts and licences, photon.yaml table; cmd/photon/readme_test.go — TestREADMEDocumentsEveryField, yamlTags;
+internal/compose/doc.go; internal/storyboard/doc.go
 **Tests:** README and doc-map tests pass.
 **Acceptance:**
-- `GOMEMLIMIT=2GiB go test ./cmd/photon/ ./internal/compose/ ./internal/storyboard/ -run 'Readme|DocMap'`
+- `GOMEMLIMIT=2GiB go test ./cmd/photon/ ./internal/compose/ ./internal/storyboard/ -run 'README|DocMap'`
 **Commit:** `docs: describe captions`
 
 ## 14. Tune state reports camera moves and captions
@@ -322,9 +417,14 @@ output clock, and the fields items 15-16 edit.
 `{"beat": N, "offset_ms": D}`, beat 0 meaning a bare clip time of D (mirrors item 2's `Moment`).
 Times come from `board.ClipTime`. Validation problems prefixed `camera[i]:`/`captions[i]:` stay
 clip-level errors, as other non-beat problems are.
+**Regression guard.** `beatNamed` returns 0 for a message starting `camera[` or `captions[`; otherwise a problem such as
+"camera[0]: zoom overlaps beat 2's zoom", left by an outside write (Refresh → rebuild), lands on beat 2.
 **Files:** internal/tune/state.go, internal/tune/session_test.go
+**Read first:** internal/tune/state.go — State, Session.State, beatStates, problemsOf, beatNamed; internal/tune/session.go — Session.rebuild, Session.build;
+internal/tune/session_test.go — newSessionFixture, sessionStoryboard, TestSession_State_ReportsTheSchedule; internal/tune/server_test.go — TestHandler_State_ReportsTheSession
 **Tests:** a session test on a storyboard with one zoom, one `via` pan and two captions asserting
-every reported field; times move when a beat's duration is edited.
+every reported field; times move when a beat's duration is edited; a Refresh onto a storyboard with a
+`camera[0]: … beat 2 …` problem reports it with `Problem.Beat` 0.
 **Acceptance:**
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ -run 'State|Session'`
 **Commit:** `feat(tune): report camera moves and captions in the state`
@@ -345,9 +445,16 @@ refused on a `via` pan. Replacing a mapping or scalar node with one-line flow te
 `yamledit.Document.Replace(path, value)` unless `splicer` already has an equivalent; add it to
 `yamledit` with its own tests. New file `internal/tune/edit_camera.go` keeps `edit.go` under ~400
 lines; extend `editFields` and the `Edit` doc comment.
-**Files:** internal/tune/edit.go, internal/tune/edit_camera.go, internal/tune/edit_test.go, internal/tune/value.go, internal/tune/doc.go, internal/yamledit/document.go, internal/yamledit/document_test.go
+**Regression guard.** Settle yamledit Replace here: `Replace(path, value)` replaces any node — plain/quoted/block scalar, flow or block mapping — with one-line flow text, in a new file internal/yamledit/replace.go (document.go is already ~400 lines) with internal/yamledit/replace_test.go; Files lists those instead of document.go/document_test.go.
+Positional `Edit{1, …}` literals in edit_test.go and session_test.go are rewritten keyed; `camera.*`/`caption.*` route before
+`splicer.apply`'s beat lookup and `editName` returns `camera[i]: <field>` for them; yamledit/doc.go's comment and map name Replace.
+**Files:** internal/tune/edit.go, internal/tune/edit_camera.go, internal/tune/edit_test.go, internal/tune/session_test.go, internal/tune/value.go, internal/tune/doc.go, internal/yamledit/replace.go, internal/yamledit/replace_test.go, internal/yamledit/doc.go
+**Read first:** internal/tune/edit.go — Edit, editFields, editName, splicer.apply, splicer.replaceTarget, splicer.writeDuration; internal/tune/value.go — formatDuration,
+parseTarget, parseMilliseconds; internal/yamledit/document.go — Document.Set, Document.Delete, Document.Insert, Document.apply; internal/yamledit/scan.go — scalarSpan;
+internal/tune/edit_test.go — TestApply_Edit_ChangesOnlyTheEditedText, TestApply_EditOnWhatIsNotThere_IsRefused, readBoard; internal/tune/testdata/board.yaml
 **Tests:** each field on block and flow forms; `at` switching between beat and clip forms; an edit
-that makes two zooms overlap is refused naming both; undo restores the bytes.
+that makes two zooms overlap is refused naming both, reading `camera[i]: <field>: …`; undo restores the bytes; `Replace` on
+plain, quoted and block scalars and on flow and block mappings.
 **Acceptance:**
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ ./internal/yamledit/`
 **Commit:** `feat(tune): edit camera moves`
@@ -363,7 +470,10 @@ undoable, and refused when the result fails validation.
 `Index` and node replacement. `for` (integer ms) and `until` (moment flow text) are exclusive:
 setting one deletes the other. `text` is written as a one-line double-quoted YAML string with
 `\n` escapes, replacing a block scalar too. `place`/`align` equal to their default delete the key.
+**Regression guard.** Rests on item 15's Replace for replacing a block-scalar caption text; no yamledit change of its own.
 **Files:** internal/tune/edit_caption.go, internal/tune/edit.go, internal/tune/edit_test.go, internal/tune/doc.go
+**Read first:** internal/tune/edit.go — splicer.writeScalar, splicer.deleteKey, keysBefore, splicer.lookup; internal/yamledit/document.go — Quote, Document.Delete,
+Document.Insert; internal/yamledit/scan.go — scalarSpan; internal/tune/edit_test.go — TestApply_InvalidResult_IsRefusedWithTheValidationError; internal/tune/doc.go
 **Tests:** each field; `for`→`until` swap; multi-line text round-trips through `storyboard.Parse`;
 a stop before the start is refused.
 **Acceptance:**
@@ -381,9 +491,17 @@ from `state.camera`/`state.captions`, scaled as beat sections are; in `app.js` a
 for camera and caption entries with a read-only panel; styles in `style.css`. If `timeline.js`
 passes ~400 lines, put the lanes in a new `page/lanes.js`, loaded from `index.html` and listed in
 `page_test.go`'s `pageFileNames`.
+**Regression guard.** Lanes hook in through a registry `window.tuneLanes` that `lanes.js` fills (loaded before
+`timeline.js`) and `render` reads, a lane giving a whole-state `draw(state)` beside the per-section one; this supersedes the
+`timeline.js` header's lane model (lines 7-9), which is rewritten. `selected()` stays a beat id or null; a new
+`selectedEntry()` → `{kind, index}` joins `tuneContract`, `takeState` keeping an entry whose index still exists. The new lanes
+are named `camera zoom`, `pan` and `captions`.
 **Files:** internal/tune/page/timeline.js, internal/tune/page/app.js, internal/tune/page/style.css, internal/tune/page/index.html, internal/tune/page/lanes.js, internal/tune/page_test.go
+**Read first:** internal/tune/page/timeline.js — lanes, render, laneRow, selectable, follow, markSelection; internal/tune/page/app.js — window.tune, select, takeState,
+renderInspector, beatOf; internal/tune/page_test.go — pageFileNames, tuneContract, TestPage_IndexReferences_AreServed; internal/tune/page/index.html;
+internal/tune/state.go — State
 **Tests:** page test asserting the lanes' element ids/classes and the state keys the page reads
-exist in `State`'s json tags.
+exist in `State`'s json tags; `selectedEntry` is in `tuneContract`.
 **Acceptance:**
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ -run Page`
 **Commit:** `feat(tune): show camera moves and captions on the timeline`
@@ -399,9 +517,15 @@ target is; the README's `photon tune` section says so.
 fields, selects for `ease`/`place`/`align`, a textarea for caption text, a moment input taking
 the flow spelling); in `picker.js` offer "use as pan target" beside the zoom option when a pan is
 selected, sending the proposal's target snippet as `camera.to`.
-**Files:** internal/tune/page/app.js, internal/tune/page/picker.js, internal/tune/page_test.go, README.md
+**Regression guard.** Acceptance uses `-run 'Page|README'`. `isTyping` also covers `HTMLTextAreaElement`; a refusal is keyed
+by beat or by `{kind, index}` and the camera and caption panels call `errorRows` for their own entry; the pan-target button is
+markup in `index.html` beside `#pick-zoom`, sending `snippets.zoom` (`SNIPPET_ZOOM`) as `camera.to`.
+**Files:** internal/tune/page/app.js, internal/tune/page/picker.js, internal/tune/page/index.html, internal/tune/page/style.css, internal/tune/page_test.go, README.md
+**Read first:** internal/tune/page/app.js — edit, applyEdit, millisecondsField, zoomPanel, errorRows, isTyping, onKey, window.tune; internal/tune/page/picker.js —
+setAsZoomTarget, showProposal, wire; internal/tune/page/index.html — pick-result, pick-zoom; internal/tune/page_test.go — TestPage_Picker_CallsPickAndClipboard,
+tuneContract; internal/tune/edit.go — editFields; cmd/photon/readme_test.go — TestREADMEDocumentsEveryCommand
 **Tests:** page test asserting every `camera.*`/`caption.*` field the page sends is in
 `editFields`; the README test passes.
 **Acceptance:**
-- `GOMEMLIMIT=2GiB go test ./internal/tune/ ./cmd/photon/ -run 'Page|Readme'`
+- `GOMEMLIMIT=2GiB go test ./internal/tune/ ./cmd/photon/ -run 'Page|README'`
 **Commit:** `feat(tune): edit camera moves and captions in the page`
