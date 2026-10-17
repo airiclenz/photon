@@ -567,7 +567,13 @@ exist in `State`'s json tags; `selectedEntry` is in `tuneContract`.
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ -run Page`
 **Commit:** `feat(tune): show camera moves and captions on the timeline`
 
-## 18. Tune page edits camera moves and captions
+## 18. Tune page edits camera moves and captions — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): TestPage_EntryReads_AreStateKeys's read pattern now skips a name right after a double quote: the edit field literal "caption.for" is not a read of caption.for, and without the change the test reports it as a state key /api/state lacks.
+NOTES (2026-10-17): the caption panel shows both `for (ms)` and `until`, the unused one empty, so either end can be set (each edit drops the other); the "Set as pan target" button is hidden while the storyboard has no pan move, and reports "Select a pan move first." when no pan is selected.
+NOTES (2026-10-17): a standing error shows on a camera move's or caption's panel when it is on the clip and its message starts with camera[N] / captions[N]; it still shows on the Clip frame panel too, as before.
+NOTES (2026-10-17): no JavaScript engine is installed on this host, so the JS changes were checked by reading and by the page tests only, not parsed or run in a browser.
+NOTES (2026-10-17): pre-existing debt: internal/tune/page/app.js was already past the ~400-line limit (812 lines) and is now ~900; splitting the inspector panels into their own file is left for a later change.
 
 Depends on items 15, 16 and 17.
 **What:**

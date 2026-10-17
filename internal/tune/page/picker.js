@@ -2,10 +2,11 @@
 // cells of one row asks the server for the target that names them.
 // It builds on app.js's window.tune alone: frame for the preview <img>, pause() to hold the
 // frame still, frameTime() for the output time of the frame the <img> shows, selected() and
-// state() for the beat a zoom target goes on, and edit(edit) to set it. Nothing here maps pixels
-// to cells or resolves a target: the drag's two corners go to /api/pick in output-frame pixels,
-// and the server answers the resolver-checked proposal, its box in output-frame pixels and the
-// YAML snippets that write it.
+// state() for the beat a zoom target goes on, selectedEntry() for the pan move a pan target goes
+// on, onState(fn) to offer that only while a pan exists, and edit(edit) to set either. Nothing
+// here maps pixels to cells or resolves a target: the drag's two corners go to /api/pick in
+// output-frame pixels, and the server answers the resolver-checked proposal, its box in
+// output-frame pixels and the YAML snippets that write it.
 "use strict";
 
 (() => {
@@ -14,6 +15,9 @@
   const SNIPPET_ZOOM = "zoom";
   const FIELD_ZOOM = "zoom";
   const FIELD_ZOOM_TARGET = "zoom.target";
+  const FIELD_CAMERA_TO = "camera.to";
+  const ENTRY_CAMERA = "camera";
+  const KIND_PAN = "pan";
   const ESCAPE_KEY = "Escape";
   const ARMED_HINT = "Drag across the cells of one row on the preview; Esc cancels.";
 
@@ -27,6 +31,7 @@
     result: document.getElementById("pick-result"),
     target: document.getElementById("pick-target"),
     setZoom: document.getElementById("pick-zoom"),
+    setPan: document.getElementById("pick-pan"),
     copies: document.querySelectorAll("#pick-result [data-snippet]"),
   };
 
@@ -204,6 +209,36 @@
     );
   }
 
+  // setAsPanTarget sets the proposal as where the selected pan move goes, in place of its target
+  // or cell; the server refuses it on a pan along a via path.
+  function setAsPanTarget() {
+    const move = selectedPan();
+    if (!proposal || !move) {
+      report("Select a pan move first.", true);
+      return;
+    }
+    const change = { index: move.index, field: FIELD_CAMERA_TO, value: proposal.snippets[SNIPPET_ZOOM] };
+    tune.edit(change).then(
+      () => report("Pan target set on camera " + move.index, false),
+      (error) => report(error.message, true),
+    );
+  }
+
+  // selectedPan is the pan move the inspector shows, or undefined when it shows anything else.
+  function selectedPan() {
+    const entry = tune.selectedEntry();
+    const state = tune.state();
+    if (!entry || !state || entry.kind !== ENTRY_CAMERA) {
+      return undefined;
+    }
+    return state.camera.find((move) => move.index === entry.index && move.kind === KIND_PAN);
+  }
+
+  // offerPan shows the pan target button only while the storyboard has a pan move to aim.
+  function offerPan(state) {
+    view.setPan.hidden = !state.camera.some((move) => move.kind === KIND_PAN);
+  }
+
   function copySnippet(key) {
     if (!proposal) {
       return;
@@ -249,6 +284,8 @@
     window.addEventListener("resize", drawBox);
     document.addEventListener("keydown", onKey);
     view.setZoom.addEventListener("click", setAsZoomTarget);
+    view.setPan.addEventListener("click", setAsPanTarget);
+    tune.onState(offerPan);
     for (const button of view.copies) {
       button.addEventListener("click", () => copySnippet(button.dataset.snippet));
     }

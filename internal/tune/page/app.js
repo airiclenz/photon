@@ -13,7 +13,8 @@
 //   frameTime()  the output milliseconds of the frame the preview <img> shows, or null
 //   seek(ms)     move the playhead to ms, clamped to the clip
 //   pause()      stop playing
-//   edit(edit)   apply {beat, field, value}; a Promise of the new state, rejected when refused
+//   edit(edit)   apply {beat, field, value}, or {index, field, value} for a camera move's or
+//                caption's field; a Promise of the new state, rejected when refused
 //   onState(fn)  call fn(state) with every new state
 //   frame        the preview <img> element
 "use strict";
@@ -43,6 +44,16 @@
   const ENTRY_CAPTION = "caption";
   const KIND_ZOOM = "zoom";
   const ENTRY_SEPARATOR = ":";
+  const FIELD_SEPARATOR = ".";
+  // ENTRY_ERROR_PREFIXES start the messages of the errors standing on a camera move or caption,
+  // followed by its index and "]", as the storyboard's validation and a refused edit spell them.
+  const ENTRY_ERROR_PREFIXES = { [ENTRY_CAMERA]: "camera[", [ENTRY_CAPTION]: "captions[" };
+  const EASES = ["smooth", "linear"];
+  const PLACES = ["top", "middle", "bottom"];
+  const ALIGNS = ["left", "middle", "right"];
+  const MOMENT_PLACEHOLDER = "{beat: 3, offset: 200ms} or 4500ms";
+  const TARGET_PLACEHOLDER = "{text: 'ok', area: list}";
+  const CAPTION_TEXT_ROWS = 3;
   // READ_ONLY_FRAME_FIELDS are the frame's keys photon tune shows but does not edit, named as the
   // storyboard and /api/state both spell them.
   const READ_ONLY_FRAME_FIELDS = [
@@ -119,8 +130,9 @@
     );
   }
 
-  // edit applies one edit. A refused edit stands on its beat, or the clip, until the next
-  // accepted one; the Promise rejects with it as well, for a caller that wants to know.
+  // edit applies one edit. A refused edit stands on its beat, the clip, or its camera move or
+  // caption until the next accepted one; the Promise rejects with it as well, for a caller that
+  // wants to know.
   function edit(change) {
     return request(API.edit, change).then(
       (state) => {
@@ -129,7 +141,7 @@
         return state;
       },
       (error) => {
-        refusal = { beat: change.beat, message: error.message };
+        refusal = { owner: ownerKey(change), message: error.message };
         renderInspector();
         throw error;
       },
@@ -137,9 +149,21 @@
   }
 
   // applyEdit is edit for the inspector's own fields: the refusal is already shown beside the
-  // field, so nothing more is done with it.
-  function applyEdit(beat, field, value) {
-    edit({ beat, field, value }).catch(() => {});
+  // field, so nothing more is done with it. owner is the beat id, 0 for the clip, or the
+  // {kind, index} entry of a camera move's or caption's field.
+  function applyEdit(owner, field, value) {
+    const change = isEntry(owner) ? { index: owner.index, field, value } : { beat: owner, field, value };
+    edit(change).catch(() => {});
+  }
+
+  // ownerKey names what change stands on: its entry's beat select value for a camera move's or
+  // caption's field, else its beat's id.
+  function ownerKey(change) {
+    const [kind] = change.field.split(FIELD_SEPARATOR);
+    if (kind === ENTRY_CAMERA || kind === ENTRY_CAPTION) {
+      return entryValue(kind, change.index);
+    }
+    return String(change.beat);
   }
 
   // poll asks for the state every second, so outside writes and reloads show up.
@@ -449,55 +473,92 @@
     view.inspector.replaceChildren(...(beat ? beatPanel(beat) : framePanel()));
   }
 
-  // entryPanel is a camera move's or caption's fields, read-only here: the YAML edits them.
+  // entryPanel is a camera move's or caption's fields; what the page does not edit shows
+  // read-only, and the YAML edits it.
   function entryPanel(kind, entry) {
     return kind === ENTRY_CAMERA ? cameraPanel(entry) : captionPanel(entry);
   }
 
-  // cameraPanel is a camera move's timing, where it goes and when it plays on the output clock.
+  // cameraPanel edits a camera move's timing and where it goes, and shows when it plays on the
+  // output clock and the errors standing on it.
   function cameraPanel(move) {
+    const owner = { kind: ENTRY_CAMERA, index: move.index };
     return [
       element("h2", {}, "camera " + move.index + " " + move.kind),
-      readOnlyRow("at", momentText(move.at)),
-      readOnlyRow("over", move.over_ms + "ms"),
-      readOnlyRow("ease", move.ease),
-      aimRow(move),
+      textField("at", owner, "camera.at", momentText(move.at), MOMENT_PLACEHOLDER),
+      millisecondsField("over", owner, "camera.over", move.over_ms),
+      choiceField("ease", owner, "camera.ease", EASES, move.ease),
+      aimRow(owner, move),
       readOnlyRow("plays", formatTime(move.start_ms) + " – " + formatTime(move.end_ms)),
+      ...errorRows(owner),
     ];
   }
 
-  // aimRow is where a camera move goes: a zoom's factor, a pan's target or cell, or the points
-  // of a pan's path.
-  function aimRow(move) {
+  // aimRow edits where a camera move goes: a zoom's factor, or a pan's target or cell; the
+  // points of a pan's path show read-only.
+  function aimRow(owner, move) {
     if (move.kind === KIND_ZOOM) {
-      return readOnlyRow("to", move.factor + "×");
+      const input = element("input", { type: "number", step: "0.1", value: String(move.factor) });
+      input.addEventListener("change", () => applyEdit(owner, "camera.to", input.value.trim()));
+      return fieldRow("to (×)", input);
     }
     if (move.target) {
-      return readOnlyRow("to", flowTarget(move.target));
+      return textField("to", owner, "camera.to", flowTarget(move.target), TARGET_PLACEHOLDER);
     }
     if (move.cell) {
-      return readOnlyRow("to", "{cell: {x: " + move.cell.x + ", y: " + move.cell.y + "}}");
+      const cell = "{cell: {x: " + move.cell.x + ", y: " + move.cell.y + "}}";
+      return textField("to", owner, "camera.to", cell, TARGET_PLACEHOLDER);
     }
     return readOnlyRow("via", move.via_count + " points");
   }
 
-  // captionPanel is a caption's text, timing, placement and when it shows on the output clock;
-  // a caption set by position has no place or align to show.
+  // captionPanel edits a caption's text, timing and placement, and shows when it is on the
+  // output clock and the errors standing on it. It ends after for or at until: either field
+  // sets its end and drops the other. A caption set by position has no place or align to edit.
   function captionPanel(caption) {
-    const end = caption.until
-      ? readOnlyRow("until", momentText(caption.until))
-      : readOnlyRow("for", caption.for_ms + "ms");
+    const owner = { kind: ENTRY_CAPTION, index: caption.index };
     const placement = caption.place
-      ? [readOnlyRow("place", caption.place), readOnlyRow("align", caption.align)]
+      ? [
+          choiceField("place", owner, "caption.place", PLACES, caption.place),
+          choiceField("align", owner, "caption.align", ALIGNS, caption.align),
+        ]
       : [];
     return [
       element("h2", {}, "caption " + caption.index),
-      readOnlyRow("text", caption.text),
-      readOnlyRow("at", momentText(caption.at)),
-      end,
+      captionTextField(owner, caption.text),
+      textField("at", owner, "caption.at", momentText(caption.at), MOMENT_PLACEHOLDER),
+      captionForField(owner, caption),
+      captionUntilField(owner, caption),
       ...placement,
       readOnlyRow("shows", formatTime(caption.start_ms) + " – " + formatTime(caption.stop_ms)),
+      ...errorRows(owner),
     ];
+  }
+
+  // captionForField edits how long a caption shows; it is empty while the caption ends at until.
+  function captionForField(owner, caption) {
+    const input = element("input", {
+      type: "number",
+      min: "1",
+      step: "1",
+      value: caption.until ? "" : String(caption.for_ms),
+    });
+    input.addEventListener("change", () => applyEdit(owner, "caption.for", input.value.trim()));
+    return fieldRow("for (ms)", input);
+  }
+
+  // captionUntilField edits the moment a caption ends at; it is empty while the caption ends
+  // after for.
+  function captionUntilField(owner, caption) {
+    const until = caption.until ? momentText(caption.until) : "";
+    return textField("until", owner, "caption.until", until, MOMENT_PLACEHOLDER);
+  }
+
+  // captionTextField edits a caption's text, its lines as the textarea's lines.
+  function captionTextField(owner, text) {
+    const area = element("textarea", { rows: CAPTION_TEXT_ROWS, value: text });
+    area.addEventListener("change", () => applyEdit(owner, "caption.text", area.value));
+    return fieldRow("text", area);
   }
 
   function readOnlyRow(label, text) {
@@ -534,10 +595,25 @@
     ];
   }
 
-  function millisecondsField(label, beat, field, ms) {
+  function millisecondsField(label, owner, field, ms) {
     const input = element("input", { type: "number", min: "0", step: "1", value: String(ms) });
-    input.addEventListener("change", () => applyEdit(beat, field, input.value.trim()));
+    input.addEventListener("change", () => applyEdit(owner, field, input.value.trim()));
     return fieldRow(label + " (ms)", input);
+  }
+
+  // textField edits field as the one line of text typed, a moment or a target as YAML flow text.
+  function textField(label, owner, field, text, placeholder) {
+    const input = element("input", { type: "text", value: text, placeholder });
+    input.addEventListener("change", () => applyEdit(owner, field, input.value.trim()));
+    return fieldRow(label, input);
+  }
+
+  // choiceField edits field as one of choices, chosen now.
+  function choiceField(label, owner, field, choices, chosen) {
+    const input = element("select", {}, ...choices.map((choice) => option(choice, choice)));
+    input.value = chosen;
+    input.addEventListener("change", () => applyEdit(owner, field, input.value));
+    return fieldRow(label, input);
   }
 
   function countField(label, field, count) {
@@ -556,7 +632,7 @@
   function zoomPanel(beat) {
     const heading = element("h3", {}, "zoom");
     if (!beat.zoom) {
-      const target = element("input", { type: "text", placeholder: "{text: 'ok', area: list}" });
+      const target = element("input", { type: "text", placeholder: TARGET_PLACEHOLDER });
       const add = element("button", { type: "button" }, "Add zoom");
       add.addEventListener("click", () => applyEdit(beat.id, "zoom", target.value.trim()));
       return [heading, fieldRow("target", target), add];
@@ -617,13 +693,29 @@
     return [element("p", { className: isTooFast ? "report too-fast" : "report" }, section.report)];
   }
 
-  // errorRows are the errors standing on beat (or the clip, for 0) and a refused edit of it.
-  function errorRows(beat) {
-    const messages = current.errors.filter((problem) => problem.beat === beat).map((problem) => problem.message);
-    if (refusal && refusal.beat === beat) {
+  // errorRows are the errors standing on owner — a beat id, 0 for the clip, or a camera move's
+  // or caption's {kind, index} entry, whose errors stand on the clip and name it — and a refused
+  // edit of it.
+  function errorRows(owner) {
+    const isOwnedBy = isEntry(owner)
+      ? (problem) => problem.beat === CLIP && problem.message.startsWith(entryErrorPrefix(owner))
+      : (problem) => problem.beat === owner;
+    const messages = current.errors.filter(isOwnedBy).map((problem) => problem.message);
+    const key = isEntry(owner) ? entryValue(owner.kind, owner.index) : String(owner);
+    if (refusal && refusal.owner === key) {
       messages.push(refusal.message);
     }
     return messages.map((message) => element("p", { className: "error" }, message));
+  }
+
+  // entryErrorPrefix starts every error message standing on entry: camera[2] or captions[0].
+  function entryErrorPrefix(entry) {
+    return ENTRY_ERROR_PREFIXES[entry.kind] + entry.index + "]";
+  }
+
+  // isEntry says owner is a camera move's or caption's {kind, index} rather than a beat id.
+  function isEntry(owner) {
+    return typeof owner === "object" && owner !== null;
   }
 
   function errorMark(beat) {
@@ -744,7 +836,11 @@
   // isTyping says a key goes to a form field, which keeps its own keys.
   function isTyping(event) {
     const target = event.target;
-    return target instanceof HTMLInputElement || target instanceof HTMLSelectElement;
+    return (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLSelectElement ||
+      target instanceof HTMLTextAreaElement
+    );
   }
 
   // onKey: Space plays or pauses, the arrows step a frame, and with Shift a second.

@@ -51,6 +51,12 @@ var entryReaders = []struct {
 	{"moment", MomentState{}},
 }
 
+// entryFieldSenders are the page files that send camera move and caption edits.
+var entryFieldSenders = []string{"app.js", "picker.js"}
+
+// entryFieldName finds a camera move's or caption's edit field written as a string literal.
+var entryFieldName = regexp.MustCompile(`"((?:camera|caption)\.[a-z_]+)"`)
+
 // readOnlyFrameFields are the frame keys the Clip frame panel prints, read-only, from the state.
 var readOnlyFrameFields = []string{"cols", "rows", "padding", "font_size", "line_height", "scale", "max_colors"}
 
@@ -252,6 +258,28 @@ func TestPage_Picker_CallsPickAndClipboard(t *testing.T) {
 	}
 }
 
+func TestPage_EntryFields_AreEditFields(t *testing.T) {
+	t.Parallel()
+	sent := map[string]bool{}
+
+	for _, name := range entryFieldSenders {
+		for _, match := range entryFieldName.FindAllSubmatch(readPageFile(t, name), -1) {
+			field := string(match[1])
+			sent[field] = true
+			if !slices.Contains(editFields, field) {
+				t.Errorf("%s sends the field %s, which an edit does not accept", name, field)
+			}
+		}
+	}
+
+	for _, field := range editFields {
+		isEntryField := strings.HasPrefix(field, "camera.") || strings.HasPrefix(field, "caption.")
+		if isEntryField && !sent[field] {
+			t.Errorf("the page sends no %s edit", field)
+		}
+	}
+}
+
 func TestPage_Lanes_RegisterNamedLanesWithStyledBars(t *testing.T) {
 	t.Parallel()
 	lanes := string(readPageFile(t, "lanes.js"))
@@ -293,7 +321,8 @@ func TestPage_EntryReads_AreStateKeys(t *testing.T) {
 		content := readPageFile(t, name)
 		for _, reader := range entryReaders {
 			keys := jsonKeys(t, reader.of)
-			access := regexp.MustCompile(`\b` + reader.variable + `\.([a-z_]+)`)
+			// A quoted name is an edit field, such as "caption.for", not a read.
+			access := regexp.MustCompile(`(?:^|[^"\w])` + reader.variable + `\.([a-z_]+)`)
 			for _, match := range access.FindAllSubmatch(content, -1) {
 				if key := string(match[1]); !keys[key] {
 					t.Errorf("%s reads %s.%s, which /api/state does not send", name, reader.variable, key)

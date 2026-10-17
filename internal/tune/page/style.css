@@ -64,7 +64,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -89,7 +90,8 @@ button.primary {
 }
 
 input,
-select {
+select,
+textarea {
   padding: 3px 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -258,8 +260,14 @@ select {
 }
 
 .field input[type="number"],
-.field input[type="text"] {
+.field input[type="text"],
+.field select,
+.field textarea {
   width: 100%;
+}
+
+.field textarea {
+  resize: vertical;
 }
 
 .field .inline {

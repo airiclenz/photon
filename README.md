@@ -166,9 +166,11 @@ take, each service's log (`<work>/<service>.log`), and the clip's palette
 frame for frame as `photon render` composes it. Its timeline edits each beat's `duration`,
 `hold`, `cut` and `zoom`, and its inspector the clip's `frame.width` and `frame.fps`. The
 storyboard's `camera` moves and `captions` show as bars on lanes of their own under the beats,
-and a click on a bar shows that entry's fields in the inspector. A pick on
-the paused preview proposes a target for the picked cells, ready to use as a zoom target or
-to copy as a `click`, `seen` or `drag` end. `pause` and the `do` actions show read-only:
+and a click on a bar shows that entry in the inspector, which edits a camera move's `at`,
+`over`, `ease` and `to`, and a caption's `text`, `at`, `for` or `until`, `place` and `align`.
+A pan's `via` and a caption's font, colours, box, fade, offset and position change in the YAML.
+A pick on the paused preview proposes a target for the picked cells, ready to use as a zoom
+target or the selected pan's `to`, or to copy as a `click`, `seen` or `drag` end. `pause` and the `do` actions show read-only:
 changing them needs a new `photon record`. Save writes the storyboard in place and changes only
 the edited values, so comments and layout stay. It is refused while an edit leaves the
 storyboard invalid, or when the file changed on disk since it was loaded.
