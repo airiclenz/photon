@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -292,9 +293,12 @@ func TestSession_Save_WritesInPlaceKeepingTheMode(t *testing.T) {
 	if got := f.readDisk(t); got != want {
 		t.Errorf("saved:\n%s\nwant:\n%s", got, want)
 	}
-	info, err := os.Stat(f.boardPath)
-	if err != nil || info.Mode().Perm() != boardMode {
-		t.Errorf("mode %v (%v), want %v", info.Mode().Perm(), err, os.FileMode(boardMode))
+	// Windows keeps only a read-only bit, so the storyboard reads back as 0666 there.
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(f.boardPath)
+		if err != nil || info.Mode().Perm() != boardMode {
+			t.Errorf("mode %v (%v), want %v", info.Mode().Perm(), err, os.FileMode(boardMode))
+		}
 	}
 	entries, err := os.ReadDir(filepath.Dir(f.boardPath))
 	if err != nil || len(entries) != 2 {
