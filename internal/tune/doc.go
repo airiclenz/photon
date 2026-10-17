@@ -16,11 +16,15 @@
 // the preview's. [Session.Refresh] takes in outside writes — a rewritten take is read again, a
 // changed storyboard is loaded when nothing is unsaved and turns the session stale otherwise —
 // and [Session.Save] writes in place, refused while stale ([ErrStale]) or while an error stands
-// ([ErrInvalid]). [Session.State] reports everything the page shows.
+// ([ErrInvalid]). [Session.State] reports everything the page shows, and [Session.Frame] the
+// PNG of the frame `photon render` composes at an output time, from the last good pipeline, its
+// rasterized snapshots kept in a cache bounded at 1 GiB that a new rasterizer starts afresh.
 //
 // The file map:
+//   - cache.go: the bounded, least-recently-used cache of a rasterizer's snapshots.
 //   - doc.go: this package comment and file map.
 //   - edit.go: the [Edit] and applying one to storyboard source, key by key.
+//   - frame.go: [Session.Frame], one composed frame of the preview as a PNG.
 //   - history.go: a session's storyboard versions, for undo and redo.
 //   - session.go: the [Session]: its pipelines, history, refresh from disk and guarded save.
 //   - state.go: the [State] a session reports and the errors attributed to beats.

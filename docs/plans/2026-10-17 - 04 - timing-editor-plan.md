@@ -222,7 +222,10 @@ parallel.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/` ; `go vet ./internal/tune/`
 **Commit:** `feat(tune): keep a tuning session with history, reload and guarded save`
 
-## 6. tune: frames on demand
+## 6. tune: frames on demand — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): internal/tune/session.go, not in **Files:**, carries the regression guard: `pipeline` gains a `rasters *rasterCache` field and `rasterizerFor` returns the good pipeline's cache with its reused rasterizer, or a new empty cache with a new rasterizer, so the old cache is never emptied in place and `Frame` copies it with the rest of the good pipeline under the lock.
+NOTES (2026-10-17): Frame draws from the last good pipeline (the preview keeps it while an error stands) and adds an exported sentinel `ErrOutsideClip` for `out` outside [0, Length), so the HTTP item can map it; the LRU cap is injected through `newRasterCache(capacity)` into the cache's unexported `capacity` field, and the eviction tests drive the cache directly.
 
 Depends on item 5.
 

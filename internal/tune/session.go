@@ -70,13 +70,15 @@ type Session struct {
 }
 
 // pipeline is everything a frame of the preview is built from. A pipeline that failed to build
-// holds the stages before the failure and nil for the rest.
+// holds the stages before the failure and nil for the rest. rasters is the rasterizer's own
+// cache: the two are made, and reused, together.
 type pipeline struct {
 	board      *storyboard.Storyboard
 	loaded     *clip.Clip
 	recorded   *take.Take
 	schedule   *schedule.Schedule
 	rasterizer *raster.Rasterizer
+	rasters    *rasterCache
 	compositor *compose.Compositor
 }
 
@@ -332,7 +334,8 @@ func (s *Session) rebuild() {
 
 // build parses src and builds the schedule, the rasterizer and the compositor on it against
 // the take. On an error the pipeline returned holds the stages built before it. The rasterizer
-// is the good pipeline's own while the take and the frame's raster geometry are unchanged.
+// and its raster cache are the good pipeline's own while the take and the frame's raster
+// geometry are unchanged.
 func (s *Session) build(src []byte) (pipeline, error) {
 	built := pipeline{recorded: s.recorded}
 	board, err := storyboard.Parse(src, s.path)
@@ -349,23 +352,29 @@ func (s *Session) build(src []byte) (pipeline, error) {
 	if built.schedule, err = schedule.New(board, s.recorded); err != nil {
 		return built, err
 	}
-	if built.rasterizer, err = s.rasterizerFor(built.loaded); err != nil {
+	if built.rasterizer, built.rasters, err = s.rasterizerFor(built.loaded); err != nil {
 		return built, err
 	}
 	built.compositor, err = render.NewCompositor(built.loaded, s.recorded, built.schedule, built.rasterizer)
 	return built, err
 }
 
-// rasterizerFor returns the good pipeline's rasterizer when it drew the same take at the same
-// raster geometry as loaded's frame, else a new one.
-func (s *Session) rasterizerFor(loaded *clip.Clip) (*raster.Rasterizer, error) {
+// rasterizerFor returns the good pipeline's rasterizer and raster cache when it drew the same
+// take at the same raster geometry as loaded's frame, else a new rasterizer with a new, empty
+// cache. The old cache is left as it is, never emptied, so a frame still drawn against the old
+// pipeline cannot put its rasters into the new one.
+func (s *Session) rasterizerFor(loaded *clip.Clip) (*raster.Rasterizer, *rasterCache, error) {
 	good := s.good
 	isReusable := good.rasterizer != nil && good.recorded == s.recorded &&
 		rasterGeometry(good.board.Frame) == rasterGeometry(loaded.Storyboard.Frame)
 	if isReusable {
-		return good.rasterizer, nil
+		return good.rasterizer, good.rasters, nil
 	}
-	return render.NewRasterizer(loaded)
+	rasterizer, err := render.NewRasterizer(loaded)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rasterizer, newRasterCache(rasterCacheBytes), nil
 }
 
 // rasterGeometry is frame without the fields the compositor and encoder apply after
