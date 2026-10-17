@@ -1,0 +1,22 @@
+# A storyboard kept by hand: every edit must leave the rest of it byte for byte.
+clip: demo   # the clip's name
+ship: demo.gif
+
+# The frame stays one flow mapping.
+frame: {cols: 80, rows: 24, width: 600, fps: 24}
+
+beats:
+  # The first beat opens the list.
+  - id: 1
+    title: 'it''s open'
+    duration: 1800ms  # measured
+    zoom: {target: {text: 'Größe → ✓', area: list}, factor: 2, in: 1s, out: 1s}
+    do:
+      - type: {text: "say \"hi\"\tnow"}
+      - key: {name: enter}
+
+  - id: 2
+    title: "Überblick \u2713"
+    duration: 2s
+    hold: 1s
+    cut: true

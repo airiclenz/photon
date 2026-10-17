@@ -103,7 +103,13 @@ table test of `BeatReport` for a kept and a cut section.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/render/` ; `go vet ./internal/render/`
 **Commit:** `refactor(render): export the rasterizer, compositor and beat-report builders`
 
-## 3. yamledit: splice edits into YAML source
+## 3. yamledit: splice edits into YAML source — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): added internal/yamledit/scan.go, which the plan's Files line does not name. It holds the source-position and span scanners (line/column to byte offset, scalar, flow-collection and block-entry extents) as Document methods, because document.go alone ran to 577 lines and the house limit (Note coding-conventions) is about 400. doc.go's file map names it.
+NOTES (2026-10-17): Path is `[]string`. A step indexes a sequence when the node it steps into is a sequence, and is written as a decimal (Path{"beats", "0", "duration"}). Path.String renders `beats[0].duration` for errors.
+NOTES (2026-10-17): Quote single-quotes as planned, but falls back to a double-quoted, escaped string when s holds a line break or another unprintable rune, because single quotes would fold or lose those.
+NOTES (2026-10-17): the errors are exported sentinels ErrNotFound, ErrKind, ErrExists and ErrUnsupported. ErrUnsupported covers block scalars, multi-line plain scalars, anchored/tagged scalars, multi-line source text, and any edit whose result no longer parses or no longer holds the edited node. Every edit is verified that way after the splice and rolled back if it fails, so a null block value (`a:` with nothing after) is refused instead of being mis-spliced.
+NOTES (2026-10-17): Insert's "last present key named in after" is taken in document order: the new key goes after whichever named key comes last in the mapping. Delete supports mapping keys only (block, flow, and the first key of a `- id:` sequence item); a path ending in a sequence index is ErrKind.
 
 **What:**
 **Goal:** a new package `internal/yamledit` (imports only `gopkg.in/yaml.v3`) edits YAML source
