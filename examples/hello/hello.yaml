@@ -1,0 +1,39 @@
+# The hello clip: open the fixture, type a greeting, pick an item from the list.
+#   photon setup examples/hello/hello.yaml
+#   photon record examples/hello/hello.yaml
+clip: hello
+ship: out/hello.gif
+frame: {cols: 60, rows: 12, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+expect:
+  - seen: 'photon fixture'
+  - run: test -s "$PHOTON_WORK/input.log"
+beats:
+  - id: 1
+    title: open
+    why: the first paint shows the whole screen
+    duration: 2s
+    do:
+      - wait: {screen: 'ready, terminal', timeout: 5s}
+    expect:
+      - seen: 'type and enter to submit'
+  - id: 2
+    title: say hello
+    duration: 3s
+    do:
+      - type: {text: 'hello, photon'}
+      - key: {name: enter}
+      - wait: {screen: 'you typed: hello, photon', timeout: 5s}
+    expect:
+      - seen: 'you typed: hello, photon'
+        area: status
+  - id: 3
+    title: pick an item
+    duration: 2s
+    do:
+      - click: {target: {text: 'beta', area: list}}
+      - wait: {screen: 'selected: beta', timeout: 5s}
+    expect:
+      - seen: '\* beta'
+        area: list
+      - seen: 'selected: beta'
+        area: status

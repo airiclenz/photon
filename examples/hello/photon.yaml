@@ -1,0 +1,30 @@
+# The hello example: photon films its own fixture TUI, a small screen with a title, a list, an
+# input line and a status row. `photon setup` builds the program into the work dir, so the
+# example needs the Go toolchain and this repository, and nothing else.
+name: hello
+
+# setup and reset run by sh -c in this file's dir, with PHOTON_WORK set to the work dir.
+setup: go build -o "$PHOTON_WORK/hello-tui" ../../internal/testkit/fixturetui
+reset: rm -f "$PHOTON_WORK/input.log"
+
+launch:
+  command: exec "$PHOTON_WORK/hello-tui"
+  env:
+    # The fixture appends every chunk of input it reads to this file; the storyboard's run
+    # expect reads it back.
+    FIXTURE_INPUT_LOG: ${PHOTON_WORK}/input.log
+
+# ctrl+c quits the fixture; the end of a take sends it once the screen has been still for 300ms.
+end:
+  keys: [ctrl+c]
+  idle: 300ms
+
+areas:
+  # The list: the rows between the title and the input line.
+  list:
+    top: {match: '^photon fixture$', offset: 1}
+    bottom: {match: '^>', offset: -1}
+  # The status: the one row above the footer's help text.
+  status:
+    top: {match: '^type and enter to submit', offset: -1}
+    bottom: {match: '^type and enter to submit', offset: -1}
