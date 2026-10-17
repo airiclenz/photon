@@ -1,0 +1,15 @@
+# A storyboard whose camera breaks four rules: a move with no length, a zoom past 3×, a pan that
+# starts after the 4s clip ends, and two zooms that overlap on the zoom track.
+clip: camera
+ship: out/camera.gif
+frame: {cols: 80, rows: 24, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+beats:
+  - id: 1
+    title: tour the list
+    duration: 4s
+camera:
+  - zoom: {to: 2, at: 0s, over: 0s}
+  - zoom: {to: 3.5, at: 500ms, over: 500ms}
+  - pan: {to: {cell: {x: 4, y: 2}}, at: 9s, over: 1s}
+  - zoom: {to: 2, at: 2s, over: 1s}
+  - zoom: {to: 1, at: 2500ms, over: 1s}

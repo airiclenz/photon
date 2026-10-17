@@ -175,6 +175,25 @@ func namedAreas(board *storyboard.Storyboard) []namedArea {
 			named = append(named, namedArea{field, expect.Area})
 		}
 	}
+	return append(named, cameraAreas(board)...)
+}
+
+// cameraAreas lists the area field of every point a camera pan aims at, set or not; a cell point
+// leaves its area empty.
+func cameraAreas(board *storyboard.Storyboard) []namedArea {
+	var named []namedArea
+	for index, move := range board.Camera {
+		if move.Pan == nil {
+			continue
+		}
+		prefix := fmt.Sprintf("camera[%d]: pan.", index)
+		if move.Pan.To != nil {
+			named = append(named, namedArea{prefix + "to.area", move.Pan.To.Area})
+		}
+		for point, via := range move.Pan.Via {
+			named = append(named, namedArea{fmt.Sprintf("%svia[%d].area", prefix, point), via.Area})
+		}
+	}
 	return named
 }
 

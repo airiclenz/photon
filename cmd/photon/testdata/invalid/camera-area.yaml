@@ -1,0 +1,10 @@
+# A valid storyboard whose camera pans to an area photon.yaml in valid/ does not declare.
+clip: camera-area
+ship: out/camera-area.gif
+frame: {cols: 80, rows: 24, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+beats:
+  - id: 1
+    title: look at the sidebar
+    duration: 2s
+camera:
+  - pan: {to: {text: 'Item', area: sidebar}, at: 500ms, over: 1s}

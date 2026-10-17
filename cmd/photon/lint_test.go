@@ -18,6 +18,8 @@ var (
 	invalidStoryboard    = filepath.Join("testdata", "invalid", "demo.yaml")
 	undeclaredStoryboard = filepath.Join("testdata", "invalid", "undeclared.yaml")
 	badDragStoryboard    = filepath.Join("testdata", "invalid", "drag.yaml")
+	badCameraStoryboard  = filepath.Join("testdata", "invalid", "camera.yaml")
+	cameraAreaStoryboard = filepath.Join("testdata", "invalid", "camera-area.yaml")
 )
 
 // okMarker is what lint prints for a clip with no problem.
@@ -66,6 +68,23 @@ func TestLint(t *testing.T) {
 			args:       []string{"lint", badDragStoryboard, "--config", validConfig},
 			wantCode:   exitRunFailed,
 			wantStderr: []string{"beat 1: do[0]: drag.to: want exactly one of text or offset"},
+		},
+		{
+			name:     "every bad camera move is listed under its field",
+			args:     []string{"lint", badCameraStoryboard, "--config", validConfig},
+			wantCode: exitRunFailed,
+			wantStderr: []string{
+				"camera[0]: zoom.over: want >0, got 0s",
+				"camera[1]: zoom.to: want in [1, 3], got 3.5",
+				"camera[2]: pan.at: want a start in [0s, 4s), got 9s",
+				"camera[4]: zoom: overlaps camera[3] on the zoom track",
+			},
+		},
+		{
+			name:       "an undeclared camera area is listed",
+			args:       []string{"lint", cameraAreaStoryboard, "--config", validConfig},
+			wantCode:   exitRunFailed,
+			wantStderr: []string{`camera[0]: pan.to.area: "sidebar" is not declared`},
 		},
 		{
 			name:       "no storyboard is a bad command line",

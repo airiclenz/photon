@@ -228,6 +228,50 @@ func TestWithStoryboard_UndeclaredAreaFailsNamingIt(t *testing.T) {
 	}
 }
 
+func TestWithStoryboard_UndeclaredCameraAreaFailsNamingIt(t *testing.T) {
+	t.Setenv(WorkEnv, "")
+	loaded, err := Load(validStoryboard, "", "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	raw, err := os.ReadFile(validStoryboard)
+	if err != nil {
+		t.Fatalf("read the storyboard: %v", err)
+	}
+	// Beat 1 zooms over the whole of its section, so the pans sit in a second beat.
+	withCamera := string(raw) + `  - id: 2
+    title: look around
+    duration: 4s
+camera:
+  - pan: {to: {text: 'Saved', area: footer}, at: 4s, over: 1s}
+  - zoom: {to: 2, at: 5s, over: 1s}
+  - pan: {via: [{text: 'Item', area: list}, {text: 'Bin', area: trash}, {cell: {x: 1, y: 1}}], at: 6s, over: 1s}
+`
+	board, err := storyboard.Parse([]byte(withCamera), validStoryboard)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	want := []string{
+		`camera[0]: pan.to.area: "footer" is not declared`,
+		`camera[2]: pan.via[1].area: "trash" is not declared`,
+	}
+
+	_, err = loaded.WithStoryboard(board)
+
+	var crossCheckErr *ValidationError
+	if !errors.As(err, &crossCheckErr) {
+		t.Fatalf("WithStoryboard error = %v, want a *ValidationError", err)
+	}
+	if len(crossCheckErr.Problems) != len(want) {
+		t.Fatalf("problems = %q, want %d of them", crossCheckErr.Problems, len(want))
+	}
+	for index, prefix := range want {
+		if got := crossCheckErr.Problems[index].Error(); !strings.HasPrefix(got, prefix) {
+			t.Errorf("problem %d = %q, want it to start %q", index, got, prefix)
+		}
+	}
+}
+
 func TestWithStoryboard_KeepsTheConfigAndWorkFlag(t *testing.T) {
 	t.Setenv(WorkEnv, "")
 	flagWork := filepath.Join(t.TempDir(), "flag")

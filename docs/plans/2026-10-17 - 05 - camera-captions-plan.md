@@ -129,7 +129,11 @@ zoomClickTake, testLayout; internal/raster/raster_test.go — update flag
 - `GOMEMLIMIT=2GiB go test ./internal/compose/ -run Golden`
 **Commit:** `test(compose): pin a beat zoom's crops in a golden`
 
-## 4. Storyboard `camera`: schema and validation
+## 4. Storyboard `camera`: schema and validation — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the camera's rules live in camera.go beside its types (validate.go only calls `validateCamera`), so doc.go's validate.go entry now reads "every other validation rule"; overlaps are checked pairwise (each move against every earlier move on its track and every kept beat's zoom section), which reports the same problems as a sorted sweep and names both holders
+NOTES (2026-10-17): an absent `at` is the clip's start (Moment's zero value) and an absent `ease` is set to `smooth` by applyDefaults; the lint fixture uses `over: 0s` because yaml.v3 refuses a unitless `0` for a duration; both lint cases pass `--config` validConfig
+NOTES (2026-10-17): the README gains one `camera` row in the Storyboard Header table naming every new tag; item 8 writes the full reference
 
 Depends on item 2.
 **What:**

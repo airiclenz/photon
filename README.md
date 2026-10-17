@@ -372,6 +372,7 @@ beats:
 | `frame.max_colors` | The palette size, 2..256. The palette is built per clip, without dithering. |
 | `expect` | Take-level expects, checked on every screen of the take. See [Expects](#expects). |
 | `beats` | The beats, at least one. |
+| `camera` | Camera moves on the clip's clock: each is a `zoom` (`to` a factor) or a `pan` (`to` a target or a `cell`, or `via` waypoints), with `at` (a clip time, or a `beat` and an `offset`), `over` and `ease`. |
 
 ### Beats
 

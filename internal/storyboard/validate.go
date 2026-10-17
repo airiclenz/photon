@@ -53,6 +53,7 @@ func (s *Storyboard) validate() []error {
 	for _, beat := range s.Beats {
 		beat.validate(prefixed(report, fmt.Sprintf("beat %d: ", beat.ID)))
 	}
+	s.validateCamera(report)
 	return problems
 }
 
