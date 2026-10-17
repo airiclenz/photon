@@ -375,7 +375,7 @@ beats:
 | `expect` | Take-level expects, checked on every screen of the take. See [Expects](#expects). |
 | `beats` | The beats, at least one. |
 | `camera` | Camera moves on the clip's clock: each is a `zoom` (`to` a factor) or a `pan` (`to` a target or a `cell`, or `via` waypoints), with `at` (a clip time, or a `beat` and an `offset`), `over` and `ease`. See [Camera](#camera). |
-| `captions` | Text drawn over the composed frame on the clip's clock: each has `text`, `at`, and `for` or `until`; a `font` (`size`, `weight`); a `place` and `align` with an `offset`, or a `position`; a `color`, a `box` (`color`, `opacity`) and a `fade` (`in`, `out`). |
+| `captions` | Text drawn over the composed frame on the clip's clock: each has `text`, `at`, and `for` or `until`; a `font` (`size`, `weight`); a `place` and `align` with an `offset`, or a `position`; a `color`, a `box` (`color`, `opacity`) and a `fade` (`in`, `out`). See [Captions](#captions). |
 
 ### Beats
 
@@ -481,6 +481,73 @@ the next zoom aims.
 with both or neither of `text` and `cell`, a cell outside the grid, an `ease` other than `smooth`
 or `linear`, an `over` that is not >0, an `at` that names a missing or cut beat, a move that
 starts outside the clip or ends after it, and every overlap above.
+
+### Captions
+
+The top-level `captions` list draws text over the clip, on the same clock as the
+[camera](#camera). A caption sits on the shipped frame itself: it is drawn after the zoom, the
+pan and the downscale to `frame.width`, and over the cursor. A zoom or pan never moves or scales
+it. Captions may overlap one another; one listed later draws over one listed earlier.
+
+| Field | Meaning |
+| --- | --- |
+| `text` | Required. The caption's text. Each line of a YAML block (`text: \|`) is a line of the caption. Lines are not wrapped. |
+| `at` | When the caption appears, in the same two forms as a camera move's `at`: a bare time such as `4500ms`, or `{beat: N, offset: D}`. Leave it out to start at the clip's first frame. |
+| `for`, `until` | When it goes. Set exactly one: `for` is how long it shows, >0; `until` is the moment it ends, in the same forms as `at`. It must end after it starts and by the clip's end. |
+| `font.size` | The text size, in the same unit as `frame.font_size`, 6..72. Default `frame.font_size`, which matches the terminal text's size. |
+| `font.weight` | `regular` (default) or `bold`. See [Fonts and licences](#fonts-and-licences). |
+| `place` | `top`, `middle` or `bottom` (default): where the caption sits vertically. |
+| `align` | `left`, `middle` (default) or `right`: where the caption sits across the frame, and how its lines line up. |
+| `offset` | `{x, y}`: moves the placed caption, in design pixels. `x` is right and `y` is down. Negative goes left and up. |
+| `position` | `{x, y}`: puts the caption's box with its top-left corner here, in design pixels, instead of `place`, `align` and `offset`. Its lines line up left. |
+| `color` | The text colour, `#rrggbb`. Default `#ffffff`. |
+| `box.color` | The colour of the box behind the text, `#rrggbb`. Default `#000000`. |
+| `box.opacity` | The box's opacity, 0..1. Default `0.6`. `0` draws no box. |
+| `fade.in`, `fade.out` | How long the caption fades in after it appears and out before it goes, ≥0. Default 0, which cuts it in and out. The two together must fit in the caption's length. |
+
+A placed caption sits a margin in from the frame's edge it is placed against, or centred, and is
+then moved by its `offset`. The box pads the text on every side. Whatever its placement, the box
+is kept inside the frame: one that would cross an edge stops at that edge. `photon render` fails
+if a caption's box is larger than the frame.
+
+A design pixel is a pixel of the frame drawn at scale 2, before the downscale to `frame.width`.
+photon scales every caption length with the frame, so a caption keeps its size and place against
+the terminal text whatever `frame.scale` and `frame.width` are.
+
+```yaml
+captions:
+  - text: Pick an item
+    at: {beat: 1, offset: 500ms}
+    for: 2s
+    fade: {in: 200ms, out: 200ms}
+  - text: |
+      Saved.
+      Nothing to set up.
+    at: 7s
+    until: {beat: 4}
+    font: {size: 18, weight: bold}
+    place: top
+    align: right
+    offset: {x: 0, y: 12}
+    color: '#ffe08a'
+    box: {color: '#202020', opacity: 0.8}
+  - text: v1.2
+    at: 0s
+    for: 3s
+    position: {x: 20, y: 20}
+    box: {opacity: 0}
+```
+
+A caption changes only the rendered GIF, not what photon records. After you edit `captions`, run
+`photon render` again; the take stays as it is.
+
+`photon lint` reports a caption with no `text`, a caption that sets both or neither of `for` and
+`until`, a `for` that is not >0, an `at` or `until` that names a missing or cut beat, a caption
+that starts outside the clip, ends before it starts or ends after the clip, a `font.size` outside
+6..72 (its own, or the `frame.font_size` it falls back to), a `font.weight` other than `regular`
+or `bold`, a `place` or `align` that is not one of its words, a `position` set with `place`,
+`align` or `offset`, a colour not spelled `#rrggbb`, a `box.opacity` outside 0..1, a negative
+fade, and fades that together outlast the caption.
 
 ## Targets and areas
 
@@ -615,12 +682,12 @@ follows the button: it eases from the press cell to the drag's last move, at the
 then rings again on release. Moves do not ring. Its size is fixed and does not grow with a zoom.
 Clicks and drags in a cut beat draw nothing.
 
-To render, photon draws every frame at `frame.scale`, adds the zoom and the cursor, and downscales
-to `frame.width`. It streams the frames through ffmpeg twice. Pass 1 builds a palette of
-`max_colors` colours into `<work>/<clip>.palette.png`. Pass 2 maps the frames onto it, with no
-dithering, into the GIF. The palette file is then removed. No frames are stored between passes,
-so memory stays flat for any clip length. Box-drawing and block characters are drawn as shapes,
-not taken from a font, so lines and blocks join cleanly.
+To render, photon draws every frame at `frame.scale`, adds the zoom and the cursor, downscales to
+`frame.width` and draws the [captions](#captions) on top. It streams the frames through ffmpeg
+twice. Pass 1 builds a palette of `max_colors` colours into `<work>/<clip>.palette.png`. Pass 2
+maps the frames onto it, with no dithering, into the GIF. The palette file is then removed. No
+frames are stored between passes, so memory stays flat for any clip length. Box-drawing and block
+characters are drawn as shapes, not taken from a font, so lines and blocks join cleanly.
 
 ## Environment variables
 

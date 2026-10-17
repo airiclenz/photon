@@ -427,7 +427,11 @@ beat-anchored caption.
 - `capcom check`
 **Commit:** `feat(render): draw captions over the composed frame`
 
-## 13. Document captions
+## 13. Document captions — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): internal/storyboard/doc.go left untouched: item 10 already wrote its captions text and its caption.go map entry, so nothing in it was stale
+NOTES (2026-10-17): the "Fonts and licences" caption faces and `caption_font`, and the photon.yaml `caption_font` rows, were already written by item 9; not touched
+NOTES (2026-10-17): README also gains a "See [Captions](#captions)" link on the Header table's `captions` row, and the "Sections, zoom and cursor" render paragraph now says captions are drawn after the downscale (it listed only the zoom and the cursor)
 
 Depends on item 12.
 **Closes:** clip-captions

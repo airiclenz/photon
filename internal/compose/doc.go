@@ -1,6 +1,6 @@
 // Package compose turns each rasterized frame of a clip into the shipped frame: it pushes into
-// the beat's zoom target, scales to the storyboard's `frame.width` and draws a cursor over the
-// clicks and drags on top. [New] plans everything from the storyboard, the take, its schedule and
+// the beat's zoom target, scales to the storyboard's `frame.width`, draws a cursor over the
+// clicks and drags on top and the storyboard's captions over everything. [New] plans everything from the storyboard, the take, its schedule and
 // the frame [Layout]; [Compositor.Compose] is then a pure function of the output time and the
 // source frame.
 //
@@ -34,8 +34,12 @@
 // downscale to the shipped width, never by the zoom. A click or drag inside a cut beat draws
 // nothing.
 //
-// It imports schedule, target, take and storyboard. golang.org/x/image/draw does the
-// Catmull-Rom scale and the zoom's affine transform.
+// The captions are a [caption.Layer] that [New] builds from the storyboard and the caption
+// faces it is given, only when the storyboard has captions; [Compositor.Compose] draws it last,
+// on the shipped frame, so no zoom or pan moves or scales a caption.
+//
+// It imports schedule, target, take, storyboard, caption and fonts. golang.org/x/image/draw
+// does the Catmull-Rom scale and the zoom's affine transform.
 //
 // The file map:
 //   - doc.go: this package comment and file map.
