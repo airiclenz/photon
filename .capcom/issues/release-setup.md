@@ -4,6 +4,7 @@ status: open
 type: chore
 priority: 3
 deps: [user-docs]
+plan: 2026-10-17 - 03 - release-tooling-plan
 created: 2026-10-17T08:54:41Z
 ---
 
