@@ -476,7 +476,11 @@ every reported field; times move when a beat's duration is edited; a Refresh ont
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ -run 'State|Session'`
 **Commit:** `feat(tune): report camera moves and captions in the state`
 
-## 15. Tune edits a camera move's fields
+## 15. Tune edits a camera move's fields — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): `yamledit.Document.Replace` swaps a scalar's or flow collection's text where it stands; a block collection or block scalar is replaced only as a block mapping's value (the key line keeps its comment), and as a sequence item it is refused with ErrUnsupported, as are anchored, tagged and alias nodes and multi-line plain scalars.
+NOTES (2026-10-17): camera fields ignore `Edit.Beat` (frame fields still demand 0); `camera.at` with a clip start (`0ms`) on a move without `at` writes nothing, following the "a default is never written out" rule; errors read `camera[i]: camera.<key>: …` (the full field name, as `editName` uses for frame fields).
+NOTES (2026-10-17): `parseTarget` now shares a new `parseFlowMapping` helper with the new `parsePoint` (same checks, same error text); camera edit tests build their storyboards inline from `sessionStoryboard`/`cameraCaptionsStoryboard` rather than a new testdata file.
 
 Depends on item 14.
 **What:**

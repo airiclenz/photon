@@ -1,12 +1,13 @@
 // Package tune is the timing editor behind `photon tune`: it previews a storyboard's section
 // timing, zoom and frame against an existing take, and saves the edits back into the storyboard.
 //
-// An [Edit] is one typed change — a beat's duration, hold, cut or zoom, or the clip's
-// frame.width or frame.fps — spelled as the page sends it. Applying one splices only the edited
-// scalar into the storyboard's source through yamledit, so comments, quoting, key order and flow
-// or block style stay as the person wrote them: a duration keeps its unit, a new key goes in the
-// storyboard's field order, a default is never written out, and switching cut off or the zoom
-// factor to auto removes the key. The result is parsed again with the storyboard's own strict
+// An [Edit] is one typed change — a beat's duration, hold, cut or zoom, the clip's frame.width
+// or frame.fps, or a camera move's start, length, ease or destination — spelled as the page
+// sends it. Applying one splices only the edited scalar, or the one node a camera move's start
+// or pan destination replaces, into the storyboard's source through yamledit, so comments,
+// quoting, key order and flow or block style stay as the person wrote them: a duration keeps its
+// unit, a new key goes in the storyboard's field order, a default is never written out, and
+// switching cut off, the zoom factor to auto or a camera move's ease to smooth removes the key. The result is parsed again with the storyboard's own strict
 // loader, so an edit that leaves the storyboard invalid is refused with the problems it causes.
 //
 // A [Session] holds one clip and take being tuned. Every applied edit, undo, redo or revert
@@ -33,6 +34,7 @@
 //   - cache.go: the bounded, least-recently-used cache of a rasterizer's snapshots.
 //   - doc.go: this package comment and file map.
 //   - edit.go: the [Edit] and applying one to storyboard source, key by key.
+//   - edit_camera.go: an Edit of a camera move's at, over, ease or to.
 //   - frame.go: [Session.Frame], one composed frame of the preview as a PNG.
 //   - history.go: a session's storyboard versions, for undo and redo.
 //   - pick.go: [Session.Pick], a resolver-checked target [Proposal] from picked cells.

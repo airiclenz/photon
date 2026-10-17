@@ -15,19 +15,28 @@ import (
 )
 
 // Edit is one change the page asks for, as it arrives on the wire:
-// {"beat": <id>, "field": "<name>", "value": "<string>"}. Beat is the id of the beat edited, and
-// 0 for frame.width and frame.fps. Value is spelled per field:
+// {"beat": <id>, "index": <n>, "field": "<name>", "value": "<string>"}. Beat is the id of the
+// beat edited, and 0 for frame.width and frame.fps; a camera field ignores it. Index is the
+// position of the move a camera field edits in the storyboard's camera list, from 0, and is
+// ignored by every other field. Value is spelled per field:
 //   - duration, hold, zoom.in, zoom.out: a decimal integer of milliseconds ("1850");
 //   - cut: "true" or "false";
 //   - zoom.factor: a decimal ("1.8") or "auto";
 //   - frame.width, frame.fps: a decimal integer;
 //   - zoom.target, and zoom when it adds one: a target as YAML flow text, the zoom snippet a
 //     proposal returns ({text: 'ok', area: list, nth: 2});
-//   - zoom with "" removes the beat's zoom.
+//   - zoom with "" removes the beat's zoom;
+//   - camera.at: a moment as one line of YAML, a beat's {beat: 3, offset: 200ms} or a clip
+//     time 4500ms, which replaces the move's whole at;
+//   - camera.over: a decimal integer of milliseconds;
+//   - camera.ease: smooth, which removes the key, or linear;
+//   - camera.to: a decimal for a zoom move; for a pan, a target as YAML flow text or a cell
+//     ({cell: {x: 3, y: 4}}), refused on a pan along a via path.
 //
 // Any other spelling is refused with an error naming the field.
 type Edit struct {
 	Beat  int    `json:"beat"`
+	Index int    `json:"index"`
 	Field string `json:"field"`
 	Value string `json:"value"`
 }
@@ -49,7 +58,8 @@ const (
 // editFields lists every field an Edit can name, as the unknown-field error offers them.
 var editFields = []string{
 	fieldDuration, fieldHold, fieldCut, fieldZoom, fieldZoomTarget, fieldZoomFactor, fieldZoomIn,
-	fieldZoomOut, fieldFrameWidth, fieldFrameFPS,
+	fieldZoomOut, fieldFrameWidth, fieldFrameFPS, fieldCameraAt, fieldCameraOver, fieldCameraEase,
+	fieldCameraTo,
 }
 
 // The storyboard keys an edit addresses directly; a field's own key is its name past the dot.
@@ -84,11 +94,13 @@ var (
 // value in ms is written in ms, one in plain seconds in seconds with the fewest decimals, any
 // other or new value as time.Duration.String(). A new key goes after the keys that precede it in
 // the storyboard's field order; a value equal to the default of a key that is absent writes
-// nothing; cut false and zoom.factor auto delete their key. A zoom.target on a block zoom
+// nothing; cut false, zoom.factor auto and camera.ease smooth delete their key. A zoom.target on a block zoom
 // holding nothing but its target rewrites that zoom as a flow mapping, since removing its only
-// key would leave nothing to insert into. The edit is refused with an error naming the beat and
-// field when its value is misspelled, when it names a beat or zoom that is not there, or when
-// the result fails validation; the last wraps the *storyboard.ValidationError.
+// key would leave nothing to insert into. A camera.at or a pan's camera.to replaces its whole
+// node with the value's flow text. The edit is refused with an error naming the beat, or the
+// camera move, and field when its value is misspelled, when it names a beat, zoom or camera move
+// that is not there, or when the result fails validation; the last wraps the
+// *storyboard.ValidationError.
 func apply(src []byte, path string, edit Edit) ([]byte, *storyboard.Storyboard, error) {
 	board, err := storyboard.Parse(src, path)
 	if err != nil {
@@ -115,10 +127,14 @@ func apply(src []byte, path string, edit Edit) ([]byte, *storyboard.Storyboard, 
 	return edited, next, nil
 }
 
-// editName names what edit changes, as its errors lead with it: `beat 2: hold`, `frame.fps`.
+// editName names what edit changes, as its errors lead with it: `beat 2: hold`, `frame.fps`,
+// `camera[1]: camera.at`.
 func editName(edit Edit) string {
 	if isFrameField(edit.Field) {
 		return edit.Field
+	}
+	if isCameraField(edit.Field) {
+		return fmt.Sprintf("camera[%d]: %s", edit.Index, edit.Field)
 	}
 	return fmt.Sprintf("beat %d: %s", edit.Beat, edit.Field)
 }
@@ -135,13 +151,17 @@ type splicer struct {
 	root *yaml.Node
 }
 
-// apply routes edit to the frame or to its beat in board, the storyboard doc holds.
+// apply routes edit to the frame, to a camera move or to its beat in board, the storyboard doc
+// holds.
 func (s *splicer) apply(board *storyboard.Storyboard, edit Edit) error {
 	if isFrameField(edit.Field) {
 		return s.editFrame(edit)
 	}
 	if !slices.Contains(editFields, edit.Field) {
 		return fmt.Errorf("unknown field, want one of %s", strings.Join(editFields, ", "))
+	}
+	if isCameraField(edit.Field) {
+		return s.editCamera(board, edit)
 	}
 	index := slices.IndexFunc(board.Beats, func(beat storyboard.Beat) bool { return beat.ID == edit.Beat })
 	if index < 0 {

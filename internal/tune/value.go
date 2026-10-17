@@ -54,32 +54,95 @@ func parseCount(value string) (int, error) {
 	return count, nil
 }
 
+// parseDecimal reads a camera zoom move's factor spelled as a decimal.
+func parseDecimal(value string) (float64, error) {
+	spellingError := fmt.Errorf("want a decimal such as 1.8, got %q", value)
+	if !decimal.MatchString(value) {
+		return 0, spellingError
+	}
+	factor, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return 0, spellingError
+	}
+	return factor, nil
+}
+
 // parseTarget checks that value is a target as one line of YAML flow text — a flow mapping of
 // a target's own keys, with no comment — and returns it trimmed.
 func parseTarget(value string) (string, error) {
+	var target storyboard.Target
+	return parseFlowMapping(value, &target, "a target as YAML flow text such as {text: 'ok', area: list}")
+}
+
+// parsePoint checks that value is a pan's point as one line of YAML flow text — a target's flow
+// mapping or a cell's, {cell: {x: 3, y: 4}}, with no comment — and returns it trimmed.
+func parsePoint(value string) (string, error) {
+	var point storyboard.Point
+	return parseFlowMapping(value, &point, "a target or a cell as YAML flow text such as {text: 'ok'} or {cell: {x: 3, y: 4}}")
+}
+
+// parseFlowMapping checks that value is one line of YAML flow text holding a flow mapping with
+// no comment, decodes it strictly into into, and returns it trimmed. Its error says it wants
+// want.
+func parseFlowMapping(value string, into any, want string) (string, error) {
 	trimmed := strings.TrimSpace(value)
-	spellingError := fmt.Errorf("want a target as YAML flow text such as {text: 'ok', area: list}, got %q", value)
+	spellingError := fmt.Errorf("want %s, got %q", want, value)
 	isBraced := strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")
-	if !isBraced || strings.ContainsAny(trimmed, "\r\n") {
+	if !isBraced {
 		return "", spellingError
 	}
-	var file yaml.Node
-	if err := yaml.Unmarshal([]byte(trimmed), &file); err != nil || len(file.Content) == 0 {
-		return "", spellingError
-	}
-	mapping := file.Content[0]
-	hasComment := mapping.HeadComment != "" || mapping.LineComment != "" || mapping.FootComment != ""
-	if mapping.Kind != yaml.MappingNode || mapping.Style&yaml.FlowStyle == 0 || hasComment {
+	node, isOneLine := oneLineNode(trimmed)
+	if !isOneLine || node.Kind != yaml.MappingNode || node.Style&yaml.FlowStyle == 0 {
 		return "", spellingError
 	}
 
 	decoder := yaml.NewDecoder(strings.NewReader(trimmed))
 	decoder.KnownFields(true)
-	var target storyboard.Target
-	if err := decoder.Decode(&target); err != nil {
+	if err := decoder.Decode(into); err != nil {
 		return "", fmt.Errorf("%w: %v", spellingError, err)
 	}
 	return trimmed, nil
+}
+
+// parseMoment checks that value is a moment as one line of YAML — a {beat, offset} flow mapping
+// or a clip time, with no comment — and returns it trimmed with the moment it reads as.
+func parseMoment(value string) (string, storyboard.Moment, error) {
+	trimmed := strings.TrimSpace(value)
+	spellingError := fmt.Errorf("want a moment as YAML such as {beat: 3, offset: 200ms} or 4500ms, got %q", value)
+	node, isOneLine := oneLineNode(trimmed)
+	if !isOneLine {
+		return "", storyboard.Moment{}, spellingError
+	}
+	isFlowMapping := node.Kind == yaml.MappingNode && node.Style&yaml.FlowStyle != 0
+	isLineScalar := node.Kind == yaml.ScalarNode && node.Style&(yaml.LiteralStyle|yaml.FoldedStyle) == 0
+	if !isFlowMapping && !isLineScalar {
+		return "", storyboard.Moment{}, spellingError
+	}
+
+	var moment storyboard.Moment
+	if err := node.Decode(&moment); err != nil {
+		return "", storyboard.Moment{}, fmt.Errorf("%w: %v", spellingError, err)
+	}
+	return trimmed, moment, nil
+}
+
+// oneLineNode parses text, which must hold no line break, as YAML and returns its one node;
+// isOneLine is false when text spans lines, is not YAML, holds nothing, or carries a comment.
+func oneLineNode(text string) (node *yaml.Node, isOneLine bool) {
+	if strings.ContainsAny(text, "\r\n") {
+		return nil, false
+	}
+	var file yaml.Node
+	if err := yaml.Unmarshal([]byte(text), &file); err != nil || len(file.Content) == 0 {
+		return nil, false
+	}
+	node = file.Content[0]
+	for _, holder := range []*yaml.Node{&file, node} {
+		if holder.HeadComment != "" || holder.LineComment != "" || holder.FootComment != "" {
+			return nil, false
+		}
+	}
+	return node, true
 }
 
 // formatDuration spells length in the unit old, the value it replaces, is written in.
