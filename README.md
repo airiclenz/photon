@@ -3,9 +3,9 @@
 Record a terminal app's demo clip from a storyboard, check the take, and render it to a GIF.
 
 photon runs the real program in a pty, performs the storyboard's beats — humanized typing, keys,
-real mouse clicks, waits — records every screen change, and renders the shipped GIF with fixed
-section lengths, zooms on on-screen targets and a drawn cursor. A re-record after the UI changes
-is one command, not a hand performance.
+real mouse clicks and drags, waits — records every screen change, and renders the shipped GIF
+with fixed section lengths, zooms on on-screen targets and a drawn cursor. A re-record after the
+UI changes is one command, not a hand performance.
 
 photon is one CLI for any project in any language. A project plugs in through two kinds of YAML
 file: one `photon.yaml` for the project (how its app is built, launched and filmed) and one
@@ -132,7 +132,7 @@ Errors go to stderr as `photon: <error>`.
 3. Launches `launch.command` in a pty sized to the storyboard's `frame.cols` × `frame.rows`, and
    waits for its first paint.
 4. Performs every beat's actions, in order. A failing action — a `wait` that times out, a
-   `click` whose target is not on screen — fails its beat and ends the take there.
+   `click` or `drag` whose target is not on screen — fails its beat and ends the take there.
 5. Ends the take: waits for the program to stop painting for `end.idle` (at most
    `end.settle_timeout`), freezes the take so nothing the program paints on its way out is kept,
    types `end.keys`, and kills the program's whole process group if it has not left
@@ -157,8 +157,9 @@ photon render docs/demo/tour.yaml
 expect is tried out. `photon render` reads the take only; it never runs the program.
 
 A take file is a gzip-compressed JSON-lines file: every full-grid snapshot of the screen with its
-time, plus a log of what photon did (beat starts, actions, resolved targets, clicks). It carries
-a format version; a newer or foreign file is refused.
+time, plus a log of what photon did (beat starts, actions, resolved targets, clicks, and each
+drag's press, moves and release). It carries a format version; a newer or foreign file is
+refused.
 
 ## photon.yaml reference
 
@@ -359,7 +360,8 @@ example:
 ```
 
 The program must enable mouse reporting itself for a click or a drag to reach it; photon only
-sends the reports a terminal would.
+sends the reports a terminal would. A drag also needs the program to enable button-event (`1002`)
+or any-event (`1003`) tracking, the modes under which a terminal reports a held button's moves.
 
 ## Targets and areas
 
@@ -401,10 +403,10 @@ areas:
 ```
 
 An area whose anchor finds no row, or whose top lands below its bottom, is not on screen: a
-`click` there fails, and a `seen` expect does not match. Area names start with a letter and use
-letters, digits, `-` and `_`; `any` is reserved for the whole screen. A storyboard may name only
-areas its config declares — `photon lint` checks that. The same resolver serves clicks, zooms and
-`seen` expects, so all three agree on what an area is.
+`click` or `drag` there fails, and a `seen` expect does not match. Area names start with a
+letter and use letters, digits, `-` and `_`; `any` is reserved for the whole screen. A storyboard
+may name only areas its config declares — `photon lint` checks that. The same resolver serves
+clicks, drags, zooms and `seen` expects, so all of them agree on what an area is.
 
 ## Expects
 
@@ -477,13 +479,16 @@ A **zoom** pushes into its target over the `in` ramp from the start of the secti
 eases back out over the `out` ramp before the section ends; ramps that together outrun the
 section shrink in proportion. With no `factor`, the zoom fits the target: the target plus two
 cells either side fills 70 percent of the frame width, clamped to 1.25-2.5×. The zoom aims at the
-box a click of the same beat on the same target logged, else at the target found on the latest
-screen of the beat that shows it.
+box a click of the same beat on the same target logged, or a drag of the same beat whose `from` or
+`to` is the same target, else at the target found on the latest screen of the beat that shows it.
 
 The **cursor** is drawn, not recorded: a white dot in a dark outline that fades in, glides from
-the previous click point (the bottom row's centre before the first click) to each click, rings
-on the press, and fades out after the beat's last click. Its size is fixed in design pixels and
-does not grow with a zoom. A click inside a cut beat draws nothing.
+the previous point (the bottom row's centre before the first) to each click and each drag's
+press, rings on the press, and fades out after the beat's last press or release. Through a drag
+it follows the button: it eases from the press cell to the drag's last move over the span
+between them, speeding up and slowing down as the drag did, then rings a second time on the
+release; a move never rings. Its size is fixed in design pixels and does not grow with a zoom. A
+click or drag inside a cut beat draws nothing.
 
 The render rasterizes every frame at `frame.scale`, composes the zoom and the cursor, downscales
 to `frame.width`, and streams the frames into ffmpeg for a per-clip palette of `max_colors`

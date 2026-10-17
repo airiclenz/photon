@@ -9,12 +9,12 @@ imports upward, and there are no cycles.
 
 | package | owns | imports |
 |---|---|---|
-| `internal/keys` | named keys to bytes, SGR mouse press and release | — |
+| `internal/keys` | named keys to bytes, SGR mouse press, motion and release | — |
 | `internal/take` | the Take: snapshots, cells, colours, typed events, `Box`, beat spans; its versioned file format | — |
 | `internal/storyboard` | a clip's Storyboard; strict decode and validation | `keys` |
 | `internal/config` | the project's `photon.yaml` (rig, launch, services, profiles, end, areas, theme, fonts) and its lookup | `keys` |
 | `internal/clip` | a storyboard and its config loaded together, cross-checked; work dir and take path | `storyboard`, `config` |
-| `internal/target` | a target's cell box and an area's rows on a snapshot; the only resolver (clicks, zooms, `seen`) | `take`, `storyboard`, `config` |
+| `internal/target` | a target's cell box and an area's rows on a snapshot; the only resolver (clicks, drags, zooms, `seen`) | `take`, `storyboard`, `config` |
 | `internal/terminal` | the program in a pty, the vt emulator, sampled snapshots, first paint, settle, quit, the EPERM probe; a Windows stand-in that refuses | `take` |
 | `internal/engine` | performing a beat's actions; defines the `Terminal` interface it drives (pty terminal plus a test fake) | `take`, `target`, `storyboard`, `keys` |
 | `internal/service` | a take's services: start, readiness, ports, logs, stop; profiles | `config` |

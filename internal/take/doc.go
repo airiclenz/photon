@@ -4,9 +4,10 @@
 // program or the pty.
 //
 // A take is full-grid snapshots stamped on the take's clock plus a typed log of what photon did
-// along the way (beat starts, actions, resolved targets, clicks). On disk it is a gzip-compressed
-// JSON-lines file whose first line names the format and its version; a foreign file, a newer
-// version or a truncated file is refused with an error naming the file.
+// along the way (beat starts, actions, resolved targets, clicks, and each drag's press, moves and
+// release). On disk it is a gzip-compressed JSON-lines file whose first line names the format and
+// its version; a foreign file, a newer version or a truncated file is refused with an error naming
+// the file.
 //
 // It is a leaf: it imports only the standard library. Turning emulator cells into [Cell]s lives
 // with the terminal, and resolving a palette index to RGB lives with the rasterizer.

@@ -15,8 +15,8 @@ The terms code, flags, messages and docs use. One meaning each.
 - **Take**: one recording, written to `<work>/<clip>.take`: snapshots plus the event log.
 - **Snapshot**: the full cell grid at one moment of a take, with its time.
 - **Beat**: one step of a storyboard: its actions, section timing, zoom and expects.
-- **Action**: one thing a beat does: `type`, `key`, `click`, `wait`, `pause`.
-- **Target**: a place on screen, found by regex, `nth` and area; what a click or zoom aims at.
+- **Action**: one thing a beat does: `type`, `key`, `click`, `drag`, `wait`, `pause`.
+- **Target**: a place on screen, found by regex, `nth` and area; what a click, drag or zoom aims at.
 - **Area**: a band of rows a target is searched in, defined in the config by row anchors.
 - **Expect**: what a keeper take must show, judged PASS or FAIL by `check`.
 - **Section**: a beat's stretch of the rendered clip; its `duration` sets the playback speed.

@@ -1,9 +1,10 @@
 // Package render turns a clip's take into the shipped GIF. [Run] lays each beat of the take onto
 // its section's duration (package schedule), rasterizes every scheduled snapshot at the
 // storyboard's frame times its scale (package raster, over the config's fonts and theme), composes
-// the zooms and the click cursor at frame.width (package compose), and streams the frames as raw
-// RGBA into ffmpeg for a per-clip palette encode: `max_colors` entries, no dithering, `fps` frames
-// a second. When gifsicle is on PATH, a lossless `-O3` pass then shrinks the GIF in place.
+// the zooms and the cursor over the clicks and drags at frame.width (package compose), and streams
+// the frames as raw RGBA into ffmpeg for a per-clip palette encode: `max_colors` entries, no
+// dithering, `fps` frames a second. When gifsicle is on PATH, a lossless `-O3` pass then shrinks
+// the GIF in place.
 //
 // The GIF goes to the storyboard's ship path unless [Options] names another, its directory created
 // when missing. Run then prints `<path>  <size>  <length>s` and one `beat N  <speed>×  <take> of

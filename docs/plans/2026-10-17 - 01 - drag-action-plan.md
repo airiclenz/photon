@@ -140,7 +140,13 @@ cmd/photon/render.go — newRenderCommand (--output)
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./cmd/photon -run 'Record|Drag'` passes.
 **Commit:** `test(record): a dragging storyboard records, checks and renders`
 
-## 7. Docs and Notes describe the drag
+## 7. Docs and Notes describe the drag — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): re-derived from the assumption that the README "Targets and areas" intro and the `Target` comment in internal/storyboard/beat.go still read click-or-zoom: item 2 already updated both, so beat.go is not edited and the intro line is unchanged.
+NOTES (2026-10-17): missed-site rule applied as a floor: the README intro ("real mouse clicks, waits"), the README area paragraph ("a `click` there fails") and the doc comments below also list the action forms, what a target aims, or the take log, and now name drags.
+NOTES (2026-10-17): consequential edit — internal/target/doc.go: made necessary by the drag now being one of the resolver's users the package comment enumerates ("engine aims clicks and waits").
+NOTES (2026-10-17): consequential edit — internal/check/doc.go: made necessary by the drag now being one of the resolver's users the package comment enumerates ("agrees with clicks and zooms").
+NOTES (2026-10-17): consequential edit — internal/take/doc.go: made necessary by the take log now holding press, move and release events the package comment's log list left out.
 
 Depends on items 2, 3 and 5.
 

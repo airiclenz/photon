@@ -17,9 +17,10 @@ func newRenderCommand() *cobra.Command {
 		Short: "Render the shipped GIF from a take, framed as the storyboard says",
 		Long: "render lays each beat of the take onto its section's duration — the hold at 1×, the\n" +
 			"rest sped up to fit or frozen on its last frame — rasterizes every frame at the\n" +
-			"storyboard's frame, composes the zooms and the click cursor, and streams the frames into\n" +
-			"ffmpeg for a per-clip palette encode, then shrinks the GIF with gifsicle -O3 when that is\n" +
-			"on PATH. It prints the GIF's path, size and length and one speed row per beat.\n" +
+			"storyboard's frame, composes the zooms and the cursor over the clicks and drags, and\n" +
+			"streams the frames into ffmpeg for a per-clip palette encode, then shrinks the GIF with\n" +
+			"gifsicle -O3 when that is on PATH. It prints the GIF's path, size and length and one\n" +
+			"speed row per beat.\n" +
 			"The take defaults to <work>/<clip>.take; the work dir is --work, else $" + clip.WorkEnv + ",\n" +
 			"else the config's work, else ~/.cache/<name>-photon. The GIF defaults to the storyboard's\n" +
 			"ship path. --dry-run prints the ffmpeg command line instead of rendering.\n" +
