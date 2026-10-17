@@ -510,7 +510,11 @@ plain, quoted and block scalars and on flow and block mappings.
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ ./internal/yamledit/`
 **Commit:** `feat(tune): edit camera moves`
 
-## 16. Tune edits a caption's fields
+## 16. Tune edits a caption's fields — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): caption edit errors lead with `captions[i]: caption.<key>: …`, the storyboard's own list name, which state.go's clipLevelPrefixes already files on the clip; caption fields ignore `Edit.Beat` as camera fields do; `caption.at` reuses edit_camera.go's setMoment (a clip start on a caption without `at` writes nothing).
+NOTES (2026-10-17): `caption.for` of 0 is refused as a spelling error (`want a length longer than 0ms`) rather than left to validation; `caption.text` is always written with strconv.Quote (double-quoted, Go escapes YAML reads back) rather than yamledit.Quote, which single-quotes one-line text, to follow the item's "double-quoted" text.
+NOTES (2026-10-17): the undo test (TestSession_CaptionEdit_SwapsTheEndAndUndoes) sits in edit_test.go, the item's listed test file, on session_test.go's newSessionFixtureOf and cameraCaptionsStoryboard.
 
 Depends on item 15.
 **What:**

@@ -16,9 +16,10 @@ import (
 
 // Edit is one change the page asks for, as it arrives on the wire:
 // {"beat": <id>, "index": <n>, "field": "<name>", "value": "<string>"}. Beat is the id of the
-// beat edited, and 0 for frame.width and frame.fps; a camera field ignores it. Index is the
-// position of the move a camera field edits in the storyboard's camera list, from 0, and is
-// ignored by every other field. Value is spelled per field:
+// beat edited, and 0 for frame.width and frame.fps; a camera or caption field ignores it. Index
+// is the position of the move a camera field edits in the storyboard's camera list, or of the
+// caption a caption field edits in its captions list, from 0, and is ignored by every other
+// field. Value is spelled per field:
 //   - duration, hold, zoom.in, zoom.out: a decimal integer of milliseconds ("1850");
 //   - cut: "true" or "false";
 //   - zoom.factor: a decimal ("1.8") or "auto";
@@ -31,7 +32,13 @@ import (
 //   - camera.over: a decimal integer of milliseconds;
 //   - camera.ease: smooth, which removes the key, or linear;
 //   - camera.to: a decimal for a zoom move; for a pan, a target as YAML flow text or a cell
-//     ({cell: {x: 3, y: 4}}), refused on a pan along a via path.
+//     ({cell: {x: 3, y: 4}}), refused on a pan along a via path;
+//   - caption.at: a moment, as camera.at spells it;
+//   - caption.for: a decimal integer of milliseconds above 0, which removes the caption's until;
+//   - caption.until: a moment, as camera.at spells it, which removes the caption's for;
+//   - caption.text: the text itself, its lines separated by \n;
+//   - caption.place: top, middle or bottom, which removes the key;
+//   - caption.align: left, middle, which removes the key, or right.
 //
 // Any other spelling is refused with an error naming the field.
 type Edit struct {
@@ -59,7 +66,8 @@ const (
 var editFields = []string{
 	fieldDuration, fieldHold, fieldCut, fieldZoom, fieldZoomTarget, fieldZoomFactor, fieldZoomIn,
 	fieldZoomOut, fieldFrameWidth, fieldFrameFPS, fieldCameraAt, fieldCameraOver, fieldCameraEase,
-	fieldCameraTo,
+	fieldCameraTo, fieldCaptionAt, fieldCaptionFor, fieldCaptionUntil, fieldCaptionText,
+	fieldCaptionPlace, fieldCaptionAlign,
 }
 
 // The storyboard keys an edit addresses directly; a field's own key is its name past the dot.
@@ -94,13 +102,16 @@ var (
 // value in ms is written in ms, one in plain seconds in seconds with the fewest decimals, any
 // other or new value as time.Duration.String(). A new key goes after the keys that precede it in
 // the storyboard's field order; a value equal to the default of a key that is absent writes
-// nothing; cut false, zoom.factor auto and camera.ease smooth delete their key. A zoom.target on a block zoom
+// nothing; cut false, zoom.factor auto and camera.ease smooth delete their key, as do a
+// caption.place of bottom and a caption.align of middle. A zoom.target on a block zoom
 // holding nothing but its target rewrites that zoom as a flow mapping, since removing its only
-// key would leave nothing to insert into. A camera.at or a pan's camera.to replaces its whole
-// node with the value's flow text. The edit is refused with an error naming the beat, or the
-// camera move, and field when its value is misspelled, when it names a beat, zoom or camera move
-// that is not there, or when the result fails validation; the last wraps the
-// *storyboard.ValidationError.
+// key would leave nothing to insert into. A camera.at, a caption.at or caption.until, or a pan's
+// camera.to replaces its whole node with the value's flow text, and a caption.text replaces its
+// whole node, a block scalar too, with one double-quoted line; a caption.for deletes the
+// caption's until and a caption.until its for. The edit is refused with an error naming the
+// beat, the camera move or the caption, and field when its value is misspelled, when it names a
+// beat, zoom, camera move or caption that is not there, or when the result fails validation; the
+// last wraps the *storyboard.ValidationError.
 func apply(src []byte, path string, edit Edit) ([]byte, *storyboard.Storyboard, error) {
 	board, err := storyboard.Parse(src, path)
 	if err != nil {
@@ -128,13 +139,16 @@ func apply(src []byte, path string, edit Edit) ([]byte, *storyboard.Storyboard, 
 }
 
 // editName names what edit changes, as its errors lead with it: `beat 2: hold`, `frame.fps`,
-// `camera[1]: camera.at`.
+// `camera[1]: camera.at`, `captions[0]: caption.text`.
 func editName(edit Edit) string {
 	if isFrameField(edit.Field) {
 		return edit.Field
 	}
 	if isCameraField(edit.Field) {
 		return fmt.Sprintf("camera[%d]: %s", edit.Index, edit.Field)
+	}
+	if isCaptionField(edit.Field) {
+		return fmt.Sprintf("captions[%d]: %s", edit.Index, edit.Field)
 	}
 	return fmt.Sprintf("beat %d: %s", edit.Beat, edit.Field)
 }
@@ -151,8 +165,8 @@ type splicer struct {
 	root *yaml.Node
 }
 
-// apply routes edit to the frame, to a camera move or to its beat in board, the storyboard doc
-// holds.
+// apply routes edit to the frame, to a camera move, to a caption or to its beat in board, the
+// storyboard doc holds.
 func (s *splicer) apply(board *storyboard.Storyboard, edit Edit) error {
 	if isFrameField(edit.Field) {
 		return s.editFrame(edit)
@@ -162,6 +176,9 @@ func (s *splicer) apply(board *storyboard.Storyboard, edit Edit) error {
 	}
 	if isCameraField(edit.Field) {
 		return s.editCamera(board, edit)
+	}
+	if isCaptionField(edit.Field) {
+		return s.editCaption(board, edit)
 	}
 	index := slices.IndexFunc(board.Beats, func(beat storyboard.Beat) bool { return beat.ID == edit.Beat })
 	if index < 0 {

@@ -444,3 +444,258 @@ func TestApply_CameraWireSpellings(t *testing.T) {
 		})
 	}
 }
+
+// captionEditPath is the name the caption edit tests parse their storyboard under.
+const captionEditPath = "captions.yaml"
+
+// captionEditBoard is sessionStoryboard with captions of block and flow forms: beat 1 lasts 1s,
+// beat 2 1.5s, so the clip ends at 2.5s.
+const captionEditBoard = sessionStoryboard + `captions:
+  - text: |
+      Watch
+      this
+    at:
+      beat: 1
+      offset: 100ms
+    for: 700ms # short
+    place: top
+  - {text: 'All green', at: {beat: 2}, until: {beat: 2, offset: 1200ms}, align: right}
+  - text: "Done"
+    at: 1200ms
+    until: 2s
+  - {text: 'Start', for: 300ms}
+`
+
+// captionEdit is an Edit of the caption at index.
+func captionEdit(index int, field, value string) Edit {
+	return Edit{Index: index, Field: field, Value: value}
+}
+
+func TestApply_CaptionEdit_ChangesOnlyTheEditedText(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		edit     Edit
+		old, new string
+	}{
+		{"a block beat at becomes a clip time", captionEdit(0, fieldCaptionAt, "150ms"),
+			"    at:\n      beat: 1\n      offset: 100ms\n", "    at: 150ms\n"},
+		{"a flow beat at moves to another beat", captionEdit(1, fieldCaptionAt, "{beat: 1, offset: 900ms}"),
+			"at: {beat: 2},", "at: {beat: 1, offset: 900ms},"},
+		{"an absent at is inserted after text", captionEdit(3, fieldCaptionAt, "100ms"),
+			"{text: 'Start', for: 300ms}", "{text: 'Start', at: 100ms, for: 300ms}"},
+		{"for keeps its unit", captionEdit(0, fieldCaptionFor, "650"), "for: 700ms # short", "for: 650ms # short"},
+		{"until replaces a block for", captionEdit(0, fieldCaptionUntil, "{beat: 1, offset: 900ms}"),
+			"    for: 700ms # short\n", "    until: {beat: 1, offset: 900ms}\n"},
+		{"for replaces a flow until", captionEdit(1, fieldCaptionFor, "1000"),
+			", until: {beat: 2, offset: 1200ms}", ", for: 1s"},
+		{"until is set", captionEdit(2, fieldCaptionUntil, "2200ms"), "until: 2s", "until: 2200ms"},
+		{"text replaces a block scalar", captionEdit(0, fieldCaptionText, "Look\nhere"),
+			"text: |\n      Watch\n      this\n", "text: \"Look\\nhere\"\n"},
+		{"text replaces a single-quoted string", captionEdit(1, fieldCaptionText, "All good"),
+			"'All green'", `"All good"`},
+		{"text escapes its quotes", captionEdit(2, fieldCaptionText, `Done "now"`),
+			`text: "Done"`, `text: "Done \"now\""`},
+		{"bottom deletes a place", captionEdit(0, fieldCaptionPlace, "bottom"), "    place: top\n", ""},
+		{"place is set", captionEdit(0, fieldCaptionPlace, "middle"), "place: top", "place: middle"},
+		{"place goes after until in a flow caption", captionEdit(1, fieldCaptionPlace, "top"),
+			"1200ms}, align", "1200ms}, place: top, align"},
+		{"middle deletes an align", captionEdit(1, fieldCaptionAlign, "middle"), ", align: right}", "}"},
+		{"align goes after place", captionEdit(0, fieldCaptionAlign, "left"),
+			"    place: top\n", "    place: top\n    align: left\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if count := strings.Count(captionEditBoard, tc.old); count != 1 {
+				t.Fatalf("the board holds %q %d times, want once", tc.old, count)
+			}
+			want := strings.Replace(captionEditBoard, tc.old, tc.new, 1)
+
+			got, _, err := apply([]byte(captionEditBoard), captionEditPath, tc.edit)
+
+			if err != nil {
+				t.Fatalf("apply(%+v): %v", tc.edit, err)
+			}
+			if string(got) != want {
+				t.Errorf("apply(%+v) =\n%s\nwant\n%s", tc.edit, got, want)
+			}
+		})
+	}
+}
+
+func TestApply_CaptionEditToWhatAnAbsentKeyMeans_LeavesTheSourceAsItIs(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		edit Edit
+	}{
+		{"a clip start on a caption without at", captionEdit(3, fieldCaptionAt, "0ms")},
+		{"bottom on a caption without place", captionEdit(2, fieldCaptionPlace, "bottom")},
+		{"middle on a caption without align", captionEdit(2, fieldCaptionAlign, "middle")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, _, err := apply([]byte(captionEditBoard), captionEditPath, tc.edit)
+
+			if err != nil {
+				t.Fatalf("apply(%+v): %v", tc.edit, err)
+			}
+			if string(got) != captionEditBoard {
+				t.Errorf("apply(%+v) changed the source:\n%s", tc.edit, got)
+			}
+		})
+	}
+}
+
+func TestApply_CaptionText_RoundTripsThroughTheStoryboard(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		text string
+	}{
+		{"two lines", "Line one\nLine two"},
+		{"three lines in a block scalar's place", "a\nb\nc"},
+		{"quotes and a backslash", `say "hi" \ 'there'`},
+		{"a tab and a non-ASCII rune", "x\ty → z"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			for _, index := range []int{0, 1} {
+				got, _, err := apply([]byte(captionEditBoard), captionEditPath, captionEdit(index, fieldCaptionText, tc.text))
+				if err != nil {
+					t.Fatalf("apply caption %d: %v", index, err)
+				}
+
+				board, err := storyboard.Parse(got, captionEditPath)
+
+				if err != nil {
+					t.Fatalf("storyboard.Parse after editing caption %d: %v", index, err)
+				}
+				if board.Captions[index].Text != tc.text {
+					t.Errorf("caption %d text %q, want %q", index, board.Captions[index].Text, tc.text)
+				}
+			}
+		})
+	}
+}
+
+func TestApply_CaptionEditFailingValidation_IsRefused(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		edit    Edit
+		message string
+	}{
+		{"a stop before the start", captionEdit(2, fieldCaptionUntil, "1000ms"), "until: want a stop after the start"},
+		{"a for past the clip's end", captionEdit(0, fieldCaptionFor, "5000"), "for: want the caption to end by the clip's end"},
+		{"a start past the clip's end", captionEdit(3, fieldCaptionAt, "3s"), "at: want a start in"},
+		{"an empty text", captionEdit(1, fieldCaptionText, ""), "text: missing"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, _, err := apply([]byte(captionEditBoard), captionEditPath, tc.edit)
+
+			var invalid *storyboard.ValidationError
+			if !errors.As(err, &invalid) {
+				t.Fatalf("apply(%+v) = %v, want a *storyboard.ValidationError", tc.edit, err)
+			}
+			for _, want := range []string{editName(tc.edit) + ": ", tc.message} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("apply(%+v) = %q, want it to contain %q", tc.edit, err, want)
+				}
+			}
+		})
+	}
+}
+
+func TestApply_CaptionEditOnWhatIsNotThere_IsRefused(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		board   string
+		edit    Edit
+		message string
+	}{
+		{"an index past the last caption", captionEditBoard, captionEdit(9, fieldCaptionFor, "100"),
+			"captions[9]: caption.for: the storyboard has no caption at index 9"},
+		{"a negative index", captionEditBoard, captionEdit(-1, fieldCaptionFor, "100"),
+			"captions[-1]: caption.for: the storyboard has no caption at index -1"},
+		{"a storyboard without captions", sessionStoryboard, captionEdit(0, fieldCaptionPlace, "top"),
+			"captions[0]: caption.place: the storyboard has no caption at index 0"},
+		{"an unknown caption field", captionEditBoard, captionEdit(0, "caption.color", "#000000"),
+			"captions[0]: caption.color: unknown field"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, _, err := apply([]byte(tc.board), captionEditPath, tc.edit)
+
+			if err == nil || !strings.Contains(err.Error(), tc.message) {
+				t.Errorf("apply(%+v) = %v, want an error containing %q", tc.edit, err, tc.message)
+			}
+		})
+	}
+}
+
+func TestApply_CaptionWireSpellings(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		edit       Edit
+		isAccepted bool
+	}{
+		{"a beat moment", captionEdit(0, fieldCaptionAt, "{beat: 1, offset: 200ms}"), true},
+		{"a moment as words", captionEdit(0, fieldCaptionAt, "soon"), false},
+		{"milliseconds of for", captionEdit(0, fieldCaptionFor, "500"), true},
+		{"a for with a unit", captionEdit(0, fieldCaptionFor, "500ms"), false},
+		{"a for of 0", captionEdit(0, fieldCaptionFor, "0"), false},
+		{"an until as a clip time", captionEdit(1, fieldCaptionUntil, "2s"), true},
+		{"an until as a block mapping", captionEdit(1, fieldCaptionUntil, "beat: 2"), false},
+		{"a place", captionEdit(0, fieldCaptionPlace, "middle"), true},
+		{"a place as another word", captionEdit(0, fieldCaptionPlace, "center"), false},
+		{"an empty place", captionEdit(0, fieldCaptionPlace, ""), false},
+		{"an align", captionEdit(0, fieldCaptionAlign, "right"), true},
+		{"an align as a place", captionEdit(0, fieldCaptionAlign, "top"), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, _, err := apply([]byte(captionEditBoard), captionEditPath, tc.edit)
+
+			if tc.isAccepted && err != nil {
+				t.Fatalf("apply(%+v): %v", tc.edit, err)
+			}
+			if !tc.isAccepted && (err == nil || !strings.Contains(err.Error(), tc.edit.Field+": want")) {
+				t.Errorf("apply(%+v) = %v, want a spelling error naming %s", tc.edit, err, tc.edit.Field)
+			}
+		})
+	}
+}
+
+func TestSession_CaptionEdit_SwapsTheEndAndUndoes(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
+
+	f.apply(t, Edit{Index: 1, Field: fieldCaptionFor, Value: "1000"})
+	edited := f.session.State()
+	undoErr := f.session.Undo()
+	undone := f.session.State()
+
+	if caption := edited.Captions[1]; caption.ForMS != 1000 || caption.Until != nil || caption.StopMS != 2000 || !edited.IsDirty {
+		t.Errorf("after the edit: captions[1] %+v, dirty %v; want for 1s, no until, a stop at 2s, dirty", caption, edited.IsDirty)
+	}
+	if undoErr != nil {
+		t.Fatalf("Undo: %v", undoErr)
+	}
+	if caption := undone.Captions[1]; caption.ForMS != 0 || caption.Until == nil || undone.IsDirty {
+		t.Errorf("after the undo: captions[1] %+v, dirty %v; want the until back, the bytes on disk", caption, undone.IsDirty)
+	}
+}
