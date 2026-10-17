@@ -224,10 +224,11 @@ func NewRasterizer(loaded *clip.Clip) (*raster.Rasterizer, error) {
 	})
 }
 
-// NewCompositor plans the zooms and the cursor over the rasterizer's cell layout, resolving zoom
-// targets through the config's areas and clearing a zoomed frame to the theme background. The
-// rasterizer must be the one [NewRasterizer] built for the same clip, so the layout matches the
-// frames it draws. It fails when an area or a zoom target does not resolve.
+// NewCompositor plans the camera and the cursor over the rasterizer's cell layout, resolving zoom
+// and pan targets through the config's areas and clearing a zoomed frame to the theme background.
+// The rasterizer must be the one [NewRasterizer] built for the same clip, so the layout matches
+// the frames it draws. It fails when an area, a zoom target or a camera pan's target does not
+// resolve.
 func NewCompositor(
 	loaded *clip.Clip,
 	recorded *take.Take,

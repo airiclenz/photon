@@ -28,7 +28,8 @@ const (
 	dragToText   = "to"
 )
 
-// zoomPlanner plans the zooms of one clip from its parts.
+// zoomPlanner plans the camera of one clip from its parts: its beats' zooms and its storyboard's
+// camera moves.
 type zoomPlanner struct {
 	board    *storyboard.Storyboard
 	recorded *take.Take
@@ -36,9 +37,10 @@ type zoomPlanner struct {
 	layout   Layout
 }
 
-// plan plans every kept section's zoom onto the camera's tracks: its target box, the factor
-// given or auto-fit, and its ramps — zero means [storyboard.DefaultZoomRamp] — shrunk in
-// proportion when together they outrun the section.
+// plan plans every kept section's zoom onto the camera's tracks — its target box, the factor
+// given or auto-fit, and its ramps (zero means [storyboard.DefaultZoomRamp]) shrunk in
+// proportion when together they outrun the section — and then every camera move of the
+// storyboard beside them, as [zoomPlanner.planMoves] does.
 func (p zoomPlanner) plan(clipSchedule *schedule.Schedule) (camera, error) {
 	sections := make(map[int]schedule.Section, len(clipSchedule.Sections))
 	for _, section := range clipSchedule.Sections {
@@ -59,7 +61,11 @@ func (p zoomPlanner) plan(clipSchedule *schedule.Schedule) (camera, error) {
 		zooms = append(zooms, push, pull)
 		pans = append(pans, aim)
 	}
-	return newCamera(p.layout, zooms, pans), nil
+	moveZooms, movePans, err := p.planMoves(clipSchedule)
+	if err != nil {
+		return camera{}, err
+	}
+	return newCamera(p.layout, append(zooms, moveZooms...), append(pans, movePans...)), nil
 }
 
 // planSection is the zoom of one section onto box as camera moves: aim sets the pan track to the
@@ -97,14 +103,28 @@ func (p zoomPlanner) zoomBox(beat storyboard.Beat, section schedule.Section) (ta
 	if box, isLogged := p.loggedBox(beat); isLogged {
 		return box, nil
 	}
+	until := section.End
+	if section.End <= section.Start {
+		// A beat of no length has no snapshot of its own to stop before.
+		until = math.MaxInt64
+	}
+	return p.resolveShown(beat.Zoom.Target, section.Start, until, "the beat")
+}
+
+// resolveShown resolves goal on the take's snapshots: the latest one taken before source time
+// until that shows it, walking back to the snapshot in effect at source time since, the
+// earliest the stretch shows. It fails with the last [target.ErrNotOnScreen] when none of them
+// shows goal, at once on any other resolver error, and when the take has no snapshot in the
+// stretch, which where names.
+func (p zoomPlanner) resolveShown(goal storyboard.Target, since, until time.Duration, where string) (take.Box, error) {
 	var lastErr error
 	snapshots := p.recorded.Snapshots
 	for index := len(snapshots) - 1; index >= 0; index-- {
 		snapshot := snapshots[index]
-		if snapshot.At >= section.End && section.End > section.Start {
+		if snapshot.At >= until {
 			continue
 		}
-		box, err := p.resolver.Target(snapshot, beat.Zoom.Target)
+		box, err := p.resolver.Target(snapshot, goal)
 		if err == nil {
 			return box, nil
 		}
@@ -112,13 +132,12 @@ func (p zoomPlanner) zoomBox(beat storyboard.Beat, section schedule.Section) (ta
 			return take.Box{}, err
 		}
 		lastErr = err
-		// The snapshot in effect at the beat's start is the earliest the beat shows.
-		if snapshot.At <= section.Start {
+		if snapshot.At <= since {
 			break
 		}
 	}
 	if lastErr == nil {
-		lastErr = fmt.Errorf("target /%s/: the take has no snapshot in the beat", beat.Zoom.Target.Text)
+		lastErr = fmt.Errorf("target /%s/: the take has no snapshot in %s", goal.Text, where)
 	}
 	return take.Box{}, lastErr
 }

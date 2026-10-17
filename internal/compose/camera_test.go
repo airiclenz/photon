@@ -1,11 +1,17 @@
 package compose
 
 import (
+	"errors"
+	"image/color"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
+	"github.com/airiclenz/photon/internal/take"
+	"github.com/airiclenz/photon/internal/target"
 )
 
 // cameraLayout is a 1000 × 600 frame whose camera rests on its centre, (500, 300).
@@ -149,3 +155,168 @@ func TestCameraPanFollowsItsPath(t *testing.T) {
 		})
 	}
 }
+
+// cameraTake is a take of the given snapshots over beats of the given lengths, started end to
+// end from source time 0, so each beat fits its duration and source and output clocks agree.
+func cameraTake(snapshots []take.Snapshot, durations ...time.Duration) (*storyboard.Storyboard, *take.Take) {
+	board := &storyboard.Storyboard{}
+	recorded := &take.Take{Snapshots: snapshots}
+	var start time.Duration
+	for index, duration := range durations {
+		board.Beats = append(board.Beats, storyboard.Beat{ID: index + 1, Duration: duration})
+		recorded.Events = append(recorded.Events, beatStart(start, index+1))
+		start += duration
+	}
+	return board, recorded
+}
+
+// textPoint is a pan point on the target text.
+func textPoint(text string) storyboard.Point {
+	return storyboard.Point{Target: storyboard.Target{Text: text}}
+}
+
+// cellPoint is a pan point on the cell at column x, row y.
+func cellPoint(x, y int) storyboard.Point {
+	return storyboard.Point{Cell: &storyboard.Cell{X: x, Y: y}}
+}
+
+// at is the moment offset after beat's section start.
+func at(beat int, offset time.Duration) storyboard.Moment {
+	return storyboard.Moment{Beat: beat, Offset: offset}
+}
+
+func TestComposePlansOverlappingCameraMovesAcrossBeats(t *testing.T) {
+	t.Parallel()
+	lines := map[int]string{2: "     alpha", 11: "                              omega"}
+	board, recorded := cameraTake([]take.Snapshot{screen(0, lines), screen(12*sec, lines)}, 4*sec, 4*sec, 4*sec)
+	board.Camera = []storyboard.CameraMove{
+		{Zoom: &storyboard.ZoomMove{To: 2, At: at(1, sec), Over: 2 * sec}},
+		{Pan: &storyboard.PanMove{To: ptr(textPoint("alpha")), At: at(1, 2*sec), Over: 2 * sec}},
+		{Pan: &storyboard.PanMove{Via: []storyboard.Point{cellPoint(10, 3), textPoint("omega")}, At: at(2, sec), Over: 3 * sec}},
+		{Zoom: &storyboard.ZoomMove{To: 1, At: at(2, 2*sec), Over: 4 * sec}},
+	}
+
+	compositor, _ := newTestCompositor(t, board, recorded)
+
+	rest := pointF{X: 500, Y: 300}
+	alpha := testLayout.boxRect(take.Box{X: 5, Y: 2, W: 5, H: 1}).centre()
+	omega := testLayout.boxRect(take.Box{X: 30, Y: 11, W: 5, H: 1}).centre()
+	curve := newPath(alpha, []pointF{testLayout.cellCentre(10, 3), omega})
+	for _, tc := range []struct {
+		name       string
+		at         time.Duration
+		wantFactor float64
+		wantCentre pointF
+	}{
+		{name: "zoom-in starts", at: sec, wantFactor: 1, wantCentre: rest},
+		{name: "zoom-in half-way, first pan starts", at: 2 * sec, wantFactor: math.Sqrt2, wantCentre: rest},
+		{name: "zoom-in ends, first pan half-way", at: 3 * sec, wantFactor: 2, wantCentre: lerp(rest, alpha, 0.5)},
+		{name: "first pan ends on the next beat", at: 4 * sec, wantFactor: 2, wantCentre: alpha},
+		{name: "via pan starts", at: 5 * sec, wantFactor: 2, wantCentre: alpha},
+		{name: "zoom-out starts during the via pan", at: 6 * sec, wantFactor: 2, wantCentre: curve.at(easeInOut(1.0 / 3))},
+		{
+			name:       "via pan half-way",
+			at:         6500 * time.Millisecond,
+			wantFactor: math.Pow(2, 1-easeInOut(0.125)),
+			wantCentre: curve.at(0.5),
+		},
+		{name: "via pan ends, zoom-out half-way", at: 8 * sec, wantFactor: math.Sqrt2, wantCentre: omega},
+		{name: "zoom-out ends in the third beat", at: 10 * sec, wantFactor: 1, wantCentre: omega},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := compositor.camera.factorAt(tc.at); math.Abs(got-tc.wantFactor) > 1e-9 {
+				t.Errorf("factor at %s: want %g, got %g", tc.at, tc.wantFactor, got)
+			}
+			got := compositor.camera.centreAt(tc.at)
+			if math.Abs(got.X-tc.wantCentre.X) > 1e-6 || math.Abs(got.Y-tc.wantCentre.Y) > 1e-6 {
+				t.Errorf("centre at %s: want %+v, got %+v", tc.at, tc.wantCentre, got)
+			}
+		})
+	}
+}
+
+func TestComposePanResolvesOnTheScreenAtItsEnd(t *testing.T) {
+	t.Parallel()
+	early := map[int]string{2: "     alpha"}
+	late := map[int]string{9: "                              alpha"}
+	wantLate := testLayout.boxRect(take.Box{X: 30, Y: 9, W: 5, H: 1}).centre()
+	for _, tc := range []struct {
+		name      string
+		snapshots []take.Snapshot
+	}{
+		{
+			name:      "moved by the move's end",
+			snapshots: []take.Snapshot{screen(0, early), screen(2*sec, late), screen(8*sec, late)},
+		},
+		{
+			name:      "gone by the move's end, shown at its start",
+			snapshots: []take.Snapshot{screen(0, early), screen(sec, late), screen(2*sec, nil), screen(8*sec, nil)},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			board, recorded := cameraTake(tc.snapshots, 8*sec)
+			board.Camera = []storyboard.CameraMove{
+				{Pan: &storyboard.PanMove{To: ptr(textPoint("alpha")), At: at(1, 1500*time.Millisecond), Over: 1500 * time.Millisecond}},
+			}
+
+			compositor, _ := newTestCompositor(t, board, recorded)
+
+			if got := compositor.camera.pan[0].To; got != wantLate {
+				t.Errorf("pan destination: want %+v, got %+v", wantLate, got)
+			}
+		})
+	}
+}
+
+func TestNewRefusesAPanTargetItsMoveNeverShows(t *testing.T) {
+	t.Parallel()
+	shown := map[int]string{3: "     ghost"}
+	// Shown before the move and from the second beat on: never across the move's [1s, 2s].
+	board, recorded := cameraTake(
+		[]take.Snapshot{screen(0, shown), screen(500*time.Millisecond, nil), screen(4*sec, shown)},
+		4*sec, 4*sec,
+	)
+	board.Frame.Width = testWidth
+	board.Camera = []storyboard.CameraMove{
+		{Pan: &storyboard.PanMove{To: ptr(textPoint("ghost")), At: at(1, sec), Over: sec}},
+	}
+	clipSchedule, err := schedule.New(board, recorded)
+	if err != nil {
+		t.Fatalf("schedule.New: %v", err)
+	}
+
+	_, err = New(board, recorded, clipSchedule, target.Resolver{}, testLayout, testBackground)
+
+	if !errors.Is(err, target.ErrNotOnScreen) || !strings.Contains(err.Error(), "compose: camera[0]: pan: to") {
+		t.Errorf("New: want camera[0]'s pan target not on screen, got %v", err)
+	}
+}
+
+func TestComposeCursorMapsThroughAPannedCrop(t *testing.T) {
+	t.Parallel()
+	board, recorded := cameraTake([]take.Snapshot{{At: 0}, {At: 4 * sec}}, 4*sec)
+	recorded.Events = append(recorded.Events, clickAt(3*sec, 1, take.Box{X: 33, Y: 9, W: 1, H: 1})...)
+	board.Camera = []storyboard.CameraMove{
+		{Zoom: &storyboard.ZoomMove{To: 2, At: at(1, 0), Over: sec}},
+		{Pan: &storyboard.PanMove{To: ptr(cellPoint(30, 8)), At: at(1, 0), Over: sec}},
+	}
+	compositor, _ := newTestCompositor(t, board, recorded)
+
+	frame := compositor.Compose(3*sec, solidFrame(testBackground))
+
+	// The crop is 500 × 300 source pixels centred on cell (30, 8)'s (620, 350), so its corner is
+	// (370, 200), and the 500-pixel shipped frame shows it 1:1: cell (33, 9)'s centre (680, 390)
+	// lands at (310, 190).
+	bright := func(c color.RGBA) bool { return c.G > testBackground.G+0x30 }
+	cursor, count := centroidWhere(frame, bright)
+	if count == 0 {
+		t.Fatal("no cursor drawn at the press")
+	}
+	if want := (pointF{X: 310, Y: 190}); math.Hypot(cursor.X-want.X, cursor.Y-want.Y) > 1 {
+		t.Errorf("cursor at the press: want %+v through the panned crop, got %+v", want, cursor)
+	}
+}
+
+// ptr is a pointer to a copy of value.
+func ptr[V any](value V) *V { return &value }

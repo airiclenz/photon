@@ -230,7 +230,12 @@ give no NaN, and one distinct point holds still.
 - `GOMEMLIMIT=2GiB go test ./internal/compose/ -run 'Path|Camera'`
 **Commit:** `feat(compose): pan along a smooth path through waypoints`
 
-## 7. Compose: plan the storyboard's camera moves
+## 7. Compose: plan the storyboard's camera moves — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): re-derived from New in compose.go assembling the camera's tracks: item 5 moved the assembly (newCamera) into zoomPlanner.plan in internal/compose/zoom.go, so plan now appends the camera moves planMoves (camera.go) returns before building the camera; zoomPlanner keeps its name, its doc now says it plans the whole camera.
+NOTES (2026-10-17): the snapshot walk-back zoomBox did is extracted into zoomPlanner.resolveShown (zoom.go) and shared by a pan's target points instead of copied; the beat-zoom golden and box tests pass unchanged.
+NOTES (2026-10-17): consequential edit — internal/render/render.go: made necessary by New now failing on a camera pan's target (NewCompositor's doc named only an area or a zoom target).
+NOTES (2026-10-17): no CHANGELOG entry here: item 8 owns the camera's CHANGELOG line under Unreleased.
 
 Depends on items 4 and 6.
 **What:**

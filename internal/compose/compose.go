@@ -80,12 +80,13 @@ type Compositor struct {
 	cursor     cursorTrack
 }
 
-// New plans the zooms and the cursor of a clip: board's frame gives the shipped width and its
-// beats the zooms, recorded the clicks, the drags and the snapshots a zoom target resolves on
-// (through resolver), clipSchedule the output clock, layout where cells sit in a source frame, and
-// background the colour a zoomed frame is cleared to before the push is drawn. It fails on a
-// layout with no size, a frame width that is not positive, and a zoomed beat whose target
-// resolves on none of its snapshots.
+// New plans the camera and the cursor of a clip: board's frame gives the shipped width, its
+// beats the zooms and its camera the moves beside them, recorded the clicks, the drags and the
+// snapshots a zoom or pan target resolves on (through resolver), clipSchedule the output clock,
+// layout where cells sit in a source frame, and background the colour a zoomed frame is cleared
+// to before the push is drawn. It fails on a layout with no size, a frame width that is not
+// positive, a zoomed beat whose target resolves on none of its snapshots, a camera move whose
+// start is not on the clip's clock, and a pan target no screen of its move shows.
 func New(
 	board *storyboard.Storyboard,
 	recorded *take.Take,

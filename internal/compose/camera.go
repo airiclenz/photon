@@ -2,10 +2,13 @@ package compose
 
 import (
 	"cmp"
+	"errors"
+	"fmt"
 	"math"
 	"slices"
 	"time"
 
+	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
 )
 
@@ -111,4 +114,90 @@ func trackAt[V any, M interface{ timing() move[V] }](
 		return blend(entry, value, m.progress(t))
 	}
 	return value
+}
+
+// planMoves plans every camera move of the storyboard onto the camera's tracks, each starting at
+// its `at` on the output clock and lasting its `over`. A pan's points resolve as
+// [zoomPlanner.panPoint] does, on the screens clipSchedule shows across the move. It fails,
+// under camera[i], on a move whose start is not on the clip's clock and on a pan target that no
+// screen of its move shows, wrapping [target.ErrNotOnScreen].
+func (p zoomPlanner) planMoves(clipSchedule *schedule.Schedule) (zooms []move[float64], pans []move[pointF], err error) {
+	for index, cameraMove := range p.board.Camera {
+		switch {
+		case cameraMove.Zoom != nil:
+			zoom := cameraMove.Zoom
+			start, err := p.board.ClipTime(zoom.At)
+			if err != nil {
+				return nil, nil, fmt.Errorf("compose: camera[%d]: zoom: at: %w", index, err)
+			}
+			zooms = append(zooms, move[float64]{Start: start, Over: zoom.Over, To: zoom.To, Ease: zoom.Ease})
+		case cameraMove.Pan != nil:
+			pan, err := p.planPan(*cameraMove.Pan, clipSchedule)
+			if err != nil {
+				return nil, nil, fmt.Errorf("compose: camera[%d]: pan: %w", index, err)
+			}
+			pans = append(pans, pan)
+		}
+	}
+	return zooms, pans, nil
+}
+
+// planPan is the pan move on the output clock with its points resolved to source pixels: its To,
+// or the last of its Via as the destination and the rest as the waypoints between. Where the
+// path starts is the camera's business: the centre its pan track holds at the move's start.
+func (p zoomPlanner) planPan(pan storyboard.PanMove, clipSchedule *schedule.Schedule) (move[pointF], error) {
+	start, err := p.board.ClipTime(pan.At)
+	if err != nil {
+		return move[pointF]{}, fmt.Errorf("at: %w", err)
+	}
+	since, until := shownAt(clipSchedule, start), shownAt(clipSchedule, start+pan.Over)
+	points := pan.Via
+	if pan.To != nil {
+		points = []storyboard.Point{*pan.To}
+	}
+	if len(points) == 0 {
+		return move[pointF]{}, errors.New("want a to or a via")
+	}
+	centres := make([]pointF, 0, len(points))
+	for index, point := range points {
+		centre, err := p.panPoint(point, since, until)
+		if err != nil && pan.To != nil {
+			return move[pointF]{}, fmt.Errorf("to: %w", err)
+		}
+		if err != nil {
+			return move[pointF]{}, fmt.Errorf("via[%d]: %w", index, err)
+		}
+		centres = append(centres, centre)
+	}
+	last := len(centres) - 1
+	return move[pointF]{Start: start, Over: pan.Over, To: centres[last], Via: centres[:last], Ease: pan.Ease}, nil
+}
+
+// panPoint is the source pixel a pan's point aims at: a cell's centre, or the centre of the box
+// its target resolves to on the screen shown at source time until — the move's end — walking
+// back to the screen shown at source time since, the move's start, while the target is absent.
+func (p zoomPlanner) panPoint(point storyboard.Point, since, until time.Duration) (pointF, error) {
+	if point.Cell != nil {
+		return p.layout.cellCentre(point.Cell.X, point.Cell.Y), nil
+	}
+	// The screen shown at until is the snapshot taken at or before it, so the walk stops just
+	// after it.
+	box, err := p.resolveShown(point.Target, since, until+time.Nanosecond, "the move")
+	if err != nil {
+		return pointF{}, err
+	}
+	return p.layout.boxRect(box).centre(), nil
+}
+
+// shownAt is the source time of the screen clipSchedule shows at output time out, clamped into
+// the clip's [0, Length), so a move that ends as the clip ends resolves on its last frame.
+func shownAt(clipSchedule *schedule.Schedule, out time.Duration) time.Duration {
+	clamped := min(max(out, 0), clipSchedule.Length-time.Nanosecond)
+	// Every instant of [0, Length) maps onto a source time, so only an empty clip reports false,
+	// and its source time 0 is as good as any.
+	source, _, isShown := clipSchedule.Source(clamped)
+	if !isShown {
+		return 0
+	}
+	return source
 }
