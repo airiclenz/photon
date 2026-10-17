@@ -127,8 +127,10 @@ func TestStartRetryingEPERM_ClosesTheSlaveOfAStartedLaunch(t *testing.T) {
 	}
 }
 
+// TestProbeLaunches_OnAHealthyPTY runs serially, before the parallel tests start: macOS reuses
+// pty numbers and revokes a pty when its session leader exits, so a parallel test's child exiting
+// late can revoke the pty this test was just handed, and its Setctty launch then fails with EBADF.
 func TestProbeLaunches_OnAHealthyPTY(t *testing.T) {
-	t.Parallel()
 	master, tty, err := pty.Open()
 	if err != nil {
 		t.Fatalf("open a pty: %v", err)
