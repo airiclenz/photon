@@ -17,9 +17,11 @@
   --lane-block: #e4ebf7;
   --lane-hold: #d9d9d4;
   --lane-zoom: #cfe3d4;
+  --lane-pan: #e6dcf2;
+  --lane-caption: #f6e4c8;
   --lane-hatch: #9a9a94;
   --pick-box: #f2b705;
-  --lane-name-width: 56px;
+  --lane-name-width: 84px;
   --lane-height: 26px;
   --cut-marker-width: 10px;
   --gap: 12px;
@@ -43,6 +45,8 @@
     --lane-block: #263449;
     --lane-hold: #34342f;
     --lane-zoom: #23392a;
+    --lane-pan: #352a45;
+    --lane-caption: #43361f;
     --lane-hatch: #6b6b66;
     --pick-box: #ffd24d;
   }
@@ -415,6 +419,18 @@ select {
   background: linear-gradient(to left, transparent, var(--lane-zoom));
   border-left: 0;
   border-radius: 0 3px 3px 0;
+}
+
+.block.camera-zoom {
+  background: var(--lane-zoom);
+}
+
+.block.pan {
+  background: var(--lane-pan);
+}
+
+.block.caption {
+  background: var(--lane-caption);
 }
 
 .block.too-fast {

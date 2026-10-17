@@ -1,12 +1,17 @@
 // photon tune's timeline: lanes on the clip's output-time axis under the transport bar.
 // It builds on app.js's window.tune alone: state() and onState(fn) for what to draw, time() for
-// the playhead, selected() and select(id) for the beat the inspector shows, seek(ms) for the
-// axis, and edit(edit) for a drag, which the server applies, validates and schedules. Nothing
-// here computes timing: every position comes from the state's sections and beats.
+// the playhead, selected() and select(id) for the beat the inspector shows, selectedEntry() and
+// selectEntry(entry) for the camera move or caption it shows instead, seek(ms) for the axis, and
+// edit(edit) for a drag, which the server applies, validates and schedules. Nothing here computes
+// timing: every position comes from the state's sections, beats, camera moves and captions.
 //
-// The timeline is one list of lanes. A lane is {name, draw(section, state), handles(section,
-// state)}: draw returns the nodes it places for one section, handles the edges a drag moves, so
-// another lane is one more entry in that list.
+// The timeline is two lists of lanes, drawn top to bottom. Its own lanes follow the beats: such a
+// lane is {name, draw(section, state), handles(section, state)}, where draw returns the nodes it
+// places for one section and handles the edges a drag moves. The lanes in the registry
+// window.tuneLanes, which lanes.js fills before this file runs, follow the whole state: such a
+// lane is {name, draw(state)}, where draw returns its bars as data, {from, to, className, label,
+// title, entry}, each placed from its from to its to and selecting its entry, {kind, index}, on a
+// click. Another lane is one more entry in either list.
 //
 // A handle is {beat, field, anchor, sign, value, min, max}: the edit's beat and field, the value
 // it holds now in milliseconds, the bounds a drag keeps it in, and where its edge sits on the
@@ -33,6 +38,8 @@
     { name: "hold", draw: drawHold, handles: holdHandles },
     { name: "zoom", draw: drawZoom, handles: zoomHandles },
   ];
+  // registeredLanes are lanes.js's, drawn under the timeline's own.
+  const registeredLanes = window.tuneLanes || [];
 
   let clipLength = 0;
   let playhead = null;
@@ -173,9 +180,14 @@
     clipLength = state.length_ms;
     playhead = element("div", { className: "playhead" });
     const playheadColumn = element("div", { className: "playhead-column" }, playhead);
-    root.replaceChildren(axisRow(), ...lanes.map((lane) => laneRow(lane, state)), playheadColumn);
+    root.replaceChildren(
+      axisRow(),
+      ...lanes.map((lane) => laneRow(lane, state)),
+      ...registeredLanes.map((lane) => clipLaneRow(lane, state)),
+      playheadColumn,
+    );
     shownTime = null;
-    shownSelection = tune.selected();
+    shownSelection = selectionKey();
     markSelection();
     follow();
   }
@@ -190,7 +202,27 @@
         track.append(handleNode(handle, track));
       }
     }
-    return element("div", { className: "lane" }, element("span", { className: "lane-name" }, lane.name), track);
+    return laneElement(lane.name, track);
+  }
+
+  // clipLaneRow is a registered lane: its bars over the whole clip, each selecting its entry.
+  function clipLaneRow(lane, state) {
+    const track = element("div", { className: "lane-track" });
+    track.append(...lane.draw(state).map(barNode));
+    return laneElement(lane.name, track);
+  }
+
+  // barNode places a registered lane's bar on the axis, selecting the bar's entry on a click.
+  function barNode(bar) {
+    const node = span(bar.from, bar.to, "block " + bar.className, bar.label);
+    node.title = bar.title;
+    node.dataset.entry = entryKey(bar.entry);
+    node.addEventListener("click", () => tune.selectEntry(bar.entry));
+    return node;
+  }
+
+  function laneElement(name, track) {
+    return element("div", { className: "lane" }, element("span", { className: "lane-name" }, name), track);
   }
 
   // axisRow is the time scale: a tick every step that keeps the labels apart; a click or drag
@@ -220,14 +252,15 @@
     return step || TICK_STEPS_MS[TICK_STEPS_MS.length - 1];
   }
 
-  // follow keeps the playhead on tune.time() and the selected beat marked, every animation frame.
+  // follow keeps the playhead on tune.time() and the selected beat or entry marked, every
+  // animation frame.
   function follow() {
     const at = tune.time();
     if (playhead && at !== shownTime) {
       shownTime = at;
       playhead.style.left = percentOf(at) + "%";
     }
-    const selection = tune.selected();
+    const selection = selectionKey();
     if (selection !== shownSelection) {
       shownSelection = selection;
       markSelection();
@@ -240,9 +273,25 @@
   }
 
   function markSelection() {
+    const beat = tune.selected();
+    const entry = entryKey(tune.selectedEntry());
     for (const node of root.querySelectorAll("[data-beat]")) {
-      node.classList.toggle("selected", Number(node.dataset.beat) === shownSelection);
+      node.classList.toggle("selected", Number(node.dataset.beat) === beat);
     }
+    for (const node of root.querySelectorAll("[data-entry]")) {
+      node.classList.toggle("selected", node.dataset.entry === entry);
+    }
+  }
+
+  // selectionKey names what the inspector shows: the selected entry's key, else the beat's id.
+  function selectionKey() {
+    const entry = tune.selectedEntry();
+    return entry ? entryKey(entry) : tune.selected();
+  }
+
+  // entryKey spells entry, {kind, index}, as one string; no entry is the empty string.
+  function entryKey(entry) {
+    return entry ? entry.kind + ":" + entry.index : "";
   }
 
   // --- dragging a handle ---

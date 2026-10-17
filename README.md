@@ -164,7 +164,9 @@ take, each service's log (`<work>/<service>.log`), and the clip's palette
 **Tuning** with `photon tune` prints the page's address, such as
 `photon tune: http://127.0.0.1:41234/`, and never opens a browser. The page previews the take
 frame for frame as `photon render` composes it. Its timeline edits each beat's `duration`,
-`hold`, `cut` and `zoom`, and its inspector the clip's `frame.width` and `frame.fps`. A pick on
+`hold`, `cut` and `zoom`, and its inspector the clip's `frame.width` and `frame.fps`. The
+storyboard's `camera` moves and `captions` show as bars on lanes of their own under the beats,
+and a click on a bar shows that entry's fields in the inspector. A pick on
 the paused preview proposes a target for the picked cells, ready to use as a zoom target or
 to copy as a `click`, `seen` or `drag` end. `pause` and the `do` actions show read-only:
 changing them needs a new `photon record`. Save writes the storyboard in place and changes only

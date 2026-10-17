@@ -535,7 +535,13 @@ a stop before the start is refused.
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ -run Edit`
 **Commit:** `feat(tune): edit captions`
 
-## 17. Tune page shows camera moves and captions
+## 17. Tune page shows camera moves and captions — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): window.tune also gains selectEntry(entry), the setter beside the guard's selectedEntry(); both are in tuneContract, and select(id) clears an entry selection so selected() stays a beat id or null.
+NOTES (2026-10-17): registered lanes return their bars as data ({from, to, className, label, title, entry}) that timeline.js places and makes selectable, so lanes.js needs no timeline helpers; the Inspect select also lists camera moves and captions (values `camera:N` / `caption:N`) so it shows what the inspector shows.
+NOTES (2026-10-17): the lane-name column widens from 56px to 84px to fit `camera zoom`; timeline.js is now 460 lines (lanes live in lanes.js as the guard asks; only the registry hookup, bar placement and entry marking went into timeline.js).
+NOTES (2026-10-17): README.md's Tuning paragraph gains one sentence on the new lanes (user-facing behaviour changed).
+NOTES (2026-10-17): checked in headless chromium against a stub state: three lanes draw with correct extents, bar clicks and the Inspect select show camera/caption panels, the selected bar is marked, and selecting a beat clears the entry.
 
 Depends on item 14.
 **What:**

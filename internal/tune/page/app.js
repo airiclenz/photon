@@ -4,8 +4,11 @@
 //
 // window.tune is the contract the timeline lanes and the target picker build on:
 //   state()      the last /api/state JSON, or null before the first arrives
-//   selected()   the id of the beat the inspector shows, or null for the clip's frame
+//   selected()   the id of the beat the inspector shows, or null for the clip's frame or an entry
 //   select(id)   show beat id in the inspector, or the clip's frame for null
+//   selectedEntry()    the camera move or caption the inspector shows, as {kind, index}, or null:
+//                      kind "camera" or "caption", index its place in state().camera or .captions
+//   selectEntry(entry) show entry, {kind, index}, in the inspector
 //   time()       the playhead, in output milliseconds
 //   frameTime()  the output milliseconds of the frame the preview <img> shows, or null
 //   seek(ms)     move the playhead to ms, clamped to the clip
@@ -36,6 +39,10 @@
   const VALUE_TRUE = "true";
   const VALUE_FALSE = "false";
   const DEFAULT_FACTOR = "2";
+  const ENTRY_CAMERA = "camera";
+  const ENTRY_CAPTION = "caption";
+  const KIND_ZOOM = "zoom";
+  const ENTRY_SEPARATOR = ":";
   // READ_ONLY_FRAME_FIELDS are the frame's keys photon tune shows but does not edit, named as the
   // storyboard and /api/state both spell them.
   const READ_ONLY_FRAME_FIELDS = [
@@ -73,6 +80,7 @@
   let current = null;
   let currentKey = "";
   let selectedBeat = null;
+  let selectedEntry = null;
   let playhead = 0;
   let playing = null;
   let shownFrameMs = null;
@@ -163,6 +171,9 @@
     currentKey = stateKey(state);
     if (selectedBeat !== null && !beatOf(selectedBeat)) {
       selectedBeat = null;
+    }
+    if (selectedEntry !== null && !entryOf(selectedEntry)) {
+      selectedEntry = null;
     }
     playhead = clampTime(playhead);
     renderAll();
@@ -401,16 +412,96 @@
     for (const beat of current.beats) {
       options.push(option(String(beat.id), "beat " + beat.id + " " + beat.title + errorMark(beat.id)));
     }
+    for (const move of current.camera) {
+      options.push(option(entryValue(ENTRY_CAMERA, move.index), "camera " + move.index + " " + move.kind));
+    }
+    for (const caption of current.captions) {
+      const label = "caption " + caption.index + " " + caption.text;
+      options.push(option(entryValue(ENTRY_CAPTION, caption.index), label));
+    }
     view.beatSelect.replaceChildren(...options);
-    view.beatSelect.value = selectedBeat === null ? "" : String(selectedBeat);
+    view.beatSelect.value = selectionValue();
+  }
+
+  // selectionValue is the beat select's value for what the inspector shows.
+  function selectionValue() {
+    if (selectedEntry !== null) {
+      return entryValue(selectedEntry.kind, selectedEntry.index);
+    }
+    return selectedBeat === null ? "" : String(selectedBeat);
+  }
+
+  // entryValue spells an entry as a beat select value, which no beat id can be.
+  function entryValue(kind, index) {
+    return kind + ENTRY_SEPARATOR + index;
   }
 
   function renderInspector() {
     if (!current) {
       return;
     }
+    const entry = selectedEntry === null ? null : entryOf(selectedEntry);
+    if (entry) {
+      view.inspector.replaceChildren(...entryPanel(selectedEntry.kind, entry));
+      return;
+    }
     const beat = selectedBeat === null ? null : beatOf(selectedBeat);
     view.inspector.replaceChildren(...(beat ? beatPanel(beat) : framePanel()));
+  }
+
+  // entryPanel is a camera move's or caption's fields, read-only here: the YAML edits them.
+  function entryPanel(kind, entry) {
+    return kind === ENTRY_CAMERA ? cameraPanel(entry) : captionPanel(entry);
+  }
+
+  // cameraPanel is a camera move's timing, where it goes and when it plays on the output clock.
+  function cameraPanel(move) {
+    return [
+      element("h2", {}, "camera " + move.index + " " + move.kind),
+      readOnlyRow("at", momentText(move.at)),
+      readOnlyRow("over", move.over_ms + "ms"),
+      readOnlyRow("ease", move.ease),
+      aimRow(move),
+      readOnlyRow("plays", formatTime(move.start_ms) + " – " + formatTime(move.end_ms)),
+    ];
+  }
+
+  // aimRow is where a camera move goes: a zoom's factor, a pan's target or cell, or the points
+  // of a pan's path.
+  function aimRow(move) {
+    if (move.kind === KIND_ZOOM) {
+      return readOnlyRow("to", move.factor + "×");
+    }
+    if (move.target) {
+      return readOnlyRow("to", flowTarget(move.target));
+    }
+    if (move.cell) {
+      return readOnlyRow("to", "{cell: {x: " + move.cell.x + ", y: " + move.cell.y + "}}");
+    }
+    return readOnlyRow("via", move.via_count + " points");
+  }
+
+  // captionPanel is a caption's text, timing, placement and when it shows on the output clock;
+  // a caption set by position has no place or align to show.
+  function captionPanel(caption) {
+    const end = caption.until
+      ? readOnlyRow("until", momentText(caption.until))
+      : readOnlyRow("for", caption.for_ms + "ms");
+    const placement = caption.place
+      ? [readOnlyRow("place", caption.place), readOnlyRow("align", caption.align)]
+      : [];
+    return [
+      element("h2", {}, "caption " + caption.index),
+      readOnlyRow("text", caption.text),
+      readOnlyRow("at", momentText(caption.at)),
+      end,
+      ...placement,
+      readOnlyRow("shows", formatTime(caption.start_ms) + " – " + formatTime(caption.stop_ms)),
+    ];
+  }
+
+  function readOnlyRow(label, text) {
+    return fieldRow(label, element("span", { className: "read-only" }, text));
   }
 
   // beatPanel is the selected beat's fields, its zoom, its read-only pauses, its report row and
@@ -575,6 +666,21 @@
     return current.beats.find((beat) => beat.id === id);
   }
 
+  // entryOf is the camera move or caption entry names in the current state, or undefined.
+  function entryOf(entry) {
+    const list = entry.kind === ENTRY_CAMERA ? current.camera : current.captions;
+    return list.find((item) => item.index === entry.index);
+  }
+
+  // momentText spells a moment as the storyboard does: {beat: N, offset: D} or a bare clip time.
+  function momentText(moment) {
+    if (moment.beat === 0) {
+      return moment.offset_ms + "ms";
+    }
+    const offset = moment.offset_ms === 0 ? "" : ", offset: " + moment.offset_ms + "ms";
+    return "{beat: " + moment.beat + offset + "}";
+  }
+
   // flowTarget spells a target as the YAML flow text a zoom.target edit takes.
   function flowTarget(target) {
     const parts = ["text: " + quoted(target.text)];
@@ -605,6 +711,28 @@
 
   function select(id) {
     selectedBeat = id === null || id === undefined ? null : Number(id);
+    selectedEntry = null;
+    renderSelection();
+  }
+
+  // selectEntry shows entry, {kind, index}, in the inspector in place of a beat.
+  function selectEntry(entry) {
+    selectedEntry = Object.freeze({ kind: entry.kind, index: Number(entry.index) });
+    selectedBeat = null;
+    renderSelection();
+  }
+
+  // selectValue selects what a beat select value names: the clip's frame, a beat or an entry.
+  function selectValue(value) {
+    const [kind, index] = value.split(ENTRY_SEPARATOR);
+    if (index !== undefined) {
+      selectEntry({ kind, index });
+    } else {
+      select(value === "" ? null : value);
+    }
+  }
+
+  function renderSelection() {
     if (current) {
       renderBeatSelect();
       renderInspector();
@@ -656,9 +784,7 @@
     view.revert.addEventListener("click", () => post(API.revert, "Reverted to the storyboard on disk"));
     view.save.addEventListener("click", () => post(API.save, "Saved"));
     view.reload.addEventListener("click", () => post(API.reload, "Reloaded from disk"));
-    view.beatSelect.addEventListener("change", () =>
-      select(view.beatSelect.value === "" ? null : view.beatSelect.value),
-    );
+    view.beatSelect.addEventListener("change", () => selectValue(view.beatSelect.value));
     document.addEventListener("keydown", onKey);
     document.addEventListener("keyup", onKeyUp);
     setInterval(poll, POLL_INTERVAL_MS);
@@ -669,6 +795,8 @@
     state: () => current,
     selected: () => selectedBeat,
     select: select,
+    selectedEntry: () => selectedEntry,
+    selectEntry: selectEntry,
     time: () => Math.round(playhead),
     frameTime: () => shownFrameMs,
     seek: seek,

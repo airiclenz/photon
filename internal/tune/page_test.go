@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -14,7 +15,7 @@ import (
 )
 
 // pageFileNames are the files the page is made of, each embedded under page/.
-var pageFileNames = []string{"index.html", "style.css", "app.js", "timeline.js", "picker.js"}
+var pageFileNames = []string{"index.html", "style.css", "app.js", "lanes.js", "timeline.js", "picker.js"}
 
 // pickerCalls are what picker.js must call: the pick endpoint and the clipboard its copy buttons
 // write the snippets to.
@@ -23,7 +24,31 @@ var pickerCalls = []string{"/api/pick", "navigator.clipboard.writeText"}
 // tuneContract lists every member of the window.tune object app.js exposes to the lanes and
 // the target picker.
 var tuneContract = []string{
-	"state", "selected", "select", "time", "frameTime", "seek", "pause", "edit", "onState", "frame",
+	"state", "selected", "select", "selectedEntry", "selectEntry", "time", "frameTime", "seek", "pause",
+	"edit", "onState", "frame",
+}
+
+// registeredLanes are the lanes lanes.js puts in window.tuneLanes: the name each shows and the
+// class of its bars, which style.css colours.
+var registeredLanes = []struct {
+	name     string
+	barClass string
+}{
+	{"camera zoom", "camera-zoom"},
+	{"pan", "pan"},
+	{"captions", "caption"},
+}
+
+// entryReaders are the variables the page reads state entries through, each with the state type
+// whose json keys it may name: state.<key>, move.<key>, caption.<key> and moment.<key>.
+var entryReaders = []struct {
+	variable string
+	of       any
+}{
+	{"state", State{}},
+	{"move", CameraState{}},
+	{"caption", CaptionState{}},
+	{"moment", MomentState{}},
 }
 
 // readOnlyFrameFields are the frame keys the Clip frame panel prints, read-only, from the state.
@@ -46,6 +71,18 @@ var pageReference = regexp.MustCompile(`\b(?:src|href)\s*=\s*["']([^"']+)["']`)
 
 // tuneObject is the window.tune assignment in app.js, up to the end of its object literal.
 var tuneObject = regexp.MustCompile(`(?s)window\.tune\s*=\s*Object\.freeze\(\{(.*?)\n\s*\}\);`)
+
+// jsonKeys returns the json keys value's struct type encodes its fields under.
+func jsonKeys(t *testing.T, value any) map[string]bool {
+	t.Helper()
+	kind := reflect.TypeOf(value)
+	keys := make(map[string]bool, kind.NumField())
+	for field := range kind.Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		keys[name] = true
+	}
+	return keys
+}
 
 // readPageFile returns the embedded page file name, failing the test when it is missing.
 func readPageFile(t *testing.T, name string) []byte {
@@ -211,6 +248,69 @@ func TestPage_Picker_CallsPickAndClipboard(t *testing.T) {
 	for _, call := range pickerCalls {
 		if !strings.Contains(picker, call) {
 			t.Errorf("picker.js does not contain %s", call)
+		}
+	}
+}
+
+func TestPage_Lanes_RegisterNamedLanesWithStyledBars(t *testing.T) {
+	t.Parallel()
+	lanes := string(readPageFile(t, "lanes.js"))
+	style := string(readPageFile(t, "style.css"))
+
+	if !strings.Contains(lanes, "window.tuneLanes =") {
+		t.Fatal("lanes.js does not fill window.tuneLanes")
+	}
+	for _, lane := range registeredLanes {
+		if !strings.Contains(lanes, `name: "`+lane.name+`"`) {
+			t.Errorf("lanes.js registers no lane named %q", lane.name)
+		}
+		if !strings.Contains(lanes, `"`+lane.barClass+`"`) {
+			t.Errorf("lanes.js gives no bar the class %s", lane.barClass)
+		}
+		if !strings.Contains(style, ".block."+lane.barClass+" {") {
+			t.Errorf("style.css does not style .block.%s", lane.barClass)
+		}
+	}
+}
+
+func TestPage_Index_LoadsLanesBeforeTimeline(t *testing.T) {
+	t.Parallel()
+	index := string(readPageFile(t, pageIndex))
+
+	lanes := strings.Index(index, assetsPrefix+"lanes.js")
+	timeline := strings.Index(index, assetsPrefix+"timeline.js")
+
+	if lanes < 0 || timeline < 0 || lanes > timeline {
+		t.Errorf("index.html loads lanes.js at %d and timeline.js at %d; want lanes.js first", lanes, timeline)
+	}
+}
+
+func TestPage_EntryReads_AreStateKeys(t *testing.T) {
+	t.Parallel()
+	files := []string{"lanes.js", "app.js"}
+
+	for _, name := range files {
+		content := readPageFile(t, name)
+		for _, reader := range entryReaders {
+			keys := jsonKeys(t, reader.of)
+			access := regexp.MustCompile(`\b` + reader.variable + `\.([a-z_]+)`)
+			for _, match := range access.FindAllSubmatch(content, -1) {
+				if key := string(match[1]); !keys[key] {
+					t.Errorf("%s reads %s.%s, which /api/state does not send", name, reader.variable, key)
+				}
+			}
+		}
+	}
+}
+
+func TestPage_Lanes_ReadCameraAndCaptions(t *testing.T) {
+	t.Parallel()
+	lanes := string(readPageFile(t, "lanes.js"))
+	keys := []string{"camera", "captions"}
+
+	for _, key := range keys {
+		if !strings.Contains(lanes, "state."+key) {
+			t.Errorf("lanes.js does not read state.%s", key)
 		}
 	}
 }
