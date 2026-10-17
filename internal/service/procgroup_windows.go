@@ -67,21 +67,32 @@ func (g *group) terminate() error {
 	return errNoInterrupt
 }
 
-// kill ends every process in the job.
+// kill ends every process in the job. A released job has none left to end.
 func (g *group) kill() error {
+	if g.job == 0 {
+		return nil
+	}
 	return windows.TerminateJobObject(g.job, 1)
 }
 
 // alive reports whether any process of the job is still running; one the job cannot be asked
-// about counts as running.
+// about counts as running, and a released job has none.
 func (g *group) alive() bool {
+	if g.job == 0 {
+		return false
+	}
 	var info jobAccounting
 	err := windows.QueryInformationJobObject(g.job, windows.JobObjectBasicAccountingInformation,
 		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), nil)
 	return err != nil || info.ActiveProcesses > 0
 }
 
-// release closes the job's handle.
+// release closes the job's handle, once: a set stopped again finds its jobs already released.
 func (g *group) release() error {
-	return windows.CloseHandle(g.job)
+	if g.job == 0 {
+		return nil
+	}
+	job := g.job
+	g.job = 0
+	return windows.CloseHandle(job)
 }
