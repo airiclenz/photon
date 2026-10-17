@@ -261,7 +261,10 @@ through a panned crop.
 - `GOMEMLIMIT=2GiB go test ./internal/compose/ ./internal/render/`
 **Commit:** `feat(compose): plan the storyboard's camera moves`
 
-## 8. Document the camera
+## 8. Document the camera — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the Header table's existing `camera` row (added by item 4) now links to the new Camera subsection; no other README section touched.
+NOTES (2026-10-17): `capcom check` exits 1 on the untouched tree too ("AGENTS.md:30: the capcom block is out of date; run capcom agents to refresh it"); pre-existing, AGENTS.md is untouched by this run, and the check reports nothing for the edited Note.
 
 Depends on item 7.
 **Closes:** camera-moves

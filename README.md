@@ -372,7 +372,7 @@ beats:
 | `frame.max_colors` | The palette size, 2..256. The palette is built per clip, without dithering. |
 | `expect` | Take-level expects, checked on every screen of the take. See [Expects](#expects). |
 | `beats` | The beats, at least one. |
-| `camera` | Camera moves on the clip's clock: each is a `zoom` (`to` a factor) or a `pan` (`to` a target or a `cell`, or `via` waypoints), with `at` (a clip time, or a `beat` and an `offset`), `over` and `ease`. |
+| `camera` | Camera moves on the clip's clock: each is a `zoom` (`to` a factor) or a `pan` (`to` a target or a `cell`, or `via` waypoints), with `at` (a clip time, or a `beat` and an `offset`), `over` and `ease`. See [Camera](#camera). |
 
 ### Beats
 
@@ -421,6 +421,63 @@ A drag's `to` is one of two kinds:
 Your program must turn on mouse reporting itself for a click or drag to reach it. photon only
 sends the reports a terminal would. A drag also needs button-event (`1002`) or any-event (`1003`)
 tracking, the modes in which a terminal reports moves while a button is held.
+
+### Camera
+
+The top-level `camera` list moves the camera on the clip's own clock, the timeline of the
+shipped GIF, not the take's. The camera has two tracks that run independently: a **zoom** track
+(the magnification, at rest at 1×) and a **pan** track (the point the crop centres on, at rest at
+the frame's centre). Each entry of `camera` is exactly one move:
+
+- `zoom`: eases the magnification to `to`, a factor from 1 to 3. `to: 1` zooms back out.
+- `pan`: carries the centre to a point. Set exactly one of two forms:
+  - `to`: one point. The camera moves there in a straight line.
+  - `via`: a list of at least two points. The camera follows a smooth curve through them,
+    without a corner at any point. The last point is where it ends.
+
+Both forms take the same timing fields:
+
+| Field | Meaning |
+| --- | --- |
+| `at` | When the move starts. A bare time such as `4500ms` is that long after the clip's first frame. `{beat: N, offset: D}` is where beat N's section starts in the clip, plus `D`. `D` may be negative and defaults to 0. Leave `at` out to start at the clip's first frame. |
+| `over` | How long the move runs, >0. It must end by the clip's end. |
+| `ease` | `smooth` (default) speeds up and slows down. `linear` runs at a steady pace. |
+
+A pan's point is one of two kinds:
+
+- a [target](#targets-and-areas): `text`, with `nth` and `area`. The camera aims at the centre of
+  its box. photon looks for it on the screen shown when the move ends. If it is not there, photon
+  looks at earlier screens, back to the one shown when the move starts. `photon render` fails if
+  none of them shows it.
+- `cell: {x, y}`: one cell of the grid. `x` is the column and `y` the row, both counted from 0.
+  The camera aims at the cell's centre. A cell takes no `nth` or `area`.
+
+```yaml
+camera:
+  - zoom: {to: 2, at: {beat: 2}, over: 600ms}
+  - pan: {to: {text: 'beta', area: list}, at: {beat: 2, offset: 200ms}, over: 1s}
+  - pan:
+      via:
+        - {cell: {x: 10, y: 4}}
+        - {cell: {x: 80, y: 4}}
+        - {text: 'Saved'}
+      at: 7s
+      over: 2s
+      ease: linear
+  - zoom: {to: 1, at: 9500ms, over: 800ms}
+```
+
+A zoom and a pan may overlap: that is how the camera pushes in while it moves. Two moves on the
+same track may not. A beat's `zoom` holds both tracks for its whole section, so no camera move may
+overlap that section. Between moves, each track holds where the last move left it. A pan shows
+only while the camera is zoomed in: at 1× the whole frame is in view. A pan at 1× still sets where
+the next zoom aims.
+
+`photon lint` reports a move that sets both or neither of `zoom` and `pan`, a `zoom.to` outside
+1-3, a pan with both or neither of `to` and `via`, a `via` with fewer than two points, a point
+with both or neither of `text` and `cell`, a cell outside the grid, an `ease` other than `smooth`
+or `linear`, an `over` that is not >0, an `at` that names a missing or cut beat, a move that
+starts outside the clip or ends after it, and every overlap above.
 
 ## Targets and areas
 
@@ -538,6 +595,15 @@ With no `factor`, the zoom fits the target: the target plus two cells each side 
 of the frame width, clamped to 1.25-2.5×. The zoom aims at the spot where a click or drag in the
 same beat hit the same target. If there is none, it aims at the target on the latest screen of
 the beat that shows it.
+
+A beat's `zoom` is a shorthand for [camera](#camera) moves. When the section starts, the pan
+track aims at the zoom's target. The zoom track then pushes in over `in`, holds, and comes back
+to 1× over `out`. The zoom holds both tracks for its section, and no `camera` move may overlap
+it. Between moves the camera holds its last state: a factor stays put until the next zoom, and
+the centre stays put until the next pan. The crop never leaves the frame. When the centre is
+near an edge, the crop stops at that edge, so the aimed point sits off-centre rather than
+showing empty space. The cursor follows the camera: it is drawn through the same crop, so it
+stays on the cell it points at.
 
 The **cursor** is drawn, not recorded. It is a white dot with a dark outline. It fades in, glides
 from the last point (the bottom row's centre at first) to each click and each drag's press, and
