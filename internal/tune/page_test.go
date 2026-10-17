@@ -2,11 +2,13 @@ package tune
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -23,6 +25,15 @@ var pickerCalls = []string{"/api/pick", "navigator.clipboard.writeText"}
 var tuneContract = []string{
 	"state", "selected", "select", "time", "frameTime", "seek", "pause", "edit", "onState", "frame",
 }
+
+// readOnlyFrameFields are the frame keys the Clip frame panel prints, read-only, from the state.
+var readOnlyFrameFields = []string{"cols", "rows", "padding", "font_size", "line_height", "scale", "max_colors"}
+
+// readOnlyFrameList is the READ_ONLY_FRAME_FIELDS array in app.js; quotedName finds each name in it.
+var (
+	readOnlyFrameList = regexp.MustCompile(`(?s)READ_ONLY_FRAME_FIELDS\s*=\s*\[(.*?)\]`)
+	quotedName        = regexp.MustCompile(`"([^"]+)"`)
+)
 
 // externalFetch finds a URL in fetch position — an attribute, a CSS url(), an ES import or a
 // fetch() — that leaves this server: absolute or protocol-relative. A namespace URI is no fetch.
@@ -158,6 +169,37 @@ func TestPage_App_DefinesTheTuneContract(t *testing.T) {
 		pattern := regexp.MustCompile(`(?m)^\s*` + member + `\s*:`)
 		if !pattern.Match(object[1]) {
 			t.Errorf("window.tune has no member %s", member)
+		}
+	}
+}
+
+func TestPage_App_ReadOnlyFrameFields_AreStateKeys(t *testing.T) {
+	t.Parallel()
+	app := readPageFile(t, "app.js")
+	encoded, err := json.Marshal(State{})
+	if err != nil {
+		t.Fatalf("marshal State: %v", err)
+	}
+	var stateKeys map[string]any
+	if err := json.Unmarshal(encoded, &stateKeys); err != nil {
+		t.Fatalf("unmarshal State: %v", err)
+	}
+
+	list := readOnlyFrameList.FindSubmatch(app)
+
+	if list == nil {
+		t.Fatal("app.js does not define READ_ONLY_FRAME_FIELDS = [...]")
+	}
+	var names []string
+	for _, match := range quotedName.FindAllSubmatch(list[1], -1) {
+		names = append(names, string(match[1]))
+	}
+	if !slices.Equal(names, readOnlyFrameFields) {
+		t.Errorf("READ_ONLY_FRAME_FIELDS %q, want %q", names, readOnlyFrameFields)
+	}
+	for _, name := range names {
+		if _, ok := stateKeys[name]; !ok {
+			t.Errorf("READ_ONLY_FRAME_FIELDS names %s, which /api/state does not send", name)
 		}
 	}
 }

@@ -36,7 +36,17 @@
   const VALUE_TRUE = "true";
   const VALUE_FALSE = "false";
   const DEFAULT_FACTOR = "2";
-  const READ_ONLY_FRAME_FIELDS = "cols, rows, padding, font_size, line_height, scale, max_colors";
+  // READ_ONLY_FRAME_FIELDS are the frame's keys photon tune shows but does not edit, named as the
+  // storyboard and /api/state both spell them.
+  const READ_ONLY_FRAME_FIELDS = [
+    "cols",
+    "rows",
+    "padding",
+    "font_size",
+    "line_height",
+    "scale",
+    "max_colors",
+  ];
   const PLAY_GLYPH = "▶";
   const PAUSE_GLYPH = "⏸";
 
@@ -424,7 +434,9 @@
       element("h2", {}, "Clip frame"),
       countField("width (px)", "frame.width", current.width),
       countField("fps", "frame.fps", current.fps),
-      element("p", { className: "read-only" }, READ_ONLY_FRAME_FIELDS + " are read-only in photon tune."),
+      ...READ_ONLY_FRAME_FIELDS.map((name) =>
+        fieldRow(name, element("span", { className: "read-only" }, String(current[name]))),
+      ),
       element("p", { className: "read-only" }, "Length " + formatTime(current.length_ms)),
       ...current.warnings.map((warning) => element("p", { className: "error" }, warning)),
       ...errorRows(CLIP),

@@ -56,7 +56,9 @@ caption YAML keys use `color` as `max_colors` does; caption placement words are
 - 17: guard folded; supersedes the internal/tune/page/timeline.js lane-model header
 - 18: guard folded (writer's decision on Acceptance)
 
-## 1. Tune inspector shows the read-only frame values
+## 1. Tune inspector shows the read-only frame values — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the page test did not pin the panel's text, so instead of extending an existing assertion it gains TestPage_App_ReadOnlyFrameFields_AreStateKeys, which checks that app.js's READ_ONLY_FRAME_FIELDS lists the seven keys and that /api/state sends each of them; gofmt realigned the existing State fields and the State literal around the seven new ones
 
 **Closes:** tune-frame-readonly-values
 **What:**

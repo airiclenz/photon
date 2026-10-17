@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -227,6 +228,18 @@ func TestSession_State_ReportsTheSchedule(t *testing.T) {
 	}
 	if len(beat.PausesMS) != 1 || beat.PausesMS[0] != 400 {
 		t.Errorf("beat 2 pauses %v, want [400]", beat.PausesMS)
+	}
+}
+
+func TestSession_State_ReportsTheReadOnlyFrame(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixture(t)
+
+	state := f.session.State()
+
+	frame := []any{state.Cols, state.Rows, state.Padding, state.FontSize, state.LineHeight, state.Scale, state.MaxColors}
+	if want := []any{fixtureCols, 4, 4, 10.0, 1.2, 2, 16}; !slices.Equal(frame, want) {
+		t.Errorf("cols, rows, padding, font_size, line_height, scale, max_colors %v, want %v", frame, want)
 	}
 }
 

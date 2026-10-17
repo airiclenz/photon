@@ -23,11 +23,21 @@ type State struct {
 	LengthMS int64          `json:"length_ms"`
 	FPS      int            `json:"fps"`
 	Width    int            `json:"width"`
-	Errors   []Problem      `json:"errors"`
-	IsDirty  bool           `json:"dirty"`
-	IsStale  bool           `json:"stale"`
-	CanUndo  bool           `json:"can_undo"`
-	CanRedo  bool           `json:"can_redo"`
+
+	// The frame's other fields, which photon tune shows but does not edit.
+	Cols       int     `json:"cols"`
+	Rows       int     `json:"rows"`
+	Padding    int     `json:"padding"`
+	FontSize   float64 `json:"font_size"`
+	LineHeight float64 `json:"line_height"`
+	Scale      int     `json:"scale"`
+	MaxColors  int     `json:"max_colors"`
+
+	Errors  []Problem `json:"errors"`
+	IsDirty bool      `json:"dirty"`
+	IsStale bool      `json:"stale"`
+	CanUndo bool      `json:"can_undo"`
+	CanRedo bool      `json:"can_redo"`
 }
 
 // BeatState is one beat's tunable timing, its zoom, and the pauses its actions hold, which are
@@ -95,18 +105,25 @@ func (s *Session) State() State {
 		clipSchedule = s.good.schedule
 	}
 	return State{
-		Version:  s.version,
-		Beats:    beatStates(board),
-		Sections: sectionStates(clipSchedule),
-		Warnings: append([]string{}, clipSchedule.Warnings...),
-		LengthMS: clipSchedule.Length.Milliseconds(),
-		FPS:      board.Frame.FPS,
-		Width:    board.Frame.Width,
-		Errors:   append([]Problem{}, s.problems...),
-		IsDirty:  s.isDirty(),
-		IsStale:  s.isStale,
-		CanUndo:  s.history.canUndo(),
-		CanRedo:  s.history.canRedo(),
+		Version:    s.version,
+		Beats:      beatStates(board),
+		Sections:   sectionStates(clipSchedule),
+		Warnings:   append([]string{}, clipSchedule.Warnings...),
+		LengthMS:   clipSchedule.Length.Milliseconds(),
+		FPS:        board.Frame.FPS,
+		Width:      board.Frame.Width,
+		Cols:       board.Frame.Cols,
+		Rows:       board.Frame.Rows,
+		Padding:    board.Frame.Padding,
+		FontSize:   board.Frame.FontSize,
+		LineHeight: board.Frame.LineHeight,
+		Scale:      board.Frame.Scale,
+		MaxColors:  board.Frame.MaxColors,
+		Errors:     append([]Problem{}, s.problems...),
+		IsDirty:    s.isDirty(),
+		IsStale:    s.isStale,
+		CanUndo:    s.history.canUndo(),
+		CanRedo:    s.history.canRedo(),
 	}
 }
 
