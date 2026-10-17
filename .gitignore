@@ -6,6 +6,9 @@
 *.test
 *.out
 
+# Release archives staged by a dist build — published as GitHub release assets, never committed
+/dist/
+
 # Rendered clips and takes from local runs; the shipped GIF lives in the project that films it
 *.take
 

@@ -63,7 +63,10 @@ NOTES (2026-10-17): the only version numbers in the file are the Keep a Changelo
 **Acceptance:** `head -1 CHANGELOG.md | grep -qx '# Changelog'`; `grep -qx '## \[Unreleased\]' CHANGELOG.md`; `! grep -qE '^## \[[0-9]' CHANGELOG.md`; `test "$(sed -n '/^## \[Unreleased\]/,$p' CHANGELOG.md | grep -c '^- ')" -ge 6`; forbidden grep on `CHANGELOG.md`.
 **Commit:** `docs: add CHANGELOG with the unreleased v1 features`
 
-## 2. Bulk port of the release tool
+## 2. Bulk port of the release tool — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): source doc_test.go dropped and replaced by docmap_test.go (testkit.CheckDocMap); doc.go's file-map lead-in now names TestDocMap, its imports sentence admits docmap_test.go's internal/testkit import, and the ADR references in doc.go and versionbump_test.go were removed (photon has no ADR).
+NOTES (2026-10-17): the winget code, templates and goldens are ported with the id renamed to AiricLenz.Photon (manifests/a/AiricLenz/Photon) so the package compiles; item 4 deletes them.
 
 **What:** Recast at the regression check (2026-10-17).
 **Goal:** `go run ./cmd/release --help` lists `dist`, `status`, `prepare`, `publish`, `smoke`; `go vet`, `go test` and the targeted lint pass on `./cmd/release/`; the version-bump tests pass; the forbidden grep is clean on `cmd/release` and `.github`.
