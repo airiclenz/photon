@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -26,7 +27,7 @@ const (
 
 // smokeFake is a published publishVersion whose assets sit in releaseDir: repo holds the
 // checkout and its GitHub repository, channels the bucket, and respond answers the brew and
-// binary commands the way brew and the released binaries would.
+// binary commands the way brew and the released binaries would on a given host.
 type smokeFake struct {
 	releaseDir string
 	repo       memRepo
@@ -35,7 +36,7 @@ type smokeFake struct {
 	revision    string
 	modified    string
 	isUnstamped bool
-	// binaryVersion is the bare version a released binary reports.
+	// binaryVersion is the bare version the host's released binary reports.
 	binaryVersion string
 	// brew is "missing" (not installed), "absent" (photon not installed through it) or
 	// "installed"; brewReports is what its photon prints for `photon version`.
@@ -64,7 +65,7 @@ func newSmokeFake(t *testing.T) *smokeFake {
 		modified:      "false",
 		binaryVersion: strings.TrimPrefix(publishVersion, "v"),
 		brew:          "installed",
-		brewReports:   "photon " + strings.TrimPrefix(publishVersion, "v"),
+		brewReports:   strings.TrimPrefix(publishVersion, "v"),
 		manifest:      manifest,
 	}
 }
@@ -140,8 +141,15 @@ func writeReleaseTree(dir string) error {
 	return nil
 }
 
-// respond answers one command.
-func (f *smokeFake) respond(call recordedCall) (string, error) {
+// respond answers each command as it would be answered on a goos/goarch host.
+func (f *smokeFake) respond(goos, goarch string) func(call recordedCall) (string, error) {
+	return func(call recordedCall) (string, error) {
+		return f.respondOn(goos, goarch, call)
+	}
+}
+
+// respondOn answers one command on a goos/goarch host.
+func (f *smokeFake) respondOn(goos, goarch string, call recordedCall) (string, error) {
 	line := call.name + " " + strings.Join(call.args, " ")
 	args := call.args
 	switch {
@@ -160,13 +168,16 @@ func (f *smokeFake) respond(call recordedCall) (string, error) {
 	case line == filepath.Join(smokeBrewPrefix, "bin", "photon")+" "+versionArgument:
 		return f.brewReports + "\n", nil
 	case len(args) == 1 && args[0] == versionArgument:
-		// A binary extracted from an archive: report the version and the stub it holds, so a
-		// test can tell which platform's binary ran.
+		// A binary extracted from an archive: only the host's own build reports the version, so
+		// running another platform's binary fails the version check.
 		stub, err := os.ReadFile(call.name)
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("photon %s (%s)\n", f.binaryVersion, strings.TrimSpace(string(stub))), nil
+		if string(stub) != stubBinary([]string{"CGO_ENABLED=0", "GOOS=" + goos, "GOARCH=" + goarch}) {
+			return "0.0.0\n", nil
+		}
+		return f.binaryVersion + "\n", nil
 	}
 	return "", fmt.Errorf("unexpected command %q", line)
 }
@@ -216,7 +227,7 @@ func runTestSmoke(t *testing.T, fake *smokeFake, adjust func(options *smokeOptio
 	if options.channels == nil {
 		options.channels = fake.channels()
 	}
-	commands := &fakeRunner{respond: fake.respond}
+	commands := &fakeRunner{respond: fake.respond(options.goos, options.goarch)}
 	var output bytes.Buffer
 
 	err := runSmoke(t.Context(), commands, &output, options)
@@ -251,8 +262,8 @@ func TestSmokeChecks(t *testing.T) {
 				{"PASS", "SHA256SUMS in"},
 				{"PASS", "6 assets downloaded, all checksums match"},
 				{"PASS", "6 assets carry vcs.revision 81eec1b3ac7d = the tag"},
-				{"PASS", "the released binary reports \"photon 0.24.11"},
-				{"PASS", "brew's photon reports \"photon 0.24.11\""},
+				{"PASS", "the released binary reports \"0.24.11\""},
+				{"PASS", "brew's photon reports \"0.24.11\""},
 				{"PASS", "bucket at 0.24.11, both Windows hashes match SHA256SUMS"},
 			},
 			wantTally: "7 passed, 0 failed, 0 skipped",
@@ -369,7 +380,7 @@ func TestSmokeChecks(t *testing.T) {
 		},
 		"the host's binary reports another version": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.binaryVersion = "0.24.10" },
-			wantResults: [][2]string{{"FAIL", "the released binary reports \"photon 0.24.10"}},
+			wantResults: [][2]string{{"FAIL", "the released binary reports \"0.24.10\", not \"0.24.11\""}},
 			wantTally:   "6 passed, 1 failed, 0 skipped",
 		},
 		"no release archive for the host": {
@@ -393,8 +404,13 @@ func TestSmokeChecks(t *testing.T) {
 			wantTally:   "6 passed, 0 failed, 1 skipped",
 		},
 		"brew upgrade leaves the old version": {
-			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brewReports = "photon 0.24.10" },
-			wantResults: [][2]string{{"FAIL", "brew's photon reports \"photon 0.24.10\", not \"photon 0.24.11\""}},
+			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brewReports = "0.24.10" },
+			wantResults: [][2]string{{"FAIL", "brew's photon reports \"0.24.10\", not \"0.24.11\""}},
+			wantTally:   "6 passed, 1 failed, 0 skipped",
+		},
+		"a version behind photon's name is not the bare version": {
+			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brewReports = "photon 0.24.11" },
+			wantResults: [][2]string{{"FAIL", "brew's photon reports \"photon 0.24.11\", not \"0.24.11\""}},
 			wantTally:   "6 passed, 1 failed, 0 skipped",
 		},
 		"the bucket's manifest is unreadable": {
@@ -574,7 +590,7 @@ func TestSmokeNeverRunsAHostBinaryThatFailedItsHash(t *testing.T) {
 		workDir := t.TempDir()
 		var output bytes.Buffer
 		run := &smokeRun{
-			commands: &fakeRunner{respond: fake.respond},
+			commands: &fakeRunner{respond: fake.respond("linux", "amd64")},
 			repo:     fake.repo,
 			output:   &output,
 			options:  smokeOptions{dir: t.TempDir(), goos: "linux", goarch: "amd64", readBuildInfo: fake.readBuildInfo},
@@ -639,7 +655,7 @@ func TestSmokeRunsTheHostsZipArchive(t *testing.T) {
 	if result.err != nil {
 		t.Fatalf("smoke failed: %v\n%s", result.err, result.output)
 	}
-	if !hasResult(result.output, "PASS", "GOOS=windows GOARCH=amd64") {
+	if !hasResult(result.output, "PASS", "the released binary reports \"0.24.11\"") {
 		t.Errorf("the host check did not run the windows/amd64 binary:\n%s", result.output)
 	}
 	var ran []string
@@ -674,7 +690,7 @@ func TestSmokeVersion(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				t.Parallel()
 				fake := newSmokeFake(t)
-				commands := &fakeRunner{respond: fake.respond}
+				commands := &fakeRunner{respond: fake.respond(runtime.GOOS, runtime.GOARCH)}
 
 				output, err := executeWith(t, commands, fake.openRepo, fake.channels(), tc.args...)
 
@@ -721,7 +737,7 @@ func TestSmokeFailureIsARunFailure(t *testing.T) {
 	fake := newSmokeFake(t)
 	fake.repo.remoteTags = map[string]string{}
 
-	output, err := executeWith(t, &fakeRunner{respond: fake.respond}, fake.openRepo, fake.channels(), "smoke", publishVersion)
+	output, err := executeWith(t, &fakeRunner{respond: fake.respond(runtime.GOOS, runtime.GOARCH)}, fake.openRepo, fake.channels(), "smoke", publishVersion)
 
 	if err == nil || exitCodeFor(err) != exitRunFailed {
 		t.Errorf("smoke error = %v (exit %d), want a run failure (exit %d)", err, exitCodeFor(err), exitRunFailed)

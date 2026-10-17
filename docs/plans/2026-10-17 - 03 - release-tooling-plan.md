@@ -119,7 +119,10 @@ cmd/release/status_test.go — TestStatusJSONKeysArePinned; cmd/release/main.go 
 **Acceptance:** `! grep -rni 'winget\|komac' cmd/release .github`; `go vet ./cmd/release/`; `go test -c -o /dev/null ./cmd/release/`; `GOMEMLIMIT=2GiB go test ./cmd/release/`; `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(sed -n 's/^GOLANGCI_LINT_VERSION := //p' Makefile) run ./cmd/release/`; forbidden grep on `cmd/release .github`.
 **Commit:** `feat(release): drop the winget channel`
 
-## 5. Smoke accepts the bare version
+## 5. Smoke accepts the bare version — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): `smokeFake.respond` now takes the host (`respond(goos, goarch)` returns the responder; the switch moved to `respondOn`), so the fake answers the bare version only for the host's own stub build and `0.0.0` for any other; `runTestSmoke` passes its options' host, the direct `smokeRun` test linux/amd64, and the two command-tree tests `runtime.GOOS/GOARCH` as the tree itself uses.
+NOTES (2026-10-17): the "photon 1.2.3 fails" proof is a new TestSmokeChecks case ("a version behind photon's name is not the bare version", brew reporting "photon 0.24.11") on the suite's 0.24.11 fixture rather than a literal 1.2.3.
 
 Depends on items 2 and 4.
 

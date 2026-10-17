@@ -44,7 +44,7 @@ class Photon < Formula
   end
 
   test do
-    # `photon version` prints "photon X.Y.Z".
+    # `photon version` prints the bare version, X.Y.Z.
     assert_match version.to_s, shell_output("#{bin}/photon version")
   end
 end

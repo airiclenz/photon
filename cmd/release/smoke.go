@@ -27,8 +27,8 @@ const gitObjectTag = "tag"
 // prompt, so a missing credential fails the command instead of waiting on a human.
 var nonInteractiveEnv = []string{"GIT_TERMINAL_PROMPT=0", "GH_PROMPT_DISABLED=1"}
 
-// versionArgument is the subcommand a photon binary reports its version under; it prints
-// "photon X.Y.Z" with the bare version.
+// versionArgument is the subcommand a photon binary reports its version under; it prints the
+// bare version, X.Y.Z, and nothing else.
 const versionArgument = "version"
 
 // The build settings `-buildvcs` stamps into every release binary: the commit it was built from
@@ -420,8 +420,8 @@ func (r *smokeRun) checkHostBinary(ctx context.Context) {
 	r.checkReportsVersion(ctx, binary, "the released binary")
 }
 
-// checkReportsVersion runs `binary version` and requires its output to open with
-// "photon X.Y.Z", the bare version.
+// checkReportsVersion runs `binary version` and requires its output, trimmed, to be the bare
+// version.
 func (r *smokeRun) checkReportsVersion(ctx context.Context, binary, label string) {
 	reported, err := r.commands.run(ctx, r.options.dir, nil, binary, versionArgument)
 	if err != nil {
@@ -429,8 +429,7 @@ func (r *smokeRun) checkReportsVersion(ctx context.Context, binary, label string
 		return
 	}
 	reported = strings.TrimSpace(reported)
-	want := binaryName + " " + bareRelease(r.version)
-	if fields := strings.Fields(reported); len(fields) < 2 || fields[0]+" "+fields[1] != want {
+	if want := bareRelease(r.version); reported != want {
 		r.fail("%s reports %q, not %q", label, reported, want)
 		return
 	}
