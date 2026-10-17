@@ -17,6 +17,7 @@ var (
 	minimalStoryboard    = filepath.Join("testdata", "minimal", "hello.yaml")
 	invalidStoryboard    = filepath.Join("testdata", "invalid", "demo.yaml")
 	undeclaredStoryboard = filepath.Join("testdata", "invalid", "undeclared.yaml")
+	badDragStoryboard    = filepath.Join("testdata", "invalid", "drag.yaml")
 )
 
 // okMarker is what lint prints for a clip with no problem.
@@ -59,6 +60,12 @@ func TestLint(t *testing.T) {
 			args:       []string{"lint", undeclaredStoryboard, "--config", validConfig},
 			wantCode:   exitRunFailed,
 			wantStderr: []string{`beat 1: expect[0]: area: "sidebar" is not declared`},
+		},
+		{
+			name:       "a bad drag is listed under its field",
+			args:       []string{"lint", badDragStoryboard, "--config", validConfig},
+			wantCode:   exitRunFailed,
+			wantStderr: []string{"beat 1: do[0]: drag.to: want exactly one of text or offset"},
 		},
 		{
 			name:       "no storyboard is a bad command line",

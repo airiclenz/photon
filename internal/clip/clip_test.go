@@ -116,6 +116,7 @@ func TestLoad_UndeclaredAreaFailsNamingIt(t *testing.T) {
 		`expect[0]: area: "footer" is not declared`,
 		`beat 1: zoom.target.area: "sidebar" is not declared`,
 		`beat 1: do[0]: click.target.area: "sidebar" is not declared`,
+		`beat 1: do[1]: drag.to.area: "trash" is not declared`,
 	}
 
 	_, err := Load(storyboardPath, "", "")

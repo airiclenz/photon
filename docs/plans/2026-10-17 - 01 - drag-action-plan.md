@@ -50,7 +50,11 @@ internal/take/file_test.go — sampleTake, TestFile_SaveLoadRoundTrip, TestWrite
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/keys ./internal/take` passes; `go vet ./internal/keys ./internal/take`.
 **Commit:** `feat(keys): SGR held-button motion report; take: press, move and release events`
 
-## 2. The `drag` action in the storyboard, lint and README reference
+## 2. The `drag` action in the storyboard, lint and README reference — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the README `drag` row says what the action does (press at `from`'s centre, eased held moves, release at `to`) but leaves when `to.text` is resolved to item 3's engine work; the full drag description in the storyboard reference stays with item 7.
+NOTES (2026-10-17): added a strict-decode `TestLoadRejects` row ("unknown offset field") on top of the plan's rows, to pin that the inline `to` target still refuses unknown fields.
+NOTES (2026-10-17): the lint test for `testdata/invalid/drag.yaml` passes `--config testdata/valid/photon.yaml`, as the undeclared-area row does, so the invalid/ config's own broken rule does not mix into the drag's output.
 
 **What:**
 **Goal:** a storyboard decodes `drag: {from: <target>, to: {text|offset…}, steps: n}`; `photon lint` reports a bad drag (both or neither of `to.text`/`to.offset`, a zero offset, `to.nth`/`to.area` with an offset, `steps` < 1, a bad `from`) and an undeclared `drag.from.area` / `drag.to.area`; the README documents every new field.

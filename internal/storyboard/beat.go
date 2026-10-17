@@ -43,6 +43,7 @@ type Action struct {
 	Type  *TypeAction  `yaml:"type"`
 	Key   *KeyAction   `yaml:"key"`
 	Click *ClickAction `yaml:"click"`
+	Drag  *DragAction  `yaml:"drag"`
 	Wait  *WaitAction  `yaml:"wait"`
 	Pause *PauseAction `yaml:"pause"`
 }
@@ -71,6 +72,42 @@ type ClickAction struct {
 	Times  int    `yaml:"times"`
 }
 
+// DragAction presses the left button at the resolved From target, moves with it held to To in
+// Steps steps and releases it there. Steps is a pointer so an absent key reads as the default,
+// [DefaultDragSteps], while an explicit value below 1 is a validation problem.
+type DragAction struct {
+	From  Target  `yaml:"from"`
+	To    DragEnd `yaml:"to"`
+	Steps *int    `yaml:"steps"`
+}
+
+// DefaultDragSteps is how many held-button moves a drag makes when the storyboard gives no steps.
+const DefaultDragSteps = 12
+
+// StepCount returns the drag's steps: the storyboard's value, or [DefaultDragSteps] when it gives
+// none.
+func (d DragAction) StepCount() int {
+	if d.Steps == nil {
+		return DefaultDragSteps
+	}
+	return *d.Steps
+}
+
+// DragEnd is where a drag releases: either a target resolved on the screen as it stands (its
+// fields sit inline, so `to: {text: …}` reads as a target) or an Offset from the press cell.
+// Exactly one of Text and Offset is set.
+type DragEnd struct {
+	Target `yaml:",inline"`
+	Offset *Offset `yaml:"offset"`
+}
+
+// Offset is a move in cells: X columns to the right and Y rows down; negative values go left and
+// up.
+type Offset struct {
+	X int `yaml:"x"`
+	Y int `yaml:"y"`
+}
+
 // WaitAction blocks until the Screen regex matches the terminal (or, with Gone, no longer
 // matches) and fails the beat once Timeout passes.
 type WaitAction struct {
@@ -87,9 +124,9 @@ type PauseAction struct {
 	For time.Duration `yaml:"for"`
 }
 
-// Target is an on-screen place a click or zoom resolves on the current screen: Text is a regex
-// over the screen's rows, Nth picks which match counts and Area limits the rows searched to an
-// area the config declares (empty or [AreaAny] means the whole screen).
+// Target is an on-screen place a click, drag or zoom resolves on the current screen: Text is a
+// regex over the screen's rows, Nth picks which match counts and Area limits the rows searched to
+// an area the config declares (empty or [AreaAny] means the whole screen).
 type Target struct {
 	Text string `yaml:"text"`
 	Nth  Nth    `yaml:"nth"`

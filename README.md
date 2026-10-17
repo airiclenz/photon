@@ -343,15 +343,27 @@ Each entry of `do` sets exactly one of these.
 | `type` | `text` (required), `humanize` (default `true`) | Types the text. Humanized typing paces each character from a fixed profile — letters 25-45 ms apart, spaces 60-90 ms, punctuation 90-140 ms, an occasional thinking pause at a space — from a fixed seed, so every take types the same. `humanize: false` sends the text in one write. |
 | `key` | `name` (required), `repeat` (default 1) | Presses a [named key](#key-names) `repeat` times. |
 | `click` | `target` (required), `times` (default 1) | Finds the target on the screen as it stands and sends `times` left clicks at its centre cell, as real SGR mouse press and release reports. Fails when the target is not on screen, so a `wait` usually comes first. |
+| `drag` | `from` (required), `to` (required), `steps` (default 12) | Finds the `from` target on the screen as it stands, presses the left button at its centre cell, moves with the button held to the `to` end in `steps` moves that speed up and slow down, and releases there, all as real SGR mouse reports. Fails when a target is not on screen. |
 | `wait` | `screen` (required), `gone`, `timeout` (required, at most `180s`) | Waits until the `screen` regex matches the screen's text (its rows joined by newlines) — or, with `gone: true`, until it no longer does. Fails at the timeout, or at once when the program exits. |
 | `pause` | `for` (required) | Waits the given duration. |
 
-The program must enable mouse reporting itself for a click to reach it; photon only sends the
-reports a terminal would.
+A drag's `to` is exactly one of two ends. `to.text` is a [target](#targets-and-areas), with its
+`to.nth` and `to.area`; the drag releases at its centre cell. `to.offset` is a move in cells
+from the press cell: `to.offset.x` columns to the right and `to.offset.y` rows down, negative
+going left and up, at least one of them non-zero. An offset takes no `nth` or `area`. For
+example:
+
+```yaml
+- drag: {from: {text: '│', area: panes}, to: {offset: {x: 12}}, steps: 8}
+- drag: {from: {text: 'draft.txt'}, to: {text: 'Trash', area: sidebar}}
+```
+
+The program must enable mouse reporting itself for a click or a drag to reach it; photon only
+sends the reports a terminal would.
 
 ## Targets and areas
 
-A **target** is a place on screen that a `click` or a `zoom` aims at:
+A **target** is a place on screen that a `click`, a `drag` or a `zoom` aims at:
 
 | Field | Meaning |
 | --- | --- |

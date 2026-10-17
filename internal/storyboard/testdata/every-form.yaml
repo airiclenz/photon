@@ -35,6 +35,8 @@ beats:
       - click: {target: {text: 'Item 2', nth: first, area: list}, times: 2}
       - click: {target: {text: 'Item', nth: 3, area: any}}
       - click: {target: {text: 'Save'}}
+      - drag: {from: {text: 'Item 1', area: list}, to: {text: 'Item 3', nth: last, area: list}, steps: 4}
+      - drag: {from: {text: 'Item 2'}, to: {offset: {x: -3, y: 1}}}
     expect:
       - seen: 'Item 2 selected'
         area: status

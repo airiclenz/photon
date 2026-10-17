@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -30,6 +31,7 @@ beats:
       - click: {target: {text: 'Item', area: list}, times: 1}
       - wait: {screen: 'Ready', timeout: 5s}
       - pause: {for: 1s}
+      - drag: {from: {text: 'Grip'}, to: {offset: {x: 4}}, steps: 2}
     expect:
       - seen: 'Item'
         area: list
@@ -91,6 +93,22 @@ func TestLoadEveryForm(t *testing.T) {
 	for index, want := range wantClicks {
 		if click := pick.Do[index].Click; click == nil || *click != want {
 			t.Errorf("beat 2 do[%d]: want click %+v, got %+v", index, want, pick.Do[index])
+		}
+	}
+	wantDrags := []struct {
+		drag  DragAction
+		steps int
+	}{
+		{DragAction{
+			From: Target{Text: "Item 1", Area: "list"}, To: DragEnd{Target: Target{Text: "Item 3", Nth: NthLast, Area: "list"}},
+			Steps: new(4),
+		}, 4},
+		{DragAction{From: Target{Text: "Item 2"}, To: DragEnd{Offset: &Offset{X: -3, Y: 1}}}, DefaultDragSteps},
+	}
+	for offset, want := range wantDrags {
+		index := len(wantClicks) + offset
+		if drag := pick.Do[index].Drag; drag == nil || !reflect.DeepEqual(*drag, want.drag) || drag.StepCount() != want.steps {
+			t.Errorf("beat 2 do[%d]: want drag %+v with %d steps, got %+v", index, want.drag, want.steps, pick.Do[index])
 		}
 	}
 	wantPickExpects := []Expect{{Seen: "Item 2 selected", Area: "status"}, {Run: `grep -q 'Item 2' "$PHOTON_WORK/saved.txt"`}}
@@ -169,9 +187,9 @@ func TestLoadRejects(t *testing.T) {
 		{"zoom out negative", "in: 1s, out: 1s", "in: 1s, out: -1s", "beat 1: zoom.out: want ≥0, got -1s", false},
 		{"zoom target regex", "text: 'Item', nth: 1", "text: '(', nth: 1", "beat 1: zoom.target.text: error parsing regexp", false},
 		{"two action forms", "      - pause: {for: 1s}", "      - pause: {for: 1s}\n        type: {text: x}",
-			"beat 1: do[4]: want exactly one of type, key, click, wait or pause", false},
+			"beat 1: do[4]: want exactly one of type, key, click, drag, wait or pause", false},
 		{"no action form", "      - pause: {for: 1s}", "      - {}",
-			"beat 1: do[4]: want exactly one of type, key, click, wait or pause", false},
+			"beat 1: do[4]: want exactly one of type, key, click, drag, wait or pause", false},
 		{"type text missing", "text: 'hi'", "text: ''", "beat 1: do[0]: type.text: missing", false},
 		{"key name missing", "name: enter, repeat: 1", "repeat: 1", "beat 1: do[1]: key.name: missing", false},
 		{"key name unknown", "name: enter, repeat: 1", "name: return, repeat: 1",
@@ -185,6 +203,17 @@ func TestLoadRejects(t *testing.T) {
 		{"wait timeout zero", "timeout: 5s", "timeout: 0s", "beat 1: do[3]: wait.timeout: want in (0, 3m0s], got 0s", false},
 		{"wait timeout too long", "timeout: 5s", "timeout: 3m1s", "beat 1: do[3]: wait.timeout: want in (0, 3m0s], got 3m1s", false},
 		{"pause not positive", "for: 1s", "for: 0s", "beat 1: do[4]: pause.for: want >0, got 0s", false},
+		{"drag end with both forms", "offset: {x: 4}}", "text: 'Edge', offset: {x: 4}}",
+			"beat 1: do[5]: drag.to: want exactly one of text or offset", false},
+		{"drag end with neither form", "to: {offset: {x: 4}}", "to: {}", "beat 1: do[5]: drag.to: want exactly one of text or offset", false},
+		{"drag offset zero", "{x: 4}", "{x: 0}", "beat 1: do[5]: drag.to.offset: want a non-zero x or y", false},
+		{"drag offset with an nth", "to: {offset", "to: {nth: 2, offset", "beat 1: do[5]: drag.to.nth: only a to.text takes an nth", false},
+		{"drag offset with an area", "to: {offset", "to: {area: list, offset",
+			"beat 1: do[5]: drag.to.area: only a to.text takes an area", false},
+		{"drag to regex", "to: {offset: {x: 4}}", "to: {text: '('}", "beat 1: do[5]: drag.to.text: error parsing regexp", false},
+		{"drag from text missing", "from: {text: 'Grip'}", "from: {area: list}", "beat 1: do[5]: drag.from.text: missing", false},
+		{"drag steps zero", "steps: 2", "steps: 0", "beat 1: do[5]: drag.steps: want ≥1, got 0", false},
+		{"unknown offset field", "{x: 4}", "{x: 4, z: 1}", "field z not found", true},
 		{"expect without a form", "- run: 'true'", "- area: list", "beat 1: expect[1]: want exactly one of seen or run", false},
 		{"expect with both forms", "run: 'true'", "run: 'true'\n        seen: x", "beat 1: expect[1]: want exactly one of seen or run", false},
 		{"seen regex", "- seen: 'Item'", "- seen: '('", "beat 1: expect[0]: seen: error parsing regexp", false},

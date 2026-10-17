@@ -1,0 +1,10 @@
+# A storyboard whose only broken rule is a drag that releases at both a target and an offset.
+clip: drag
+ship: out/drag.gif
+frame: {cols: 80, rows: 24, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+beats:
+  - id: 1
+    title: drag the divider
+    duration: 2s
+    do:
+      - drag: {from: {text: '│'}, to: {text: 'Item', offset: {x: 12}}}

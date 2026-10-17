@@ -153,13 +153,13 @@ func (z Zoom) validate(report reporter) {
 // validate checks that exactly one action form is set and that its fields fit that form.
 func (a Action) validate(report reporter) {
 	forms := 0
-	for _, isSet := range []bool{a.Type != nil, a.Key != nil, a.Click != nil, a.Wait != nil, a.Pause != nil} {
+	for _, isSet := range []bool{a.Type != nil, a.Key != nil, a.Click != nil, a.Drag != nil, a.Wait != nil, a.Pause != nil} {
 		if isSet {
 			forms++
 		}
 	}
 	if forms != 1 {
-		report("want exactly one of type, key, click, wait or pause")
+		report("want exactly one of type, key, click, drag, wait or pause")
 		return
 	}
 	switch {
@@ -174,6 +174,8 @@ func (a Action) validate(report reporter) {
 		if a.Click.Times < 0 {
 			report("click.times: want ≥0, got %d", a.Click.Times)
 		}
+	case a.Drag != nil:
+		a.Drag.validate(prefixed(report, "drag."))
 	case a.Wait != nil:
 		a.Wait.validate(prefixed(report, "wait."))
 	case a.Pause != nil:
@@ -194,6 +196,38 @@ func (k KeyAction) validate(report reporter) {
 	}
 	if k.Repeat < 0 {
 		report("repeat: want ≥0, got %d", k.Repeat)
+	}
+}
+
+// validate checks the drag's from target, its to end and that an explicit steps is at least 1.
+func (d DragAction) validate(report reporter) {
+	d.From.validate(prefixed(report, "from."))
+	d.To.validate(report)
+	if d.Steps != nil && *d.Steps < 1 {
+		report("steps: want ≥1, got %d", *d.Steps)
+	}
+}
+
+// validate checks that the drag end sets exactly one of text or offset, then the target's fields
+// or the offset's. An offset is relative to the press cell, so a target's nth and area do not
+// apply to it. Problems are filed under to, as the drag's own field.
+func (e DragEnd) validate(report reporter) {
+	if (e.Text == "") == (e.Offset == nil) {
+		report("to: want exactly one of text or offset")
+		return
+	}
+	if e.Offset == nil {
+		e.Target.validate(prefixed(report, "to."))
+		return
+	}
+	if *e.Offset == (Offset{}) {
+		report("to.offset: want a non-zero x or y")
+	}
+	if e.Nth != 0 {
+		report("to.nth: only a to.text takes an nth")
+	}
+	if e.Area != "" {
+		report("to.area: only a to.text takes an area")
 	}
 }
 

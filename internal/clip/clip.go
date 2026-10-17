@@ -151,6 +151,13 @@ func namedAreas(board *storyboard.Storyboard) []namedArea {
 				field := fmt.Sprintf("%sdo[%d]: click.target.area", prefix, index)
 				named = append(named, namedArea{field, action.Click.Target.Area})
 			}
+			if action.Drag != nil {
+				field := fmt.Sprintf("%sdo[%d]: drag.", prefix, index)
+				named = append(named,
+					namedArea{field + "from.area", action.Drag.From.Area},
+					namedArea{field + "to.area", action.Drag.To.Area},
+				)
+			}
 		}
 		for index, expect := range beat.Expect {
 			field := fmt.Sprintf("%sexpect[%d]: area", prefix, index)
