@@ -80,7 +80,10 @@ page test if it pins the panel's text.
 - `grep -n "max_colors" internal/tune/state.go internal/tune/page/app.js`
 **Commit:** `fix(tune): report and show the read-only frame values`
 
-## 2. Storyboard clip clock: moments on the output timeline
+## 2. Storyboard clip clock: moments on the output timeline — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the mapping form requires `beat` ≥1 (`{offset: 1s}` and `{beat: 0}` are decode errors), so beat 0 only ever comes from the bare clip-time scalar; the doc.go package comment's yaml.v3 sentence also names Moment's two forms
+NOTES (2026-10-17): golangci-lint is not installed on this host; gofmt and go vet are clean
 
 **What:**
 **Goal:** `storyboard` has a `Moment` type that decodes from a duration scalar (`4500ms`) or a

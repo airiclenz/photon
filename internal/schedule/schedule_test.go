@@ -304,3 +304,35 @@ func TestNew_RejectsBadSpans(t *testing.T) {
 		})
 	}
 }
+
+func TestNew_AgreesWithTheStoryboardClipClock(t *testing.T) {
+	t.Parallel()
+	board, recorded := recording(t, 20*sec,
+		beat{id: 1, start: 0, duration: 2 * sec},
+		beat{id: 2, start: 3 * sec, duration: 4 * sec, hold: sec},
+		beat{id: 3, start: 9 * sec, cut: true},
+		beat{id: 4, start: 12 * sec, duration: 1500 * ms},
+		beat{id: 6, start: 13 * sec, duration: 3 * sec},
+	)
+
+	schedule, err := New(board, recorded)
+
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	for _, section := range schedule.Sections {
+		if section.Cut {
+			continue
+		}
+		clipTime, err := board.ClipTime(storyboard.Moment{Beat: section.Beat})
+		if err != nil {
+			t.Fatalf("ClipTime(beat %d): %v", section.Beat, err)
+		}
+		if clipTime != section.OutStart {
+			t.Errorf("beat %d: ClipTime = %s, want OutStart %s", section.Beat, clipTime, section.OutStart)
+		}
+	}
+	if length := board.Length(); length != schedule.Length {
+		t.Errorf("Length() = %s, want Schedule.Length %s", length, schedule.Length)
+	}
+}

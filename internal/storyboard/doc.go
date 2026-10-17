@@ -9,11 +9,13 @@
 // the config are loaded together, not here.
 //
 // gopkg.in/yaml.v3 is the decoder because it can refuse unknown fields (KnownFields) and hands a
-// custom scalar its yaml.Node, which is how `nth: last` decodes.
+// custom scalar its yaml.Node, which is how `nth: last` decodes and how a [Moment] takes either
+// a duration or a `{beat, offset}` mapping.
 //
 // The file map:
 //   - doc.go: this package comment and file map.
 //   - storyboard.go: the [Storyboard] and its [Frame], [Load], [Parse] and [ValidationError].
 //   - beat.go: a [Beat], its [Zoom], [Action] forms, [Target] and [Nth], and [Expect].
+//   - moment.go: a [Moment] on the clip's output clock, [Storyboard.ClipTime] and [Storyboard.Length].
 //   - validate.go: every validation rule, each reporting its problem under the field's path.
 package storyboard
