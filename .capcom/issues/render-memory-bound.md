@@ -3,6 +3,7 @@ title: photon render buffers every frame and OOMs on long clips
 status: open
 type: bug
 priority: 2
+plan: 2026-10-17 - 02 - render-memory-bound-plan
 created: 2026-10-17T14:04:09Z
 ---
 
