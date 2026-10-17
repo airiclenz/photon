@@ -30,7 +30,7 @@ shape this repository from its first commit:
 - **Tests.** Standard `testing`, table-driven with `t.Run`, `t.Helper()` in helpers, tested
   through the package's interface. Hermetic: no network, no files outside `t.TempDir()`, no
   dependency on the operator's fonts, ffmpeg or shell rc. A test that needs ffmpeg skips when it
-  is absent. Recording is tested against a small fixture TUI built from `testdata`, never a real
-  app.
+  is absent. Recording is tested against the small fixture TUI in `internal/testkit/fixturetui`
+  (built by `testkit.BuildFixtureTUI`), never a real app.
 - **Dependencies.** Pinned in `go.mod`; each non-obvious one has its reason in the package that
   imports it.

@@ -3,7 +3,10 @@
 // without a cycle.
 //
 // The file map:
+//   - build.go: [BuildFixtureTUI], which builds the fixture TUI (package fixturetui beside this
+//     one) once per test binary and returns its path.
 //   - doc.go: this package comment and file map.
 //   - docmap.go: [CheckDocMap], the structural test that a package's doc.go names every
 //     non-test file beside it.
+//   - eventually.go: [Eventually], which polls a condition until it holds or a deadline passes.
 package testkit
