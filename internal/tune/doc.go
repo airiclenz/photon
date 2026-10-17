@@ -23,6 +23,12 @@
 // a target the resolver resolves back onto them, with its area and nth, and its YAML for a zoom,
 // a click, a seen expect and either end of a drag.
 //
+// [Run] serves a session to a browser on this machine: it listens on 127.0.0.1 only, prints the
+// page's address, and serves the embedded page under page/ and a JSON API over the session —
+// its state, frames as PNG, edits, undo, redo, revert, reload, save and picks — until its
+// context ends. A request naming any Host but the printed address or localhost on its port is
+// refused, as is a POST whose body is not JSON, so another site's page reaches neither.
+//
 // The file map:
 //   - cache.go: the bounded, least-recently-used cache of a rasterizer's snapshots.
 //   - doc.go: this package comment and file map.
@@ -30,6 +36,8 @@
 //   - frame.go: [Session.Frame], one composed frame of the preview as a PNG.
 //   - history.go: a session's storyboard versions, for undo and redo.
 //   - pick.go: [Session.Pick], a resolver-checked target [Proposal] from picked cells.
+//   - run.go: [Run] and its [Options]: listen on 127.0.0.1, print the address, serve until done.
+//   - server.go: the HTTP handler: the embedded page, the JSON API and its Host and POST guards.
 //   - session.go: the [Session]: its pipelines, history, refresh from disk and guarded save.
 //   - state.go: the [State] a session reports and the errors attributed to beats.
 //   - value.go: reading an edit's value spellings and writing a duration in its old unit.

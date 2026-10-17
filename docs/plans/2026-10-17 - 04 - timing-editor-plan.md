@@ -287,7 +287,12 @@ flow mapping item 4's `zoom.target` edit accepts.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/compose/` ; `GOMEMLIMIT=2GiB go test ./internal/tune/` ; `go vet ./internal/compose/ ./internal/tune/`
 **Commit:** `feat(tune): propose resolver-checked targets from picked cells`
 
-## 8. tune: local HTTP server
+## 8. tune: local HTTP server — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): every successful POST except pick answers 200 with the session's State JSON (the page needs the new state after an edit, undo, redo, revert, reload or save); the plan names no response body for them.
+NOTES (2026-10-17): status mapping beyond the plan's list — undo/redo with nothing to step to (ErrNoUndo/ErrNoRedo) and a frame outside the clip (ErrOutsideClip) answer 422; a bad or missing ?t= and malformed JSON answer 400; a body past 1 MiB 413; any other session failure 500. Every failure body is {"error": "…"}.
+NOTES (2026-10-17): the Host guard also refuses 127.0.0.1 or localhost on any other port; /assets/ is served from the embedded page/ directory, so its directory request serves page/index.html until item 9 adds assets.
+NOTES (2026-10-17): tests beyond the plan's list — page served at / and /assets/, bad frame times, refused edit 422, undo/redo/revert through the API, and the Run test also GETs /api/state over the real listener before cancelling.
 
 Depends on items 6 and 7.
 
