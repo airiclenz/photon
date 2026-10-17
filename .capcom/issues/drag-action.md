@@ -4,6 +4,7 @@ status: open
 type: feature
 priority: 2
 labels: [storyboard]
+plan: 2026-10-17 - 01 - drag-action-plan
 created: 2026-10-17T13:25:28Z
 ---
 
