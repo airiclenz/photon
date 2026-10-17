@@ -1,10 +1,12 @@
 ---
 title: photon render buffers every frame and OOMs on long clips
-status: open
+status: done
 type: bug
 priority: 2
 plan: 2026-10-17 - 02 - render-memory-bound-plan
 created: 2026-10-17T14:04:09Z
+closed: 2026-10-17T14:52:34Z
+reason: "Resolved by plan 2026-10-17 - 02 - render-memory-bound-plan (archived in d7ce9a9): two-pass palette encode, flat peak-memory test, docs updated."
 ---
 
 `photon render` holds every frame of a clip in memory inside ffmpeg, so a long clip runs the
