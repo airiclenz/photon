@@ -33,7 +33,10 @@ stays byte-identical to the one-pass encode.
 - 2: guard folded (bounded-colour synthetic frames)
 - 3: guard folded (render.go Run comment, work-dir sites, whole-word tree-only grep) and decision applied (cmd/photon/render_test.go needs no edit)
 
-## 1. Two-pass palette encode
+## 1. Two-pass palette encode — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the `shellLine` doc comment in internal/render/encode.go said "the shell would split"; reworded to "break apart" so the Acceptance `grep -n 'split' internal/render/encode.go` prints nothing (comment text only).
+NOTES (2026-10-17): `TestRunMatchesTheOnePassEncode` passed on the first argv (no pixel-format or PNG options needed); `onePassArgs` holds the old argv verbatim rather than reusing `rawInputArgs`, so the reference cannot drift with the production prefix.
 
 **What:**
 **Goal:** `photon render` runs ffmpeg twice — pass 1 `palettegen=max_colors=N` from raw RGBA on stdin into `<work>/<clip>.palette.png`; pass 2 raw RGBA on stdin plus that PNG through `paletteuse=dither=none` into the GIF — with no `split` in either graph; the GIF is byte-identical to the one-pass graph's for the same take; the palette file is gone after `Run` returns; `--dry-run` prints both lines and creates nothing.

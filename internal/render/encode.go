@@ -25,7 +25,8 @@ import (
 const ditherMode = "none"
 
 const (
-	// ffmpegProgram encodes the frames into the GIF.
+	// ffmpegProgram runs both encode passes: the frames into a palette, then the frames through
+	// that palette into the GIF.
 	ffmpegProgram = "ffmpeg"
 	// gifsicleProgram shrinks the GIF afterwards, when it is on PATH.
 	gifsicleProgram = "gifsicle"
@@ -40,26 +41,45 @@ const (
 // shellSpecial are the characters that make shellLine quote an argument.
 const shellSpecial = " '\";()"
 
-// ffmpegArgs is the encode's command line: raw RGBA frames of size at frame.fps on stdin, a
-// per-clip palette of frame.max_colors applied without dithering, the GIF written to out.
-func ffmpegArgs(size image.Point, frame storyboard.Frame, out string) []string {
-	graph := fmt.Sprintf(
-		"[0:v]split[a][b];[a]palettegen=max_colors=%d[p];[b][p]paletteuse=dither=%s",
-		frame.MaxColors, ditherMode,
-	)
+// rawInputArgs starts both passes' command lines: raw RGBA frames of size at frame.fps read from
+// stdin. The passes see the same frames through the same input, which keeps the palette pass 1
+// builds the one pass 2 maps against.
+func rawInputArgs(size image.Point, frame storyboard.Frame) []string {
 	return []string{
 		ffmpegProgram, "-y", "-loglevel", "error",
 		"-f", "rawvideo", "-pixel_format", "rgba",
 		"-video_size", fmt.Sprintf("%dx%d", size.X, size.Y),
 		"-framerate", strconv.Itoa(frame.FPS),
 		"-i", "pipe:0",
-		"-filter_complex", graph,
-		out,
 	}
 }
 
+// paletteArgs is the palette pass's command line: the frames on stdin reduced to a per-clip
+// palette of frame.max_colors, written to the PNG at palette. ffmpeg keeps only its statistics
+// while the frames stream, so the pass holds no frame past the one it reads.
+func paletteArgs(size image.Point, frame storyboard.Frame, palette string) []string {
+	return append(
+		rawInputArgs(size, frame),
+		"-vf", fmt.Sprintf("palettegen=max_colors=%d", frame.MaxColors),
+		"-update", "1",
+		palette,
+	)
+}
+
+// encodeArgs is the GIF pass's command line: the frames on stdin mapped onto the palette pass's
+// PNG at palette without dithering, the GIF written to out. Every frame is mapped as it arrives.
+func encodeArgs(size image.Point, frame storyboard.Frame, palette, out string) []string {
+	return append(
+		rawInputArgs(size, frame),
+		"-i", palette,
+		"-filter_complex", fmt.Sprintf("[0:v][1:v]paletteuse=dither=%s", ditherMode),
+		out,
+	)
+}
+
 // encode streams every scheduled frame, composed, into the encoder commandLine starts, as raw
-// RGBA on its stdin. The encoder's own failure is reported first, with its stderr, since a
+// RGBA on its stdin. Each pass calls it once, so the frames are rasterized and composed afresh
+// for each and none is kept between them. The encoder's own failure is reported first, with its stderr, since a
 // broken pipe while streaming is only its symptom.
 func (p *plan) encode(ctx context.Context, commandLine []string) error {
 	//nolint:gosec // the program is fixed and every argument is built here
@@ -114,8 +134,8 @@ func snapshotAt(snapshots []take.Snapshot, t time.Duration) int {
 	return max(after-1, 0)
 }
 
-// shellLine joins a command line for a human to read or paste: an argument the shell would split
-// or unquote is wrapped in double quotes.
+// shellLine joins a command line for a human to read or paste: an argument the shell would break
+// apart or unquote is wrapped in double quotes.
 func shellLine(commandLine []string) string {
 	words := make([]string, 0, len(commandLine))
 	for _, argument := range commandLine {

@@ -3,15 +3,20 @@ package render
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"image"
 	"image/gif"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
+	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 )
 
@@ -107,11 +112,15 @@ func saveRenderTake(t *testing.T, dir string, cols int) string {
 	return path
 }
 
+// TestRunDryRunPrintsTheFfmpegLine pins the two passes' command lines, palette pass first: both
+// read raw frames from stdin, pass 1 writes the palette into the work dir, pass 2 reads it back
+// and writes the GIF, and neither graph splits the stream.
 func TestRunDryRunPrintsTheFfmpegLine(t *testing.T) {
 	t.Parallel()
 	loaded := loadRenderClip(t)
 	dir := t.TempDir()
 	gifPath := filepath.Join(dir, "out.gif")
+	palettePath := workPalette(t, loaded)
 	options := Options{Take: saveRenderTake(t, dir, 20), Out: gifPath, DryRun: true}
 	var stdout, stderr bytes.Buffer
 
@@ -120,19 +129,45 @@ func TestRunDryRunPrintsTheFfmpegLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v\n%s", err, stderr.String())
 	}
-	for _, want := range []string{
-		"ffmpeg -y -loglevel error -f rawvideo -pixel_format rgba -video_size 160x",
-		"-framerate 10 -i pipe:0",
-		`"[0:v]split[a][b];[a]palettegen=max_colors=16[p];[b][p]paletteuse=dither=none"`,
-		" " + gifPath + "\n",
+	lines := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("want two ffmpeg lines, got:\n%s", stdout.String())
+	}
+	input := "ffmpeg -y -loglevel error -f rawvideo -pixel_format rgba -video_size 160x"
+	for _, want := range []struct{ line, prefix, middle, suffix string }{
+		{
+			line: lines[0], prefix: input, suffix: " " + palettePath,
+			middle: " -framerate 10 -i pipe:0 -vf palettegen=max_colors=16 -update 1 ",
+		},
+		{
+			line: lines[1], prefix: input, suffix: " " + gifPath,
+			middle: " -framerate 10 -i pipe:0 -i " + palettePath +
+				" -filter_complex [0:v][1:v]paletteuse=dither=none ",
+		},
 	} {
-		if !strings.Contains(stdout.String(), want) {
-			t.Errorf("want the ffmpeg line to carry %q, got:\n%s", want, stdout.String())
+		if !strings.HasPrefix(want.line, want.prefix) || !strings.Contains(want.line, want.middle) ||
+			!strings.HasSuffix(want.line, want.suffix) {
+			t.Errorf("want a line `%s…%s…%s`, got:\n%s", want.prefix, want.middle, want.suffix, want.line)
 		}
 	}
-	if _, err := os.Stat(gifPath); !os.IsNotExist(err) {
-		t.Errorf("a dry run wrote %s", gifPath)
+	if strings.Contains(stdout.String(), "split") {
+		t.Errorf("want no split in either graph, got:\n%s", stdout.String())
 	}
+	for _, path := range []string{gifPath, palettePath} {
+		if !isMissing(path) {
+			t.Errorf("a dry run wrote %s", path)
+		}
+	}
+}
+
+// workPalette is where a render of loaded writes its palette: in its work dir, after the clip.
+func workPalette(t *testing.T, loaded *clip.Clip) string {
+	t.Helper()
+	work, err := loaded.Work()
+	if err != nil {
+		t.Fatalf("resolve the work dir: %v", err)
+	}
+	return filepath.Join(work, loaded.Storyboard.Clip+".palette.png")
 }
 
 func TestRunDryRunDefaultsToTheShipPath(t *testing.T) {
@@ -201,6 +236,81 @@ func TestRunWritesAGIFOfTheScheduledLength(t *testing.T) {
 	if width := decoded.Image[0].Bounds().Dx(); width != wantWidth {
 		t.Errorf("GIF width: want frame.width %d, got %d", wantWidth, width)
 	}
+}
+
+// onePassArgs is the single-graph encode the two passes replaced, verbatim: it splits the frame
+// stream and so buffers every frame until the input ends. It is the byte-identity reference.
+func onePassArgs(size image.Point, frame storyboard.Frame, out string) []string {
+	graph := fmt.Sprintf(
+		"[0:v]split[a][b];[a]palettegen=max_colors=%d[p];[b][p]paletteuse=dither=%s",
+		frame.MaxColors, ditherMode,
+	)
+	return []string{
+		ffmpegProgram, "-y", "-loglevel", "error",
+		"-f", "rawvideo", "-pixel_format", "rgba",
+		"-video_size", fmt.Sprintf("%dx%d", size.X, size.Y),
+		"-framerate", strconv.Itoa(frame.FPS),
+		"-i", "pipe:0",
+		"-filter_complex", graph,
+		out,
+	}
+}
+
+// TestRunMatchesTheOnePassEncode renders the take through Run's two passes and through the old
+// one-pass graph, and wants the same GIF bytes. gifsicle is kept off PATH so both GIFs are
+// ffmpeg's own; PATH is process-wide, so the test does not run in parallel.
+func TestRunMatchesTheOnePassEncode(t *testing.T) {
+	ffmpeg, err := exec.LookPath(ffmpegProgram)
+	if err != nil {
+		t.Skip("ffmpeg is not on PATH")
+	}
+	bin := t.TempDir()
+	if err := os.Symlink(ffmpeg, filepath.Join(bin, ffmpegProgram)); err != nil {
+		t.Fatalf("link ffmpeg: %v", err)
+	}
+	t.Setenv("PATH", bin)
+	loaded := loadRenderClip(t)
+	dir := t.TempDir()
+	takePath := saveRenderTake(t, dir, 20)
+	twoPass, onePass := filepath.Join(dir, "two-pass.gif"), filepath.Join(dir, "one-pass.gif")
+	reference, err := newPlan(loaded, Options{Take: takePath, Out: onePass}, io.Discard)
+	if err != nil {
+		t.Fatalf("newPlan: %v", err)
+	}
+	commandLine := onePassArgs(reference.compositor.Size(), reference.frame, onePass)
+	if err := reference.encode(context.Background(), commandLine); err != nil {
+		t.Fatalf("one-pass encode: %v", err)
+	}
+	var stderr bytes.Buffer
+
+	err = Run(context.Background(), loaded, Options{Take: takePath, Out: twoPass}, io.Discard, &stderr)
+
+	if err != nil {
+		t.Fatalf("Run: %v\n%s", err, stderr.String())
+	}
+	got, want := readFile(t, twoPass), readFile(t, onePass)
+	if !bytes.Equal(got, want) {
+		t.Errorf("two-pass GIF (%d bytes) differs from the one-pass GIF (%d bytes)", len(got), len(want))
+	}
+	if palette := workPalette(t, loaded); !isMissing(palette) {
+		t.Errorf("want the palette %s removed after Run", palette)
+	}
+}
+
+// readFile reads the file at path whole.
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return content
+}
+
+// isMissing reports whether nothing exists at path.
+func isMissing(path string) bool {
+	_, err := os.Stat(path)
+	return os.IsNotExist(err)
 }
 
 // decodeGIF decodes every frame of the GIF at path.
