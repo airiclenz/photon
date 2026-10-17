@@ -22,7 +22,9 @@ func newRenderCommand() *cobra.Command {
 			"on PATH. It prints the GIF's path, size and length and one speed row per beat.\n" +
 			"The take defaults to <work>/<clip>.take; the work dir is --work, else $" + clip.WorkEnv + ",\n" +
 			"else the config's work, else ~/.cache/<name>-photon. The GIF defaults to the storyboard's\n" +
-			"ship path. --dry-run prints the ffmpeg command line instead of rendering.",
+			"ship path. --dry-run prints the ffmpeg command line instead of rendering.\n" +
+			"Exit status: 0 when the GIF was written; 1 when the take could not be rendered;\n" +
+			"2 for a bad command line.",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: runE(func(cmd *cobra.Command, args []string) error {
 			loaded, err := clip.Load(args[0], configPath, workPath)

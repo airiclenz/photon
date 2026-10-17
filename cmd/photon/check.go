@@ -26,7 +26,9 @@ func newCheckCommand() *cobra.Command {
 			"its command in the work dir with PHOTON_WORK, PHOTON_TAKE and PHOTON_BEAT set. It prints\n" +
 			"one `beat N | PASS/FAIL | detail` row per expect and exits 1 on any FAIL.\n" +
 			"The take defaults to <work>/<clip>.take; the work dir is --work, else $" + clip.WorkEnv + ",\n" +
-			"else the config's work, else ~/.cache/<name>-photon.",
+			"else the config's work, else ~/.cache/<name>-photon.\n" +
+			"Exit status: 0 when every expect passed; 1 when an expect failed or the take could not\n" +
+			"be judged; 2 for a bad command line.",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: runE(func(cmd *cobra.Command, args []string) error {
 			loaded, err := clip.Load(args[0], configPath, workPath)

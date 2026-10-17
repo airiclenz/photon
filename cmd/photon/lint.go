@@ -19,7 +19,10 @@ func newLintCommand() *cobra.Command {
 		Use:   "lint <storyboard>",
 		Short: "Check a storyboard and its photon config without recording",
 		Long: "lint loads a storyboard and the photon config it uses (--config, else the nearest\n" +
-			"photon.yaml at or above the storyboard), and prints every problem the two files have.",
+			"photon.yaml at or above the storyboard), and prints every problem the two files have,\n" +
+			"or ok with the clip's name, beat count and config path. It records nothing.\n" +
+			"Exit status: 0 when both files are clean; 1 when either has a problem; 2 for a bad\n" +
+			"command line.",
 		Args: cobra.ExactArgs(1),
 		RunE: runE(func(cmd *cobra.Command, args []string) error {
 			loaded, err := clip.Load(args[0], configPath, "")

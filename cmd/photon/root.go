@@ -12,7 +12,10 @@ func newRootCommand() *cobra.Command {
 		Use:   programName,
 		Short: "Record, check and render a terminal app's demo clip from its storyboard",
 		Long: "photon records a terminal app's demo clip from a storyboard, checks the take, and\n" +
-			"renders the shipped GIF. A project plugs in through its photon config and storyboards.",
+			"renders the shipped GIF. A project plugs in through its photon config and storyboards.\n" +
+			"Every command finds the config by --config, else the nearest photon.yaml at or above\n" +
+			"the storyboard. The retake loop is `until photon record <storyboard>; do :; done`.\n" +
+			"Exit status: 0 on success; 1 when a run started and failed; 2 for a bad command line.",
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
 	}
