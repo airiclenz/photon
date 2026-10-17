@@ -1,0 +1,19 @@
+.DS_Store
+
+# Go build artifacts (the photon binary if built at the repo root, test bins, coverage profiles)
+/photon
+/photon.exe
+*.test
+*.out
+
+# Rendered clips and takes from local runs; the shipped GIF lives in the project that films it
+*.take
+
+# Local cross-repo development against a sibling checkout
+/go.work
+/go.work.sum
+
+# Machine-local agent instructions. CLAUDE.md only imports AGENTS.md, the shared guide
+/CLAUDE.md
+/CLAUDE.local.md
+/AGENTS.local.md

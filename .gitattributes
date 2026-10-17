@@ -1,0 +1,12 @@
+# Every text file is LF in the index and in every checkout, on every platform. Storyboards,
+# take fixtures, goldens and go:embed'd files are read byte-for-byte, and a core.autocrlf=true
+# checkout (Windows CI) would otherwise put a carriage return on each line.
+* text=auto eol=lf
+
+# Binary fixtures and assets are never converted: a CRLF byte pair inside an image or a font
+# would be rewritten on `git add` and corrupt the file.
+*.png binary
+*.gif binary
+*.ttf binary
+*.otf binary
+.capcom/issues/**/*.md merge=capcom-log
