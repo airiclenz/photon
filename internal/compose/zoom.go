@@ -22,6 +22,12 @@ const (
 	autoFitMax         = 2.5
 )
 
+// The Text of a drag's two target events in a take, naming which end of the drag the Box is.
+const (
+	dragFromText = "from"
+	dragToText   = "to"
+)
+
 // zoomPlan is one section's push into its target, on the output clock: the section's [Start,
 // End), the ramps In and Out, the full Factor and the Centre the push aims at, in source pixels.
 type zoomPlan struct {
@@ -101,11 +107,11 @@ func (p zoomPlanner) planSection(zoom *storyboard.Zoom, section schedule.Section
 	return plan
 }
 
-// zoomBox finds the beat's zoom target: the box a click of the same beat resolved on the same
-// target, as the take logged it, else the target resolved on the beat's snapshots — the latest
-// one inside the beat's span that shows it, walking back to the snapshot in effect at the beat's
-// start, so the push lands where the beat settles and a target gone by the beat's end still
-// zooms.
+// zoomBox finds the beat's zoom target: the box a click or a drag of the same beat resolved on
+// the same target, as the take logged it, else the target resolved on the beat's snapshots —
+// the latest one inside the beat's span that shows it, walking back to the snapshot in effect
+// at the beat's start, so the push lands where the beat settles and a target gone by the beat's
+// end still zooms.
 func (p zoomPlanner) zoomBox(beat storyboard.Beat, section schedule.Section) (take.Box, error) {
 	if box, isLogged := p.loggedBox(beat); isLogged {
 		return box, nil
@@ -136,18 +142,36 @@ func (p zoomPlanner) zoomBox(beat storyboard.Beat, section schedule.Section) (ta
 	return take.Box{}, lastErr
 }
 
-// loggedBox is the box the take logged for a click of beat on the zoom's own target, if any.
+// loggedBox is the box the take logged for a click of beat on the zoom's own target, or for a
+// drag of beat whose `from` target, or `to` target, is the zoom's, if any.
 func (p zoomPlanner) loggedBox(beat storyboard.Beat) (take.Box, bool) {
 	for _, event := range p.recorded.Events {
 		if event.Kind != take.EventTarget || event.Beat != beat.ID || event.Box == nil ||
 			event.Action < 0 || event.Action >= len(beat.Do) {
 			continue
 		}
-		if click := beat.Do[event.Action].Click; click != nil && click.Target == beat.Zoom.Target {
+		action := beat.Do[event.Action]
+		if click := action.Click; click != nil && click.Target == beat.Zoom.Target {
+			return *event.Box, true
+		}
+		if drag := action.Drag; drag != nil && dragEndIs(*drag, event.Text, beat.Zoom.Target) {
 			return *event.Box, true
 		}
 	}
 	return take.Box{}, false
+}
+
+// dragEndIs reports whether the end of drag a target event's text names was resolved on
+// zoomed: `from` its From target, `to` its To target — never an Offset, which has none.
+func dragEndIs(drag storyboard.DragAction, text string, zoomed storyboard.Target) bool {
+	switch text {
+	case dragFromText:
+		return drag.From == zoomed
+	case dragToText:
+		return drag.To.Offset == nil && drag.To.Target == zoomed
+	default:
+		return false
+	}
 }
 
 // autoFitFactor is the magnification at which box, with autoFitMarginCells either side, spans

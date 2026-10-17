@@ -105,7 +105,10 @@ internal/testkit/fixturetui/doc.go — package comment, file map; internal/keys/
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/testkit/... ./internal/engine -run 'Fixture|TestDocMap'` passes.
 **Commit:** `test(fixturetui): report a received drag; engine fixture test drags`
 
-## 5. The drawn cursor follows a drag; zoom aims at a drag's box
+## 5. The drawn cursor follows a drag; zoom aims at a drag's box — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): trackCursor keeps only a drag's final move (consecutive moves of one beat collapse into the last), so position eases press-to-final-move in one smootherstep curve; `clickMark` keeps its name and gains a `Kind` (markGlide for click/press, markFollow for the final move, markRing for the release).
+NOTES (2026-10-17): compose defines its own `dragFromText`/`dragToText` ("from"/"to") for the drag target events' Text, since engine's constants of the same name are unexported and compose does not import engine.
 
 Depends on items 1 and 2.
 

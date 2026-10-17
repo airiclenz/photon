@@ -63,9 +63,10 @@ func (l Layout) home() pointF {
 }
 
 // Compositor turns each scheduled snapshot, rasterized, into a shipped frame: it pushes into
-// the section's zoom target, scales to the shipped width and draws the click cursor on top at
-// constant size. Everything it needs is fixed at construction, so composing is a pure function
-// of the output time and the source frame, and a Compositor is safe for concurrent use.
+// the section's zoom target, scales to the shipped width and draws the cursor of the clicks and
+// drags on top at constant size. Everything it needs is fixed at construction, so composing is a
+// pure function of the output time and the source frame, and a Compositor is safe for
+// concurrent use.
 type Compositor struct {
 	layout     Layout
 	out        image.Point
@@ -75,8 +76,8 @@ type Compositor struct {
 }
 
 // New plans the zooms and the cursor of a clip: board's frame gives the shipped width and its
-// beats the zooms, recorded the clicks and the snapshots a zoom target resolves on (through
-// resolver), clipSchedule the output clock, layout where cells sit in a source frame, and
+// beats the zooms, recorded the clicks, the drags and the snapshots a zoom target resolves on
+// (through resolver), clipSchedule the output clock, layout where cells sit in a source frame, and
 // background the colour a zoomed frame is cleared to before the push is drawn. It fails on a
 // layout with no size, a frame width that is not positive, and a zoomed beat whose target
 // resolves on none of its snapshots.
@@ -170,8 +171,8 @@ func (c *Compositor) unit() float64 {
 	return float64(scale) / designScale * float64(c.out.X) / float64(c.layout.Size.X)
 }
 
-// drawCursor draws the click ring and then the dot at output time t, each positioned through
-// the crop and sized in design pixels.
+// drawCursor draws the ring of a click, press or release and then the dot at output time t, each
+// positioned through the crop and sized in design pixels.
 func (c *Compositor) drawCursor(dst *image.RGBA, t time.Duration, crop rectF) {
 	unit := c.unit()
 	if diameter, opacity, centre, ok := c.cursor.ring(t); ok {
