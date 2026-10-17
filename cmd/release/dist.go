@@ -38,8 +38,16 @@ const (
 	directoryMode = 0o755
 )
 
-// documentFiles are copied from the source tree into every archive beside the binary.
-var documentFiles = []string{"LICENSE", "README.md"}
+// documentFiles are copied from the source tree into every archive, flat beside the binary: the
+// licence and readme, and the OFL licences of the fonts photon embeds. Each is a slash-separated
+// path relative to the source tree; its archive entry keeps only the base name.
+var documentFiles = []string{
+	"LICENSE",
+	"README.md",
+	"internal/fonts/SourceCodePro-OFL.txt",
+	"internal/fonts/NotoSansMath-OFL.txt",
+	"internal/fonts/NotoSansSymbols-OFL.txt",
+}
 
 // distTarget is one platform a release ships a binary for.
 type distTarget struct {
@@ -108,7 +116,8 @@ func newDistCommand(commands runner) *cobra.Command {
 		Use:   "dist",
 		Short: "Build the six release archives and SHA256SUMS",
 		Long: "dist cross-builds photon for linux, darwin and windows on amd64 and arm64, packs\n" +
-			"each binary with LICENSE and README.md into photon_<version>_<os>_<arch>.tar.gz\n" +
+			"each binary with LICENSE, README.md and the font licences (the three\n" +
+			"internal/fonts/*-OFL.txt texts) into photon_<version>_<os>_<arch>.tar.gz\n" +
 			"(.zip on windows), and writes SHA256SUMS beside them. The archives are byte-identical\n" +
 			"across runs over the same commit. --out is emptied first.",
 		Args: cobra.NoArgs,
@@ -236,7 +245,7 @@ func buildArchive(ctx context.Context, commands runner, target distTarget, bareV
 	entries := make([]archiveEntry, 0, len(documentFiles)+1)
 	entries = append(entries, archiveEntry{name: path.Join(stem, target.binaryFile()), source: binaryPath, mode: binaryMode})
 	for _, document := range documentFiles {
-		entries = append(entries, archiveEntry{name: path.Join(stem, document), source: filepath.Join(sourceDir, document), mode: documentMode})
+		entries = append(entries, archiveEntry{name: path.Join(stem, path.Base(document)), source: filepath.Join(sourceDir, filepath.FromSlash(document)), mode: documentMode})
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
 

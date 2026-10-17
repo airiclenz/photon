@@ -24,11 +24,38 @@ const (
 	testBareVersion = "1.2.3"
 	testLicense     = "the license\n"
 	testReadme      = "the readme\n"
+	testCodeOFL     = "the source code pro licence\n"
+	testMathOFL     = "the noto sans math licence\n"
+	testSymbolsOFL  = "the noto sans symbols licence\n"
 	testCommitTime  = "1760000000\n"
 )
 
-// testSourceTree writes a minimal photon source tree — the three files dist reads itself — and
-// returns its path.
+// testDocuments are the documents every test source tree holds, by slash-separated path: the
+// files dist packs beside the binary.
+var testDocuments = map[string]string{
+	"LICENSE":                                testLicense,
+	"README.md":                              testReadme,
+	"internal/fonts/SourceCodePro-OFL.txt":   testCodeOFL,
+	"internal/fonts/NotoSansMath-OFL.txt":    testMathOFL,
+	"internal/fonts/NotoSansSymbols-OFL.txt": testSymbolsOFL,
+}
+
+// writeTestDocuments writes testDocuments into the source tree at dir.
+func writeTestDocuments(dir string) error {
+	for name, content := range testDocuments {
+		documentPath := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(documentPath), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(documentPath, []byte(content), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// testSourceTree writes a minimal photon source tree — VERSION and the documents dist packs —
+// and returns its path.
 func testSourceTree(t *testing.T) string {
 	t.Helper()
 	return testSourceTreeAt(t, testVersion)
@@ -39,11 +66,11 @@ func testSourceTree(t *testing.T) string {
 func testSourceTreeAt(t *testing.T, version string) string {
 	t.Helper()
 	sourceDir := t.TempDir()
-	files := map[string]string{"VERSION": version, "LICENSE": testLicense, "README.md": testReadme}
-	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(sourceDir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.WriteFile(filepath.Join(sourceDir, "VERSION"), []byte(version), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeTestDocuments(sourceDir); err != nil {
+		t.Fatal(err)
 	}
 	return sourceDir
 }
@@ -177,7 +204,10 @@ func TestDistArchivesHoldTheBinaryAndDocsUnderTheStem(t *testing.T) {
 		want := []archiveFile{
 			{name: stem + "/", mode: fs.ModeDir | 0o755},
 			{name: stem + "/LICENSE", mode: 0o644, content: testLicense},
+			{name: stem + "/NotoSansMath-OFL.txt", mode: 0o644, content: testMathOFL},
+			{name: stem + "/NotoSansSymbols-OFL.txt", mode: 0o644, content: testSymbolsOFL},
 			{name: stem + "/README.md", mode: 0o644, content: testReadme},
+			{name: stem + "/SourceCodePro-OFL.txt", mode: 0o644, content: testCodeOFL},
 			{name: stem + "/" + target.binaryFile(), mode: 0o755, content: binary},
 		}
 

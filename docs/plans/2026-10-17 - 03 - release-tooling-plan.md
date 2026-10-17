@@ -137,7 +137,9 @@ cmd/release/templates/photon.rb.tmpl — test do; cmd/photon/version.go — newV
 **Acceptance:** `GOMEMLIMIT=2GiB go test -run Smoke ./cmd/release/`; `GOMEMLIMIT=2GiB go test -run Render ./cmd/release/`; `! grep -rn '"photon X.Y.Z"' cmd/release`; `go vet ./cmd/release/`; `go test -c -o /dev/null ./cmd/release/`; `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(sed -n 's/^GOLANGCI_LINT_VERSION := //p' Makefile) run ./cmd/release/`; forbidden grep on `cmd/release`.
 **Commit:** `feat(release): smoke accepts the bare version`
 
-## 6. Archives carry the font licences
+## 6. Archives carry the font licences — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): `testSourceTreeAt` and `writeReleaseTree` share one new fixture writer, `writeTestDocuments` in `dist_test.go`, over a `testDocuments` map (LICENSE, README.md and the three OFL texts under `internal/fonts/`); document sources are joined with `filepath.FromSlash` so the slash-separated `documentFiles` paths resolve on any host.
 
 Depends on item 2.
 

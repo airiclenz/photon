@@ -128,17 +128,11 @@ func writeReleaseTree(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	files := map[string]string{
-		versionFile: strings.TrimPrefix(publishVersion, "v") + "\n",
-		"LICENSE":   testLicense,
-		"README.md": testReadme,
+	version := strings.TrimPrefix(publishVersion, "v") + "\n"
+	if err := os.WriteFile(filepath.Join(dir, versionFile), []byte(version), 0o644); err != nil {
+		return err
 	}
-	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
+	return writeTestDocuments(dir)
 }
 
 // respond answers each command as it would be answered on a goos/goarch host.
