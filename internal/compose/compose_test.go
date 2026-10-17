@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"image"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/airiclenz/photon/internal/fonts"
 	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
@@ -50,7 +52,8 @@ func clickAt(at time.Duration, beat int, box take.Box) []take.Event {
 	}
 }
 
-// newTestCompositor schedules the take over the board's beats and builds its compositor.
+// newTestCompositor schedules the take over the board's beats and builds its compositor, drawing
+// any captions in the embedded caption faces.
 func newTestCompositor(t *testing.T, board *storyboard.Storyboard, recorded *take.Take) (*Compositor, *schedule.Schedule) {
 	t.Helper()
 	board.Frame.Width = testWidth
@@ -58,7 +61,13 @@ func newTestCompositor(t *testing.T, board *storyboard.Storyboard, recorded *tak
 	if err != nil {
 		t.Fatalf("schedule.New: %v", err)
 	}
-	compositor, err := New(board, recorded, clipSchedule, target.Resolver{}, testLayout, testBackground)
+	var captionFaces fonts.CaptionSet
+	if len(board.Captions) > 0 {
+		if captionFaces, err = fonts.LoadCaption("", ""); err != nil {
+			t.Fatalf("fonts.LoadCaption: %v", err)
+		}
+	}
+	compositor, err := New(board, recorded, clipSchedule, target.Resolver{}, testLayout, testBackground, captionFaces)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -413,7 +422,7 @@ func TestNewRefusesAZoomTargetTheBeatNeverShows(t *testing.T) {
 		t.Fatalf("schedule.New: %v", err)
 	}
 
-	_, err = New(board, recorded, clipSchedule, target.Resolver{}, testLayout, testBackground)
+	_, err = New(board, recorded, clipSchedule, target.Resolver{}, testLayout, testBackground, fonts.CaptionSet{})
 
 	if !errors.Is(err, target.ErrNotOnScreen) || !strings.Contains(err.Error(), "beat 1: zoom") {
 		t.Errorf("New: want beat 1's zoom target not on screen, got %v", err)
@@ -440,7 +449,7 @@ func TestNewRefusesAnUnusableFrame(t *testing.T) {
 				t.Fatalf("schedule.New: %v", err)
 			}
 
-			_, err = New(board, recorded, clipSchedule, target.Resolver{}, tc.layout, testBackground)
+			_, err = New(board, recorded, clipSchedule, target.Resolver{}, tc.layout, testBackground, fonts.CaptionSet{})
 
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("New: want an error naming %q, got %v", tc.want, err)
@@ -554,6 +563,133 @@ func TestCompositorRect(t *testing.T) {
 
 			if got != test.want {
 				t.Errorf("Rect(%s, %+v): want %v, got %v", test.at, box, test.want, got)
+			}
+		})
+	}
+}
+
+// testCaptionBox is the colour of a test caption's box, which no other test pixel takes.
+var testCaptionBox = color.RGBA{0x20, 0x40, 0x60, 0xff}
+
+// boxCaption is a caption in an opaque box of testCaptionBox, starting at start and showing for
+// length, placed at the bottom middle with no fade.
+func boxCaption(text string, start storyboard.Moment, length time.Duration) storyboard.Caption {
+	return storyboard.Caption{
+		Text:  text,
+		At:    start,
+		For:   length,
+		Font:  storyboard.CaptionFont{Size: 14, Weight: storyboard.WeightRegular},
+		Place: storyboard.PlaceBottom,
+		Align: storyboard.AlignMiddle,
+		Color: "#ffffff",
+		Box:   storyboard.CaptionBox{Color: "#204060", Opacity: ptr(1.0)},
+	}
+}
+
+// stripedFrame is a source frame of vertical stripes, so a zoomed frame differs from the
+// unzoomed one wherever the push shows.
+func stripedFrame() *image.RGBA {
+	const stripe = 7
+	img := solidFrame(testBackground)
+	for x := 0; x < testLayout.Size.X; x += 2 * stripe {
+		band := image.Rect(x, 0, x+stripe, testLayout.Size.Y)
+		draw.Draw(img, band, &image.Uniform{C: color.RGBA{0xf0, 0xc0, 0x40, 0xff}}, image.Point{}, draw.Src)
+	}
+	return img
+}
+
+// captionBox draws compositor's captions alone at output time at onto a transparent shipped
+// frame and returns the rectangle they cover and that frame, failing when none shows.
+func captionBox(t *testing.T, compositor *Compositor, at time.Duration) (image.Rectangle, *image.RGBA) {
+	t.Helper()
+	layer := image.NewRGBA(image.Rectangle{Max: compositor.Size()})
+	compositor.captions.Draw(layer, at)
+	var covered image.Rectangle
+	for y := range layer.Rect.Max.Y {
+		for x := range layer.Rect.Max.X {
+			if layer.RGBAAt(x, y).A > 0 {
+				covered = covered.Union(image.Rect(x, y, x+1, y+1))
+			}
+		}
+	}
+	if covered.Empty() {
+		t.Fatalf("no caption shows at %s", at)
+	}
+	return covered, layer
+}
+
+// assertSameRegion fails the test at the first pixel of region where got and want differ.
+func assertSameRegion(t *testing.T, got, want *image.RGBA, region image.Rectangle) {
+	t.Helper()
+	for y := region.Min.Y; y < region.Max.Y; y++ {
+		for x := region.Min.X; x < region.Max.X; x++ {
+			if g, w := got.RGBAAt(x, y), want.RGBAAt(x, y); g != w {
+				t.Fatalf("pixel (%d,%d) of %v: want %v, got %v", x, y, region, w, g)
+			}
+		}
+	}
+}
+
+// countColour is how many of img's pixels are exactly colour.
+func countColour(img *image.RGBA, colour color.RGBA) int {
+	_, count := centroidWhere(img, func(c color.RGBA) bool { return c == colour })
+	return count
+}
+
+func TestComposeZoomLeavesACaptionInPlace(t *testing.T) {
+	t.Parallel()
+	board, recorded := zoomClickTake(take.Box{X: 30, Y: 3, W: 6, H: 1})
+	board.Captions = []storyboard.Caption{boxCaption("Caption", at(1, 0), 6*sec)}
+	compositor, _ := newTestCompositor(t, board, recorded)
+	src := stripedFrame()
+	unzoomed, zoomed := 1*sec, 4*sec
+	if crop := compositor.crop(zoomed); crop.W >= float64(testLayout.Size.X) {
+		t.Fatalf("crop at %s: want the beat's zoom pushed in, got %+v", zoomed, crop)
+	}
+
+	plain, pushed := compositor.Compose(unzoomed, src), compositor.Compose(zoomed, src)
+
+	box, _ := captionBox(t, compositor, unzoomed)
+	if zoomedBox, _ := captionBox(t, compositor, zoomed); zoomedBox != box {
+		t.Fatalf("caption box: want %v at both times, got %v zoomed", box, zoomedBox)
+	}
+	if countColour(plain, testCaptionBox) == 0 {
+		t.Fatal("unzoomed frame: want the caption's box drawn")
+	}
+	assertSameRegion(t, pushed, plain, box)
+	if bytes.Equal(pushed.Pix, plain.Pix) {
+		t.Error("want the zoomed frame to differ from the unzoomed one outside the caption")
+	}
+}
+
+func TestComposeBeatAnchoredCaptionFollowsTheBeatsDuration(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name          string
+		firstBeat     time.Duration
+		shown, hidden time.Duration
+	}{
+		{name: "beat 1 lasts 2s", firstBeat: 2 * sec, shown: 2500 * time.Millisecond, hidden: 3500 * time.Millisecond},
+		{name: "beat 1 lasts 3s", firstBeat: 3 * sec, shown: 3500 * time.Millisecond, hidden: 2500 * time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			board := &storyboard.Storyboard{
+				Beats:    []storyboard.Beat{{ID: 1, Duration: tc.firstBeat}, {ID: 2, Duration: 4 * sec}},
+				Captions: []storyboard.Caption{boxCaption("Beat two", at(2, 0), sec)},
+			}
+			recorded := &take.Take{
+				Snapshots: []take.Snapshot{{At: 0}, {At: 6 * sec}},
+				Events:    []take.Event{beatStart(0, 1), beatStart(2*sec, 2)},
+			}
+			compositor, _ := newTestCompositor(t, board, recorded)
+			src := solidFrame(testBackground)
+
+			if countColour(compositor.Compose(tc.shown, src), testCaptionBox) == 0 {
+				t.Errorf("at %s: want the caption shown", tc.shown)
+			}
+			if countColour(compositor.Compose(tc.hidden, src), testCaptionBox) != 0 {
+				t.Errorf("at %s: want the caption gone", tc.hidden)
 			}
 		})
 	}

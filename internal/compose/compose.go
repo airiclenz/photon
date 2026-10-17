@@ -10,6 +10,8 @@ import (
 	"golang.org/x/image/draw"
 	"golang.org/x/image/math/f64"
 
+	"github.com/airiclenz/photon/internal/caption"
+	"github.com/airiclenz/photon/internal/fonts"
 	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
@@ -68,8 +70,8 @@ func (l Layout) home() pointF {
 }
 
 // Compositor turns each scheduled snapshot, rasterized, into a shipped frame: it pushes into
-// the section's zoom target, scales to the shipped width and draws the cursor of the clicks and
-// drags on top at constant size. Everything it needs is fixed at construction, so composing is a
+// the section's zoom target, scales to the shipped width, draws the cursor of the clicks and
+// drags on top at constant size and the storyboard's captions over everything. Everything it needs is fixed at construction, so composing is a
 // pure function of the output time and the source frame, and a Compositor is safe for
 // concurrent use.
 type Compositor struct {
@@ -78,15 +80,19 @@ type Compositor struct {
 	background color.RGBA
 	camera     camera
 	cursor     cursorTrack
+	// captions is the storyboard's captions laid out for the shipped frame; nil when it has none.
+	captions *caption.Layer
 }
 
 // New plans the camera and the cursor of a clip: board's frame gives the shipped width, its
 // beats the zooms and its camera the moves beside them, recorded the clicks, the drags and the
 // snapshots a zoom or pan target resolves on (through resolver), clipSchedule the output clock,
-// layout where cells sit in a source frame, and background the colour a zoomed frame is cleared
-// to before the push is drawn. It fails on a layout with no size, a frame width that is not
-// positive, a zoomed beat whose target resolves on none of its snapshots, a camera move whose
-// start is not on the clip's clock, and a pan target no screen of its move shows.
+// layout where cells sit in a source frame, background the colour a zoomed frame is cleared to
+// before the push is drawn, and captionFaces the faces board's captions are drawn in (unread when
+// it has none, so it may then be the zero set). It fails on a layout with no size, a frame width
+// that is not positive, a zoomed beat whose target resolves on none of its snapshots, a camera
+// move whose start is not on the clip's clock, a pan target no screen of its move shows, and a
+// caption [caption.New] refuses.
 func New(
 	board *storyboard.Storyboard,
 	recorded *take.Take,
@@ -94,6 +100,7 @@ func New(
 	resolver target.Resolver,
 	layout Layout,
 	background color.RGBA,
+	captionFaces fonts.CaptionSet,
 ) (*Compositor, error) {
 	if layout.Size.X <= 0 || layout.Size.Y <= 0 || layout.CellWidth <= 0 || layout.LineHeight <= 0 {
 		return nil, fmt.Errorf("compose: invalid cell layout %+v", layout)
@@ -109,20 +116,28 @@ func New(
 	if err != nil {
 		return nil, err
 	}
-	return &Compositor{
+	compositor := &Compositor{
 		layout:     layout,
 		out:        image.Pt(width, height),
 		background: background,
 		camera:     clipCamera,
 		cursor:     trackCursor(recorded, clipSchedule, layout),
-	}, nil
+	}
+	if len(board.Captions) > 0 {
+		if compositor.captions, err = caption.New(board, captionFaces, compositor.out, compositor.unit()); err != nil {
+			return nil, err
+		}
+	}
+	return compositor, nil
 }
 
 // Size is the shipped frame's pixel size.
 func (c *Compositor) Size() image.Point { return c.out }
 
 // Compose builds the shipped frame at output time t from src, the rasterized snapshot the
-// schedule shows then. src is only read.
+// schedule shows then: the camera's crop scaled to the shipped width, the cursor over it and the
+// captions showing at t last, in output space, so no zoom or pan moves or scales them. src is
+// only read.
 func (c *Compositor) Compose(t time.Duration, src *image.RGBA) *image.RGBA {
 	dst := image.NewRGBA(image.Rectangle{Max: c.out})
 	crop := c.crop(t)
@@ -135,6 +150,9 @@ func (c *Compositor) Compose(t time.Duration, src *image.RGBA) *image.RGBA {
 		draw.CatmullRom.Transform(dst, transform, src, src.Bounds(), draw.Src, nil)
 	}
 	c.drawCursor(dst, t, crop)
+	if c.captions != nil {
+		c.captions.Draw(dst, t)
+	}
 	return dst
 }
 

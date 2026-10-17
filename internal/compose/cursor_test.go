@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"image"
 	"image/color"
 	"math"
 	"slices"
@@ -236,4 +237,33 @@ func TestComposeZoomAimsAtADragsLoggedBox(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestComposeDrawsACaptionOverTheCursor(t *testing.T) {
+	t.Parallel()
+	position := storyboard.Pixels{X: 40, Y: 40}
+	covering := boxCaption("caption\nover the cursor", at(1, 0), 10*sec)
+	covering.Place, covering.Align, covering.Position = "", "", &position
+	board := &storyboard.Storyboard{
+		Beats:    []storyboard.Beat{{ID: 1, Duration: 10 * sec}},
+		Captions: []storyboard.Caption{covering},
+	}
+	events := append([]take.Event{beatStart(0, 1)}, dragAt(dragPressAt, 1, dragPress, dragMoves...)...)
+	recorded := &take.Take{Snapshots: []take.Snapshot{{At: 0}, {At: 10 * sec}}, Events: events}
+	captioned, _ := newTestCompositor(t, board, recorded)
+	plain := newDragCompositor(t)
+	src := solidFrame(testBackground)
+	centre := plain.toOutput(plain.cursor.position(dragPressAt), plain.crop(dragPressAt))
+	dot := image.Pt(int(centre.X), int(centre.Y))
+	if got := plain.Compose(dragPressAt, src).RGBAAt(dot.X, dot.Y); got == testBackground {
+		t.Fatalf("without the caption: want the cursor drawn at %v, got the background", dot)
+	}
+	box, layer := captionBox(t, captioned, dragPressAt)
+	if !dot.In(box) {
+		t.Fatalf("caption box %v: want it over the cursor at %v", box, dot)
+	}
+
+	frame := captioned.Compose(dragPressAt, src)
+
+	assertSameRegion(t, frame, layer, box)
 }

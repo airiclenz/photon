@@ -391,7 +391,14 @@ inside the box and none outside it; a caption at size = `frame.font_size` has th
 - `GOMEMLIMIT=2GiB go test ./internal/caption/`
 **Commit:** `feat(caption): lay out and draw a clip's captions`
 
-## 12. Captions on every composed frame
+## 12. Captions on every composed frame — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): consequential edit — internal/compose/camera_test.go: made necessary by the new `compose.New` parameter (TestNewRefusesAPanTargetItsMoveNeverShows calls New; it passes `fonts.CaptionSet{}`)
+NOTES (2026-10-17): the Regression guard assumes `caption.New` with no captions skips the faces, but item 11's `caption.New` refuses an empty face set first; compose therefore builds the caption layer only when the board has captions (a nil layer draws nothing), so zero-set callers still work and caption.go stays untouched
+NOTES (2026-10-17): `render.NewCompositor` loads the caption faces on every call, captions or not, as the Approach says, so a `caption_font` file that does not parse fails a render even without captions; the new `compose.New` parameter goes last, after `background`
+NOTES (2026-10-17): internal/compose/doc.go's "It imports schedule, target, take and storyboard" is now stale; left for item 13, which the plan says rewrites it
+NOTES (2026-10-17): render_test.go gains `loadRenderClipOf` (loadRenderClip now calls it) and a GIF frame compositor for the caption render test, which checks presence by box colour across the whole frame rather than at computed box coordinates
+NOTES (2026-10-17): `capcom check` exits 1 on the untouched tree too ("AGENTS.md:30: the capcom block is out of date"); pre-existing, AGENTS.md untouched by this run, nothing reported for the edited Note
 
 Depends on items 7 and 11.
 **What:**

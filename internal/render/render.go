@@ -224,11 +224,12 @@ func NewRasterizer(loaded *clip.Clip) (*raster.Rasterizer, error) {
 	})
 }
 
-// NewCompositor plans the camera and the cursor over the rasterizer's cell layout, resolving zoom
-// and pan targets through the config's areas and clearing a zoomed frame to the theme background.
-// The rasterizer must be the one [NewRasterizer] built for the same clip, so the layout matches
-// the frames it draws. It fails when an area, a zoom target or a camera pan's target does not
-// resolve.
+// NewCompositor plans the camera, the cursor and the captions over the rasterizer's cell layout,
+// resolving zoom and pan targets through the config's areas, clearing a zoomed frame to the theme
+// background and drawing captions in the config's caption faces. The rasterizer must be the one
+// [NewRasterizer] built for the same clip, so the layout matches the frames it draws. It fails
+// when an area, a zoom target or a camera pan's target does not resolve, when a caption face
+// cannot be loaded, and when a caption cannot be laid out.
 func NewCompositor(
 	loaded *clip.Clip,
 	recorded *take.Take,
@@ -247,8 +248,12 @@ func NewCompositor(
 		LineHeight: rasterizer.LineHeight(),
 		Scale:      frame.Scale,
 	}
+	captionFaces, err := fonts.LoadCaption(loaded.Config.CaptionFont.Regular, loaded.Config.CaptionFont.Bold)
+	if err != nil {
+		return nil, err
+	}
 	background := loaded.Config.Theme.BG.RGBA()
-	return compose.New(loaded.Storyboard, recorded, clipSchedule, resolver, layout, background)
+	return compose.New(loaded.Storyboard, recorded, clipSchedule, resolver, layout, background, captionFaces)
 }
 
 // writeSummary prints what was rendered: path, size and the clip's length — the schedule's

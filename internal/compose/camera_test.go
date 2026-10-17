@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/airiclenz/photon/internal/fonts"
 	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
@@ -286,7 +287,7 @@ func TestNewRefusesAPanTargetItsMoveNeverShows(t *testing.T) {
 		t.Fatalf("schedule.New: %v", err)
 	}
 
-	_, err = New(board, recorded, clipSchedule, target.Resolver{}, testLayout, testBackground)
+	_, err = New(board, recorded, clipSchedule, target.Resolver{}, testLayout, testBackground, fonts.CaptionSet{})
 
 	if !errors.Is(err, target.ErrNotOnScreen) || !strings.Contains(err.Error(), "compose: camera[0]: pan: to") {
 		t.Errorf("New: want camera[0]'s pan target not on screen, got %v", err)

@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/color"
+	"image/draw"
 	"image/gif"
 	"io"
 	"os"
@@ -79,9 +81,15 @@ func textSnapshot(at time.Duration, lines ...string) take.Snapshot {
 // with its work dir in a temp dir.
 func loadRenderClip(t *testing.T) *clip.Clip {
 	t.Helper()
+	return loadRenderClipOf(t, renderStoryboard)
+}
+
+// loadRenderClipOf is [loadRenderClip] with storyboard in place of renderStoryboard.
+func loadRenderClipOf(t *testing.T, storyboard string) *clip.Clip {
+	t.Helper()
 	project := t.TempDir()
 	writeFile(t, project, "photon.yaml", renderConfig)
-	board := writeFile(t, project, "rendered.yaml", renderStoryboard)
+	board := writeFile(t, project, "rendered.yaml", storyboard)
 	loaded, err := clip.Load(board, "", t.TempDir())
 	if err != nil {
 		t.Fatalf("clip.Load: %v", err)
@@ -237,6 +245,117 @@ func TestRunWritesAGIFOfTheScheduledLength(t *testing.T) {
 	if width := decoded.Image[0].Bounds().Dx(); width != wantWidth {
 		t.Errorf("GIF width: want frame.width %d, got %d", wantWidth, width)
 	}
+}
+
+// captionedStoryboard is renderStoryboard with two captions: a red-boxed one at the top over
+// [100ms, 800ms) and a blue-boxed one at the bottom from beat 2's start (1s) for 1s, fading in
+// and out over 300ms each.
+const captionedStoryboard = renderStoryboard + `captions:
+  - {text: one, at: 100ms, for: 700ms, place: top, box: {color: '#ff0000', opacity: 1}}
+  - {text: two, at: {beat: 2}, for: 1s, box: {color: '#0000ff', opacity: 1}, fade: {in: 300ms, out: 300ms}}
+`
+
+// TestRunDrawsCaptionsAtTheirTimes renders the captioned clip and reads the GIF back frame by
+// frame: each caption's box shows only inside its span, and the faded one is dimmer half-way
+// through its fade-in than at full strength.
+func TestRunDrawsCaptionsAtTheirTimes(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath(ffmpegProgram); err != nil {
+		t.Skip("ffmpeg is not on PATH")
+	}
+	loaded := loadRenderClipOf(t, captionedStoryboard)
+	gifPath := filepath.Join(t.TempDir(), "captioned.gif")
+	options := Options{Take: saveRenderTake(t, t.TempDir(), 20), Out: gifPath}
+	var stderr bytes.Buffer
+
+	err := Run(context.Background(), loaded, options, io.Discard, &stderr)
+
+	if err != nil {
+		t.Fatalf("Run: %v\n%s", err, stderr.String())
+	}
+	decoded := decodeGIF(t, gifPath)
+	isRed := func(c color.RGBA) bool { return c.R > 0xc0 && c.G < 0x40 && c.B < 0x40 }
+	isBlue := func(c color.RGBA) bool { return c.B > 0xc0 && c.R < 0x40 && c.G < 0x40 }
+	for _, tc := range []struct {
+		at        time.Duration
+		red, blue bool
+	}{
+		{at: 50 * time.Millisecond},
+		{at: 450 * time.Millisecond, red: true},
+		{at: 900 * time.Millisecond},
+		{at: 1500 * time.Millisecond, blue: true},
+		{at: 2250 * time.Millisecond},
+	} {
+		frame := gifFrameAt(t, decoded, tc.at)
+		if got := countPixels(frame, isRed) > 0; got != tc.red {
+			t.Errorf("at %s: want the top caption shown %t, got %t", tc.at, tc.red, got)
+		}
+		if got := countPixels(frame, isBlue) > 0; got != tc.blue {
+			t.Errorf("at %s: want the faded caption shown %t, got %t", tc.at, tc.blue, got)
+		}
+	}
+	fading, full := bluest(gifFrameAt(t, decoded, 1150*time.Millisecond)), bluest(gifFrameAt(t, decoded, 1500*time.Millisecond))
+	if fading == 0 || fading >= full {
+		t.Errorf("faded caption: want its box dimmer mid-fade than at full, got blue %d mid-fade and %d at full", fading, full)
+	}
+}
+
+// gifFrameAt is the picture decoded shows at time at: its frames drawn in order onto a canvas,
+// each over the ones before it, up to the one whose delay spans at.
+func gifFrameAt(t *testing.T, decoded *gif.GIF, at time.Duration) *image.RGBA {
+	t.Helper()
+	canvas := image.NewRGBA(image.Rect(0, 0, decoded.Config.Width, decoded.Config.Height))
+	var start time.Duration
+	for index, frame := range decoded.Image {
+		if start > at {
+			return canvas
+		}
+		var previous *image.RGBA
+		if index < len(decoded.Disposal) && decoded.Disposal[index] == gif.DisposalPrevious {
+			previous = image.NewRGBA(canvas.Rect)
+			copy(previous.Pix, canvas.Pix)
+		}
+		draw.Draw(canvas, frame.Bounds(), frame, frame.Bounds().Min, draw.Over)
+		start += time.Duration(decoded.Delay[index]) * 10 * time.Millisecond
+		if start > at || index == len(decoded.Image)-1 {
+			return canvas
+		}
+		switch {
+		case previous != nil:
+			canvas = previous
+		case index < len(decoded.Disposal) && decoded.Disposal[index] == gif.DisposalBackground:
+			draw.Draw(canvas, frame.Bounds(), image.Transparent, image.Point{}, draw.Src)
+		}
+	}
+	t.Fatalf("the GIF holds no frames")
+	return nil
+}
+
+// countPixels is how many of img's pixels match keep.
+func countPixels(img *image.RGBA, keep func(color.RGBA) bool) int {
+	count := 0
+	for y := img.Rect.Min.Y; y < img.Rect.Max.Y; y++ {
+		for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
+			if keep(img.RGBAAt(x, y)) {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// bluest is the highest blue value among img's pixels whose blue outweighs red and green
+// together, or 0 when there are none.
+func bluest(img *image.RGBA) uint8 {
+	var most uint8
+	for y := img.Rect.Min.Y; y < img.Rect.Max.Y; y++ {
+		for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
+			if c := img.RGBAAt(x, y); int(c.B) > int(c.R)+int(c.G) && c.B > most {
+				most = c.B
+			}
+		}
+	}
+	return most
 }
 
 // onePassArgs is the single-graph encode the two passes replaced, verbatim: it splits the frame
