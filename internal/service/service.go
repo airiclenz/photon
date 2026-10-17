@@ -57,11 +57,13 @@ type Set struct {
 	env      []string
 }
 
-// running is one started service: its process, its log, and its exit once reaped.
+// running is one started service: its process and the group it leads, its log, and its exit
+// once reaped.
 type running struct {
 	name    string
 	log     string
 	cmd     *exec.Cmd
+	group   *group
 	exited  chan struct{}
 	waitErr error
 }
@@ -263,12 +265,17 @@ func launch(dir, work string, next planned, port int, environ []string) (*runnin
 		ready.matched = watcher.matched
 	}
 	cmd.WaitDelay = waitDelay
-	ownGroup(cmd)
+	prepareGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, ready, errors.Join(fmt.Errorf("start service %s: %w", next.name, err), logFile.Close())
 	}
+	group, err := joinGroup(cmd.Process)
+	if err != nil {
+		return nil, ready, errors.Join(fmt.Errorf("start service %s: %w", next.name, err),
+			cmd.Process.Kill(), cmd.Wait(), logFile.Close())
+	}
 
-	service := &running{name: next.name, log: logPath, cmd: cmd, exited: make(chan struct{})}
+	service := &running{name: next.name, log: logPath, cmd: cmd, group: group, exited: make(chan struct{})}
 	go service.reap(logFile)
 	return service, ready, nil
 }
@@ -283,15 +290,24 @@ func (r *running) reap(logFile *os.File) {
 	close(r.exited)
 }
 
-// stop asks the service's group to exit and kills it once it has not within stopTimeout.
+// stop asks the service's group to exit and kills it once it has not within stopTimeout, then
+// releases the group.
 func (r *running) stop() error {
-	if err := terminate(r.cmd.Process); err == nil && r.awaitGone(stopTimeout) {
-		return nil
+	if err := r.group.terminate(); err == nil && r.awaitGone(stopTimeout) {
+		return r.releaseGroup()
 	}
-	if err := kill(r.cmd.Process); err != nil {
-		return fmt.Errorf("kill service %s: %w", r.name, err)
+	if err := r.group.kill(); err != nil {
+		return errors.Join(fmt.Errorf("kill service %s: %w", r.name, err), r.releaseGroup())
 	}
 	<-r.exited
+	return r.releaseGroup()
+}
+
+// releaseGroup frees what the service's group holds.
+func (r *running) releaseGroup() error {
+	if err := r.group.release(); err != nil {
+		return fmt.Errorf("release service %s's group: %w", r.name, err)
+	}
 	return nil
 }
 
@@ -300,7 +316,7 @@ func (r *running) stop() error {
 func (r *running) awaitGone(timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for {
-		if isClosed(r.exited) && !groupAlive(r.cmd.Process) {
+		if isClosed(r.exited) && !r.group.alive() {
 			return true
 		}
 		if !time.Now().Before(deadline) {
