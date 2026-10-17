@@ -54,6 +54,7 @@ func (s *Storyboard) validate() []error {
 		beat.validate(prefixed(report, fmt.Sprintf("beat %d: ", beat.ID)))
 	}
 	s.validateCamera(report)
+	s.validateCaptions(report)
 	return problems
 }
 

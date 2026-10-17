@@ -1,0 +1,15 @@
+# A storyboard whose captions break five rules: a stop before the start, a start after the 4s
+# clip ends, an unknown beat, a size out of bounds, and fades longer than the caption.
+clip: captions
+ship: out/captions.gif
+frame: {cols: 80, rows: 24, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+beats:
+  - id: 1
+    title: tour the list
+    duration: 4s
+captions:
+  - {text: 'Backwards', at: 2s, until: 1s}
+  - {text: 'Too late', at: 9s, for: 1s}
+  - {text: 'Lost', at: {beat: 7}, for: 1s}
+  - {text: 'Huge', at: 0s, for: 1s, font: {size: 100}}
+  - {text: 'Fading', at: 1s, for: 1s, fade: {in: 800ms, out: 400ms}}

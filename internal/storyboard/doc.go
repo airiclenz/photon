@@ -1,8 +1,8 @@
 // Package storyboard holds a clip's Storyboard — the YAML file that says what photon performs,
-// how long each beat plays in the clip, where it zooms, how its camera moves, and what a keeper
-// take must show — and the strict loaders that are the only ways to get one. [Load] reads a file
-// and [Parse] takes its bytes; both refuse an unknown field and report every rule the file breaks
-// at once, in a [ValidationError].
+// how long each beat plays in the clip, where it zooms, how its camera moves, which captions it
+// shows, and what a keeper take must show — and the strict loaders that are the only ways to get
+// one. [Load] reads a file and [Parse] takes its bytes; both refuse an unknown field and report
+// every rule the file breaks at once, in a [ValidationError].
 //
 // It imports only keys, to check that a `key` action names a key photon can send. Whether an
 // area a target or expect names is declared in the config is checked where the storyboard and
@@ -17,6 +17,7 @@
 //   - storyboard.go: the [Storyboard] and its [Frame], [Load], [Parse] and [ValidationError].
 //   - beat.go: a [Beat], its [Zoom], [Action] forms, [Target] and [Nth], and [Expect].
 //   - camera.go: a [CameraMove] — a [ZoomMove] or [PanMove] — its [Point], [Cell] and [Ease], and their rules.
+//   - caption.go: a [Caption], its [CaptionFont] and [Weight], [Place], [Align], [Pixels], [CaptionBox] and [Fade], and their rules.
 //   - moment.go: a [Moment] on the clip's output clock, [Storyboard.ClipTime] and [Storyboard.Length].
 //   - validate.go: every other validation rule, each reporting its problem under the field's path.
 package storyboard

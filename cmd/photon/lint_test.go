@@ -20,6 +20,7 @@ var (
 	badDragStoryboard    = filepath.Join("testdata", "invalid", "drag.yaml")
 	badCameraStoryboard  = filepath.Join("testdata", "invalid", "camera.yaml")
 	cameraAreaStoryboard = filepath.Join("testdata", "invalid", "camera-area.yaml")
+	badCaptionStoryboard = filepath.Join("testdata", "invalid", "captions.yaml")
 )
 
 // okMarker is what lint prints for a clip with no problem.
@@ -85,6 +86,18 @@ func TestLint(t *testing.T) {
 			args:       []string{"lint", cameraAreaStoryboard, "--config", validConfig},
 			wantCode:   exitRunFailed,
 			wantStderr: []string{`camera[0]: pan.to.area: "sidebar" is not declared`},
+		},
+		{
+			name:     "every bad caption is listed under its field",
+			args:     []string{"lint", badCaptionStoryboard, "--config", validConfig},
+			wantCode: exitRunFailed,
+			wantStderr: []string{
+				"captions[0]: until: want a stop after the start 2s, got 1s",
+				"captions[1]: at: want a start in [0s, 4s), got 9s",
+				"captions[2]: at: beat 7 is not in the storyboard",
+				"captions[3]: font.size: want in [6, 72], got 100",
+				"captions[4]: fade: want in + out within the caption's length 1s, got 1.2s",
+			},
 		},
 		{
 			name:       "no storyboard is a bad command line",

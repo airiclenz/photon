@@ -321,7 +321,11 @@ test covers the caption table; dist test lists the new licence; the README test 
 - `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run README`
 **Commit:** `feat(fonts): embed Source Sans 3 as the caption face`
 
-## 10. Storyboard `captions`: schema and validation
+## 10. Storyboard `captions`: schema and validation — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the caption rules live in caption.go beside their types (validate.go only calls `validateCaptions`), as camera.go does; applyDefaults trims one trailing newline from `text` and fills size (frame.font_size), weight regular, place bottom / align middle (only when `position` is absent), color #ffffff and box #000000 at 0.6
+NOTES (2026-10-17): `box.opacity` is a *float64 so an explicit `opacity: 0` (no box) differs from the 0.6 default; `for: 0s` without `until` reads as no end ("want exactly one of for or until"); a caption inheriting a frame.font_size outside [6, 72] is reported as `font.size: … from frame.font_size`; offset and position are a new `Pixels {x, y}` type in design pixels (beat.go's `Offset` counts cells)
+NOTES (2026-10-17): the README gains one `captions` row in the Storyboard Header table naming every new tag; item 13 writes the full reference
 
 Depends on item 2.
 **What:**

@@ -165,6 +165,28 @@ func TestLoadEveryForm(t *testing.T) {
 	if !reflect.DeepEqual(board.Camera, wantCamera) {
 		t.Errorf("camera: want %+v with smooth by default, got %+v", wantCamera, board.Camera)
 	}
+
+	wantCaptions := []Caption{
+		{
+			Text: "Pick an item\nthen save it", At: Moment{Beat: 2, Offset: 200 * time.Millisecond}, Until: &Moment{Beat: 3},
+			Font: CaptionFont{Size: 18, Weight: WeightBold}, Place: PlaceTop, Align: AlignLeft, Offset: Pixels{X: 8, Y: -4},
+			Color: "#FFCC00", Box: CaptionBox{Color: "#202020", Opacity: new(0.0)},
+			Fade: Fade{In: 300 * time.Millisecond, Out: 200 * time.Millisecond},
+		},
+		{
+			Text: "Saved", At: Moment{Offset: 9 * time.Second}, For: 2 * time.Second,
+			Font: CaptionFont{Size: 14, Weight: WeightRegular}, Position: &Pixels{X: 40, Y: 300},
+			Color: "#ffffff", Box: CaptionBox{Color: "#000000", Opacity: new(0.6)},
+		},
+		{
+			Text: "Goodbye", At: Moment{Beat: 3, Offset: -time.Second}, For: time.Second,
+			Font: CaptionFont{Size: 14, Weight: WeightRegular}, Place: PlaceBottom, Align: AlignMiddle,
+			Color: "#ffffff", Box: CaptionBox{Color: "#000000", Opacity: new(0.6)},
+		},
+	}
+	if !reflect.DeepEqual(board.Captions, wantCaptions) {
+		t.Errorf("captions: want %+v with their defaults, got %+v", wantCaptions, board.Captions)
+	}
 }
 
 // cameraBase is validBase with a camera that breaks no rule: beat 1's zoom holds both tracks over
@@ -253,6 +275,132 @@ func TestLoadRejects_Camera(t *testing.T) {
 			}
 			if got := len(invalid.Problems); got != 1 {
 				t.Errorf("problems: want exactly the one broken rule, got %d:\n%v", got, err)
+			}
+		})
+	}
+}
+
+// captionBase is validBase with captions that break no rule, on its 5s clip. Each row of
+// TestLoadRejects_Captions swaps one fragment of it, which must occur in it exactly once.
+const captionBase = validBase + `captions:
+  - text: 'Pick one'
+    at: {beat: 1, offset: 500ms}
+    until: {beat: 2}
+    font: {size: 20, weight: bold}
+    place: top
+    align: right
+    offset: {x: 4, y: 2}
+    color: '#ffcc00'
+    box: {color: '#101010', opacity: 0.5}
+    fade: {in: 600ms, out: 400ms}
+  - {text: 'Done', at: 4s, for: 500ms, position: {x: 10, y: 20}}
+`
+
+func TestLoadRejects_Captions(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		old, new string
+		want     string
+		// decode marks a rule the strict decode enforces, which fails before validation runs.
+		decode bool
+	}{
+		{"unknown caption field", "text: 'Done',", "text: 'Done', style: plain,", "field style not found", true},
+		{"unknown box field", "opacity: 0.5}", "opacity: 0.5, blur: 2}", "field blur not found", true},
+		{"text missing", "text: 'Done', ", "", "captions[1]: text: missing", false},
+		{"text a lone newline", "text: 'Done'", `text: "\n"`, "captions[1]: text: missing", false},
+		{"for and until", "until: {beat: 2}", "until: {beat: 2}\n    for: 2s", "captions[0]: want exactly one of for or until", false},
+		{"neither for nor until", "    until: {beat: 2}\n", "", "captions[0]: want exactly one of for or until", false},
+		{"for negative", "for: 500ms", "for: -1s", "captions[1]: for: want >0, got -1s", false},
+		{"start at an unknown beat", "beat: 1, offset", "beat: 9, offset", "captions[0]: at: beat 9 is not in the storyboard", false},
+		{"stop at an unknown beat", "until: {beat: 2}", "until: {beat: 7}", "captions[0]: until: beat 7 is not in the storyboard", false},
+		{"start at the clip's end", "at: 4s", "at: 5s", "captions[1]: at: want a start in [0s, 5s), got 5s", false},
+		{"start before the clip", "at: 4s", "at: -1s", "captions[1]: at: want a start in [0s, 5s), got -1s", false},
+		{"stop before the start", "until: {beat: 2}", "until: 200ms", "captions[0]: until: want a stop after the start 500ms, got 200ms", false},
+		{"stop at the start", "until: {beat: 2}", "until: 500ms", "captions[0]: until: want a stop after the start 500ms, got 500ms", false},
+		{"for past the clip", "for: 500ms", "for: 2s", "captions[1]: for: want the caption to end by the clip's end 5s, got an end at 6s", false},
+		{"until past the clip", "until: {beat: 2}", "until: {beat: 2, offset: 3s}",
+			"captions[0]: until: want the caption to end by the clip's end 5s, got an end at 6s", false},
+		{"size too small", "size: 20", "size: 5", "captions[0]: font.size: want in [6, 72], got 5", false},
+		{"size too large", "size: 20", "size: 80", "captions[0]: font.size: want in [6, 72], got 80", false},
+		{"weight unknown", "weight: bold", "weight: heavy", `captions[0]: font.weight: want regular or bold, got "heavy"`, false},
+		{"place unknown", "place: top", "place: centre", `captions[0]: place: want top, middle or bottom, got "centre"`, false},
+		{"align unknown", "align: right", "align: center", `captions[0]: align: want left, middle or right, got "center"`, false},
+		{"position with place", "position: {x: 10, y: 20}", "position: {x: 10, y: 20}, place: top",
+			"captions[1]: position: want it instead of place, align and offset, not with them", false},
+		{"position with offset", "position: {x: 10, y: 20}", "position: {x: 10, y: 20}, offset: {y: 1}",
+			"captions[1]: position: want it instead of place, align and offset, not with them", false},
+		{"color misspelled", "color: '#ffcc00'", "color: 'yellow'", `captions[0]: color: want #rrggbb, got "yellow"`, false},
+		{"box color short", "color: '#101010'", "color: '#111'", `captions[0]: box.color: want #rrggbb, got "#111"`, false},
+		{"box opacity too large", "opacity: 0.5", "opacity: 1.5", "captions[0]: box.opacity: want in [0, 1], got 1.5", false},
+		{"box opacity negative", "opacity: 0.5", "opacity: -0.1", "captions[0]: box.opacity: want in [0, 1], got -0.1", false},
+		{"fade in negative", "in: 600ms, out: 400ms", "in: -1s, out: 400ms", "captions[0]: fade.in: want ≥0, got -1s", false},
+		{"fade out negative", "in: 600ms, out: 400ms", "in: 600ms, out: -1s", "captions[0]: fade.out: want ≥0, got -1s", false},
+		{"fades longer than the caption", "in: 600ms, out: 400ms", "in: 2s, out: 600ms",
+			"captions[0]: fade: want in + out within the caption's length 2.5s, got 2.6s", false},
+	}
+	if _, err := Parse([]byte(captionBase), "captions.yaml"); err != nil {
+		t.Fatalf("the caption base storyboard must parse clean: %v", err)
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if count := strings.Count(captionBase, tc.old); count != 1 {
+				t.Fatalf("fragment %q occurs %d times in the base, want once", tc.old, count)
+			}
+
+			_, err := Parse([]byte(strings.Replace(captionBase, tc.old, tc.new, 1)), "captions.yaml")
+
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want an error containing %q, got:\n%v", tc.want, err)
+			}
+			var invalid *ValidationError
+			isValidation := errors.As(err, &invalid)
+			if tc.decode {
+				if isValidation {
+					t.Fatalf("want a decode error, got a *ValidationError:\n%v", err)
+				}
+				return
+			}
+			if !isValidation {
+				t.Fatalf("want a *ValidationError, got %T: %v", err, err)
+			}
+			if got := len(invalid.Problems); got != 1 {
+				t.Errorf("problems: want exactly the one broken rule, got %d:\n%v", got, err)
+			}
+		})
+	}
+}
+
+func TestLoad_CaptionSizeFromTheFrame(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		frameSize string
+		want      string
+	}{
+		{"in bounds", "font_size: 14", ""},
+		{"out of bounds", "font_size: 80", "captions[0]: font.size: want in [6, 72], got 80 from frame.font_size"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := strings.Replace(validBase, "font_size: 14", tc.frameSize, 1) + "captions:\n  - {text: 'Hi', at: 1s, for: 1s}\n"
+
+			board, err := Parse([]byte(body), "captions.yaml")
+
+			if tc.want != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Fatalf("want an error containing %q, got:\n%v", tc.want, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			if got := board.Captions[0].Font.Size; got != 14 {
+				t.Errorf("font size: want frame.font_size 14, got %g", got)
 			}
 		})
 	}

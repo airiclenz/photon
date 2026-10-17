@@ -15,23 +15,25 @@ import (
 // Storyboard is one clip's storyboard: the single source of a clip. The header names the clip,
 // where its GIF ships and the terminal frame; each beat says what photon does (Do), how long the
 // beat plays in the clip (Duration, Hold, Cut, Zoom) and what a keeper take must show (Expect).
-// Expect at the top level holds what the take as a whole must show, and Camera the camera moves
-// placed on the clip's output clock.
+// Expect at the top level holds what the take as a whole must show, Camera the camera moves
+// placed on the clip's output clock, and Captions the text drawn over the composed frame on that
+// clock.
 //
 // [Load] and [Parse] are the only ways to get one: a Storyboard in hand has passed validation,
-// its Ship is resolved against the file's directory, and its zoom ramps and camera eases carry
-// their defaults.
+// its Ship is resolved against the file's directory, and its zoom ramps, camera eases and
+// captions carry their defaults.
 type Storyboard struct {
 	// Path is the storyboard file Load read or Parse was handed, as the caller named it.
 	Path string `yaml:"-"`
 	Clip string `yaml:"clip"`
 	// Ship is written relative to the storyboard's own directory and resolved by Load, so a
 	// caller in any working directory finds it.
-	Ship   string       `yaml:"ship"`
-	Frame  Frame        `yaml:"frame"`
-	Expect []Expect     `yaml:"expect"`
-	Beats  []Beat       `yaml:"beats"`
-	Camera []CameraMove `yaml:"camera"`
+	Ship     string       `yaml:"ship"`
+	Frame    Frame        `yaml:"frame"`
+	Expect   []Expect     `yaml:"expect"`
+	Beats    []Beat       `yaml:"beats"`
+	Camera   []CameraMove `yaml:"camera"`
+	Captions []Caption    `yaml:"captions"`
 }
 
 // Frame is the recorded terminal and the shipped geometry: the pty's Cols × Rows, the
@@ -88,8 +90,12 @@ func Parse(data []byte, path string) (*Storyboard, error) {
 }
 
 // applyDefaults fills what a valid storyboard may leave out: a zoom ramp left at zero runs
-// [DefaultZoomRamp], and a camera move without an ease eases [EaseSmooth].
+// [DefaultZoomRamp], a camera move without an ease eases [EaseSmooth], and a caption takes the
+// defaults [Caption] lists.
 func (s *Storyboard) applyDefaults() {
+	for index := range s.Captions {
+		s.Captions[index].applyDefaults(s.Frame.FontSize)
+	}
 	for _, move := range s.Camera {
 		switch {
 		case move.Zoom != nil && move.Zoom.Ease == "":
