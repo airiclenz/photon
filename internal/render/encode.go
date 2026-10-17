@@ -110,7 +110,7 @@ func (p *plan) writeFrames(w io.Writer) error {
 	shown := -1
 	var source *image.RGBA
 	for _, frame := range p.schedule.Frames(p.frame.FPS) {
-		index := snapshotAt(p.recorded.Snapshots, frame.Source)
+		index := SnapshotAt(p.recorded.Snapshots, frame.Source)
 		if index < 0 {
 			return fmt.Errorf("the take holds no snapshot to show at %s", frame.Source)
 		}
@@ -124,9 +124,9 @@ func (p *plan) writeFrames(w io.Writer) error {
 	return nil
 }
 
-// snapshotAt is the index of the snapshot on screen at source time t — the last one taken at or
+// SnapshotAt is the index of the snapshot on screen at source time t — the last one taken at or
 // before it, or the first when t precedes them all — and -1 for a take without snapshots.
-func snapshotAt(snapshots []take.Snapshot, t time.Duration) int {
+func SnapshotAt(snapshots []take.Snapshot, t time.Duration) int {
 	if len(snapshots) == 0 {
 		return -1
 	}

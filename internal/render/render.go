@@ -153,11 +153,11 @@ func newPlan(loaded *clip.Clip, options Options, stderr io.Writer) (*plan, error
 			return nil, err
 		}
 	}
-	rasterizer, err := newRasterizer(loaded, frame)
+	rasterizer, err := NewRasterizer(loaded)
 	if err != nil {
 		return nil, err
 	}
-	compositor, err := newCompositor(loaded, recorded, clipSchedule, rasterizer)
+	compositor, err := NewCompositor(loaded, recorded, clipSchedule, rasterizer)
 	if err != nil {
 		return nil, err
 	}
@@ -206,9 +206,11 @@ func palettePath(loaded *clip.Clip) (string, error) {
 	return filepath.Join(work, loaded.Storyboard.Clip+paletteSuffix), nil
 }
 
-// newRasterizer builds the rasterizer over the config's fonts and theme at the frame's geometry,
-// scaled by frame.scale.
-func newRasterizer(loaded *clip.Clip, frame storyboard.Frame) (*raster.Rasterizer, error) {
+// NewRasterizer builds the rasterizer over the config's fonts and theme at the geometry of the
+// storyboard's frame, scaled by frame.scale. It fails when a font cannot be loaded or the geometry
+// is refused by [raster.New].
+func NewRasterizer(loaded *clip.Clip) (*raster.Rasterizer, error) {
+	frame := loaded.Storyboard.Frame
 	faces, err := fonts.Load(loaded.Config.Fonts)
 	if err != nil {
 		return nil, err
@@ -222,9 +224,11 @@ func newRasterizer(loaded *clip.Clip, frame storyboard.Frame) (*raster.Rasterize
 	})
 }
 
-// newCompositor plans the zooms and the cursor over the rasterizer's cell layout, resolving zoom
-// targets through the config's areas and clearing a zoomed frame to the theme background.
-func newCompositor(
+// NewCompositor plans the zooms and the cursor over the rasterizer's cell layout, resolving zoom
+// targets through the config's areas and clearing a zoomed frame to the theme background. The
+// rasterizer must be the one [NewRasterizer] built for the same clip, so the layout matches the
+// frames it draws. It fails when an area or a zoom target does not resolve.
+func NewCompositor(
 	loaded *clip.Clip,
 	recorded *take.Take,
 	clipSchedule *schedule.Schedule,
@@ -258,16 +262,24 @@ func writeSummary(w io.Writer, path string, clipSchedule *schedule.Schedule) err
 		return err
 	}
 	for _, section := range clipSchedule.Sections {
-		row := fmt.Sprintf("  beat %d  cut", section.Beat)
-		if !section.Cut {
-			taken := (section.End - section.Start).Round(time.Millisecond)
-			row = fmt.Sprintf("  beat %d  %.2f×  %s of take in %s", section.Beat, section.Speed, taken, section.Duration)
-		}
-		if _, err := fmt.Fprintln(w, row); err != nil {
+		if _, err := fmt.Fprintln(w, summaryIndent+BeatReport(section)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// summaryIndent sets each beat row of the summary under its path line.
+const summaryIndent = "  "
+
+// BeatReport is one beat's summary row, without indent: `beat N  <speed>×  <take> of take in
+// <duration>`, the take span rounded to the millisecond, or `beat N  cut` for a cut section.
+func BeatReport(section schedule.Section) string {
+	if section.Cut {
+		return fmt.Sprintf("beat %d  cut", section.Beat)
+	}
+	taken := (section.End - section.Start).Round(time.Millisecond)
+	return fmt.Sprintf("beat %d  %.2f×  %s of take in %s", section.Beat, section.Speed, taken, section.Duration)
 }
 
 const (

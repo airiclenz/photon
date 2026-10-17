@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
+	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 )
@@ -333,12 +334,50 @@ func TestSnapshotAt(t *testing.T) {
 	snapshots := []take.Snapshot{{At: sec}, {At: 2 * sec}, {At: 4 * sec}}
 	cases := map[time.Duration]int{0: 0, sec: 0, 1999 * time.Millisecond: 0, 2 * sec: 1, 3 * sec: 1, 9 * sec: 2}
 	for at, want := range cases {
-		if got := snapshotAt(snapshots, at); got != want {
-			t.Errorf("snapshotAt(%s): want %d, got %d", at, want, got)
+		if got := SnapshotAt(snapshots, at); got != want {
+			t.Errorf("SnapshotAt(%s): want %d, got %d", at, want, got)
 		}
 	}
-	if got := snapshotAt(nil, 0); got != -1 {
-		t.Errorf("snapshotAt on no snapshots: want -1, got %d", got)
+	if got := SnapshotAt(nil, 0); got != -1 {
+		t.Errorf("SnapshotAt on no snapshots: want -1, got %d", got)
+	}
+}
+
+func TestBeatReport(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		section schedule.Section
+		want    string
+	}{
+		{
+			name: "kept",
+			section: schedule.Section{
+				BeatSpan: take.BeatSpan{Beat: 3, Start: sec, End: sec + 481*time.Millisecond + 400*time.Microsecond},
+				Duration: 3 * sec,
+				Speed:    1,
+			},
+			want: "beat 3  1.00×  481ms of take in 3s",
+		},
+		{
+			name: "cut",
+			section: schedule.Section{
+				BeatSpan: take.BeatSpan{Beat: 2, Start: sec, End: 2 * sec},
+				Cut:      true,
+			},
+			want: "beat 2  cut",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := BeatReport(tt.section)
+
+			if got != tt.want {
+				t.Errorf("BeatReport() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

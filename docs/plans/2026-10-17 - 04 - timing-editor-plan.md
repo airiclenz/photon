@@ -80,7 +80,9 @@ empty, invalid zoom); `WithStoryboard` reports an undeclared area and keeps `Wor
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard/ ./internal/clip/` ; `go vet ./internal/storyboard/ ./internal/clip/`
 **Commit:** `refactor(storyboard): parse a storyboard from bytes; let a clip take a new storyboard`
 
-## 2. Render's frame builders, exported
+## 2. Render's frame builders, exported — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): the summary row's two-space indent is the named constant `summaryIndent` (magic-string rule), so `writeSummary` prints `summaryIndent + BeatReport(section)`; output unchanged
 
 **What:**
 **Goal:** `internal/render` exports `NewRasterizer(loaded *clip.Clip) (*raster.Rasterizer,
