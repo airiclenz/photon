@@ -16,3 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Frames are drawn with fonts embedded in the binary (Source Code Pro with Noto Sans Symbols 2, Math and Symbols as fallbacks, under the SIL Open Font License), so a clip renders the same on every machine; a project can supply its own faces through the config's `fonts` directory.
 - `photon lint <storyboard>` prints every problem in a storyboard and its config without recording anything, and `photon setup <storyboard>` runs the config's `setup` once to build the rig.
 - `photon version` and `photon --version` print photon's version.
+- Maintainers can cut a release with `go run ./cmd/release` (`dist`, `status`, `prepare`, `publish`, `smoke`), and bumping `VERSION` on `main` now tags the release automatically.
+- Every release archive carries the SIL Open Font License texts of the embedded fonts (`SourceCodePro-OFL.txt`, `NotoSansMath-OFL.txt`, `NotoSansSymbols-OFL.txt`) beside `LICENSE` and `README.md`.
+- Installing photon with Homebrew or Scoop now installs ffmpeg with it, so `photon render` works out of the box; gifsicle stays optional.
+- photon installs with Homebrew (`brew install airiclenz/tap/photon`), with Scoop from the `airiclenz/scoop-bucket` bucket, or from the release archives on GitHub, beside `go install`; `docs/releasing.md` describes how a release is cut.
