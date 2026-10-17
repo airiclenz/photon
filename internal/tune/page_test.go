@@ -12,7 +12,11 @@ import (
 )
 
 // pageFileNames are the files the page is made of, each embedded under page/.
-var pageFileNames = []string{"index.html", "style.css", "app.js", "timeline.js"}
+var pageFileNames = []string{"index.html", "style.css", "app.js", "timeline.js", "picker.js"}
+
+// pickerCalls are what picker.js must call: the pick endpoint and the clipboard its copy buttons
+// write the snippets to.
+var pickerCalls = []string{"/api/pick", "navigator.clipboard.writeText"}
 
 // tuneContract lists every member of the window.tune object app.js exposes to the lanes and
 // the target picker.
@@ -154,6 +158,17 @@ func TestPage_App_DefinesTheTuneContract(t *testing.T) {
 		pattern := regexp.MustCompile(`(?m)^\s*` + member + `\s*:`)
 		if !pattern.Match(object[1]) {
 			t.Errorf("window.tune has no member %s", member)
+		}
+	}
+}
+
+func TestPage_Picker_CallsPickAndClipboard(t *testing.T) {
+	t.Parallel()
+	picker := string(readPageFile(t, "picker.js"))
+
+	for _, call := range pickerCalls {
+		if !strings.Contains(picker, call) {
+			t.Errorf("picker.js does not contain %s", call)
 		}
 	}
 }

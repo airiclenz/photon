@@ -18,6 +18,7 @@
   --lane-hold: #d9d9d4;
   --lane-zoom: #cfe3d4;
   --lane-hatch: #9a9a94;
+  --pick-box: #f2b705;
   --lane-name-width: 56px;
   --lane-height: 26px;
   --cut-marker-width: 10px;
@@ -43,6 +44,7 @@
     --lane-hold: #34342f;
     --lane-zoom: #23392a;
     --lane-hatch: #6b6b66;
+    --pick-box: #ffd24d;
   }
 }
 
@@ -140,6 +142,68 @@ select {
   max-width: 100%;
   height: auto;
   border-radius: var(--radius);
+}
+
+.stage.picking {
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.pick-drag,
+.pick-box {
+  position: absolute;
+  pointer-events: none;
+}
+
+.pick-drag {
+  border: 1px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.pick-box {
+  border: 2px solid var(--pick-box);
+  border-radius: 2px;
+}
+
+.pick-drag[hidden],
+.pick-box[hidden] {
+  display: none;
+}
+
+.picker {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+#pick[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.pick-result {
+  margin-top: 8px;
+  padding: 8px var(--gap);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.pick-target {
+  display: block;
+  margin-bottom: 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.pick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .frame-message {

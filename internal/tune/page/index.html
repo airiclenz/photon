@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/assets/style.css">
 <script src="/assets/app.js" defer></script>
 <script src="/assets/timeline.js" defer></script>
+<script src="/assets/picker.js" defer></script>
 </head>
 <body>
 <div id="banner" class="banner" hidden>
@@ -16,9 +17,25 @@
 <main class="workspace">
   <section class="preview" aria-label="Preview">
     <div id="stage" class="stage">
-      <img id="frame" alt="The composed frame at the playhead">
+      <img id="frame" alt="The composed frame at the playhead" draggable="false">
+      <div id="pick-drag" class="pick-drag" hidden></div>
+      <div id="pick-box" class="pick-box" hidden></div>
     </div>
     <p id="frame-message" class="frame-message" hidden></p>
+    <div class="picker">
+      <button id="pick" type="button" aria-pressed="false" title="Pick a target: drag across the cells of one row">&#x2316; Pick</button>
+      <span id="pick-status" class="status" role="status"></span>
+    </div>
+    <div id="pick-result" class="pick-result" hidden>
+      <code id="pick-target" class="pick-target"></code>
+      <div class="pick-actions">
+        <button id="pick-zoom" type="button">Set as zoom target</button>
+        <button type="button" data-snippet="click">Copy click</button>
+        <button type="button" data-snippet="seen">Copy seen</button>
+        <button type="button" data-snippet="drag-from">Copy drag from</button>
+        <button type="button" data-snippet="drag-to">Copy drag to</button>
+      </div>
+    </div>
   </section>
   <aside class="inspector" aria-label="Inspector">
     <label class="inspector-pick">

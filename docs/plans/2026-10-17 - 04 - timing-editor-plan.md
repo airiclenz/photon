@@ -382,7 +382,10 @@ clip; undo restores.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/`
 **Commit:** `feat(tune): add draggable timeline lanes`
 
-## 11. Page: target picker
+## 11. Page: target picker — ✅ DONE (2026-10-17)
+
+NOTES (2026-10-17): consequential edit — internal/tune/page_test.go: made necessary by adding page/picker.js; pageFileNames enumerates the page's files, so the asset test now also requires picker.js embedded, non-empty and loaded by index.html, and the new TestPage_Picker_CallsPickAndClipboard greps it for `/api/pick` and `navigator.clipboard.writeText`, as the item's Tests line asks.
+NOTES (2026-10-17): app.js is not edited; picker.js uses only window.tune (frame, pause, frameTime, selected, state, edit). It defers its box redraw on the <img> load event by one animation frame, because app.js records frameTime in its own onload handler, which may run after the picker's listener. Setting the zoom target sends `zoom.target` when the selected beat already zooms and `zoom` when it does not, with the response's `snippets.zoom` as the value. No JS runtime is installed on the host, so the JS was checked only by the Go asset tests and by counting brackets; the manual step (pick `beta`, set as zoom target, Save, git diff) is still to be done in a browser.
 
 Depends on item 10.
 
