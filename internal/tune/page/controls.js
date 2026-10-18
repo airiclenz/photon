@@ -122,8 +122,9 @@
     return fieldRow(label + " (x, y)", element("span", { className: "inline" }, x, y));
   }
 
-  function countField(label, field, count) {
-    const input = element("input", { type: "number", min: "1", step: "1", value: String(count) });
+  // countField edits the clip's field as a whole number no less than min.
+  function countField(label, field, count, min) {
+    const input = element("input", { type: "number", min, step: "1", value: String(count) });
     input.addEventListener("change", () => applyEdit(CLIP, field, numberOf(input.value)));
     return fieldRow(label, input);
   }

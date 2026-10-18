@@ -23,10 +23,11 @@ func newTuneCommand() *cobra.Command {
 		Use:   "tune <storyboard> [<take>]",
 		Short: "Tune a storyboard's timing, zoom and frame against a take in a local page",
 		Long: "tune serves a page on 127.0.0.1 that previews the take frame for frame as render\n" +
-			"composes it, and edits each beat's duration, hold, cut and zoom and the clip's\n" +
-			"frame.width and frame.fps on a timeline. Save writes the edits back into the\n" +
-			"storyboard in place, changing only the edited values; it is refused while an edit\n" +
-			"leaves the storyboard invalid or the file changed on disk since it was loaded. A " +
+			"composes it, and edits each beat's duration, hold, cut and zoom on a timeline and\n" +
+			"the clip's frame.width, fps, font_size, line_height, padding and scale. Save\n" +
+			"writes the edits back into the storyboard in place, changing only the edited\n" +
+			"values; it is refused while an edit leaves the storyboard invalid or the file\n" +
+			"changed on disk since it was loaded. A " +
 			"target\npicker on the paused preview proposes a target the resolver finds on the " +
 			"picked cells.\npause and the do actions show read-only: changing them needs photon " +
 			"record.\ntune listens on --port (default: any free port), prints the page's " +

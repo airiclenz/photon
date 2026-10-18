@@ -934,6 +934,40 @@ func TestPageJS_CaptionFont_ShowsSizeAndWeight_AndSendsTheEdits(t *testing.T) {
 	}
 }
 
+func TestPageJS_ClipFrame_EditsTheFontFields(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixture(t).session
+	page := loadPage(t, session)
+	cases := []struct {
+		label, field, typed string
+		value               any
+		stateOf             func(State) any
+	}{
+		{"font size", storyboard.FieldFrameFontSize, "12.5", 12.5, func(s State) any { return s.FontSize }},
+		{"line height", storyboard.FieldFrameLineHeight, "1.25", 1.25, func(s State) any { return s.LineHeight }},
+		{"padding (px)", storyboard.FieldFramePadding, "0", 0, func(s State) any { return s.Padding }},
+		{"scale", storyboard.FieldFrameScale, "3", 3, func(s State) any { return s.Scale }},
+	}
+	for _, label := range []string{"cols", "rows", "max_colors"} {
+		if !page.hasField(label) {
+			t.Errorf("the Clip frame panel shows no read-only %q row", label)
+		}
+	}
+
+	for _, edit := range cases {
+		page.setField(edit.label, "value", edit.typed)
+
+		page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":0},"field":%q,"value":%v}`,
+			storyboard.OwnerClip, edit.field, edit.value))
+		if got := edit.stateOf(session.State()); got != edit.value {
+			t.Errorf("the frame's %s after the edit: want %v, got %v", edit.label, edit.value, got)
+		}
+		if !page.isRequestedAfter("/api/edit", frameAPIPrefix) {
+			t.Errorf("the page did not reload the preview frame after the %s edit", edit.label)
+		}
+	}
+}
+
 // hasField says the inspector shows exactly one field row labelled label.
 func (p *pageHarness) hasField(label string) bool {
 	p.t.Helper()

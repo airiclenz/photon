@@ -29,7 +29,8 @@ type State struct {
 	FPS      int            `json:"fps"`
 	Width    int            `json:"width"`
 
-	// The frame's other fields, which photon tune shows but does not edit.
+	// The frame's other fields: padding, font_size, line_height and scale, which photon tune
+	// edits as frame.<key>, and cols, rows and max_colors, which it shows but does not edit.
 	Cols       int     `json:"cols"`
 	Rows       int     `json:"rows"`
 	Padding    int     `json:"padding"`

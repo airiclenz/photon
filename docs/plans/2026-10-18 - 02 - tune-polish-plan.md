@@ -289,7 +289,9 @@ padding −1, scale 0), with a TestLoadRejects case for the range wording beside
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard/`; `LLL ./internal/storyboard/...`
 **Commit:** `feat(storyboard): edit the frame's font size, line height, padding and scale`
 
-## 8. Edit the frame font fields in the Clip frame panel
+## 8. Edit the frame font fields in the Clip frame panel — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): `countField` now takes its `min` as a fourth argument (padding takes 0, width, fps and scale take 1) instead of hardcoding "1"; `internal/tune/doc.go`'s Edit paragraph was rewrapped after naming the four new frame fields.
 
 **What:** Depends on item 7.
 **Goal:** The tune inspector's Clip frame panel shows `font_size`, `line_height`, `padding` and

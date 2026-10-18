@@ -1,6 +1,7 @@
 package tune
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -255,7 +256,7 @@ func TestSession_State_ReportsTheSchedule(t *testing.T) {
 	}
 }
 
-func TestSession_State_ReportsTheReadOnlyFrame(t *testing.T) {
+func TestSession_State_ReportsTheFrame(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixture(t)
 
@@ -264,6 +265,30 @@ func TestSession_State_ReportsTheReadOnlyFrame(t *testing.T) {
 	frame := []any{state.Cols, state.Rows, state.Padding, state.FontSize, state.LineHeight, state.Scale, state.MaxColors}
 	if want := []any{fixtureCols, 4, 4, 10.0, 1.2, 2, 16}; !slices.Equal(frame, want) {
 		t.Errorf("cols, rows, padding, font_size, line_height, scale, max_colors %v, want %v", frame, want)
+	}
+}
+
+func TestSession_Apply_FrameFontSize_ChangesTheFrame(t *testing.T) {
+	t.Parallel()
+	const fontSize = 12.5
+	const out = 500 * time.Millisecond
+	f := newSessionFixture(t)
+	before, err := f.session.Frame(out)
+	if err != nil {
+		t.Fatalf("Frame(%s) before the edit: %v", out, err)
+	}
+
+	f.apply(t, frameEdit(storyboard.FieldFrameFontSize, fontSize))
+
+	if got := f.session.State().FontSize; got != fontSize {
+		t.Errorf("the frame's font size after the edit: want %v, got %v", fontSize, got)
+	}
+	after, err := f.session.Frame(out)
+	if err != nil {
+		t.Fatalf("Frame(%s) after the edit: %v", out, err)
+	}
+	if bytes.Equal(after, before) {
+		t.Errorf("the frame at %s is unchanged by the font size edit", out)
 	}
 }
 
