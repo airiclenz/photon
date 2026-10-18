@@ -55,7 +55,9 @@ func workVars(work string) []string {
 // runCommand runs command, the config field named field, as `sh -c <command>` in dir with vars
 // set over the operator's env and both output streams going to out. An empty command runs
 // nothing.
-func runCommand(ctx context.Context, field, command, dir string, vars []string, out io.Writer) error {
+func runCommand(
+	ctx context.Context, field, command, dir string, vars []string, out io.Writer,
+) error {
 	if command == "" {
 		return nil
 	}

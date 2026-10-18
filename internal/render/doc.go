@@ -12,10 +12,10 @@
 //
 // The GIF goes to the storyboard's ship path unless [Options] names another, its directory created
 // when missing. Run then prints `<path>  <size>  <length>s` and one `beat N  <speed>×  <take> of
-// take in <duration>` row per beat, or `beat N  cut`. A dry run prints the two ffmpeg command lines,
-// the palette pass first, one per line, and runs nothing. A take recorded at another size than the
-// storyboard's frame is refused: its cells are what the rasterizer lays out and its targets are
-// resolved on.
+// take in <duration>` row per beat, or `beat N  cut`. A dry run prints the two ffmpeg command
+// lines, the palette pass first, one per line, and runs nothing. A take recorded at another size
+// than the storyboard's frame is refused: its cells are what the rasterizer lays out and its
+// targets are resolved on.
 //
 // Every frame comes from one [Pipeline]: [Build] checks the take's frame size, schedules it and
 // builds the rasterizer, the caption faces, the target resolver and the compositor, and the

@@ -693,7 +693,10 @@ internal/check/check.go — judgement.expects; internal/testkit/docmap.go — na
 - `GOMEMLIMIT=2GiB go test` on each of those packages, one at a time
 **Commit:** `style: wrap cmd/photon and the caption-to-engine packages at 100 columns`
 
-## 20. Wrap internal/{raster,render,rig,schedule,service} to 100 columns
+## 20. Wrap internal/{raster,render,rig,schedule,service} to 100 columns — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): a few over-long lines were wrapped by moving a subexpression into a local (`top`/`right` in raster's block masks, `fill` in fillMask, `optimize` in plan.encode, `size` in the run summary, `played` in schedule's speed, `startErr` in launch, `const access` in joinGroup) or by turning an `if err := ...` header in rig.Record into an assignment to its existing `err`; none changes behaviour, and every error and output text is byte-identical. The service doc map's procgroup_windows.go entry wraps onto a 5-space continuation line, the shape the doc-map test parses; encode.go's `//nolint:gosec` lines needed no change.
+NOTES (2026-10-18): the Acceptance command `GOOS=windows LLL ./internal/service/...` as written fails before linting (`go run` builds a Windows golangci-lint binary that cannot exec here); it was run as a host-built v2.13.2 golangci-lint invoked with `GOOS=windows` (0 issues, both lll-only and the full config).
 
 **What:** Depends on item 17. As item 19, for these packages.
 **Regression guard.** Acceptance also runs `GOOS=windows LLL ./internal/service/...` (procgroup_windows.go is Windows-only).

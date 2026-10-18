@@ -101,7 +101,9 @@ func (r readiness) accepts() bool {
 // awaitReady waits until service is ready, its process exits, timeout passes or ctx is done,
 // whichever comes first; only the first is a nil error. A service that is not ready is named
 // with its log path in the error.
-func awaitReady(ctx context.Context, service *running, ready readiness, timeout time.Duration) error {
+func awaitReady(
+	ctx context.Context, service *running, ready readiness, timeout time.Duration,
+) error {
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 	poll := time.NewTicker(readyPollInterval)
@@ -124,7 +126,8 @@ func awaitReady(ctx context.Context, service *running, ready readiness, timeout 
 			return fmt.Errorf("%w: service %s within %s; its log is %s",
 				ErrNotReady, service.name, timeout, service.log)
 		case <-ctx.Done():
-			return fmt.Errorf("wait for service %s: %w; its log is %s", service.name, ctx.Err(), service.log)
+			return fmt.Errorf("wait for service %s: %w; its log is %s",
+				service.name, ctx.Err(), service.log)
 		case <-poll.C:
 		}
 	}

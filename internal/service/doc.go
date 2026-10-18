@@ -20,6 +20,7 @@
 //   - ready.go: waiting for a service to be ready, by TCP accept or by an output line.
 //   - expand.go: [ExpandEnv], the ${PHOTON_*} expansion of config env values.
 //   - procgroup_unix.go: on unix, a service's own process group, signalled and killed whole.
-//   - procgroup_windows.go: on Windows, a Job object holding the service's process tree, killed whole.
+//   - procgroup_windows.go: on Windows, a Job object holding the service's process tree, killed
+//     whole.
 //   - procgroup_other.go: elsewhere, the service process alone.
 package service

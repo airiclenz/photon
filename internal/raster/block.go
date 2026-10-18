@@ -61,9 +61,11 @@ func drawBlockElement(mask *image.Alpha, ru rune) {
 	case ru == blockUpperHalf:
 		fillMask(mask, image.Rect(0, 0, width, middleY), fullCoverage)
 	case ru >= blockLowerEighthsFirst && ru <= blockFull:
-		fillMask(mask, image.Rect(0, height-rows(int(ru-blockUpperHalf)), width, height), fullCoverage)
+		top := height - rows(int(ru-blockUpperHalf))
+		fillMask(mask, image.Rect(0, top, width, height), fullCoverage)
 	case ru > blockFull && ru <= blockLeftEighthsLast:
-		fillMask(mask, image.Rect(0, 0, columns(eighthsPerCell-int(ru-blockFull)), height), fullCoverage)
+		right := columns(eighthsPerCell - int(ru-blockFull))
+		fillMask(mask, image.Rect(0, 0, right, height), fullCoverage)
 	case ru == blockRightHalf:
 		fillMask(mask, image.Rect(middleX, 0, width, height), fullCoverage)
 	case ru >= blockShadeFirst && ru <= blockShadeLast:

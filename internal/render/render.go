@@ -237,7 +237,8 @@ func newCompositor(
 ) (*compose.Compositor, error) {
 	layout := cellLayout(loaded.Storyboard.Frame, rasterizer)
 	background := loaded.Config.Theme.BG.RGBA()
-	return compose.New(loaded.Storyboard, recorded, clipSchedule, resolver, layout, background, captionFaces)
+	return compose.New(
+		loaded.Storyboard, recorded, clipSchedule, resolver, layout, background, captionFaces)
 }
 
 // cellLayout is where the cells of frame sit in the frames rasterizer draws, which must be one
@@ -260,7 +261,8 @@ func writeSummary(w io.Writer, path string, clipSchedule *schedule.Schedule) err
 		return err
 	}
 	seconds := strconv.FormatFloat(clipSchedule.Length.Seconds(), 'f', -1, 64)
-	if _, err := fmt.Fprintf(w, "%s  %s  %ss\n", path, humanSize(stat.Size()), seconds); err != nil {
+	size := humanSize(stat.Size())
+	if _, err := fmt.Fprintf(w, "%s  %s  %ss\n", path, size, seconds); err != nil {
 		return err
 	}
 	for _, section := range clipSchedule.Sections {
@@ -281,7 +283,8 @@ func BeatReport(section schedule.Section) string {
 		return fmt.Sprintf("beat %d  cut", section.Beat)
 	}
 	taken := (section.End - section.Start).Round(time.Millisecond)
-	return fmt.Sprintf("beat %d  %.2f×  %s of take in %s", section.Beat, section.Speed, taken, section.Duration)
+	return fmt.Sprintf("beat %d  %.2f×  %s of take in %s",
+		section.Beat, section.Speed, taken, section.Duration)
 }
 
 const (

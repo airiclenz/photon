@@ -176,7 +176,8 @@ type palette struct {
 // newPalette resolves theme; an ANSI palette that is not exactly 16 colours is an error.
 func newPalette(theme config.Theme) (palette, error) {
 	if len(theme.ANSI) != ansiColors {
-		return palette{}, fmt.Errorf("raster: theme has %d ANSI colours, want %d", len(theme.ANSI), ansiColors)
+		return palette{}, fmt.Errorf("raster: theme has %d ANSI colours, want %d",
+			len(theme.ANSI), ansiColors)
 	}
 	p := palette{fg: theme.FG.RGBA(), bg: theme.BG.RGBA()}
 	for i, c := range theme.ANSI {
@@ -243,5 +244,7 @@ func blend(under, over color.RGBA, percent int) color.RGBA {
 	mix := func(a, b uint8) uint8 {
 		return uint8((int(b)*percent + int(a)*(fullPercent-percent) + blendRounding) / fullPercent)
 	}
-	return color.RGBA{R: mix(under.R, over.R), G: mix(under.G, over.G), B: mix(under.B, over.B), A: opaque}
+	return color.RGBA{
+		R: mix(under.R, over.R), G: mix(under.G, over.G), B: mix(under.B, over.B), A: opaque,
+	}
 }

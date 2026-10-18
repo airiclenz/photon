@@ -44,7 +44,8 @@ func joinGroup(process *os.Process) (*group, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create a job: %w", err)
 	}
-	handle, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(process.Pid))
+	const access = windows.PROCESS_SET_QUOTA | windows.PROCESS_TERMINATE
+	handle, err := windows.OpenProcess(access, false, uint32(process.Pid))
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("open the process: %w", err), windows.CloseHandle(job))
 	}

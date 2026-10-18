@@ -137,7 +137,8 @@ func optimizeGIF(ctx context.Context, path string) error {
 		return nil
 	}
 	optimized := path + optimizedSuffix
-	if err := runQuiet(ctx, []string{gifsicleProgram, gifsicleOptimize, "-o", optimized, path}); err != nil {
+	optimize := []string{gifsicleProgram, gifsicleOptimize, "-o", optimized, path}
+	if err := runQuiet(ctx, optimize); err != nil {
 		return err
 	}
 	return os.Rename(optimized, path)

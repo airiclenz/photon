@@ -89,7 +89,9 @@ func Build(
 	if err != nil {
 		return nil, err
 	}
-	built := &Pipeline{loaded: loaded, recorded: recorded, schedule: clipSchedule, cache: options.Cache}
+	built := &Pipeline{
+		loaded: loaded, recorded: recorded, schedule: clipSchedule, cache: options.Cache,
+	}
 	if built.err = built.buildFrames(options.Reuse); built.err != nil {
 		return built, built.err
 	}
@@ -118,11 +120,13 @@ func (p *Pipeline) buildFrames(previous *Pipeline) error {
 	if err != nil {
 		return err
 	}
-	compositor, err := newCompositor(p.loaded, p.recorded, p.schedule, rasterizer, resolver, captionFaces)
+	compositor, err := newCompositor(
+		p.loaded, p.recorded, p.schedule, rasterizer, resolver, captionFaces)
 	if err != nil {
 		return err
 	}
-	p.rasterizer, p.cache, p.captionFaces, p.compositor = rasterizer, cache, captionFaces, compositor
+	p.rasterizer, p.cache = rasterizer, cache
+	p.captionFaces, p.compositor = captionFaces, compositor
 	return nil
 }
 

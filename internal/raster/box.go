@@ -66,7 +66,8 @@ func proceduralGlyph(ru rune, width, height, stroke int) *image.Alpha {
 
 // fillMask sets every pixel of r (clipped to the mask) to alpha.
 func fillMask(mask *image.Alpha, r image.Rectangle, alpha uint8) {
-	draw.Draw(mask, r.Intersect(mask.Rect), &image.Uniform{C: color.Alpha{A: alpha}}, image.Point{}, draw.Src)
+	fill := &image.Uniform{C: color.Alpha{A: alpha}}
+	draw.Draw(mask, r.Intersect(mask.Rect), fill, image.Point{}, draw.Src)
 }
 
 // Box-drawing line weights, as boxArmTable spells them.

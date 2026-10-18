@@ -133,7 +133,8 @@ func plan(cfg *config.Config, profile string) ([]planned, error) {
 	if profile != "" {
 		chosen, isDeclared := cfg.Profiles[profile]
 		if !isDeclared {
-			return nil, fmt.Errorf("%w %q; declared: %s", ErrUnknownProfile, profile, declared(cfg.Profiles))
+			return nil, fmt.Errorf("%w %q; declared: %s",
+				ErrUnknownProfile, profile, declared(cfg.Profiles))
 		}
 		overrides = chosen.Services
 	}
@@ -218,7 +219,8 @@ func portFor(fixed int, taken map[int]bool) (int, error) {
 			return port, nil
 		}
 	}
-	return 0, fmt.Errorf("every free port the kernel offered in %d tries is a fixed one", maxPortAttempts)
+	return 0, fmt.Errorf("every free port the kernel offered in %d tries is a fixed one",
+		maxPortAttempts)
 }
 
 // freePort asks the kernel for a free loopback port and releases it for the service to take.
@@ -236,7 +238,9 @@ func freePort() (int, error) {
 
 // launch starts the service's process with its output in its log, and reaps it in the
 // background. It returns the readiness check to wait on.
-func launch(dir, work string, next planned, port int, environ []string) (*running, readiness, error) {
+func launch(
+	dir, work string, next planned, port int, environ []string,
+) (*running, readiness, error) {
 	var ready readiness
 	var pattern *regexp.Regexp
 	if next.service.Ready.Line != "" {
@@ -267,7 +271,8 @@ func launch(dir, work string, next planned, port int, environ []string) (*runnin
 	cmd.WaitDelay = waitDelay
 	prepareGroup(cmd)
 	if err := cmd.Start(); err != nil {
-		return nil, ready, errors.Join(fmt.Errorf("start service %s: %w", next.name, err), logFile.Close())
+		startErr := fmt.Errorf("start service %s: %w", next.name, err)
+		return nil, ready, errors.Join(startErr, logFile.Close())
 	}
 	group, err := joinGroup(cmd.Process)
 	if err != nil {
@@ -275,7 +280,9 @@ func launch(dir, work string, next planned, port int, environ []string) (*runnin
 			cmd.Process.Kill(), cmd.Wait(), logFile.Close())
 	}
 
-	service := &running{name: next.name, log: logPath, cmd: cmd, group: group, exited: make(chan struct{})}
+	service := &running{
+		name: next.name, log: logPath, cmd: cmd, group: group, exited: make(chan struct{}),
+	}
 	go service.reap(logFile)
 	return service, ready, nil
 }

@@ -78,7 +78,8 @@ func New(board *storyboard.Storyboard, recorded *take.Take) (*Schedule, error) {
 			continue
 		}
 		if !section.fits() {
-			section.Speed = float64(section.length()-section.Hold) / float64(section.Duration-section.Hold)
+			played := section.Duration - section.Hold
+			section.Speed = float64(section.length()-section.Hold) / float64(played)
 		}
 		if section.Speed > maxSectionSpeed {
 			schedule.Warnings = append(schedule.Warnings, fmt.Sprintf(
@@ -110,7 +111,9 @@ func mismatchOf(board *storyboard.Storyboard, err error) error {
 
 // declares reports whether the storyboard has a beat with id.
 func declares(board *storyboard.Storyboard, id int) bool {
-	return slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool { return beat.ID == id })
+	return slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool {
+		return beat.ID == id
+	})
 }
 
 // sectionsOf pairs each span with its storyboard beat's timing, in span order.
@@ -124,7 +127,9 @@ func sectionsOf(board *storyboard.Storyboard, spans []take.BeatSpan) []Section {
 	sections := make([]Section, 0, len(spans))
 	for _, span := range spans {
 		beat := beats[span.Beat]
-		sections = append(sections, Section{BeatSpan: span, Duration: beat.Duration, Hold: beat.Hold, Cut: beat.Cut})
+		sections = append(sections, Section{
+			BeatSpan: span, Duration: beat.Duration, Hold: beat.Hold, Cut: beat.Cut,
+		})
 	}
 	return sections
 }

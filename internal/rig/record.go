@@ -48,7 +48,9 @@ const takeEnv = "PHOTON_TAKE"
 // writes the take, then returns that error (a beat's is an *[engine.BeatError]) without checking
 // the take or running `on_success`. A failure before the launch records nothing. The services are
 // stopped on every path. Rows come back whenever the check ran, even when `on_success` then fails.
-func Record(ctx context.Context, loaded *clip.Clip, profile string, out io.Writer) ([]check.Row, error) {
+func Record(
+	ctx context.Context, loaded *clip.Clip, profile string, out io.Writer,
+) ([]check.Row, error) {
 	cfg := loaded.Config
 	onSuccess, err := onSuccessOf(cfg, profile)
 	if err != nil {
@@ -80,7 +82,9 @@ func Record(ctx context.Context, loaded *clip.Clip, profile string, out io.Write
 	}
 	stopped := func(err error) error { return errors.Join(err, services.Stop()) }
 	ports := services.Env()
-	recording := recorder{board: loaded.Storyboard, cfg: cfg, resolver: resolver, quitKeys: quitKeys}
+	recording := recorder{
+		board: loaded.Storyboard, cfg: cfg, resolver: resolver, quitKeys: quitKeys,
+	}
 	recorded, beatsErr := recording.record(ctx, slices.Concat(workVars(work), ports))
 	if recorded == nil {
 		return nil, stopped(beatsErr)
@@ -92,12 +96,14 @@ func Record(ctx context.Context, loaded *clip.Clip, profile string, out io.Write
 		return nil, stopped(beatsErr)
 	}
 
-	rows, err := check.Judge(ctx, loaded.Storyboard, recorded, resolver, work, takePath, check.Options{Env: ports})
+	rows, err := check.Judge(
+		ctx, loaded.Storyboard, recorded, resolver, work, takePath, check.Options{Env: ports})
 	if err := stopped(err); err != nil {
 		return nil, err
 	}
 	vars := append(workVars(work), takeEnv+"="+takePath)
-	if err := runCommand(ctx, "on_success", onSuccess, cfg.Dir, slices.Concat(vars, ports), out); err != nil {
+	err = runCommand(ctx, "on_success", onSuccess, cfg.Dir, slices.Concat(vars, ports), out)
+	if err != nil {
 		return rows, err
 	}
 	return rows, nil
@@ -113,7 +119,8 @@ func onSuccessOf(cfg *config.Config, profile string) (string, error) {
 	chosen, isDeclared := cfg.Profiles[profile]
 	if !isDeclared {
 		declared := slices.Sorted(maps.Keys(cfg.Profiles))
-		return "", fmt.Errorf("%w %q; declared: %s", service.ErrUnknownProfile, profile, strings.Join(declared, ", "))
+		return "", fmt.Errorf("%w %q; declared: %s",
+			service.ErrUnknownProfile, profile, strings.Join(declared, ", "))
 	}
 	return chosen.OnSuccess, nil
 }
