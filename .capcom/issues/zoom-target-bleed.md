@@ -1,11 +1,13 @@
 ---
 title: A zoom-in first heads for a target the camera left earlier
-status: open
+status: done
 type: bug
 priority: 2
 labels: [tune]
 plan: 2026-10-18 - 04 - open-issues-plan
 created: 2026-10-18T19:02:14Z
+closed: 2026-10-18T21:05:12Z
+reason: pan paths start from the visible crop centre; resolved by plan "2026-10-18 - 04 - open-issues-plan" (archived at 74103a6)
 ---
 
 A zoom that aims at a target can start by heading for an older target and switch to its own

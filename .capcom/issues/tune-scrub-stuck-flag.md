@@ -1,10 +1,12 @@
 ---
 title: Scrub can leave the tune preview stuck on draft frames
-status: open
+status: done
 type: bug
 priority: 3
 plan: 2026-10-18 - 04 - open-issues-plan
 created: 2026-10-18T18:40:19Z
+closed: 2026-10-18T21:05:12Z
+reason: scrub ends on any window pointer release; resolved by plan "2026-10-18 - 04 - open-issues-plan" (archived at 74103a6)
 ---
 
 A scrub on `photon tune`'s timeline axis ends only through `pointerup` or `pointercancel` on

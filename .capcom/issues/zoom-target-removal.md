@@ -1,11 +1,13 @@
 ---
 title: Aim only through the pan track
-status: open
+status: done
 type: task
 priority: 2
 labels: [tune]
 plan: 2026-10-18 - 04 - open-issues-plan
 created: 2026-10-18T19:29:47Z
+closed: 2026-10-18T21:05:12Z
+reason: zoom target removed and refused on load, docs updated; resolved by plan "2026-10-18 - 04 - open-issues-plan" (archived at 74103a6)
 ---
 
 Targets belong on the pan track only. The pan track holds the camera's focus points, and

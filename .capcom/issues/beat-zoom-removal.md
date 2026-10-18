@@ -1,11 +1,13 @@
 ---
 title: Remove beat zoom
-status: open
+status: done
 type: task
 priority: 2
 labels: [tune]
 plan: 2026-10-18 - 04 - open-issues-plan
 created: 2026-10-18T19:29:47Z
+closed: 2026-10-18T21:05:12Z
+reason: beat zoom removed and refused on load, CHANGELOG notes the break; resolved by plan "2026-10-18 - 04 - open-issues-plan" (archived at 74103a6)
 ---
 
 A beat's `zoom` (`beats[i].zoom`) duplicates the camera's zoom and pan moves. It is a second
