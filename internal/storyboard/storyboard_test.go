@@ -169,6 +169,10 @@ func TestLoadEveryForm(t *testing.T) {
 			Via: []Point{{Target: Target{Text: "Items", Nth: NthFirst, Area: AreaAny}}, {Cell: &Cell{X: 10, Y: 5}}},
 			At:  Moment{Offset: time.Second}, Over: 800 * time.Millisecond, Ease: EaseSmooth, start: time.Second,
 		}},
+		{Zoom: &ZoomMove{
+			To: 2, Target: &Target{Text: "Item 2", Nth: NthLast, Area: "list"}, At: Moment{Offset: 1800 * time.Millisecond},
+			Over: 200 * time.Millisecond, Ease: EaseSmooth, start: 1800 * time.Millisecond,
+		}},
 	}
 	if !reflect.DeepEqual(board.Camera, wantCamera) {
 		t.Errorf("camera: want %+v with smooth by default and resolved starts, got %+v", wantCamera, board.Camera)
@@ -258,6 +262,19 @@ func TestLoadRejects_Camera(t *testing.T) {
 			"camera[1]: pan: overlaps beat 1's zoom section [0s, 3s), which holds both tracks", false},
 		{"zoom in a beat's zoom", "offset: 100ms", "offset: -100ms",
 			"camera[0]: zoom: overlaps beat 1's zoom section [0s, 3s), which holds both tracks", false},
+		{"unknown zoom target field", "to: 2,", "to: 2, target: {text: 'Grip', size: 2},", "field size not found", true},
+		{"zoom target without text", panToCell, "  - zoom: {to: 1, target: {area: list}, at: 3600ms, over: 400ms}",
+			"camera[1]: zoom.target.text: missing", false},
+		{"zoom target regex", panToCell, "  - zoom: {to: 1, target: {text: '('}, at: 3600ms, over: 400ms}",
+			"camera[1]: zoom.target.text: error parsing regexp", false},
+		{"zoom target area", panToCell, "  - zoom: {to: 1, target: {text: 'Grip', area: 'a b'}, at: 3600ms, over: 400ms}",
+			`camera[1]: zoom.target.area: want an area name or any, got "a b"`, false},
+		{"targeted zoom before an overlapping pan", "to: 2,", "to: 2, target: {text: 'Grip'},",
+			"camera[1]: pan: overlaps camera[0] on the pan track ([3.1s, 3.6s) and [3s, 3.4s))", false},
+		{"targeted zoom after an overlapping pan",
+			"pan: {via: [{text: 'Grip', area: list}, {cell: {x: 2, y: 3}}], at: 4s, over: 1s}",
+			"zoom: {to: 1, target: {text: 'Grip'}, at: 3s, over: 100ms}",
+			"camera[2]: zoom: overlaps camera[1] on the pan track ([3s, 3.4s) and [3s, 3.1s))", false},
 	}
 	if _, err := Parse([]byte(cameraBase), "camera.yaml"); err != nil {
 		t.Fatalf("the camera base storyboard must parse clean: %v", err)

@@ -6,10 +6,11 @@ import (
 )
 
 // CameraMove is one move of the clip's camera, placed on the clip's output clock. Exactly one of
-// Zoom and Pan is set. The camera has two independent tracks: a zoom move runs on the zoom track
-// and a pan move on the pan track, so a zoom and a pan may overlap, while two moves on one track
-// may not. A kept beat's [Zoom] holds both tracks for the whole of its section. A move whose `at`
-// is absent starts at the clip's first frame.
+// Zoom and Pan is set. The camera has two tracks: a zoom move runs on the zoom track and a pan
+// move on the pan track, so an untargeted zoom and a pan may overlap, while two moves on one track
+// may not. A zoom with a Target aims the camera too, so it holds the pan track as well. A kept
+// beat's [Zoom] holds both tracks for the whole of its section. A move whose `at` is absent
+// starts at the clip's first frame.
 //
 // A move's authored At stays as written; [Load] also resolves it onto the output clock, which
 // [ZoomMove.Start] and [PanMove.Start] report. A move built as a struct literal rather than loaded
@@ -20,11 +21,15 @@ type CameraMove struct {
 }
 
 // ZoomMove changes the magnification to To, a factor in [1, 3], starting At and lasting Over.
+// Target, when set, is what the zoom aims at: the camera pans to its box's centre over the same
+// stretch, so a targeted zoom holds the pan track as well as the zoom track. Its box resolves on
+// the screen shown at the move's end, walking back to the move's start when it is absent there.
 type ZoomMove struct {
-	To   float64       `yaml:"to"`
-	At   Moment        `yaml:"at"`
-	Over time.Duration `yaml:"over"`
-	Ease Ease          `yaml:"ease"`
+	To     float64       `yaml:"to"`
+	Target *Target       `yaml:"target"`
+	At     Moment        `yaml:"at"`
+	Over   time.Duration `yaml:"over"`
+	Ease   Ease          `yaml:"ease"`
 
 	start time.Duration
 }
@@ -107,8 +112,8 @@ type moveTiming struct {
 }
 
 // validateCamera checks every camera move's form and its place on the clip's clock, keeping the
-// start it resolves, then that no two moves on one track overlap and that no move overlaps a kept
-// beat's zoom section. Problems are filed under camera[i], an overlap under the later move.
+// start it resolves, then that no two moves holding one track overlap and that no move overlaps a
+// kept beat's zoom section. Problems are filed under camera[i], an overlap under the later move.
 func (s *Storyboard) validateCamera(collect collector) {
 	held := map[string][]span{trackZoom: nil, trackPan: nil}
 	clock := s.Clock()
@@ -126,11 +131,14 @@ func (s *Storyboard) validateCamera(collect collector) {
 		}
 		move.place(placed.start)
 		placed.holder = holder
-		for _, other := range held[track] {
-			if placed.overlaps(other) {
-				moveReport("%s: overlaps %s on the %s track (%s and %s)",
-					track, other.holder, track, other, placed)
+		for _, heldTrack := range move.tracks() {
+			for _, other := range held[heldTrack] {
+				if placed.overlaps(other) {
+					moveReport("%s: overlaps %s on the %s track (%s and %s)",
+						track, other.holder, heldTrack, other, placed)
+				}
 			}
+			held[heldTrack] = append(held[heldTrack], placed)
 		}
 		for _, zoom := range beatZooms {
 			if placed.overlaps(zoom) {
@@ -138,7 +146,19 @@ func (s *Storyboard) validateCamera(collect collector) {
 					track, zoom.holder, zoom)
 			}
 		}
-		held[track] = append(held[track], placed)
+	}
+}
+
+// tracks names the camera tracks a move with a valid form holds: a pan holds the pan track, a
+// zoom the zoom track, and a targeted zoom, which aims the camera as it zooms, both.
+func (m CameraMove) tracks() []string {
+	switch {
+	case m.Pan != nil:
+		return []string{trackPan}
+	case m.Zoom.Target != nil:
+		return []string{trackZoom, trackPan}
+	default:
+		return []string{trackZoom}
 	}
 }
 
@@ -183,10 +203,13 @@ func (m CameraMove) place(start time.Duration) {
 	m.Pan.start = start
 }
 
-// validate checks the zoom move's factor.
+// validate checks the zoom move's factor and, when it has one, its target.
 func (z ZoomMove) validate(report reporter) {
 	if z.To < minZoomFactor || z.To > maxZoomFactor {
 		report("to: want in [%d, %d], got %g", minZoomFactor, maxZoomFactor, z.To)
+	}
+	if z.Target != nil {
+		z.Target.validate(prefixed(report, "target."))
 	}
 }
 

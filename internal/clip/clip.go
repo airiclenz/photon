@@ -188,15 +188,18 @@ func namedAreas(board *storyboard.Storyboard) []namedArea {
 	return append(named, cameraAreas(board)...)
 }
 
-// cameraAreas lists the area field of every point a camera pan aims at, set or not; a cell point
-// leaves its area empty.
+// cameraAreas lists the area field of every target a camera zoom or point a camera pan aims at,
+// set or not; a cell point leaves its area empty.
 func cameraAreas(board *storyboard.Storyboard) []namedArea {
 	var named []namedArea
 	for index, move := range board.Camera {
+		owner := storyboard.Owner{Kind: storyboard.OwnerCamera, Index: index}
+		if move.Zoom != nil && move.Zoom.Target != nil {
+			named = append(named, namedArea{owner, "zoom.target.area", move.Zoom.Target.Area})
+		}
 		if move.Pan == nil {
 			continue
 		}
-		owner := storyboard.Owner{Kind: storyboard.OwnerCamera, Index: index}
 		if move.Pan.To != nil {
 			named = append(named, namedArea{owner, "pan.to.area", move.Pan.To.Area})
 		}

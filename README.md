@@ -438,11 +438,15 @@ tracking, the modes in which a terminal reports moves while a button is held.
 ### Camera
 
 The top-level `camera` list moves the camera on the clip's own clock, the timeline of the
-shipped GIF, not the take's. The camera has two tracks that run independently: a **zoom** track
-(the magnification, at rest at 1×) and a **pan** track (the point the crop centres on, at rest at
-the frame's centre). Each entry of `camera` is exactly one move:
+shipped GIF, not the take's. The camera has two tracks: a **zoom** track (the magnification, at
+rest at 1×) and a **pan** track (the point the crop centres on, at rest at the frame's centre).
+Each entry of `camera` is exactly one move:
 
-- `zoom`: eases the magnification to `to`, a factor from 1 to 3. `to: 1` zooms back out.
+- `zoom`: eases the magnification to `to`, a factor from 1 to 3. `to: 1` zooms back out. An
+  optional `target` (a [target](#targets-and-areas): `text`, with `nth` and `area`) aims the zoom:
+  the camera pans to the centre of the target's box over the zoom's own `over`, with its `ease`.
+  photon finds the target the way it finds a pan's target point, below. A targeted zoom holds the
+  pan track as well as the zoom track.
 - `pan`: carries the centre to a point. Set exactly one of two forms:
   - `to`: one point. The camera moves there in a straight line.
   - `via`: a list of at least two points. The camera follows a smooth curve through them,
@@ -478,19 +482,22 @@ camera:
       over: 2s
       ease: linear
   - zoom: {to: 1, at: 9500ms, over: 800ms}
+  - zoom: {to: 2, target: {text: 'Saved'}, at: 11s, over: 600ms}
 ```
 
-A zoom and a pan may overlap: that is how the camera pushes in while it moves. Two moves on the
-same track may not. A beat's `zoom` holds both tracks for its whole section, so no camera move may
-overlap that section. Between moves, each track holds where the last move left it. A pan shows
-only while the camera is zoomed in: at 1× the whole frame is in view. A pan at 1× still sets where
-the next zoom aims.
+A zoom without a `target` and a pan may overlap: that is how the camera pushes in while it moves.
+Two moves on the same track may not, so a targeted zoom overlaps neither a pan nor another zoom.
+A beat's `zoom` holds both tracks for its whole section, so no camera move may overlap that
+section. Between moves, each track holds where the last move left it. A pan shows only while the
+camera is zoomed in: at 1× the whole frame is in view. A pan at 1× still sets where the next zoom
+without a `target` aims.
 
 `photon lint` reports a move that sets both or neither of `zoom` and `pan`, a `zoom.to` outside
 1-3, a pan with both or neither of `to` and `via`, a `via` with fewer than two points, a point
-with both or neither of `text` and `cell`, a cell outside the grid, an `ease` other than `smooth`
-or `linear`, an `over` that is not >0, an `at` that names a missing or cut beat, a move that
-starts outside the clip or ends after it, and every overlap above.
+with both or neither of `text` and `cell`, a zoom `target` without `text` or with a bad `text` or
+`area`, a cell outside the grid, an `ease` other than `smooth` or `linear`, an `over` that is not
+>0, an `at` that names a missing or cut beat, a move that starts outside the clip or ends after
+it, and every overlap above.
 
 ### Captions
 

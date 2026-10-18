@@ -411,7 +411,12 @@ page test sets the fixture session's build and asserts `#build` text.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/ ./cmd/photon/`; `LLL ./internal/tune/... ./cmd/photon/...`
 **Commit:** `feat(tune): show photon's build on the page`
 
-## 12. Give a camera zoom move an optional target
+## 12. Give a camera zoom move an optional target — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): `target` sits second in `ZoomMove`'s key order (`to, target, at, over, ease`), so a later Upsert of it lands after `to`.
+NOTES (2026-10-18): fields_test.go: camera[4]'s camera.at sample moved from {beat 1, 1100ms} to {beat 1, 1000ms}; its 800ms via pan would otherwise overlap the new targeted zoom camera[5] on the pan track at [1.8s, 2s).
+NOTES (2026-10-18): two overlapping targeted zooms get two problems, one per shared track (zoom and pan). That is accurate, so they are not merged into one.
+NOTES (2026-10-18): README says a targeted zoom pans to its target over the zoom's `over`, as the ratified "Zoom aim" call says. compose starts doing that in item 14.
 
 **What:** Model and validation half of `camera-zoom-target`.
 **Regression guard.** `TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder`'s `ZoomMove` pin gains

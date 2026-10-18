@@ -409,7 +409,7 @@ func TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder(t *testing.T) {
 		{"a storyboard skips its path", reflect.TypeFor[Storyboard](),
 			[]string{"clip", "ship", "frame", "expect", "beats", "camera", "captions"}},
 		{"a point leaves its inline target out", reflect.TypeFor[Point](), []string{"cell"}},
-		{"a zoom move skips its unexported start", reflect.TypeFor[ZoomMove](), []string{"to", "at", "over", "ease"}},
+		{"a zoom move skips its unexported start", reflect.TypeFor[ZoomMove](), []string{"to", "target", "at", "over", "ease"}},
 		{"a pan move", reflect.TypeFor[PanMove](), []string{"to", "via", "at", "over", "ease"}},
 		{"a caption skips its resolved times and colours", reflect.TypeFor[Caption](), []string{
 			"text", "at", "for", "until", "font", "place", "align", "offset", "position", "color", "box", "fade",
