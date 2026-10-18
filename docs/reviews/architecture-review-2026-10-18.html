@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture review for photon</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; }
+      .diagram { min-height: 300px; }
+      .mermaid { display: flex; justify-content: center; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <header class="space-y-4">
+        <p class="label text-slate-500">Architecture review · 2026-10-18</p>
+        <h1 class="font-serif text-4xl">photon</h1>
+        <p class="text-sm text-slate-600">
+          Scope: the hot spots of the last 60 commits. These are <span class="font-mono">internal/tune</span> and
+          <span class="font-mono">internal/yamledit</span>, and the storyboard → schedule → compose → caption → render chain.
+        </p>
+        <div class="flex flex-wrap gap-6 text-xs text-slate-600 items-center">
+          <span class="flex items-center gap-2"><span class="inline-block w-5 h-4 border border-slate-500 bg-white"></span>module</span>
+          <span class="flex items-center gap-2"><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="#475569" stroke-width="2" class="seam"/></svg>seam</span>
+          <span class="flex items-center gap-2"><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke-width="2" class="leak"/></svg>leakage</span>
+          <span class="flex items-center gap-2"><span class="inline-block w-5 h-4 deep rounded-sm"></span>deep module</span>
+        </div>
+        <nav class="text-sm flex flex-wrap gap-x-5 gap-y-1 text-indigo-700">
+          <a href="#c1">1 · Frame pipeline</a><a href="#c2">2 · One output clock</a><a href="#c3">3 · Located problems</a>
+          <a href="#c4">4 · Typed storyboard edits</a><a href="#c5">5 · yamledit upsert</a><a href="#c6">6 · Resolve once</a>
+          <a href="#c7">7 · Take owns screen lookup</a><a href="#top">Top recommendation</a>
+        </nav>
+      </header>
+
+      <section id="candidates" class="space-y-10">
+
+        <!-- 1 -->
+        <article id="c1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="font-serif text-2xl mr-3">1 · Deepen the render module into one frame pipeline</h2>
+            <span class="rounded-full bg-emerald-100 text-emerald-800 px-3 py-0.5 text-xs font-semibold">Strong</span>
+            <span class="rounded-full bg-slate-100 text-slate-700 px-3 py-0.5 text-xs">in-process</span>
+            <span class="rounded-full bg-slate-100 text-slate-700 px-3 py-0.5 text-xs">fonts: local-substitutable</span>
+          </div>
+          <ul class="font-mono text-sm text-slate-700 grid sm:grid-cols-2 gap-x-6">
+            <li>internal/render/render.go (newPlan, NewRasterizer, NewCompositor)</li>
+            <li>internal/render/encode.go (writeFrames, SnapshotAt, BeatReport)</li>
+            <li>internal/tune/session.go (build, rasterizerFor, checkFrame)</li>
+            <li>internal/tune/frame.go · internal/tune/pick.go</li>
+            <li>internal/tune/frame_test.go (renderedFrame oracle)</li>
+            <li>internal/compose/compose.go (Layout)</li>
+          </ul>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 p-4 diagram">
+              <p class="label text-slate-500 mb-2">Before: the chain is wired 3×</p>
+              <pre class="mermaid">
+flowchart TB
+  R[render.newPlan] --> S[schedule.New]
+  T[tune.Session.build] --> S
+  O[frame_test oracle] --> S
+  R --> RZ[NewRasterizer]
+  T -.leak.-> RZ
+  T -.leak.-> CP[NewCompositor]
+  R --> CP
+  P[tune.Pick] -.leak.-> SA[SnapshotAt]
+  P -.leak.-> TG[target.New]
+  CP --> TG
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#991b1b;
+  class T,P,O leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4 diagram flex flex-col">
+              <p class="label text-slate-500 mb-2">After: one deep module, raster cache as the seam</p>
+              <div class="flex gap-3 text-xs mb-3">
+                <div class="flex-1 border border-slate-400 rounded px-2 py-1 text-center label">render.Run (encode)</div>
+                <div class="flex-1 border border-slate-400 rounded px-2 py-1 text-center label">tune.Session</div>
+              </div>
+              <svg class="w-full" height="18"><line x1="25%" y1="0" x2="45%" y2="18" stroke="#334155" stroke-width="1.5"/><line x1="75%" y1="0" x2="55%" y2="18" stroke="#334155" stroke-width="1.5"/></svg>
+              <div class="deep rounded-lg p-4 text-slate-100 flex-1 space-y-3">
+                <p class="font-mono text-sm">Pipeline: Build(clip, take, cache)</p>
+                <p class="font-mono text-xs text-emerald-300">FrameAt(out) · ScreenAt(out) · Cell · Rect · Sections · Length</p>
+                <div class="grid grid-cols-3 gap-2 text-[0.65rem] text-slate-400 label">
+                  <span class="border border-slate-600 rounded px-1 py-1 text-center">schedule</span>
+                  <span class="border border-slate-600 rounded px-1 py-1 text-center">size check</span>
+                  <span class="border border-slate-600 rounded px-1 py-1 text-center">rasterizer</span>
+                  <span class="border border-slate-600 rounded px-1 py-1 text-center">Layout</span>
+                  <span class="border border-slate-600 rounded px-1 py-1 text-center">resolver</span>
+                  <span class="border border-slate-600 rounded px-1 py-1 text-center">caption fonts</span>
+                </div>
+                <svg class="w-full" height="10"><line x1="0" y1="5" x2="100%" y2="5" stroke="#94a3b8" class="seam"/></svg>
+                <p class="text-xs text-slate-300">Raster cache seam: <span class="font-mono">reuse-last</span> (render) · <span class="font-mono">LRU</span> (tune). Two adapters make it a real seam.</p>
+              </div>
+            </div>
+          </div>
+          <p><span class="font-semibold">Problem:</span> <span class="font-mono text-sm">render</span> exports four builders only so tune can rebuild the clip→frame chain. Tune must follow an ordering rule ("same clip's rasterizer"), and the frame-size error text is copied word for word.</p>
+          <p><span class="font-semibold">Solution:</span> make the frame pipeline a module inside <span class="font-mono text-sm">render</span>. Both the GIF encode loop and tune ask it for frames, screens and cells by output time.</p>
+          <ul class="list-disc pl-5 text-sm text-slate-700 space-y-0.5">
+            <li>Leverage: one interface, three callers</li>
+            <li>Locality: size check and resolver live in one place</li>
+            <li>Interface shrinks: four exports become one Build</li>
+            <li>Parity test checks parity by construction, without a copied oracle</li>
+            <li>FrameAt gets pixel tests without ffmpeg</li>
+            <li>No caption-font reload on every edit</li>
+          </ul>
+        </article>
+
+        <!-- 2 -->
+        <article id="c2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="font-serif text-2xl mr-3">2 · One output clock</h2>
+            <span class="rounded-full bg-emerald-100 text-emerald-800 px-3 py-0.5 text-xs font-semibold">Strong</span>
+            <span class="rounded-full bg-slate-100 text-slate-700 px-3 py-0.5 text-xs">in-process</span>
+          </div>
+          <ul class="font-mono text-sm text-slate-700 grid sm:grid-cols-2 gap-x-6">
+            <li>internal/storyboard/moment.go (ClipTime, Length)</li>
+            <li>internal/storyboard/camera.go (beatZoomSpans)</li>
+            <li>internal/schedule/schedule.go (New, sectionsOf)</li>
+            <li>internal/take/take.go (BeatSpans sorts by At)</li>
+            <li>internal/compose/zoom.go · internal/compose/camera.go</li>
+            <li>internal/caption/caption.go (span)</li>
+          </ul>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 p-4 diagram">
+              <p class="label text-slate-500 mb-3">Before: two clocks that agree by convention</p>
+              <svg viewBox="0 0 400 250" class="w-full">
+                <text x="0" y="22" font-size="11" fill="#475569">storyboard order: ClipTime</text>
+                <rect x="0" y="30" width="120" height="26" fill="#e0e7ff" stroke="#6366f1"/><text x="8" y="47" font-size="11">beat 1</text>
+                <rect x="120" y="30" width="90" height="26" fill="#e0e7ff" stroke="#6366f1"/><text x="128" y="47" font-size="11">beat 2</text>
+                <rect x="210" y="30" width="150" height="26" fill="#e0e7ff" stroke="#6366f1"/><text x="218" y="47" font-size="11">beat 3</text>
+                <text x="0" y="92" font-size="11" fill="#475569">take-start order: schedule OutStart</text>
+                <rect x="0" y="100" width="120" height="26" fill="#fef3c7" stroke="#d97706"/><text x="8" y="117" font-size="11">beat 1</text>
+                <rect x="120" y="100" width="150" height="26" fill="#fef3c7" stroke="#d97706"/><text x="128" y="117" font-size="11">beat 3</text>
+                <rect x="270" y="100" width="90" height="26" fill="#fef3c7" stroke="#d97706"/><text x="278" y="117" font-size="11">beat 2</text>
+                <line x1="120" y1="56" x2="270" y2="100" stroke-width="2" class="leak"/>
+                <text x="0" y="160" font-size="11" fill="#334155">beat zooms → OutStart (amber)</text>
+                <text x="0" y="178" font-size="11" fill="#334155">camera moves, captions → ClipTime (indigo)</text>
+                <text x="0" y="196" font-size="11" fill="#334155">beatZoomSpans: a third copy of the sum</text>
+                <text x="0" y="226" font-size="11" fill="#dc2626">Nothing checks that the two orders match.</text>
+                <text x="0" y="242" font-size="11" fill="#dc2626">If they differ, zooms and captions drift apart.</text>
+              </svg>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4 diagram flex flex-col gap-3">
+              <p class="label text-slate-500">After: one clock, the schedule consumes it</p>
+              <div class="deep rounded-lg p-4 text-slate-100">
+                <p class="font-mono text-sm">OutputClock (from beats)</p>
+                <p class="font-mono text-xs text-emerald-300 mt-1">SectionStart(beat) · Resolve(Moment) · Length</p>
+              </div>
+              <div class="grid grid-cols-3 gap-2 text-center label text-slate-600">
+                <div class="border border-slate-300 rounded py-2">schedule</div>
+                <div class="border border-slate-300 rounded py-2">compose</div>
+                <div class="border border-slate-300 rounded py-2">caption</div>
+              </div>
+              <p class="text-xs text-slate-600"><span class="font-mono">schedule.New</span> rejects a take whose beat order differs from the clock's, so agreement holds by construction.</p>
+            </div>
+          </div>
+          <p><span class="font-semibold">Problem:</span> output time is summed in four places, in two orders. Beat zooms use one order; camera moves and captions use the other. They agree only because the rig happens to run beats in storyboard order.</p>
+          <p><span class="font-semibold">Solution:</span> one clock module derived from the beats. <span class="font-mono text-sm">ClipTime</span>, <span class="font-mono text-sm">beatZoomSpans</span> and schedule's <span class="font-mono text-sm">OutStart</span> read from it.</p>
+          <ul class="list-disc pl-5 text-sm text-slate-700 space-y-0.5">
+            <li>Locality: one sum, one order</li>
+            <li>Latent drift becomes a load error</li>
+            <li>One table test replaces the agreement test</li>
+            <li>validateCamera checks the right zoom spans</li>
+          </ul>
+        </article>
+
+        <!-- 3 -->
+        <article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="font-serif text-2xl mr-3">3 · Located problems instead of scraped messages</h2>
+            <span class="rounded-full bg-emerald-100 text-emerald-800 px-3 py-0.5 text-xs font-semibold">Strong</span>
+            <span class="rounded-full bg-slate-100 text-slate-700 px-3 py-0.5 text-xs">in-process</span>
+          </div>
+          <ul class="font-mono text-sm text-slate-700 grid sm:grid-cols-2 gap-x-6">
+            <li>internal/tune/state.go (problemsOf, beatNamed, clipLevelPrefixes)</li>
+            <li>internal/tune/page/app.js (errorRows, entryErrorPrefix)</li>
+            <li>internal/storyboard/validate.go (prefixed)</li>
+            <li>internal/compose/camera.go:131,137</li>
+            <li>internal/caption/caption.go:67</li>
+            <li>internal/clip/clip.go:156,189</li>
+          </ul>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 p-4 diagram">
+              <p class="label text-slate-500 mb-2">Before: the owner is re-guessed from text on both sides of the HTTP seam</p>
+              <pre class="mermaid">
+flowchart TB
+  SB["storyboard: 'camera[2]: …'"] --> PR[problemsOf + regex beat N]
+  CO["compose: 'compose: camera[2]: …'"] -.misses prefix.-> PR
+  CA["caption: 'caption: captions[0]: …'"] -.misses prefix.-> PR
+  PR -->|"Problem{Beat int, Message}"| JS["app.js startsWith('camera[2]')"]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#991b1b;
+  class CO,CA leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4 diagram flex flex-col gap-3">
+              <p class="label text-slate-500">After: the producer states the owner once</p>
+              <div class="grid grid-cols-3 gap-2 text-center label text-slate-600">
+                <div class="border border-slate-300 rounded py-2">storyboard</div>
+                <div class="border border-slate-300 rounded py-2">compose</div>
+                <div class="border border-slate-300 rounded py-2">caption</div>
+              </div>
+              <div class="deep rounded-lg p-4 text-slate-100">
+                <p class="font-mono text-sm">located error</p>
+                <p class="font-mono text-xs text-emerald-300 mt-1">Owner{beat | camera | caption | clip, index}</p>
+              </div>
+              <svg class="w-full" height="12"><line x1="0" y1="6" x2="100%" y2="6" stroke="#475569" stroke-width="1.5" class="seam"/></svg>
+              <div class="border border-slate-300 rounded py-2 text-center label text-slate-600">page filters on owner fields</div>
+              <p class="text-xs text-slate-600">No regex, no prefix list, no <span class="font-mono">startsWith</span>.</p>
+            </div>
+          </div>
+          <p><span class="font-semibold">Problem:</span> a compose-stage or caption-stage error starts with <span class="font-mono text-sm">compose: </span> or <span class="font-mono text-sm">caption: </span>. Both prefix checks miss it, so it never shows on its move's or caption's panel, and it lands on a beat if it names one.</p>
+          <p><span class="font-semibold">Solution:</span> the code that writes the <span class="font-mono text-sm">camera[i]</span> prefix today attaches a typed owner instead. <span class="font-mono text-sm">Problem</span> serialises it.</p>
+          <ul class="list-disc pl-5 text-sm text-slate-700 space-y-0.5">
+            <li>Fixes a latent misattribution</li>
+            <li>Tests assert owner, not substrings</li>
+            <li>One test per pipeline stage</li>
+            <li>Deletes the regex and the prefix list</li>
+          </ul>
+        </article>
+
+        <!-- 4 -->
+        <article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="font-serif text-2xl mr-3">4 · A storyboard-owned source editor with typed edits</h2>
+            <span class="rounded-full bg-amber-100 text-amber-800 px-3 py-0.5 text-xs font-semibold">Worth exploring</span>
+            <span class="rounded-full bg-slate-100 text-slate-700 px-3 py-0.5 text-xs">in-process</span>
+            <span class="rounded-full bg-slate-100 text-slate-700 px-3 py-0.5 text-xs">HTTP: local-substitutable</span>
+          </div>
+          <ul class="font-mono text-sm text-slate-700 grid sm:grid-cols-2 gap-x-6">
+            <li>internal/tune/edit.go · edit_camera.go · edit_caption.go</li>
+            <li>internal/tune/value.go (parseMoment, parseTarget, …)</li>
+            <li>internal/tune/state.go (364 lines of mirrored shape)</li>
+            <li>internal/tune/page/app.js · lanes.js</li>
+            <li>internal/tune/page_test.go (regex over JS)</li>
+            <li>internal/storyboard/* (struct tags, applyDefaults)</li>
+          </ul>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 p-4 diagram">
+              <p class="label text-slate-500 mb-3">Before: one caption field, eight places</p>
+              <div class="space-y-1.5 text-xs font-mono">
+                <div class="border-l-4 border-indigo-400 bg-indigo-50 px-2 py-1">storyboard: struct tag + applyDefaults</div>
+                <div class="border-l-4 border-red-400 bg-red-50 px-2 py-1">edit_caption.go: captionKeyOrder (copy of tag order)</div>
+                <div class="border-l-4 border-red-400 bg-red-50 px-2 py-1">edit.go: editFields routing</div>
+                <div class="border-l-4 border-red-400 bg-red-50 px-2 py-1">value.go: parse YAML text back</div>
+                <div class="border-l-4 border-red-400 bg-red-50 px-2 py-1">state.go: mirrored JSON shape</div>
+                <div class="border-l-4 border-red-400 bg-red-50 px-2 py-1">app.js: momentText, enums, defaults</div>
+                <div class="border-l-4 border-red-400 bg-red-50 px-2 py-1">lanes.js</div>
+                <div class="border-l-4 border-red-400 bg-red-50 px-2 py-1">page_test.go: regex over JS names</div>
+              </div>
+              <p class="text-xs text-slate-500 mt-2">Typed state → YAML text in a JSON string → parsed back in Go.</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4 diagram flex flex-col gap-3">
+              <p class="label text-slate-500">After: schema knowledge sits behind one seam</p>
+              <div class="deep rounded-lg p-4 text-slate-100 space-y-2">
+                <p class="font-mono text-sm">storyboard source editor</p>
+                <p class="font-mono text-xs text-emerald-300">Apply(src, TypedEdit) → src · Fields(board) → editable fields</p>
+                <p class="text-xs text-slate-400">key order from struct tags · defaults from applyDefaults · enum choices</p>
+              </div>
+              <svg class="w-full" height="12"><line x1="0" y1="6" x2="100%" y2="6" stroke="#475569" stroke-width="1.5" class="seam"/></svg>
+              <div class="grid grid-cols-2 gap-2 text-center label text-slate-600">
+                <div class="border border-slate-300 rounded py-2">tune session</div>
+                <div class="border border-slate-300 rounded py-2">page renders fields</div>
+              </div>
+            </div>
+          </div>
+          <p><span class="font-semibold">Problem:</span> tune holds a hand copy of the storyboard schema: six key-order tables, the defaults, about 20 field constants, and JS enum lists. Tests only catch renames that follow naming conventions.</p>
+          <p><span class="font-semibold">Solution:</span> the storyboard package owns typed edits and an editable-field description. The page sends typed JSON and renders what it is told is editable.</p>
+          <ul class="list-disc pl-5 text-sm text-slate-700 space-y-0.5">
+            <li>Locality: a new field touches one package</li>
+            <li>Deletes value.go and the key-order tables</li>
+            <li>One round-trip test replaces the JS regex tests</li>
+            <li>Unblocks the open tune issues (via, styling, add/remove)</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900">Large and cross-language. Do it before <span class="font-mono">tune-caption-styling</span> and <span class="font-mono">tune-add-remove-entries</span> add more copies.</div>
+        </article>
+
+        <!-- 5 -->
+        <article id="c5" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="font-serif text-2xl mr-3">5 · Give yamledit the query and upsert tune works around</h2>
+            <span class="rounded-full bg-amber-100 text-amber-800 px-3 py-0.5 text-xs font-semibold">Worth exploring</span>
+            <span class="rounded-full bg-slate-100 text-slate-700 px-3 py-0.5 text-xs">in-process</span>
+          </div>
+          <ul class="font-mono text-sm text-slate-700 grid sm:grid-cols-2 gap-x-6">
+            <li>internal/yamledit/document.go · scan.go</li>
+            <li>internal/tune/edit.go (splicer.lookup, childNode, writeScalar, deleteKey, replaceTarget)</li>
+            <li>internal/tune/edit_caption.go (setCaptionUntil, setCaptionFor)</li>
+            <li>internal/tune/edit_camera.go (setMoment)</li>
+          </ul>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 p-4 diagram">
+              <p class="label text-slate-500 mb-3">Before: mass of tune's splicer next to yamledit</p>
+              <div class="flex items-end gap-8 h-56 justify-center">
+                <div class="flex flex-col items-center gap-1">
+                  <div class="w-24 bg-red-200 border border-red-400" style="height:110px"></div>
+                  <div class="w-24 bg-slate-200 border border-slate-400" style="height:70px"></div>
+                  <span class="label text-slate-600">tune splicer</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div class="w-24 bg-indigo-100 border border-indigo-400" style="height:40px"></div>
+                  <div class="w-24 deep" style="height:140px"></div>
+                  <span class="label text-slate-600">yamledit</span>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-2">Red: interface tune has to know (a second <span class="font-mono">yaml.Node</span> tree, delete-then-insert tricks, path validity across splices).</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4 diagram">
+              <p class="label text-slate-500 mb-3">After: the helpers fold into yamledit</p>
+              <div class="flex items-end gap-8 h-56 justify-center">
+                <div class="flex flex-col items-center gap-1">
+                  <div class="w-24 bg-slate-200 border border-slate-400" style="height:30px"></div>
+                  <span class="label text-slate-600">tune</span>
+                </div>
+                <div class="flex flex-col items-center gap-1">
+                  <div class="w-24 bg-indigo-100 border border-indigo-400" style="height:44px"></div>
+                  <div class="w-24 deep" style="height:180px"></div>
+                  <span class="label text-slate-600">yamledit</span>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-2 font-mono">Has · Upsert(mapping, key, value, order) · DeleteIfPresent</p>
+            </div>
+          </div>
+          <p><span class="font-semibold">Problem:</span> yamledit offers strict Set/Insert/Delete/Replace and no way to query. Tune rebuilds insert-or-update and delete-if-present on a second parse tree. Multi-step edits depend on old paths staying valid.</p>
+          <p><span class="font-semibold">Solution:</span> move query, upsert and delete-if-present into yamledit, where the source spans are already known.</p>
+          <ul class="list-disc pl-5 text-sm text-slate-700 space-y-0.5">
+            <li>Deletion test: the helpers are shallow</li>
+            <li>Upsert tested once, across block, flow and sequence-item mappings</li>
+            <li>Tune drops its third parse</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900">Overlaps with #4: if typed edits land in storyboard, it becomes yamledit's only caller and needs these operations too.</div>
+        </article>
+
+        <!-- 6 -->
+        <article id="c6" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="font-serif text-2xl mr-3">6 · Resolve storyboard values once, at Parse</h2>
+            <span class="rounded-full bg-amber-100 text-amber-800 px-3 py-0.5 text-xs font-semibold">Worth exploring</span>
+            <span class="rounded-full bg-slate-100 text-slate-700 px-3 py-0.5 text-xs">in-process</span>
+          </div>
+          <ul class="font-mono text-sm text-slate-700 grid sm:grid-cols-2 gap-x-6">
+            <li>internal/storyboard/caption.go (validateTiming, validateColor)</li>
+            <li>internal/storyboard/camera.go (placeMove)</li>
+            <li>internal/caption/caption.go (span, parseColor)</li>
+            <li>internal/caption/layout.go (boxRect)</li>
+            <li>internal/compose/camera.go (planMoves, planPan)</li>
+            <li>internal/schedule/schedule.go (checkTiming) · cmd/photon/lint.go</li>
+          </ul>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 p-4 diagram">
+              <p class="label text-slate-500 mb-3">Before: validate, then every consumer resolves again</p>
+              <div class="space-y-2">
+                <div class="h-11 border-l-4 border-indigo-500 bg-indigo-50 px-3 flex items-center text-sm">storyboard: resolves Moment, checks hex, checks bounds, <span class="font-semibold ml-1">discards the result</span></div>
+                <div class="h-11 border-l-4 border-red-400 bg-red-50 px-3 flex items-center text-sm">schedule.checkTiming: re-checks duration and hold</div>
+                <div class="h-11 border-l-4 border-red-400 bg-red-50 px-3 flex items-center text-sm">caption.span / parseColor: re-resolve, error branches that can't fire</div>
+                <div class="h-11 border-l-4 border-red-400 bg-red-50 px-3 flex items-center text-sm">compose.planMoves: re-resolve <span class="font-mono ml-1">at</span></div>
+                <div class="h-11 border-l-4 border-slate-300 bg-slate-50 px-3 flex items-center text-sm text-slate-500">lint never sees caption overflow</div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4 diagram">
+              <p class="label text-slate-500 mb-3">After: three named tiers; consumers get resolved values</p>
+              <div class="space-y-2">
+                <div class="h-16 deep rounded px-3 flex flex-col justify-center text-slate-100 text-sm"><span>static: Parse returns Durations, RGBA, resolved starts</span></div>
+                <div class="h-11 border-l-4 border-emerald-500 bg-emerald-50 px-3 flex items-center text-sm">font-bound: caption box fits; <span class="font-semibold ml-1">lint runs it</span></div>
+                <div class="h-11 border-l-4 border-emerald-500 bg-emerald-50 px-3 flex items-center text-sm">take-bound: pan or zoom target is on screen</div>
+                <div class="h-11 border border-slate-200 px-3 flex items-center text-sm text-slate-500">caption.New, planMoves: no timing errors</div>
+              </div>
+            </div>
+          </div>
+          <p><span class="font-semibold">Problem:</span> validation and resolution are separate, so caption, compose and schedule each handle errors already ruled out. Checks that need only fonts and config never run in <span class="font-mono text-sm">photon lint</span>.</p>
+          <p><span class="font-semibold">Solution:</span> Parse hands out resolved values, and the tiers get names so lint can run the font-bound one.</p>
+          <ul class="list-disc pl-5 text-sm text-slate-700 space-y-0.5">
+            <li>Interface narrows: no error returns that can't happen</li>
+            <li>Lint catches caption overflow early</li>
+            <li>Deletes the unreachable error-path tests</li>
+          </ul>
+        </article>
+
+        <!-- 7 -->
+        <article id="c7" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="font-serif text-2xl mr-3">7 · Take owns screen lookup and beat matching</h2>
+            <span class="rounded-full bg-slate-200 text-slate-700 px-3 py-0.5 text-xs font-semibold">Speculative</span>
+            <span class="rounded-full bg-slate-100 text-slate-700 px-3 py-0.5 text-xs">in-process</span>
+          </div>
+          <ul class="font-mono text-sm text-slate-700 grid sm:grid-cols-2 gap-x-6">
+            <li>internal/render/encode.go (SnapshotAt)</li>
+            <li>internal/compose/zoom.go (resolveShown, panPoint until+1ns)</li>
+            <li>internal/check/check.go (beatScreens, matchBeats)</li>
+            <li>internal/schedule/schedule.go (sectionsOf)</li>
+          </ul>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 p-4 diagram">
+              <p class="label text-slate-500 mb-2">Before: three lookups, two matchers</p>
+              <pre class="mermaid">
+flowchart LR
+  subgraph screen at t
+    A[render.SnapshotAt]
+    B[compose.resolveShown]
+    C[check.beatScreens]
+  end
+  subgraph beats started
+    D[schedule.sectionsOf]
+    E[check.matchBeats]
+  end
+  K[(take.Snapshots / Events)]
+  A --> K
+  B --> K
+  C --> K
+  D --> K
+  E --> K
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4 diagram flex flex-col gap-3">
+              <p class="label text-slate-500">After: collapsed into the take</p>
+              <div class="deep rounded-lg p-4 text-slate-100 space-y-2 flex-1">
+                <p class="font-mono text-sm">take.Take</p>
+                <p class="font-mono text-xs text-emerald-300">ScreenAt(t) · ScreensDuring(span) · MatchBeats(ids)</p>
+                <div class="grid grid-cols-3 gap-2 text-[0.65rem] label text-slate-500 pt-2">
+                  <span class="border border-slate-700 rounded px-1 py-1 text-center">at-or-before</span>
+                  <span class="border border-slate-700 rounded px-1 py-1 text-center">overlap rule</span>
+                  <span class="border border-slate-700 rounded px-1 py-1 text-center">one error text</span>
+                </div>
+              </div>
+              <div class="grid grid-cols-4 gap-2 text-center label text-slate-600">
+                <div class="border border-slate-300 rounded py-1">render</div>
+                <div class="border border-slate-300 rounded py-1">compose</div>
+                <div class="border border-slate-300 rounded py-1">check</div>
+                <div class="border border-slate-300 rounded py-1">schedule</div>
+              </div>
+            </div>
+          </div>
+          <p><span class="font-semibold">Problem:</span> "which screen shows at t" is written three ways, one with a nanosecond workaround. "Did the take start exactly these beats" is written twice, with different error texts.</p>
+          <p><span class="font-semibold">Solution:</span> the take answers both questions, and its callers stop walking snapshots.</p>
+          <ul class="list-disc pl-5 text-sm text-slate-700 space-y-0.5">
+            <li>Locality: edge cases tested in take</li>
+            <li>Removes the +1ns workaround</li>
+          </ul>
+          <div class="rounded-md bg-slate-100 border border-slate-200 px-3 py-2 text-sm text-slate-700">Small payoff alone. Most of it comes free with #1, since the pipeline's ScreenAt would be the main caller.</div>
+        </article>
+      </section>
+
+      <section id="top" class="rounded-xl deep text-slate-100 p-8 space-y-3">
+        <p class="label text-emerald-300">Top recommendation</p>
+        <h2 class="font-serif text-3xl"><a href="#c1" class="underline decoration-emerald-400/60 underline-offset-4">1 · Deepen the render module into one frame pipeline</a></h2>
+        <p class="text-slate-300">It removes the leak that commit 4fb5bfc opened, makes tune's parity with render hold by construction, and gives the coming tune work (styling, via waypoints, add/remove) one interface for frames. The raster cache is a real seam with two adapters.</p>
+        <p class="text-slate-400 text-sm">Next: #3, which is small and fixes a latent misattribution. Then #2, which closes a latent clock drift.</p>
+      </section>
+    </main>
+  </body>
+</html>

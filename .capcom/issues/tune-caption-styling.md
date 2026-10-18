@@ -4,7 +4,7 @@ status: open
 type: feature
 priority: 3
 labels: [tune]
-deps: [clip-captions]
+deps: [clip-captions, typed-storyboard-edits]
 created: 2026-10-17T20:17:38Z
 ---
 

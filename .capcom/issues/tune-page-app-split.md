@@ -4,6 +4,7 @@ status: open
 type: task
 priority: 3
 labels: [tune]
+plan: 2026-10-18 - 00 - architecture-review-plan
 created: 2026-10-18T05:26:26Z
 ---
 
