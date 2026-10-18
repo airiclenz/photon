@@ -180,7 +180,11 @@ table test that takes each proposal from `/api/pick` (or `Session.Pick`) and app
 **Closes:** target-wire-one-codec
 **Commit:** `refactor(storyboard): own the target nth wire codec`
 
-## 5. Parse every tune page script with a JavaScript engine
+## 5. Parse every tune page script with a JavaScript engine — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): goja pinned at pseudo-version v0.0.0-20261017142635-e6862644b38f (no tagged releases); its go.mod raises golang.org/x/text v0.42.0 → v0.43.0 and golang.org/x/sync v0.23.0 → v0.24.0, both linked by the shipped binary (`go version -m` confirms; goja itself is not linked) — the guard named only x/text; `go build ./cmd/photon` passes.
+
+NOTES (2026-10-18): the issue `tune-page-js-check` stays open (writer's call); its `capcom log` of this item's outcome is left to the run's closeout, since the implementer never comments on a ticket.
 
 **What:** Partly addresses `tune-page-js-check` (the manual session stays the user's; log this
 item's outcome on that issue with `capcom log`).

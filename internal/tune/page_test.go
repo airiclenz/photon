@@ -12,6 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	// goja is a test-only dependency: a JavaScript engine in Go, so the page's scripts are parsed
+	// by a real engine in `go test` without a browser or node on the host.
+	"github.com/dop251/goja"
+
 	"github.com/airiclenz/photon/internal/storyboard"
 )
 
@@ -326,6 +330,19 @@ func TestPage_Scripts_SpellNoYAML(t *testing.T) {
 	for _, name := range pageScripts(t) {
 		for _, spelling := range yamlSpellings(readPageFile(t, name)) {
 			t.Errorf("%s spells YAML in %s; send the value typed instead", name, spelling)
+		}
+	}
+}
+
+func TestPage_Scripts_Parse(t *testing.T) {
+	t.Parallel()
+	for _, name := range pageScripts(t) {
+		source := string(readPageFile(t, name))
+
+		_, err := goja.Compile(name, source, true)
+
+		if err != nil {
+			t.Errorf("%s does not parse as JavaScript: %v", name, err)
 		}
 	}
 }
