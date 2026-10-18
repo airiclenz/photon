@@ -47,7 +47,7 @@ class Photon < Formula
   end
 
   test do
-    # `photon version` prints the bare version, X.Y.Z.
+    # `photon version` prints its build string, photon X.Y.Z (<commit>[, dirty]).
     assert_match version.to_s, shell_output("#{bin}/photon version")
   end
 end

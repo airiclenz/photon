@@ -36,12 +36,16 @@ type smokeFake struct {
 	revision    string
 	modified    string
 	isUnstamped bool
-	// binaryVersion is the bare version the host's released binary reports.
+	// binaryVersion is the version the host's released binary prints in the build string
+	// versionLine makes; binaryLine, when set, is the whole line it prints instead.
 	binaryVersion string
+	binaryLine    string
 	// brew is "missing" (not installed), "absent" (photon not installed through it) or
-	// "installed"; brewReports is what its photon prints for `photon version`.
+	// "installed"; brewReports is the version its photon prints for `photon version`, in the
+	// build string versionLine makes, and brewLine, when set, the whole line instead.
 	brew        string
 	brewReports string
+	brewLine    string
 	// manifest is the bucket's manifest, "" for none; bucketFailure, when set, is the error
 	// reading it fails with.
 	manifest      string
@@ -160,7 +164,7 @@ func (f *smokeFake) respondOn(goos, goarch string, call recordedCall) (string, e
 	case line == "brew --prefix":
 		return smokeBrewPrefix + "\n", nil
 	case line == filepath.Join(smokeBrewPrefix, "bin", "photon")+" "+versionArgument:
-		return f.brewReports + "\n", nil
+		return f.printedLine(f.brewLine, f.brewReports) + "\n", nil
 	case len(args) == 1 && args[0] == versionArgument:
 		// A binary extracted from an archive: only the host's own build reports the version, so
 		// running another platform's binary fails the version check.
@@ -171,9 +175,26 @@ func (f *smokeFake) respondOn(goos, goarch string, call recordedCall) (string, e
 		if string(stub) != stubBinary([]string{"CGO_ENABLED=0", "GOOS=" + goos, "GOARCH=" + goarch}) {
 			return "0.0.0\n", nil
 		}
-		return f.binaryVersion + "\n", nil
+		return f.printedLine(f.binaryLine, f.binaryVersion) + "\n", nil
 	}
 	return "", fmt.Errorf("unexpected command %q", line)
+}
+
+// printedLine is what a binary prints for `photon version`: line when it is set, otherwise the
+// build string of version made from the fake's stamp — `photon <version> (<commit>[, dirty])`,
+// or `photon <version>` when the stamp has no revision.
+func (f *smokeFake) printedLine(line, version string) string {
+	if line != "" {
+		return line
+	}
+	if f.revision == "" {
+		return "photon " + version
+	}
+	build := f.revision[:min(len(f.revision), 7)]
+	if f.modified == "true" {
+		build += ", dirty"
+	}
+	return "photon " + version + " (" + build + ")"
 }
 
 // readBuildInfo is the fake build-stamp reader: every binary carries the fake's stamp.
@@ -360,15 +381,22 @@ func TestSmokeChecks(t *testing.T) {
 			wantTally:   "6 passed, 6 failed, 0 skipped",
 		},
 		"binaries without build information": {
-			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.isUnstamped = true },
-			wantResults: [][2]string{{"FAIL", "carries no build information"}},
-			wantTally:   "6 passed, 6 failed, 0 skipped",
+			adjust: func(fake *smokeFake, _ *smokeOptions) { fake.isUnstamped = true },
+			wantResults: [][2]string{
+				{"FAIL", "carries no build information"},
+				{"PASS", "the released binary reports \"0.24.11\""},
+			},
+			wantTally: "6 passed, 6 failed, 0 skipped",
 		},
 		"binaries built from a modified tree": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) { fake.modified = "true" },
 			wantResults: [][2]string{
 				{"warning", "asset photon_0.24.11_darwin_amd64.tar.gz was built from a modified tree"},
 				{"PASS", "6 assets carry vcs.revision"},
+				{"warning", "the released binary was built from a modified tree"},
+				{"PASS", "the released binary reports \"0.24.11\""},
+				{"warning", "brew's photon was built from a modified tree"},
+				{"PASS", "brew's photon reports \"0.24.11\""},
 			},
 			wantTally: "7 passed, 0 failed, 0 skipped",
 		},
@@ -376,6 +404,33 @@ func TestSmokeChecks(t *testing.T) {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.binaryVersion = "0.24.10" },
 			wantResults: [][2]string{{"FAIL", "the released binary reports \"0.24.10\", not \"0.24.11\""}},
 			wantTally:   "6 passed, 1 failed, 0 skipped",
+		},
+		"the host's binary prints photon and the version without a commit": {
+			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.binaryLine = "photon 0.24.11" },
+			wantResults: [][2]string{{"PASS", "the released binary reports \"0.24.11\""}},
+			wantTally:   "7 passed, 0 failed, 0 skipped",
+		},
+		"the host's binary prints the bare version of a release cut before the build string": {
+			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.binaryLine = "0.24.11" },
+			wantResults: [][2]string{{"PASS", "the released binary reports \"0.24.11\""}},
+			wantTally:   "7 passed, 0 failed, 0 skipped",
+		},
+		"the host's binary prints the bare version of another release": {
+			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.binaryLine = "0.24.10" },
+			wantResults: [][2]string{{"FAIL", "the released binary reports \"0.24.10\", not \"0.24.11\""}},
+			wantTally:   "6 passed, 1 failed, 0 skipped",
+		},
+		"the host's binary prints a commit other than its build stamp": {
+			adjust: func(fake *smokeFake, _ *smokeOptions) { fake.binaryLine = "photon 0.24.11 (0123456)" },
+			wantResults: [][2]string{{"FAIL", "the released binary reports commit 0123456, but its vcs.revision is " +
+				smokeTagCommit}},
+			wantTally: "6 passed, 1 failed, 0 skipped",
+		},
+		"the host's binary prints a line that is not a version line": {
+			adjust: func(fake *smokeFake, _ *smokeOptions) { fake.binaryLine = "photon 0.24.11 (81eec1b" },
+			wantResults: [][2]string{{"FAIL",
+				"the released binary reports \"photon 0.24.11 (81eec1b\", which is not a photon version line"}},
+			wantTally: "6 passed, 1 failed, 0 skipped",
 		},
 		"no release archive for the host": {
 			adjust:      func(_ *smokeFake, options *smokeOptions) { options.goos = "freebsd" },
@@ -402,9 +457,19 @@ func TestSmokeChecks(t *testing.T) {
 			wantResults: [][2]string{{"FAIL", "brew's photon reports \"0.24.10\", not \"0.24.11\""}},
 			wantTally:   "6 passed, 1 failed, 0 skipped",
 		},
-		"a version behind photon's name is not the bare version": {
-			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brewReports = "photon 0.24.11" },
-			wantResults: [][2]string{{"FAIL", "brew's photon reports \"photon 0.24.11\", not \"0.24.11\""}},
+		"brew's photon prints photon and the version without a commit": {
+			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brewLine = "photon 0.24.11" },
+			wantResults: [][2]string{{"PASS", "brew's photon reports \"0.24.11\""}},
+			wantTally:   "7 passed, 0 failed, 0 skipped",
+		},
+		"brew's photon prints the bare version of a release cut before the build string": {
+			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brewLine = "0.24.11" },
+			wantResults: [][2]string{{"PASS", "brew's photon reports \"0.24.11\""}},
+			wantTally:   "7 passed, 0 failed, 0 skipped",
+		},
+		"brew's photon prints a commit other than its build stamp": {
+			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brewLine = "photon 0.24.11 (0123456, dirty)" },
+			wantResults: [][2]string{{"FAIL", "brew's photon reports commit 0123456, but its vcs.revision is"}},
 			wantTally:   "6 passed, 1 failed, 0 skipped",
 		},
 		"the bucket's manifest is unreadable": {
@@ -844,4 +909,46 @@ func TestPublishSmokeStepWithoutABuild(t *testing.T) {
 			t.Errorf("the step table was not printed after the failure:\n%s", result.output)
 		}
 	})
+}
+
+// TestParseVersionLine pins the line forms smoke reads from `photon version`: the build string
+// with and without its dirty mark, photon and the version alone, and the bare version of a
+// release cut before the build string; any other line does not parse.
+func TestParseVersionLine(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		line     string
+		want     versionLine
+		isParsed bool
+	}{
+		"build string":           {"photon 1.2.3 (a1b2c3d)", versionLine{version: "1.2.3", commit: "a1b2c3d"}, true},
+		"build string, dirty":    {"photon 1.2.3 (a1b2c3d, dirty)", versionLine{version: "1.2.3", commit: "a1b2c3d", isDirty: true}, true},
+		"no VCS information":     {"photon 1.2.3", versionLine{version: "1.2.3"}, true},
+		"bare version":           {"1.2.3", versionLine{version: "1.2.3"}, true},
+		"empty":                  {"", versionLine{}, false},
+		"another program's name": {"other 1.2.3", versionLine{}, false},
+		"name without a version": {"photon ", versionLine{}, false},
+		"unclosed build":         {"photon 1.2.3 (a1b2c3d", versionLine{}, false},
+		"unopened build":         {"photon 1.2.3 a1b2c3d)", versionLine{}, false},
+		"empty commit":           {"photon 1.2.3 ()", versionLine{}, false},
+		"dirty mark alone":       {"photon 1.2.3 (, dirty)", versionLine{}, false},
+		"another build mark":     {"photon 1.2.3 (a1b2c3d, clean)", versionLine{}, false},
+		"text after the build":   {"photon 1.2.3 (a1b2c3d) extra", versionLine{}, false},
+		"two lines":              {"photon 1.2.3\nphoton 1.2.4", versionLine{}, false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, isParsed := parseVersionLine(tc.line)
+
+			if isParsed != tc.isParsed {
+				t.Fatalf("parseVersionLine(%q) parsed = %t, want %t", tc.line, isParsed, tc.isParsed)
+			}
+			if isParsed && got != tc.want {
+				t.Errorf("parseVersionLine(%q) = %+v, want %+v", tc.line, got, tc.want)
+			}
+		})
+	}
 }

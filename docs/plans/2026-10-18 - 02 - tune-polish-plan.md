@@ -341,7 +341,10 @@ cmd/photon/readme_test.go — TestREADMEDocumentsEveryCommand; .capcom/knowledge
 **Acceptance:** `GOMEMLIMIT=2GiB go test . ./cmd/photon/`; `LLL . ./cmd/photon/...`; `capcom check`
 **Commit:** `feat: print the commit and dirty state in photon version`
 
-## 10. Read the version out of the build string in release smoke
+## 10. Read the version out of the build string in release smoke — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): `checkReportsVersion` parses the line with a new `parseVersionLine` (three forms; anything else FAILs quoting the raw line, "which is not a photon version line") and reads the binary's own `vcs.revision` through a small `binaryRevision` helper over `r.options.readBuildInfo`. A wrong commit FAILs as `<label> reports commit <c>, but its vcs.revision is <rev>`, and `, dirty` warns `<label> was built from a modified tree`. PASS wording is still `<label> reports "<version>"`.
+NOTES (2026-10-18): the smoke fake gains `printedLine`, which builds `photon <v> (<rev[:7]>[, dirty])` from fake.revision/fake.modified, plus `binaryLine`/`brewLine` overrides for a raw line. The brew case expecting "photon 0.24.11" to fail now passes. New cases cover the three forms, a wrong bare version, a wrong commit (host and brew), an unparsable line and the dirty warning; `TestParseVersionLine` is the parser table. smoke.go was already over the ~400-line file guideline (603 lines before, about 680 now), and the parser stayed in it because the item's Files list names no new file.
 
 **What:** Recast at the regression check (2026-10-18). Depends on item 9; keeps releases passing after it.
 **Regression guard.** Writer's decision, keeping the user's ratified "full build string" call

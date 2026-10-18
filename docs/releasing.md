@@ -91,7 +91,8 @@ release. Keep the notes file outside the repository, so it never dirties the tre
   do, changing nothing. It never prompts and never reads stdin.
 - `smoke [vX.Y.Z] [--dist-dir D]` checks a published release from the outside: the annotated tag,
   the downloaded archives against `SHA256SUMS`, each binary's build stamp against the tagged
-  commit, the host binary's `photon version` against the bare version, Homebrew and the Scoop
+  commit, the version in the host binary's `photon version` against the bare version (a commit it
+  prints must match the binary's own build stamp; `, dirty` only warns), Homebrew and the Scoop
   manifest. With `--dist-dir`, that local build's `SHA256SUMS` must equal the published one.
 
 Every verb takes a version as `vX.Y.Z` or bare `X.Y.Z`, and prints its full description with

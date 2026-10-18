@@ -28,8 +28,15 @@ const gitObjectTag = "tag"
 var nonInteractiveEnv = []string{"GIT_TERMINAL_PROMPT=0", "GH_PROMPT_DISABLED=1"}
 
 // versionArgument is the subcommand a photon binary reports its version under; it prints the
-// bare version, X.Y.Z, and nothing else.
+// build string, `photon X.Y.Z (<commit>[, dirty])`, which parseVersionLine reads.
 const versionArgument = "version"
+
+// The pieces of the build string `photon version` prints: the binary's name before the version,
+// and the marker after the commit of a build from a modified tree.
+const (
+	versionLinePrefix = binaryName + " "
+	dirtyBuildSuffix  = ", dirty"
+)
 
 // The build settings `-buildvcs` stamps into every release binary: the commit it was built from
 // and whether that tree was dirty. They — not the archive bytes — tie a published asset to the tag.
@@ -432,20 +439,89 @@ func (r *smokeRun) checkHostBinary(ctx context.Context) {
 	r.checkReportsVersion(ctx, binary, "the released binary")
 }
 
-// checkReportsVersion runs `binary version` and requires its output, trimmed, to be the bare
-// version.
+// checkReportsVersion runs `binary version` and requires the version in its line to be the bare
+// version. A commit the line prints must be a prefix of the binary's own vcs.revision, compared
+// only when its build information carries one; a build from a modified tree is only warned
+// about, as checkBuildStamps does.
 func (r *smokeRun) checkReportsVersion(ctx context.Context, binary, label string) {
-	reported, err := r.commands.run(ctx, r.options.dir, nil, binary, versionArgument)
+	output, err := r.commands.run(ctx, r.options.dir, nil, binary, versionArgument)
 	if err != nil {
 		r.fail("%s %s: %v", label, versionArgument, err)
 		return
 	}
-	reported = strings.TrimSpace(reported)
-	if want := bareRelease(r.version); reported != want {
-		r.fail("%s reports %q, not %q", label, reported, want)
+	line := strings.TrimSpace(output)
+	reported, isParsed := parseVersionLine(line)
+	if !isParsed {
+		r.fail("%s reports %q, which is not a photon version line", label, line)
 		return
 	}
-	r.pass("%s reports %q", label, reported)
+	if want := bareRelease(r.version); reported.version != want {
+		r.fail("%s reports %q, not %q", label, reported.version, want)
+		return
+	}
+	if reported.commit != "" {
+		revision := r.binaryRevision(binary)
+		if revision != "" && !strings.HasPrefix(revision, reported.commit) {
+			r.fail("%s reports commit %s, but its %s is %s",
+				label, reported.commit, vcsRevisionSetting, revision)
+			return
+		}
+	}
+	if reported.isDirty {
+		r.warn("%s was built from a modified tree", label)
+	}
+	r.pass("%s reports %q", label, reported.version)
+}
+
+// binaryRevision returns the vcs.revision stamped into binary, "" when its build information is
+// unreadable or carries none.
+func (r *smokeRun) binaryRevision(binary string) string {
+	info, err := r.options.readBuildInfo(binary)
+	if err != nil {
+		return ""
+	}
+	return buildSetting(info, vcsRevisionSetting)
+}
+
+// versionLine is what one `photon version` line says: the version, and the commit and the
+// modified-tree flag of the build when the line prints them.
+type versionLine struct {
+	version string
+	commit  string
+	isDirty bool
+}
+
+// parseVersionLine reads the line `photon version` prints in any of its forms: the build string
+// `photon X.Y.Z (<commit>[, dirty])`, `photon X.Y.Z` from a binary without VCS information, and
+// the bare `X.Y.Z` of releases cut before the build string. It reports false for any other line.
+func parseVersionLine(line string) (versionLine, bool) {
+	rest, isNamed := strings.CutPrefix(line, versionLinePrefix)
+	if !isNamed {
+		return versionLine{version: line}, isVersionToken(line)
+	}
+	version, build, hasBuild := strings.Cut(rest, " ")
+	if !isVersionToken(version) {
+		return versionLine{}, false
+	}
+	if !hasBuild {
+		return versionLine{version: version}, true
+	}
+	inner, isOpened := strings.CutPrefix(build, "(")
+	inner, isClosed := strings.CutSuffix(inner, ")")
+	if !isOpened || !isClosed {
+		return versionLine{}, false
+	}
+	commit, isDirty := strings.CutSuffix(inner, dirtyBuildSuffix)
+	if !isVersionToken(commit) {
+		return versionLine{}, false
+	}
+	return versionLine{version: version, commit: commit, isDirty: isDirty}, true
+}
+
+// isVersionToken reports whether s is one non-empty word free of the space, parentheses and
+// comma that frame the build string.
+func isVersionToken(s string) bool {
+	return s != "" && !strings.ContainsAny(s, " \t\r\n(),")
 }
 
 // publishedSums reads the release's SHA256SUMS once, writing nothing into the checkout, and
