@@ -124,14 +124,15 @@ func place(
 // span resolves the caption's start and its end on board's output clock: its at, and its at
 // plus for or its until.
 func span(board *storyboard.Storyboard, caption storyboard.Caption) (start, stop time.Duration, err error) {
-	start, err = board.ClipTime(caption.At)
+	clock := board.Clock()
+	start, err = clock.Resolve(caption.At)
 	if err != nil {
 		return 0, 0, fmt.Errorf("at: %w", err)
 	}
 	if caption.Until == nil {
 		return start, start + caption.For, nil
 	}
-	stop, err = board.ClipTime(*caption.Until)
+	stop, err = clock.Resolve(*caption.Until)
 	if err != nil {
 		return 0, 0, fmt.Errorf("until: %w", err)
 	}

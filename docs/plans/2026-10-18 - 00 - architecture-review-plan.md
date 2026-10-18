@@ -208,7 +208,12 @@ Depends on item 6.
 - `GOMEMLIMIT=2GiB go test ./internal/caption/`
 **Commit:** `feat(compose): locate camera, beat and caption errors`
 
-## 8. One output clock in the storyboard
+## 8. One output clock in the storyboard — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): beatZoomSpans reads each kept beat's start by its position in the storyboard (the clock's own per-beat entry) rather than through SectionStart by id, so a board with a duplicated beat id still gets the zoom spans and overlap texts it got before; SectionStart (first beat with the id) serves every by-id caller.
+NOTES (2026-10-18): placeMove became a plain function taking the clock, Caption.validate takes the clock beside the board, and planPan and tune's movedState/clipMS take the clock, so validateCamera, validateCaptions, planMoves, cameraStates and captionStates build one clock each instead of one per move or caption.
+NOTES (2026-10-18): the clock tests stay in moment_test.go (the file the plan lists) under TestOutputClock_* names; clockBoard gained a second beat 5 to cover the duplicated id.
+NOTES (2026-10-18): the open issue caption-cut-beat-test still names Storyboard.ClipTime (moment.go:73) in its body; the function is now OutputClock.Resolve in clock.go.
 
 **What:**
 **Goal:** `storyboard` has an `OutputClock` (from `(*Storyboard).Clock()`) with `SectionStart(beat int) (time.Duration, error)`, `Resolve(Moment) (time.Duration, error)` and `Length() time.Duration`, built from the kept beats in storyboard order; output time is summed nowhere else in `storyboard`, `compose`, `caption` or `tune`; `ClipTime`, `Storyboard.Length` and `beatZoomSpans`' own sum are gone.

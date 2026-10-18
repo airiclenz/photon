@@ -97,7 +97,8 @@ type moveTiming struct {
 // are filed under camera[i], an overlap under the later move.
 func (s *Storyboard) validateCamera(collect collector) {
 	held := map[string][]span{trackZoom: nil, trackPan: nil}
-	beatZooms := s.beatZoomSpans()
+	clock := s.Clock()
+	beatZooms := s.beatZoomSpans(clock)
 	for index, move := range s.Camera {
 		holder := fmt.Sprintf("camera[%d]", index)
 		moveReport := collect.at(Owner{Kind: OwnerCamera, Index: index})
@@ -105,7 +106,7 @@ func (s *Storyboard) validateCamera(collect collector) {
 		if !isFormValid {
 			continue
 		}
-		placed, isPlaced := s.placeMove(timing, track, moveReport)
+		placed, isPlaced := placeMove(clock, timing, track, moveReport)
 		if !isPlaced {
 			continue
 		}
@@ -124,18 +125,16 @@ func (s *Storyboard) validateCamera(collect collector) {
 	}
 }
 
-// beatZoomSpans returns the section of every kept beat that zooms, on the output clock.
-func (s *Storyboard) beatZoomSpans() []span {
+// beatZoomSpans returns the section of every kept beat that zooms, on clock. A beat's section is
+// read by its place in the storyboard, not its id, so a duplicated id still finds its own beat.
+func (s *Storyboard) beatZoomSpans(clock OutputClock) []span {
 	var spans []span
-	var start time.Duration
-	for _, beat := range s.Beats {
-		if beat.Cut {
+	for index, beat := range s.Beats {
+		if beat.Cut || beat.Zoom == nil {
 			continue
 		}
-		if beat.Zoom != nil {
-			spans = append(spans, span{fmt.Sprintf("beat %d's zoom", beat.ID), start, start + beat.Duration})
-		}
-		start += beat.Duration
+		start := clock.sections[index].start
+		spans = append(spans, span{fmt.Sprintf("beat %d's zoom", beat.ID), start, start + beat.Duration})
 	}
 	return spans
 }
@@ -208,7 +207,7 @@ func (p Point) validate(field string, frame Frame, report reporter) {
 // placeMove checks the move's length, start, end and ease, and returns the stretch it holds on
 // the output clock. isPlaced is false when the move has no length or does not fit in the clip,
 // so it holds no stretch to check for overlaps. Problems are filed under the move's form.
-func (s *Storyboard) placeMove(timing moveTiming, form string, report reporter) (placed span, isPlaced bool) {
+func placeMove(clock OutputClock, timing moveTiming, form string, report reporter) (placed span, isPlaced bool) {
 	if timing.ease != "" && timing.ease != EaseSmooth && timing.ease != EaseLinear {
 		report("%s.ease: want %s or %s, got %q", form, EaseSmooth, EaseLinear, timing.ease)
 	}
@@ -217,12 +216,12 @@ func (s *Storyboard) placeMove(timing moveTiming, form string, report reporter) 
 		report("%s.over: want >0, got %s", form, timing.over)
 		isPlaced = false
 	}
-	start, err := s.ClipTime(timing.at)
+	start, err := clock.Resolve(timing.at)
 	if err != nil {
 		report("%s.at: %v", form, err)
 		return span{}, false
 	}
-	length := s.Length()
+	length := clock.Length()
 	if start < 0 || start >= length {
 		report("%s.at: want a start in [0s, %s), got %s", form, length, start)
 		return span{}, false

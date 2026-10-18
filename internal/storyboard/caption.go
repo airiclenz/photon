@@ -112,13 +112,14 @@ var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 // validateCaptions checks every caption's text, font, placement, colours, timing and fades.
 // Problems are filed under captions[i].
 func (s *Storyboard) validateCaptions(collect collector) {
+	clock := s.Clock()
 	for index, caption := range s.Captions {
-		caption.validate(s, collect.at(Owner{Kind: OwnerCaption, Index: index}))
+		caption.validate(s, clock, collect.at(Owner{Kind: OwnerCaption, Index: index}))
 	}
 }
 
-// validate applies the caption's rules, resolving its times on board's output clock.
-func (c Caption) validate(board *Storyboard, report reporter) {
+// validate applies the caption's rules, resolving its times on clock, board's output clock.
+func (c Caption) validate(board *Storyboard, clock OutputClock, report reporter) {
 	if strings.TrimSuffix(c.Text, "\n") == "" {
 		report("text: missing")
 	}
@@ -126,7 +127,7 @@ func (c Caption) validate(board *Storyboard, report reporter) {
 	c.validatePlacement(report)
 	validateColor("color", c.Color, report)
 	c.Box.validate(report)
-	length, isTimed := c.validateTiming(board, report)
+	length, isTimed := c.validateTiming(clock, report)
 	c.Fade.validate(length, isTimed, report)
 }
 
@@ -178,7 +179,7 @@ func (b CaptionBox) validate(report reporter) {
 // validateTiming checks that the caption sets exactly one end, that it starts inside the clip
 // and that it ends after its start and by the clip's end, and returns how long it shows.
 // isTimed is false when any of that fails, so there is no length to fit the fades in.
-func (c Caption) validateTiming(board *Storyboard, report reporter) (length time.Duration, isTimed bool) {
+func (c Caption) validateTiming(clock OutputClock, report reporter) (length time.Duration, isTimed bool) {
 	hasEnd := true
 	if (c.For == 0) == (c.Until == nil) {
 		report("want exactly one of for or until")
@@ -188,12 +189,12 @@ func (c Caption) validateTiming(board *Storyboard, report reporter) (length time
 		report("for: want >0, got %s", c.For)
 		hasEnd = false
 	}
-	start, err := board.ClipTime(c.At)
+	start, err := clock.Resolve(c.At)
 	if err != nil {
 		report("at: %v", err)
 		return 0, false
 	}
-	clipLength := board.Length()
+	clipLength := clock.Length()
 	if start < 0 || start >= clipLength {
 		report("at: want a start in [0s, %s), got %s", clipLength, start)
 		return 0, false
@@ -204,7 +205,7 @@ func (c Caption) validateTiming(board *Storyboard, report reporter) (length time
 	stop, field := start+c.For, "for"
 	if c.Until != nil {
 		field = "until"
-		if stop, err = board.ClipTime(*c.Until); err != nil {
+		if stop, err = clock.Resolve(*c.Until); err != nil {
 			report("until: %v", err)
 			return 0, false
 		}

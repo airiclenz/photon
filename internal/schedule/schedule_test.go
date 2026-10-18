@@ -320,19 +320,20 @@ func TestNew_AgreesWithTheStoryboardClipClock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	clock := board.Clock()
 	for _, section := range schedule.Sections {
 		if section.Cut {
 			continue
 		}
-		clipTime, err := board.ClipTime(storyboard.Moment{Beat: section.Beat})
+		clipTime, err := clock.Resolve(storyboard.Moment{Beat: section.Beat})
 		if err != nil {
-			t.Fatalf("ClipTime(beat %d): %v", section.Beat, err)
+			t.Fatalf("Resolve(beat %d): %v", section.Beat, err)
 		}
 		if clipTime != section.OutStart {
-			t.Errorf("beat %d: ClipTime = %s, want OutStart %s", section.Beat, clipTime, section.OutStart)
+			t.Errorf("beat %d: Resolve = %s, want OutStart %s", section.Beat, clipTime, section.OutStart)
 		}
 	}
-	if length := board.Length(); length != schedule.Length {
+	if length := clock.Length(); length != schedule.Length {
 		t.Errorf("Length() = %s, want Schedule.Length %s", length, schedule.Length)
 	}
 }
