@@ -161,7 +161,10 @@ as `Frame` is; the handler with `draft=1` answers `image/png` of that size, with
 `GOMEMLIMIT=2GiB go test ./cmd/photon`; `capcom check`
 **Commit:** `feat(tune): serve draft frames`
 
-## 4. Show draft frames while playing or scrubbing
+## 4. Show draft frames while playing or scrubbing — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): pause() settles only when it stops a play (and never during a scrub), so the pause() calls in drag.js and picker.js while already paused send no request of their own. A seek while paused and not scrubbing (Shift+arrow, a section jump, window.tune.seek) counts as a jump: it settles with a draft first.
+NOTES (2026-10-18): settleFrames sends its request from a microtask, after the caller's turn, so stepFrames' pause() followed by seek() asks only at the new playhead; a draft-first flag is used up by the next settled request, so a new state while paused asks for the exact frame only. index.html loads frames.js after fit.js (still after app.js and before transport.js). README.md's Tuning sentence already matched this behaviour and was left unchanged.
 
 Depends on item 3.
 

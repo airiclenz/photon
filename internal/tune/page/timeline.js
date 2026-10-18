@@ -4,7 +4,8 @@
 // selectEntry(entry) for the camera move or caption it shows instead, seek(ms) for the axis, and
 // edit(edit) for a lane's add, which the server applies, validates and schedules; a drag sends
 // its edit through window.tuneDrag. From the page's internal window.tunePage it takes
-// reportStatus alone, to show a refused add or bar drag in the transport bar. Nothing here
+// reportStatus, to show a refused add or bar drag in the transport bar, and beginScrub and
+// endScrub, to tell the transport a scrub's pointer went down or up. Nothing here
 // computes timing: every position comes from the state's sections, beats, camera moves and
 // captions.
 //
@@ -406,6 +407,8 @@
     }
     event.preventDefault();
     isScrubbing = true;
+    // Marked before the pause, so pausing a play to scrub does not settle the preview.
+    page.beginScrub();
     track.setPointerCapture(event.pointerId);
     tune.pause();
     tune.seek(msAt(event.clientX, track.getBoundingClientRect()));
@@ -418,7 +421,11 @@
   }
 
   function endScrub() {
+    if (!isScrubbing) {
+      return;
+    }
     isScrubbing = false;
+    page.endScrub();
   }
 
   // --- helpers ---

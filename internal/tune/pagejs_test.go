@@ -1439,3 +1439,163 @@ func TestPageJS_FitPreview_KeepsThePickBoxAndViaPathOnTheShrunkFrame(t *testing.
 func pixels(value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64) + "px"
 }
+
+// The playback of sessionStoryboard, at 10 fps: the wall-clock time a play runs before it is
+// read, landing on the frame at playedMS, the frame a step on from there shows, and the times a
+// scrub across the axis, laid out one pixel per millisecond, presses at and lets go at.
+const (
+	playedMS       = 300
+	steppedMS      = 400
+	scrubPressMS   = 500
+	scrubReleaseMS = 1000
+)
+
+// The keys of the transport the playback tests press.
+const (
+	keyPlay      = " "
+	keyStepAhead = "ArrowRight"
+)
+
+// exactFrame is the path of the request for the exact frame at ms.
+func exactFrame(ms int) string {
+	return frameAPIPrefix + "t=" + strconv.Itoa(ms)
+}
+
+// draftFrame is the path of the request for the draft frame at ms.
+func draftFrame(ms int) string {
+	return exactFrame(ms) + "&draft=1"
+}
+
+// framesAfter are the paths of the preview frame requests the page sent after its first mark
+// requests, in order.
+func (p *pageHarness) framesAfter(mark int) []string {
+	p.t.Helper()
+	var frames []string
+	for _, request := range p.requests[mark:] {
+		if strings.HasPrefix(request.path, frameAPIPrefix) {
+			frames = append(frames, request.path)
+		}
+	}
+	return frames
+}
+
+// pressKey fires a keydown of key on the document, as the transport hears it, without settling.
+func (p *pageHarness) pressKey(key string) {
+	p.t.Helper()
+	p.dispatch(elementDocument, "keydown", map[string]any{"key": key})
+}
+
+// playFor starts a play, lets ms of wall-clock time pass and settles the page.
+func (p *pageHarness) playFor(ms int) {
+	p.t.Helper()
+	p.pressKey(keyPlay)
+	p.call("advance", ms)
+	p.settle()
+}
+
+// scrubAxis fires a pointer event of type at output time ms on the timeline's axis, laid out one
+// pixel per millisecond, and settles the page.
+func (p *pageHarness) scrubAxis(eventType string, ms int) {
+	p.t.Helper()
+	found := p.eval(fmt.Sprintf(`{
+		const track = document.getElementById(%q).querySelectorAll(".axis")[0];
+		if (track) {
+			track.layout = { left: 0, top: 0, width: window.tune.state().length_ms, height: 20 };
+			track.dispatchEvent(new Event(%q, { clientX: %d }));
+		}
+		Boolean(track);
+	}`, elementTimeline, eventType, ms)).ToBoolean()
+	if !found {
+		p.t.Fatal("the timeline has no axis")
+	}
+	p.settle()
+}
+
+// assertFrames fails the test unless the page's frame requests after its first mark requests
+// are want, in order.
+func (p *pageHarness) assertFrames(mark int, want ...string) {
+	p.t.Helper()
+	if got := p.framesAfter(mark); !reflect.DeepEqual(got, want) {
+		p.t.Errorf("the frames requested: want %q, got %q", want, got)
+	}
+}
+
+func TestPageJS_Play_RequestsDraftFrames(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	mark := len(page.requests)
+
+	page.playFor(playedMS)
+
+	page.assertFrames(mark, draftFrame(playedMS))
+}
+
+func TestPageJS_Pause_RequestsTheExactFrameAtThePlayhead(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	page.playFor(playedMS)
+	mark := len(page.requests)
+
+	page.pressKey(keyPlay)
+	page.settle()
+
+	page.assertFrames(mark, exactFrame(playedMS))
+}
+
+func TestPageJS_FrameStep_RequestsADraftThenTheExactFrame(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	page.eval(fmt.Sprintf("window.tune.seek(%d);", playedMS))
+	page.settle()
+	mark := len(page.requests)
+
+	page.pressKey(keyStepAhead)
+	page.settle()
+
+	page.assertFrames(mark, draftFrame(steppedMS), exactFrame(steppedMS))
+}
+
+func TestPageJS_Scrub_RequestsDraftsAndItsReleaseTheExactFrame(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	mark := len(page.requests)
+
+	page.scrubAxis("pointerdown", scrubPressMS)
+	page.scrubAxis("pointermove", scrubReleaseMS)
+	scrubbed := len(page.requests)
+	page.scrubAxis("pointerup", scrubReleaseMS)
+
+	page.assertFrames(mark, draftFrame(scrubPressMS), draftFrame(scrubReleaseMS), exactFrame(scrubReleaseMS))
+	page.assertFrames(scrubbed, exactFrame(scrubReleaseMS))
+}
+
+func TestPageJS_StepWhilePlaying_RequestsNoFrameAtTheStalePlayhead(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	page.playFor(playedMS)
+	mark := len(page.requests)
+
+	page.pressKey(keyStepAhead)
+	page.settle()
+
+	page.assertFrames(mark, draftFrame(steppedMS), exactFrame(steppedMS))
+	if got := page.eval("window.tune.frameTime()").Export(); got != int64(steppedMS) {
+		t.Errorf("the frame shown after the step: want the one at %dms, got %v", steppedMS, got)
+	}
+}
+
+func TestPageJS_EditWhilePaused_RequestsTheExactFrameOnly(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	page.eval(fmt.Sprintf("window.tune.seek(%d);", playedMS))
+	page.settle()
+	mark := len(page.requests)
+
+	page.eval(fmt.Sprintf(`window.tune.edit({owner: {kind: %q, index: 1}, field: %q, value: %d});`,
+		storyboard.OwnerBeat, storyboard.FieldDuration, draggedDurationMS))
+	page.settle()
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":1},"field":%q,"value":%d}`,
+		storyboard.OwnerBeat, storyboard.FieldDuration, draggedDurationMS))
+	page.assertFrames(mark, exactFrame(playedMS))
+}

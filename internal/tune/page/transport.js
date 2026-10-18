@@ -1,33 +1,32 @@
-// photon tune's frame clock and transport: the playhead on the clip's output clock, the frames
-// the preview shows at it, playing, stepping and jumping between section starts, the keys that
-// drive them, the bar's status, which tells how the last action went, and the build of the
-// photon serving the page, at the bar's right end.
+// photon tune's frame clock and transport: the playhead on the clip's output clock, playing,
+// scrubbing, stepping and jumping between section starts, the keys that drive them, the bar's
+// status, which tells how the last action went, and the build of the photon serving the page, at
+// the bar's right end. frames.js shows the frames at the playhead: this file asks it for drafts
+// while the preview moves (pumpFrames) and to settle on the exact frame once it stops
+// (settleFrames).
 //
-// It loads after app.js and adds its functions to window.tunePage, the page's internal namespace,
-// where app.js's window.tune contract (time, frameTime, seek, pause), its wiring and its actions
-// reach them; timeline.js reports a refused lane add or bar drag through reportStatus there too.
-// It reads the state through the namespace too and computes no timing of its own: the fps,
+// It loads after app.js and frames.js and adds its functions to window.tunePage, the page's
+// internal namespace, where app.js's window.tune contract (time, seek, pause), its wiring and its
+// actions reach them; frames.js reads the clock there (playhead, frameCount, frameIndexAt,
+// frameStartMs, isPlaying, isScrubbing), timeline.js marks a scrub's pointer down and up through
+// beginScrub and endScrub, and reports a refused lane add or bar drag through reportStatus there
+// too. It reads the state through the namespace too and computes no timing of its own: the fps,
 // length and section starts all come from /api/state, and every frame is one the server composes.
 "use strict";
 
 (() => {
   const page = window.tunePage;
-  const FRAME_API = "/api/frame?t=";
   const MILLISECONDS_PER_SECOND = 1000;
   const SECOND_STEP_MS = 1000;
   const PLAY_GLYPH = "▶";
   const PAUSE_GLYPH = "⏸";
 
   const view = page.view;
-  const frameImage = page.frame;
   const buildText = document.getElementById("build");
 
   let playhead = 0;
   let playing = null;
-  let shownFrameMs = null;
-  let shownFrameKey = "";
-  let isFrameLoading = false;
-  let shownFrameURL = "";
+  let isScrubbing = false;
 
   // --- the clip's frames on the output clock ---
 
@@ -66,70 +65,21 @@
     playhead = clampTime(playhead);
   }
 
-  // pumpFrames asks for the frame at the playhead when it is not the one shown, one request at
-  // a time: while one is loading the playhead moves on, and the frames it passed are dropped.
-  function pumpFrames() {
-    if (isFrameLoading || frameCount() === 0) {
-      return;
-    }
-    const ms = frameStartMs(frameIndexAt(playhead));
-    const key = page.state().version + ":" + ms;
-    if (key === shownFrameKey) {
-      return;
-    }
-    isFrameLoading = true;
-    loadFrame(ms, key).finally(() => {
-      isFrameLoading = false;
-      pumpFrames();
-    });
-  }
-
-  // loadFrame fetches the frame at ms and resolves once the preview shows it.
-  async function loadFrame(ms, key) {
-    shownFrameKey = key;
-    try {
-      const response = await fetch(FRAME_API + ms);
-      if (!response.ok) {
-        const answer = await response.json();
-        throw new Error(answer.error || response.statusText);
-      }
-      await showFrame(await response.blob(), ms);
-      view.frameMessage.hidden = true;
-    } catch (error) {
-      view.frameMessage.textContent = "No frame at " + page.formatTime(ms) + ": " + error.message;
-      view.frameMessage.hidden = false;
-    }
-  }
-
-  // showFrame puts the PNG blob in the preview and resolves once it has loaded.
-  function showFrame(blob, ms) {
-    const address = URL.createObjectURL(blob);
-    return new Promise((resolve, reject) => {
-      frameImage.onload = () => {
-        if (shownFrameURL) {
-          URL.revokeObjectURL(shownFrameURL);
-        }
-        shownFrameURL = address;
-        shownFrameMs = ms;
-        resolve();
-      };
-      frameImage.onerror = () => {
-        URL.revokeObjectURL(address);
-        reject(new Error("the frame did not decode"));
-      };
-      frameImage.src = address;
-    });
-  }
-
   // --- the transport ---
 
+  // seek moves the playhead to ms: while the preview moves the frames follow it as drafts, and a
+  // jump while it is still settles it on the exact frame there.
   function seek(ms) {
     playhead = clampTime(ms);
     if (playing) {
       playing = { wallStart: performance.now(), from: playhead };
     }
     renderTime();
-    pumpFrames();
+    if (playing || isScrubbing) {
+      page.pumpFrames();
+    } else {
+      page.settleFrames();
+    }
   }
 
   function play() {
@@ -144,9 +94,26 @@
     requestAnimationFrame(tick);
   }
 
+  // pause stops playing. Stopping a play settles the preview on the exact frame, except during a
+  // scrub, whose release settles it.
   function pause() {
+    const wasPlaying = playing !== null;
     playing = null;
     renderPlay();
+    if (wasPlaying && !isScrubbing) {
+      page.settleFrames();
+    }
+  }
+
+  // beginScrub marks a scrub's pointer down: until endScrub the preview shows draft frames.
+  function beginScrub() {
+    isScrubbing = true;
+  }
+
+  // endScrub marks the scrub's pointer up and settles the preview on the exact frame.
+  function endScrub() {
+    isScrubbing = false;
+    page.settleFrames();
   }
 
   // tick moves the playhead with the wall clock while playing, stopping on the last frame.
@@ -157,13 +124,14 @@
     const at = playing.from + Math.max(performance.now() - playing.wallStart, 0);
     if (at >= lastFrameMs()) {
       playhead = lastFrameMs();
+      renderTime();
       pause();
-    } else {
-      playhead = at;
-      requestAnimationFrame(tick);
+      return;
     }
+    playhead = at;
+    requestAnimationFrame(tick);
     renderTime();
-    pumpFrames();
+    page.pumpFrames();
   }
 
   function togglePlay() {
@@ -279,11 +247,17 @@
 
   Object.assign(page, {
     time: () => Math.round(playhead),
-    frameTime: () => shownFrameMs,
+    playhead: () => playhead,
+    isPlaying: () => playing !== null,
+    isScrubbing: () => isScrubbing,
+    frameCount,
+    frameIndexAt,
+    frameStartMs,
     clampPlayhead,
-    pumpFrames,
     seek,
     pause,
+    beginScrub,
+    endScrub,
     togglePlay,
     jumpSection,
     renderPlay,

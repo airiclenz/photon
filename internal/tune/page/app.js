@@ -21,14 +21,15 @@
 //   frame        the preview <img> element
 //
 // This file holds the session's API, the selection and the wiring. The page's own scripts that
-// load after it — transport.js (the frame clock, the transport and its status), controls.js (the
-// inspector's field controls and error rows), panels.js (the beat and frame panels) and
-// entries.js (the camera move and caption panels) — share its state through window.tunePage, an
-// internal namespace no part of the contract: app.js puts in it the state they read and the
-// helpers they build with, and each of them adds what it does. Of the other scripts picker.js
-// adds the standing pick's proposal that entries.js's via waypoints read, and timeline.js reports
-// a refused lane add or bar drag through transport.js's reportStatus; fit.js, the preview fit,
-// reads window.tune alone. app.js calls those only once every script has run, so the wiring, and
+// load after it — frames.js (the preview's draft and exact frames), transport.js (the frame
+// clock, the transport and its status), controls.js (the inspector's field controls and error
+// rows), panels.js (the beat and frame panels) and entries.js (the camera move and caption
+// panels) — share its state through window.tunePage, an internal namespace no part of the
+// contract: app.js puts in it the state they read and the helpers they build with, and each of
+// them adds what it does. Of the other scripts picker.js adds the standing pick's proposal that
+// entries.js's via waypoints read, and timeline.js marks a scrub through transport.js's
+// beginScrub and endScrub and reports a refused lane add or bar drag through its reportStatus;
+// fit.js, the preview fit, reads window.tune alone. app.js calls those only once every script has run, so the wiring, and
 // with it the first /api/state request, waits for DOMContentLoaded.
 "use strict";
 
