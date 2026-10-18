@@ -234,6 +234,30 @@ func TestHandler_CameraEditsAsThePageSendsThem_AreApplied(t *testing.T) {
 	}
 }
 
+func TestHandler_CameraTargetAsThePageSendsIt_AimsAndUnaimsAZoom(t *testing.T) {
+	t.Parallel()
+	handler := newHandler(newSessionFixtureOf(t, roomyCameraStoryboard).session, testAddr)
+	aimed := `{"owner":{"kind":"camera","index":0},"field":"camera.target","value":{"text":"app","nth":"last"}}`
+	unaimed := `{"owner":{"kind":"camera","index":0},"field":"camera.target","value":null}`
+
+	aimedResponse := post(t, handler, "/api/edit", aimed)
+	assertStatus(t, aimedResponse, http.StatusOK)
+	var state State
+	decodeResponse(t, aimedResponse, &state)
+	wantTarget := TargetState{Text: "app", Nth: int(storyboard.NthLast)}
+	if move := state.Camera[0]; move.Target == nil || *move.Target != wantTarget {
+		t.Errorf("camera 0 after the target: want aimed at %+v, got %+v", wantTarget, move)
+	}
+
+	unaimedResponse := post(t, handler, "/api/edit", unaimed)
+	assertStatus(t, unaimedResponse, http.StatusOK)
+	var unaimedState State
+	decodeResponse(t, unaimedResponse, &unaimedState)
+	if move := unaimedState.Camera[0]; move.Target != nil {
+		t.Errorf("camera 0 after the null target: want no target, got %+v", move)
+	}
+}
+
 func TestHandler_RefusedEdit_Is422(t *testing.T) {
 	t.Parallel()
 	handler := newHandler(newSessionFixture(t).session, testAddr)

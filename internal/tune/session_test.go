@@ -358,6 +358,19 @@ func TestSession_State_ReportsCameraMovesAndCaptions(t *testing.T) {
 	}
 }
 
+func TestSession_State_ReportsAZoomsTarget(t *testing.T) {
+	t.Parallel()
+	board := strings.Replace(roomyCameraStoryboard, "zoom: {to: 2,", "zoom: {to: 2, target: {text: 'app', nth: last},", 1)
+	f := newSessionFixtureOf(t, board)
+
+	zoom := f.session.State().Camera[0]
+
+	want := TargetState{Text: "app", Nth: int(storyboard.NthLast)}
+	if zoom.Kind != "zoom" || zoom.Target == nil || *zoom.Target != want {
+		t.Errorf("camera 0: want a zoom aimed at %+v, got %+v", want, zoom)
+	}
+}
+
 // withoutBoxes returns a copy of captions without the boxes the pipeline lays them out in.
 func withoutBoxes(captions []CaptionState) []CaptionState {
 	stripped := slices.Clone(captions)

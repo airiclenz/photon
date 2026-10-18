@@ -83,10 +83,10 @@ type TargetState struct {
 
 // CameraState is one camera move, in storyboard order: its Index in the storyboard's camera
 // list, its Kind (zoom or pan), where it starts and ends on the output clock, and its fields.
-// Factor is a zoom's destination magnification. A pan to aims at its Target or its Cell, one of
-// the two; a via pan has neither and reports Via, the points of its path in order, each spelled
-// as a pan to's destination is, and ViaCount, how many there are. Where the path runs on a frame
-// is [Session.Path]'s.
+// Factor is a zoom's destination magnification, and its Target, when it has one, what it aims
+// at. A pan to aims at its Target or its Cell, one of the two; a via pan has neither and reports
+// Via, the points of its path in order, each spelled as a pan to's destination is, and ViaCount,
+// how many there are. Where the path runs on a frame is [Session.Path]'s.
 type CameraState struct {
 	Index    int          `json:"index"`
 	Kind     string       `json:"kind"`
@@ -273,6 +273,11 @@ func cameraStates(board *storyboard.Storyboard) []CameraState {
 			zoom := move.Zoom
 			state = movedState(cameraKindZoom, zoom.Start(), zoom.At, zoom.Over, zoom.Ease)
 			state.Factor = zoom.To
+			if target := zoom.Target; target != nil {
+				state.Target = &TargetState{
+					Text: target.Text, Nth: int(target.Nth), Area: target.Area,
+				}
+			}
 		case move.Pan != nil:
 			pan := move.Pan
 			state = movedState(cameraKindPan, pan.Start(), pan.At, pan.Over, pan.Ease)

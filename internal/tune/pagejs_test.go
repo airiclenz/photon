@@ -40,6 +40,7 @@ const (
 	elementStage      = "stage"
 	elementPick       = "pick"
 	elementPickPan    = "pick-pan"
+	elementPickZoom   = "pick-zoom"
 	elementPickStatus = "pick-status"
 	elementBeatSelect = "beat-select"
 	elementInspector  = "inspector-body"
@@ -524,6 +525,92 @@ func TestPageJS_SetAsPanTarget_SendsTheProposal(t *testing.T) {
 	wantReport := fmt.Sprintf("Pan target set on camera %d", panToTarget)
 	if got := page.text(elementPickStatus); got != wantReport {
 		t.Errorf("the pick status: want %q, got %q", wantReport, got)
+	}
+}
+
+// roomyZoom and roomyPan are roomyCameraStoryboard's zoom, which overlaps no pan, so a target
+// set on it holds the pan track, and its pan.
+const (
+	roomyZoom = 0
+	roomyPan  = 1
+)
+
+func TestPageJS_SetAsZoomTarget_OnACameraZoom_SendsCameraTarget(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, roomyCameraStoryboard).session
+	page := loadPage(t, session)
+	target := page.pickAcross(session, 0, 2, 4)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, roomyZoom))
+
+	page.dispatch(elementPickZoom, "click", nil)
+	page.settle()
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%s}`,
+		storyboard.OwnerCamera, roomyZoom, storyboard.FieldCameraTarget, target))
+	if got := session.State().Camera[roomyZoom]; got.Target == nil {
+		t.Errorf("camera %d after the set: want the picked target, got %+v", roomyZoom, got)
+	}
+	want := fmt.Sprintf("Zoom target set on camera %d", roomyZoom)
+	if got := page.text(elementPickStatus); got != want {
+		t.Errorf("the pick status: want %q, got %q", want, got)
+	}
+}
+
+func TestPageJS_SetAsZoomTarget_WithNothingZoomableSelected_AsksForOne(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		selected string
+	}{
+		{name: "the clip frame", selected: ""},
+		{name: "a pan", selected: entryValueOf(storyboard.OwnerCamera, roomyPan)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			session := newSessionFixtureOf(t, roomyCameraStoryboard).session
+			page := loadPage(t, session)
+			page.pickAcross(session, 0, 2, 4)
+			page.selectValue(elementBeatSelect, test.selected)
+
+			page.dispatch(elementPickZoom, "click", nil)
+			page.settle()
+
+			const want = "Select a beat or a camera zoom first."
+			if got := page.text(elementPickStatus); got != want {
+				t.Errorf("the pick status: want %q, got %q", want, got)
+			}
+			for _, request := range page.requests {
+				if request.path == "/api/edit" {
+					t.Errorf("the page sent an edit with nothing zoomable selected: %s", request.body)
+				}
+			}
+		})
+	}
+}
+
+func TestPageJS_CameraZoomTarget_AddAndRemoveInTheInspector(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, roomyCameraStoryboard).session
+	page := loadPage(t, session)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, roomyZoom))
+	page.settle()
+
+	page.setField("target", "value", "app")
+	page.click(elementInspector, "Add target")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":{"text":"app"}}`,
+		storyboard.OwnerCamera, roomyZoom, storyboard.FieldCameraTarget))
+	if got := session.State().Camera[roomyZoom].Target; got == nil || got.Text != "app" {
+		t.Fatalf("camera %d after the add: want aimed at app, got %+v", roomyZoom, got)
+	}
+
+	page.click(elementInspector, "Remove target")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":null}`,
+		storyboard.OwnerCamera, roomyZoom, storyboard.FieldCameraTarget))
+	if got := session.State().Camera[roomyZoom].Target; got != nil {
+		t.Errorf("camera %d after the remove: want no target, got %+v", roomyZoom, got)
 	}
 }
 

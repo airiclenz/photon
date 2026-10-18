@@ -495,7 +495,10 @@ TestNewRefusesAPanTargetItsMoveNeverShows; internal/compose/doc.go — package d
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/compose/ ./internal/render/`; `LLL ./internal/compose/... ./internal/render/...`
 **Commit:** `feat(compose): aim a targeted camera zoom at its target`
 
-## 15. Set a camera zoom's target in photon tune
+## 15. Set a camera zoom's target in photon tune — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): picker.js's `selectedPan` now delegates to a new `selectedMove(kind)`, which `setAsZoomTarget` also uses to find a selected camera zoom; the camera branch lives in a new `setCameraZoomTarget` helper, and the no-selection message ("Select a beat or a camera zoom first.") also covers a click with no pick standing, as the old message did.
+NOTES (2026-10-18): the camera zoom's target rows sit in a new `zoomTargetRows` helper in entries.js, modelled on the beat zoom panel: an untargeted zoom's inputs send nothing until Add target; a targeted zoom's inputs send `camera.target` on change and Remove target sends null.
 
 **What:** Depends on items 13 and 14.
 **Regression guard.** Item 15 removes `camera.target` from that list and deletes the list if it
