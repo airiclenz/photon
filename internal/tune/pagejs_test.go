@@ -644,6 +644,51 @@ func TestPageJS_CaptionColour_SendsTheEditAndReloadsTheFrame(t *testing.T) {
 	}
 }
 
+func TestPageJS_CaptionFont_ShowsSizeAndWeight_AndSendsTheEdits(t *testing.T) {
+	t.Parallel()
+	const size = 14.5
+	weight := string(storyboard.WeightBold)
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	page := loadPage(t, session)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCaption, styledCaption))
+
+	for _, label := range []string{"font size", "weight"} {
+		if !page.hasField(label) {
+			t.Fatalf("the caption's inspector shows no %q field row", label)
+		}
+	}
+
+	page.setField("font size", "value", fmt.Sprint(size))
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%v}`,
+		storyboard.OwnerCaption, styledCaption, storyboard.FieldCaptionFontSize, size))
+	if got := session.State().Captions[styledCaption].FontSize; got != size {
+		t.Errorf("the caption's font size after the edit: want %v, got %v", size, got)
+	}
+	if !page.isRequestedAfter("/api/edit", frameAPIPrefix) {
+		t.Error("the page did not reload the preview frame after the font size edit")
+	}
+
+	page.chooseField("weight", weight)
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%q}`,
+		storyboard.OwnerCaption, styledCaption, storyboard.FieldCaptionFontWeight, weight))
+	if got := session.State().Captions[styledCaption].FontWeight; got != weight {
+		t.Errorf("the caption's font weight after the edit: want %s, got %s", weight, got)
+	}
+	if !page.isRequestedAfter("/api/edit", frameAPIPrefix) {
+		t.Error("the page did not reload the preview frame after the weight edit")
+	}
+}
+
+// hasField says the inspector shows exactly one field row labelled label.
+func (p *pageHarness) hasField(label string) bool {
+	p.t.Helper()
+	return p.eval(fmt.Sprintf(`document.getElementById(%q).querySelectorAll("label")
+		.filter((row) => row.children.length > 0 && row.children[0].textContent === %q)
+		.length === 1`, elementInspector, label)).ToBoolean()
+}
+
 func TestPageJS_CaptionPosition_SeedsTheLaidOutCorner(t *testing.T) {
 	t.Parallel()
 	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session

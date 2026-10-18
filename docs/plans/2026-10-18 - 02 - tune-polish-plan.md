@@ -56,7 +56,9 @@ release headings.
 - 13: guard folded (writer's decision)
 - 15: guard folded (writer's decision)
 
-## 1. Confirm the caption font controls with a page test
+## 1. Confirm the caption font controls with a page test — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): added a small `hasField` page-harness helper in internal/tune/pagejs_test.go to assert the "font size" and "weight" rows show before they are edited
 
 **What:** Test-only. A goja page test in `internal/tune/pagejs_test.go` selects caption 0 of
 `cameraCaptionsStoryboard`, asserts the inspector shows the "font size" and "weight" controls
