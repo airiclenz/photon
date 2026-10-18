@@ -238,7 +238,7 @@ func TestHandler_EditsAsThePageSendsThem_AreApplied(t *testing.T) {
 	}
 	decodeResponse(t, picked, &answer)
 	drag := `{"owner":{"kind":"beat","index":1},"field":"duration","value":1500}`
-	target := `{"owner":{"kind":"beat","index":1},"field":"zoom.target","value":` + string(answer.Target) + `}`
+	target := `{"owner":{"kind":"camera","index":0},"field":"camera.to","value":` + string(answer.Target) + `}`
 
 	dragged := post(t, handler, "/api/edit", drag)
 	targeted := post(t, handler, "/api/edit", target)
@@ -250,8 +250,8 @@ func TestHandler_EditsAsThePageSendsThem_AreApplied(t *testing.T) {
 	if got := beatDuration(t, state, 1); got != 1500 {
 		t.Errorf("beat 1 after the drag: want 1500ms, got %dms", got)
 	}
-	if zoom := state.Beats[0].Zoom; zoom == nil || zoom.Target != (TargetState{Text: "unique"}) {
-		t.Errorf("beat 1's zoom after the picked target: want unique, got %+v", zoom)
+	if pan := state.Camera[pickPan]; pan.Target == nil || *pan.Target != (TargetState{Text: "unique"}) {
+		t.Errorf("camera %d after the picked target: want unique, got %+v", pickPan, pan)
 	}
 }
 
@@ -274,30 +274,6 @@ func TestHandler_CameraEditsAsThePageSendsThem_AreApplied(t *testing.T) {
 	wantTarget := TargetState{Text: "tests", Nth: int(storyboard.NthLast)}
 	if move := state.Camera[3]; move.Cell != nil || move.Target == nil || *move.Target != wantTarget {
 		t.Errorf("camera 3 after the picked target: want %+v and no cell, got %+v", wantTarget, move)
-	}
-}
-
-func TestHandler_CameraTargetAsThePageSendsIt_AimsAndUnaimsAZoom(t *testing.T) {
-	t.Parallel()
-	handler := newHandler(newSessionFixtureOf(t, roomyCameraStoryboard).session, testAddr)
-	aimed := `{"owner":{"kind":"camera","index":0},"field":"camera.target","value":{"text":"app","nth":"last"}}`
-	unaimed := `{"owner":{"kind":"camera","index":0},"field":"camera.target","value":null}`
-
-	aimedResponse := post(t, handler, "/api/edit", aimed)
-	assertStatus(t, aimedResponse, http.StatusOK)
-	var state State
-	decodeResponse(t, aimedResponse, &state)
-	wantTarget := TargetState{Text: "app", Nth: int(storyboard.NthLast)}
-	if move := state.Camera[0]; move.Target == nil || *move.Target != wantTarget {
-		t.Errorf("camera 0 after the target: want aimed at %+v, got %+v", wantTarget, move)
-	}
-
-	unaimedResponse := post(t, handler, "/api/edit", unaimed)
-	assertStatus(t, unaimedResponse, http.StatusOK)
-	var unaimedState State
-	decodeResponse(t, unaimedResponse, &unaimedState)
-	if move := unaimedState.Camera[0]; move.Target != nil {
-		t.Errorf("camera 0 after the null target: want no target, got %+v", move)
 	}
 }
 

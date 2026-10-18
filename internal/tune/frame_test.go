@@ -70,20 +70,21 @@ func assertSameFrame(t *testing.T, got, want *image.RGBA) {
 func TestSession_Frame_AfterEditMatchesTheRenderOfTheSavedFile(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name string
-		edit Edit
+		name  string
+		board string
+		edit  Edit
 		// out is an output time whose frame the edit changes.
 		out time.Duration
 	}{
-		{"duration", beatEdit(1, storyboard.FieldDuration, 2000), 500 * time.Millisecond},
-		{"hold", beatEdit(1, storyboard.FieldHold, 600), 500 * time.Millisecond},
-		{"cut", beatEdit(1, storyboard.FieldCut, true), 500 * time.Millisecond},
-		{"zoom ramp", beatEdit(2, storyboard.FieldZoomIn, 200), 1200 * time.Millisecond},
+		{"duration", sessionStoryboard, beatEdit(1, storyboard.FieldDuration, 2000), 500 * time.Millisecond},
+		{"hold", sessionStoryboard, beatEdit(1, storyboard.FieldHold, 600), 500 * time.Millisecond},
+		{"cut", sessionStoryboard, beatEdit(1, storyboard.FieldCut, true), 500 * time.Millisecond},
+		{"zoom ramp", aimedStoryboard, cameraEdit(0, storyboard.FieldCameraOver, 600), 1200 * time.Millisecond},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			fixture := newSessionFixture(t)
+			fixture := newSessionFixtureOf(t, tc.board)
 			before := fixture.frameAt(t, tc.out)
 
 			fixture.apply(t, tc.edit)

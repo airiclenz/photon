@@ -70,8 +70,8 @@ const styledCaption = 0
 // frameAPIPrefix starts the path of every preview frame request.
 const frameAPIPrefix = "/api/frame?"
 
-// roomyCameraStoryboard is sessionStoryboard without beat 2's zoom, its camera a zoom early in
-// beat 1 and a pan late in beat 2: a 600ms zoom or pan added at addMoveAtMS overlaps neither.
+// roomyCameraStoryboard is sessionStoryboard's beats under a camera of a zoom early in beat 1 and
+// a pan late in beat 2: a 600ms zoom or pan added at addMoveAtMS overlaps neither.
 const roomyCameraStoryboard = `clip: tuned
 ship: out/tuned.gif
 frame: {cols: 20, rows: 4, padding: 4, font_size: 10, line_height: 1.2, scale: 2, width: 160, fps: 10, max_colors: 16}
@@ -722,7 +722,8 @@ func TestPageJS_DragABeatsEnd_SendsOneSnappedDurationEdit(t *testing.T) {
 // via pan, from 200ms at {beat: 1, offset: 200ms}, grabbed at panGrabMS and let go at
 // panReleaseMS, a shift snapped to panShiftMS; its until caption, from 1s at {beat: 2}, grabbed
 // at captionGrabMS and let go at captionReleaseMS, a shift snapped to captionShiftMS; and its
-// zoom, from 100ms, grabbed at zoomGrabMS and let go at zoomReleaseMS, inside beat 2's zoom.
+// zoom, from 100ms, grabbed at zoomGrabMS and let go at zoomReleaseMS, onto the stretch of
+// releaseStretchZoom.
 const (
 	panGrabMS        = 400
 	panReleaseMS     = 290
@@ -738,6 +739,10 @@ const (
 	zoomGrabMS       = 200
 	zoomReleaseMS    = 1400
 )
+
+// releaseStretchZoom is a second camera zoom, appended to cameraCaptionsStoryboard's camera, over
+// the stretch the zoom dragged to zoomReleaseMS lands on.
+const releaseStretchZoom = "  - zoom: {to: 3, at: {beat: 2, offset: 400ms}, over: 300ms}\n"
 
 // The lanes of the timeline the bar drags run on, by name.
 const (
@@ -846,7 +851,8 @@ func TestPageJS_ClickABarWithoutMoving_SelectsAndSendsNoEdit(t *testing.T) {
 
 func TestPageJS_RefusedBarDrag_RedrawsInPlaceAndShowsTheRefusal(t *testing.T) {
 	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	board := strings.Replace(cameraCaptionsStoryboard, "captions:", releaseStretchZoom+"captions:", 1)
+	session := newSessionFixtureOf(t, board).session
 	page := loadPage(t, session)
 	before := page.barLeft(storyboard.OwnerCamera, movedZoom)
 
@@ -854,13 +860,13 @@ func TestPageJS_RefusedBarDrag_RedrawsInPlaceAndShowsTheRefusal(t *testing.T) {
 
 	refused := page.lastRequest("/api/edit")
 	if refused.status == http.StatusOK {
-		t.Fatalf("the zoom dragged into beat 2's zoom: want it refused, got 200: %s", refused.answer)
+		t.Fatalf("the zoom dragged onto another zoom: want it refused, got 200: %s", refused.answer)
 	}
 	if got := page.barLeft(storyboard.OwnerCamera, movedZoom); got != before {
 		t.Errorf("the refused bar's left: want %s, got %s", before, got)
 	}
 	status := page.text(elementStatus)
-	for _, want := range []string{"overlaps", "section", "which holds both tracks"} {
+	for _, want := range []string{"overlaps", "on the zoom track"} {
 		if !strings.Contains(status, want) {
 			t.Errorf("the status after the refused drag: want it containing %q, got %q", want, status)
 		}

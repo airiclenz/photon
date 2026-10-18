@@ -52,28 +52,18 @@ type State struct {
 	CanRedo bool      `json:"can_redo"`
 }
 
-// BeatState is one beat's tunable timing, its zoom, and the pauses its actions hold, which are
-// read-only: changing one needs a new `photon record`.
+// BeatState is one beat's tunable timing and the pauses its actions hold, which are read-only:
+// changing one needs a new `photon record`.
 type BeatState struct {
-	ID         int        `json:"id"`
-	Title      string     `json:"title"`
-	DurationMS int64      `json:"duration_ms"`
-	HoldMS     int64      `json:"hold_ms"`
-	IsCut      bool       `json:"cut"`
-	Zoom       *ZoomState `json:"zoom,omitempty"`
-	PausesMS   []int64    `json:"pauses_ms"`
+	ID         int     `json:"id"`
+	Title      string  `json:"title"`
+	DurationMS int64   `json:"duration_ms"`
+	HoldMS     int64   `json:"hold_ms"`
+	IsCut      bool    `json:"cut"`
+	PausesMS   []int64 `json:"pauses_ms"`
 }
 
-// ZoomState is a beat's zoom. Factor 0 is auto, fitted to the target; the ramps carry their
-// defaults when the storyboard leaves them out.
-type ZoomState struct {
-	Target TargetState `json:"target"`
-	Factor float64     `json:"factor"`
-	InMS   int64       `json:"in_ms"`
-	OutMS  int64       `json:"out_ms"`
-}
-
-// TargetState is a zoom's target: a regex over the screen's rows, which match counts (0 is the
+// TargetState is a pan's target: a regex over the screen's rows, which match counts (0 is the
 // first, -1 the last) and the area searched (empty is the whole screen).
 type TargetState struct {
 	Text string `json:"text"`
@@ -83,10 +73,10 @@ type TargetState struct {
 
 // CameraState is one camera move, in storyboard order: its Index in the storyboard's camera
 // list, its Kind (zoom or pan), where it starts and ends on the output clock, and its fields.
-// Factor is a zoom's destination magnification, and its Target, when it has one, what it aims
-// at. A pan to aims at its Target or its Cell, one of the two; a via pan has neither and reports
-// Via, the points of its path in order, each spelled as a pan to's destination is, and ViaCount,
-// how many there are. Where the path runs on a frame is [Session.Path]'s.
+// Factor is a zoom's destination magnification. A pan to aims at its Target or its Cell, one of
+// the two; a via pan has neither and reports Via, the points of its path in order, each spelled
+// as a pan to's destination is, and ViaCount, how many there are. Where the path runs on a
+// frame is [Session.Path]'s.
 type CameraState struct {
 	Index    int          `json:"index"`
 	Kind     string       `json:"kind"`
@@ -240,25 +230,14 @@ func (s *Session) State() State {
 func beatStates(board *storyboard.Storyboard) []BeatState {
 	beats := make([]BeatState, 0, len(board.Beats))
 	for _, beat := range board.Beats {
-		state := BeatState{
+		beats = append(beats, BeatState{
 			ID:         beat.ID,
 			Title:      beat.Title,
 			DurationMS: beat.Duration.Milliseconds(),
 			HoldMS:     beat.Hold.Milliseconds(),
 			IsCut:      beat.Cut,
 			PausesMS:   pausesOf(beat),
-		}
-		if zoom := beat.Zoom; zoom != nil {
-			state.Zoom = &ZoomState{
-				Target: TargetState{
-					Text: zoom.Target.Text, Nth: int(zoom.Target.Nth), Area: zoom.Target.Area,
-				},
-				Factor: zoom.Factor,
-				InMS:   zoom.In.Milliseconds(),
-				OutMS:  zoom.Out.Milliseconds(),
-			}
-		}
-		beats = append(beats, state)
+		})
 	}
 	return beats
 }
@@ -273,11 +252,6 @@ func cameraStates(board *storyboard.Storyboard) []CameraState {
 			zoom := move.Zoom
 			state = movedState(cameraKindZoom, zoom.Start(), zoom.At, zoom.Over, zoom.Ease)
 			state.Factor = zoom.To
-			if target := zoom.Target; target != nil {
-				state.Target = &TargetState{
-					Text: target.Text, Nth: int(target.Nth), Area: target.Area,
-				}
-			}
 		case move.Pan != nil:
 			pan := move.Pan
 			state = movedState(cameraKindPan, pan.Start(), pan.At, pan.Over, pan.Ease)

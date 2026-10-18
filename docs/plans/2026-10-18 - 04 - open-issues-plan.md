@@ -230,7 +230,12 @@ panel shows no target row; exempt `camera.target` in `TestPage_EntryFields_AreEd
 
 **Commit:** `feat(tune)!: drop zoom targets and beat zoom from the page`
 
-## 5. Drop zoom aiming from the tune state
+## 5. Drop zoom aiming from the tune state — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): pickStoryboard took pickPanStoryboard's pan to a cell (pickPan) instead of keeping a second, otherwise identical fixture, so the pick session's camera.to edits and the apply table share one board; pickPanStoryboard is gone.
+NOTES (2026-10-18): TestHandler_EditsAsThePageSendsThem_AreApplied keeps its picked-target edit, sent as camera.to on the pick board's pan instead of zoom.target, rather than losing the row; the snippet key "zoom" (snippetZoom, the page's SNIPPET_ZOOM) stays, its comment now naming the camera.to edit it writes.
+NOTES (2026-10-18): the camera zoom + pan over beat 2 fixture is aimedStoryboard (aimedPan, notOnScreen) in session_test.go; styledCaptionsStoryboard split into sessionStoryboard + styledCaptions so the caption-box test can sit the captions under that camera.
+NOTES (2026-10-18): README.md's `photon tune` row still says "timing, zoom and frame"; still true of camera zooms, left for item 11's docs pass.
 
 **What:**
 Continues item 4. Depends on item 4.

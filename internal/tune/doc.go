@@ -1,17 +1,18 @@
 // Package tune is the timing editor behind `photon tune`: it previews a storyboard's section
-// timing, zoom and frame against an existing take, and saves the edits back into the storyboard.
+// timing, camera moves and frame against an existing take, and saves the edits back into the
+// storyboard.
 //
-// An [Edit] is one typed change — a beat's duration, hold, cut or zoom, the clip's frame.width,
+// An [Edit] is one typed change — a beat's duration, hold or cut, the clip's frame.width,
 // frame.fps, frame.font_size, frame.line_height, frame.padding or frame.scale, a camera move's
 // start, length, ease or destination, or a caption's start, end, text, place or align — spelled as
 // the page sends it, and [storyboard.Apply] applies it: it splices only the edited scalar, or the
 // one node a moment, a pan destination or a caption's text replaces, into the storyboard's source
 // through yamledit, so comments, quoting, key order and flow or block style stay as the person
 // wrote them: a duration keeps its unit, a new key goes in the storyboard's field order, a default
-// is never written out, switching cut off, the zoom factor to auto, a camera move's ease to smooth
-// or a caption's place or align to its default removes the key, and a caption's for and until
-// replace each other. The result is parsed again with the storyboard's own strict loader, so an
-// edit that leaves the storyboard invalid is refused with the problems it causes.
+// is never written out, switching cut off, a camera move's ease to smooth or a caption's place or
+// align to its default removes the key, and a caption's for and until replace each other. The
+// result is parsed again with the storyboard's own strict loader, so an edit that leaves the
+// storyboard invalid is refused with the problems it causes.
 //
 // A [Session] holds one clip and take being tuned. Every applied edit, undo, redo or revert
 // rebuilds the render pipeline on the new bytes, as `photon render` builds it, handing render the
@@ -30,8 +31,8 @@
 // at 256 MiB that carries across rebuilds as the exact one does; once stopped the page settles on
 // the exact frame. [Session.Pick] turns cells picked on that frame into a [Proposal]: the picked
 // text, escaped, as a target the resolver resolves back onto them, with its area and nth, and its
-// YAML for a zoom, a click, a seen expect and either end of a drag. [Session.Path] maps a via pan's
-// points onto that frame, through its camera's crop at the output time.
+// YAML for a pan's destination, a click, a seen expect and either end of a drag. [Session.Path]
+// maps a via pan's points onto that frame, through its camera's crop at the output time.
 //
 // [Run] serves a session to a browser on this machine: it listens on 127.0.0.1 only, prints the
 // page's address, and serves the embedded page under page/ and a JSON API over the session —

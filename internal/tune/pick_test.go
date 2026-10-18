@@ -36,7 +36,8 @@ areas:
     bottom: {match: '^a\+b'}
 `
 
-// pickStoryboard is one 2s beat over pickScreen, zoomed onto its first row.
+// pickStoryboard is one 2s beat over pickScreen under camera move pickPan, a pan to a cell, which
+// a pick's target replaces.
 const pickStoryboard = `clip: picked
 ship: out/picked.gif
 frame: {cols: 30, rows: 9, padding: 4, font_size: 10, line_height: 1.2, scale: 2, width: 600, fps: 10, max_colors: 16}
@@ -44,8 +45,12 @@ beats:
   - id: 1
     title: list
     duration: 2s
-    zoom: {target: {text: 'Items'}}
+camera:
+  - pan: {to: {cell: {x: 1, y: 1}}, at: 200ms, over: 600ms}
 `
+
+// pickPan is the index of pickStoryboard's pan.
+const pickPan = 0
 
 // pickScreen is what the pick take shows, one line per row.
 var pickScreen = []string{
@@ -262,7 +267,7 @@ func TestSession_Pick_NoTarget_IsRefused(t *testing.T) {
 	}
 }
 
-func TestSession_Pick_ProposedTargetIsAZoomTargetEdit(t *testing.T) {
+func TestSession_Pick_ProposedTargetIsAPanDestinationEdit(t *testing.T) {
 	t.Parallel()
 	session := newPickSession(t)
 	proposal, err := session.Pick(0, cellPixel(t, session, 0, 4), cellPixel(t, session, 6, 4))
@@ -270,7 +275,7 @@ func TestSession_Pick_ProposedTargetIsAZoomTargetEdit(t *testing.T) {
 		t.Fatalf("Pick: %v", err)
 	}
 
-	err = session.Apply(beatEdit(1, storyboard.FieldZoomTarget, responseOf(proposal).Target))
+	err = session.Apply(cameraEdit(pickPan, storyboard.FieldCameraTo, responseOf(proposal).Target))
 
 	if err != nil {
 		t.Fatalf("Apply the proposed target: %v", err)
@@ -280,8 +285,8 @@ func TestSession_Pick_ProposedTargetIsAZoomTargetEdit(t *testing.T) {
 		t.Errorf("errors after the edit: %+v", state.Errors)
 	}
 	want := TargetState{Text: proposal.Target.Text, Nth: int(proposal.Target.Nth), Area: proposal.Target.Area}
-	if zoom := state.Beats[0].Zoom; zoom == nil || zoom.Target != want {
-		t.Errorf("beat 1's zoom: want the target %+v, got %+v", want, zoom)
+	if pan := state.Camera[pickPan]; pan.Cell != nil || pan.Target == nil || *pan.Target != want {
+		t.Errorf("camera %d: want the target %+v, got %+v", pickPan, want, pan)
 	}
 }
 
@@ -292,7 +297,7 @@ func TestSession_LastMatchTarget_RoundTripsThroughTheProposalAndItsApply(t *test
 	response := responseOf(Proposal{Target: last, Snippets: snippetsOf(last)})
 
 	encoded, encodeErr := json.Marshal(response.Target)
-	applyErr := session.Apply(beatEdit(1, storyboard.FieldZoomTarget, json.RawMessage(encoded)))
+	applyErr := session.Apply(cameraEdit(pickPan, storyboard.FieldCameraTo, json.RawMessage(encoded)))
 
 	if encodeErr != nil {
 		t.Fatalf("encode the proposed target: %v", encodeErr)
@@ -301,31 +306,18 @@ func TestSession_LastMatchTarget_RoundTripsThroughTheProposalAndItsApply(t *test
 		t.Errorf("the proposed target on the wire: want %s, got %s", want, encoded)
 	}
 	if want := "{text: 'beta', nth: last}"; response.Snippets[snippetZoom] != want {
-		t.Errorf("the zoom snippet: want %q, got %q", want, response.Snippets[snippetZoom])
+		t.Errorf("the bare target snippet: want %q, got %q", want, response.Snippets[snippetZoom])
 	}
 	if applyErr != nil {
 		t.Fatalf("Apply the proposed target: %v", applyErr)
 	}
 	want := TargetState{Text: "beta", Nth: int(storyboard.NthLast)}
-	if zoom := session.State().Beats[0].Zoom; zoom == nil || zoom.Target != want {
-		t.Errorf("beat 1's zoom: want the target %+v, got %+v", want, zoom)
+	if pan := session.State().Camera[pickPan]; pan.Target == nil || *pan.Target != want {
+		t.Errorf("camera %d: want the target %+v, got %+v", pickPan, want, pan)
 	}
 }
 
-// pickPanStoryboard is pickStoryboard's beat without its zoom, under one pan to a cell, which a
-// pick's target replaces.
-const pickPanStoryboard = `clip: picked
-ship: out/picked.gif
-frame: {cols: 30, rows: 9, padding: 4, font_size: 10, line_height: 1.2, scale: 2, width: 600, fps: 10, max_colors: 16}
-beats:
-  - id: 1
-    title: list
-    duration: 2s
-camera:
-  - pan: {to: {cell: {x: 1, y: 1}}, at: 200ms, over: 600ms}
-`
-
-func TestSession_PickProposal_AppliesAsAZoomTargetAndAPanDestination(t *testing.T) {
+func TestSession_PickProposal_AppliesAsAPanDestination(t *testing.T) {
 	t.Parallel()
 	session := newPickSession(t)
 	picked := func(row, fromCol, toCol int) func(*testing.T) Proposal {
@@ -368,22 +360,14 @@ func TestSession_PickProposal_AppliesAsAZoomTargetAndAPanDestination(t *testing.
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			proposed := responseOf(test.proposal(t)).Target
-			zoomTarget := beatEdit(1, storyboard.FieldZoomTarget, proposed)
-			panTo := cameraEdit(0, storyboard.FieldCameraTo, proposed)
+			panTo := cameraEdit(pickPan, storyboard.FieldCameraTo, proposed)
 
-			_, zoomed, zoomErr := storyboard.Apply([]byte(pickStoryboard), "picked.yaml", zoomTarget)
-			_, panned, panErr := storyboard.Apply([]byte(pickPanStoryboard), "picked.yaml", panTo)
+			_, panned, panErr := storyboard.Apply([]byte(pickStoryboard), "picked.yaml", panTo)
 
-			if zoomErr != nil {
-				t.Fatalf("apply %+v as zoom.target: %v", proposed, zoomErr)
-			}
-			if got := zoomed.Beats[0].Zoom.Target; got != test.want {
-				t.Errorf("zoom.target: want %+v, got %+v", test.want, got)
-			}
 			if panErr != nil {
 				t.Fatalf("apply %+v as camera.to: %v", proposed, panErr)
 			}
-			if got := panned.Camera[0].Pan.To; got.Cell != nil || got.Target != test.want {
+			if got := panned.Camera[pickPan].Pan.To; got.Cell != nil || got.Target != test.want {
 				t.Errorf("camera.to: want %+v, got %+v", test.want, got)
 			}
 		})
