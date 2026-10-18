@@ -80,6 +80,8 @@ var pendingPageFields = map[string]bool{
 	storyboard.FieldCaptionBoxOpacity: true,
 	storyboard.FieldCaptionFadeIn:     true,
 	storyboard.FieldCaptionFadeOut:    true,
+	storyboard.FieldCaptionOffset:     true,
+	storyboard.FieldCaptionPosition:   true,
 }
 
 // entryFieldName finds a camera move's or caption's edit field written as a string literal.

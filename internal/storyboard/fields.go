@@ -40,6 +40,9 @@ const (
 	KindColor FieldKind = "color"
 	// KindFraction is a number from 0 to 1.
 	KindFraction FieldKind = "fraction"
+	// KindPixels is a pair of whole lengths in design pixels, {"x": 8, "y": -4}: X to the right
+	// and Y down.
+	KindPixels FieldKind = "pixels"
 )
 
 // Field describes one field of a storyboard's owner — the clip, a beat, a camera move or a
@@ -63,13 +66,14 @@ type Field struct {
 const frameFieldPrefix = "frame."
 
 // The defaults a field's absent key means, typed as an [Edit] types them: zero, false,
-// no text, a target with no text, and a moment at the clip's first frame.
+// no text, a target with no text, a moment at the clip's first frame, and no offset.
 const (
 	defaultZero      = "0"
 	defaultFalse     = "false"
 	defaultText      = `""`
 	defaultTarget    = `{"text":""}`
 	defaultClipStart = `{"beat":0,"offset_ms":0}`
+	defaultNoOffset  = `{"x":0,"y":0}`
 )
 
 // newEntryDefault is the default of a list's insert: an entry of kind at the clip's start.
@@ -188,8 +192,8 @@ func cameraFields(index int, move CameraMove) []Field {
 }
 
 // captionFields describes the fields of the caption at index: its start, its end — a for or an
-// until — its text, where it sits, its font, its size defaulting to frameFontSize, its colours,
-// its box and its fade, and its remove and move.
+// until — its text, where it sits — its place, align and offset, or its position — its font, its
+// size defaulting to frameFontSize, its colours, its box and its fade, and its remove and move.
 func captionFields(index int, frameFontSize float64) []Field {
 	owner := Owner{Kind: OwnerCaption, Index: index}
 	fields := []Field{
@@ -199,6 +203,8 @@ func captionFields(index int, frameFontSize float64) []Field {
 		{Owner: owner, Name: FieldCaptionText, Kind: KindText, Default: raw(defaultText)},
 		{Owner: owner, Name: FieldCaptionPlace, Kind: KindEnum, Choices: slices.Clone(placeChoices), Default: quoted(string(PlaceBottom))},
 		{Owner: owner, Name: FieldCaptionAlign, Kind: KindEnum, Choices: slices.Clone(alignChoices), Default: quoted(string(AlignMiddle))},
+		{Owner: owner, Name: FieldCaptionOffset, Kind: KindPixels, Default: raw(defaultNoOffset)},
+		{Owner: owner, Name: FieldCaptionPosition, Kind: KindPixels, Default: raw(jsonNull)},
 		{Owner: owner, Name: FieldCaptionFontSize, Kind: KindDecimal, Default: raw(formatDecimal(frameFontSize))},
 		{Owner: owner, Name: FieldCaptionFontWeight, Kind: KindEnum, Choices: slices.Clone(weightChoices), Default: quoted(string(WeightRegular))},
 		{Owner: owner, Name: FieldCaptionColor, Kind: KindColor, Default: quoted(defaultCaptionColor)},

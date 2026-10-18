@@ -400,7 +400,15 @@ opacity 1.5 refused; fade longer than the caption refused.
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ -run TestPage_EntryFields_AreEditFields`
 **Commit:** `feat(storyboard): edit a caption's font, colours, box and fade`
 
-## 11. Storyboard edits for a caption's offset and position
+## 11. Storyboard edits for a caption's offset and position — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the new kind is `KindPixels` ("pixels"), typed `{"x": 8, "y": -4}`: whole numbers, both keys required, any other key refused. Fields() lists caption.offset (default `{"x":0,"y":0}`) and caption.position (default null) after caption.align, in the caption's key order.
+
+NOTES (2026-10-18): setPlacement (edit_caption.go) now deletes a position for caption.place and caption.align, the default spelling too, so `bottom` or `middle` on a positioned caption puts it back at bottom middle. An offset or position is written as a `{x: 8, y: -4}` flow mapping over the whole node; a key holding no text (an empty `offset:`) is deleted and inserted again, the same way item 10 handles an empty `font:`.
+
+NOTES (2026-10-18): edit_test.go gains a null caption.offset case in TestApply_CaptionNull_IsRefusedButForUntil; the Apply doc paragraph is rewrapped to 100 columns where the new sentences landed.
+
+NOTES (2026-10-18): consequential edit — internal/storyboard/doc.go: made necessary by caption.offset and caption.position joining edit_caption_style.go, which the doc map's line lists the edits of
 
 **What:** Depends on item 10.
 **Regression guard.** Adds `caption.offset` and `caption.position` to `pendingPageFields` (same Files and Acceptance additions).

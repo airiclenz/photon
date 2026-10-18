@@ -1,6 +1,7 @@
 package storyboard
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -213,6 +214,196 @@ func TestApply_CaptionStyleEdit_IsRefused(t *testing.T) {
 			t.Parallel()
 
 			_, _, err := Apply([]byte(captionStyleBoard), captionEditPath, tc.edit)
+
+			if err == nil || !strings.Contains(err.Error(), tc.message) {
+				t.Errorf("Apply(%+v) = %v, want an error containing %q", tc.edit, err, tc.message)
+			}
+		})
+	}
+}
+
+// captionPlacementBoard is editBaseBoard with captions placed in block and flow mappings: a
+// block caption with place, align and a block offset, a flow caption with align and an offset,
+// a block and a flow caption set by position, and a flow caption with a place alone.
+const captionPlacementBoard = editBaseBoard + `captions:
+  - text: Placed
+    at: 100ms
+    for: 1s
+    place: top
+    align: left
+    offset:
+      x: 8
+      y: -4
+    color: '#ffcc00'
+  - {text: 'Nudged', at: 1200ms, for: 800ms, align: right, offset: {x: 2, y: 3}}
+  - text: Pinned
+    at: 2s
+    for: 400ms
+    position: {x: 40, y: 300} # top-left
+  - {text: 'Fixed', at: 300ms, for: 500ms, position: {x: 10, y: 20}, color: '#ffcc00'}
+  - {text: 'Middle', at: 1500ms, for: 300ms, place: middle, color: '#ffcc00'}
+`
+
+// pixels is design pixels as an [Edit] types them.
+func pixels(x, y int) map[string]int {
+	return map[string]int{"x": x, "y": y}
+}
+
+// swap is one change an edit makes to a storyboard's text: old, found once, becomes new.
+type swap struct {
+	old, new string
+}
+
+func TestApply_CaptionPlacementEdit_ChangesOnlyTheEditedText(t *testing.T) {
+	t.Parallel()
+	positionLine := "    position: {x: 40, y: 300} # top-left\n"
+	cases := []struct {
+		name  string
+		edit  Edit
+		swaps []swap
+	}{
+		{"a block offset becomes a flow one", captionEdit(0, FieldCaptionOffset, pixels(5, 6)),
+			[]swap{{"    offset:\n      x: 8\n      y: -4\n", "    offset: {x: 5, y: 6}\n"}}},
+		{"a flow offset is changed", captionEdit(1, FieldCaptionOffset, pixels(-2, 0)),
+			[]swap{{"offset: {x: 2, y: 3}", "offset: {x: -2, y: 0}"}}},
+		{"0, 0 deletes a block offset", captionEdit(0, FieldCaptionOffset, pixels(0, 0)),
+			[]swap{{"    offset:\n      x: 8\n      y: -4\n", ""}}},
+		{"0, 0 deletes a flow offset", captionEdit(1, FieldCaptionOffset, pixels(0, 0)),
+			[]swap{{", offset: {x: 2, y: 3}", ""}}},
+		{"an offset goes after a flow place", captionEdit(4, FieldCaptionOffset, pixels(1, 2)),
+			[]swap{{"place: middle, color", "place: middle, offset: {x: 1, y: 2}, color"}}},
+		{"an offset replaces a block position", captionEdit(2, FieldCaptionOffset, pixels(1, -1)),
+			[]swap{{positionLine, "    offset: {x: 1, y: -1}\n"}}},
+		{"0, 0 deletes a flow position", captionEdit(3, FieldCaptionOffset, pixels(0, 0)),
+			[]swap{{", position: {x: 10, y: 20}", ""}}},
+		{"a place replaces a block position", captionEdit(2, FieldCaptionPlace, "top"),
+			[]swap{{positionLine, "    place: top\n"}}},
+		{"bottom deletes a flow position", captionEdit(3, FieldCaptionPlace, "bottom"),
+			[]swap{{", position: {x: 10, y: 20}", ""}}},
+		{"an align replaces a flow position", captionEdit(3, FieldCaptionAlign, "right"),
+			[]swap{{", position: {x: 10, y: 20}", ", align: right"}}},
+		{"middle deletes a block position", captionEdit(2, FieldCaptionAlign, "middle"),
+			[]swap{{positionLine, ""}}},
+		{"a position replaces a block place, align and offset", captionEdit(0, FieldCaptionPosition, pixels(40, 50)),
+			[]swap{{"    place: top\n    align: left\n    offset:\n      x: 8\n      y: -4\n", "    position: {x: 40, y: 50}\n"}}},
+		{"a position replaces a flow align and offset", captionEdit(1, FieldCaptionPosition, pixels(4, 5)),
+			[]swap{{", align: right, offset: {x: 2, y: 3}", ", position: {x: 4, y: 5}"}}},
+		{"a position replaces a flow place", captionEdit(4, FieldCaptionPosition, pixels(1, 2)),
+			[]swap{{", place: middle", ", position: {x: 1, y: 2}"}}},
+		{"a block position is changed, keeping its comment", captionEdit(2, FieldCaptionPosition, pixels(0, 0)),
+			[]swap{{"{x: 40, y: 300} # top-left", "{x: 0, y: 0} # top-left"}}},
+		{"a flow position is changed", captionEdit(3, FieldCaptionPosition, pixels(-5, 20)),
+			[]swap{{"{x: 10, y: 20}", "{x: -5, y: 20}"}}},
+		{"null deletes a block position", captionEdit(2, FieldCaptionPosition, nil), []swap{{positionLine, ""}}},
+		{"null deletes a flow position", captionEdit(3, FieldCaptionPosition, nil),
+			[]swap{{", position: {x: 10, y: 20}", ""}}},
+		{"null on a caption without position leaves it as it is", captionEdit(0, FieldCaptionPosition, nil), nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			want := captionPlacementBoard
+			for _, change := range tc.swaps {
+				if count := strings.Count(want, change.old); count != 1 {
+					t.Fatalf("the board holds %q %d times, want once", change.old, count)
+				}
+				want = strings.Replace(want, change.old, change.new, 1)
+			}
+
+			got, _, err := Apply([]byte(captionPlacementBoard), captionEditPath, tc.edit)
+
+			if err != nil {
+				t.Fatalf("Apply(%+v): %v", tc.edit, err)
+			}
+			if string(got) != want {
+				t.Errorf("Apply(%+v) =\n%s\nwant\n%s", tc.edit, got, want)
+			}
+		})
+	}
+}
+
+// placement is where a loaded caption sits: its place, align, offset and position.
+type placement struct {
+	place    Place
+	align    Align
+	offset   Pixels
+	position *Pixels
+}
+
+// placementOf reads caption's placement.
+func placementOf(caption Caption) placement {
+	return placement{caption.Place, caption.Align, caption.Offset, caption.Position}
+}
+
+func TestApply_CaptionPlacementEdits_SwitchToPositionAndBack(t *testing.T) {
+	t.Parallel()
+	positioned := func(x, y int) placement { return placement{position: &Pixels{X: x, Y: y}} }
+	cases := []struct {
+		name  string
+		edits []Edit
+		index int
+		want  placement
+	}{
+		{"a block caption to position", []Edit{captionEdit(0, FieldCaptionPosition, pixels(40, 50))}, 0,
+			positioned(40, 50)},
+		{"a flow caption to position", []Edit{captionEdit(1, FieldCaptionPosition, pixels(4, 5))}, 1,
+			positioned(4, 5)},
+		{"a block caption to position and back by null", []Edit{
+			captionEdit(0, FieldCaptionPosition, pixels(40, 50)), captionEdit(0, FieldCaptionPosition, nil),
+		}, 0, placement{place: PlaceBottom, align: AlignMiddle}},
+		{"a flow caption to position and back by a place", []Edit{
+			captionEdit(1, FieldCaptionPosition, pixels(4, 5)), captionEdit(1, FieldCaptionPlace, "top"),
+		}, 1, placement{place: PlaceTop, align: AlignMiddle}},
+		{"a positioned block caption to an offset", []Edit{captionEdit(2, FieldCaptionOffset, pixels(3, 4))}, 2,
+			placement{place: PlaceBottom, align: AlignMiddle, offset: Pixels{X: 3, Y: 4}}},
+		{"a positioned flow caption to an align and back by a position", []Edit{
+			captionEdit(3, FieldCaptionAlign, "left"), captionEdit(3, FieldCaptionPosition, pixels(7, 8)),
+		}, 3, positioned(7, 8)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := []byte(captionPlacementBoard)
+			var board *Storyboard
+			var err error
+
+			for _, edit := range tc.edits {
+				if src, board, err = Apply(src, captionEditPath, edit); err != nil {
+					t.Fatalf("Apply(%+v): %v", edit, err)
+				}
+			}
+
+			if got := placementOf(board.Captions[tc.index]); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("captions[%d] placed %+v, want %+v", tc.index, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestApply_CaptionPlacementEdit_IsRefused(t *testing.T) {
+	t.Parallel()
+	const wantPixels = "want whole design pixels"
+	cases := []struct {
+		name    string
+		edit    Edit
+		message string
+	}{
+		{"an offset as text", captionEdit(0, FieldCaptionOffset, "8, -4"), "captions[0]: caption.offset: " + wantPixels},
+		{"an offset without y", captionEdit(0, FieldCaptionOffset, map[string]int{"x": 1}),
+			"captions[0]: caption.offset: " + wantPixels},
+		{"an offset of a fraction", captionEdit(0, FieldCaptionOffset, map[string]float64{"x": 1.5, "y": 0}),
+			"captions[0]: caption.offset: " + wantPixels},
+		{"an offset with another key", captionEdit(0, FieldCaptionOffset, map[string]int{"x": 1, "y": 2, "z": 3}),
+			"captions[0]: caption.offset: " + wantPixels},
+		{"a position as a number", captionEdit(2, FieldCaptionPosition, 40), "captions[2]: caption.position: " + wantPixels},
+		{"a position on a caption that is not there", captionEdit(9, FieldCaptionPosition, pixels(1, 1)),
+			"captions[9]: caption.position: the storyboard has no caption at index 9"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, _, err := Apply([]byte(captionPlacementBoard), captionEditPath, tc.edit)
 
 			if err == nil || !strings.Contains(err.Error(), tc.message) {
 				t.Errorf("Apply(%+v) = %v, want an error containing %q", tc.edit, err, tc.message)

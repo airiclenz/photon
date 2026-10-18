@@ -53,7 +53,8 @@ func isCaptionField(field string) bool {
 }
 
 // editCaption sets field, typed as value, on the caption at index in board, the storyboard s.doc
-// holds — its timing, text and placement here, its font, colours, box and fade by
+// holds — its timing, text, place and align here, its offset and position by
+// [splicer.setCaptionOffset] and [splicer.setCaptionPosition], its font, colours, box and fade by
 // [splicer.setCaptionStyle] — or adds, removes or reorders a caption for a list field.
 func (s *splicer) editCaption(board *Storyboard, index int, field string, value json.RawMessage) error {
 	if isListField(field) {
@@ -77,6 +78,10 @@ func (s *splicer) editCaption(board *Storyboard, index int, field string, value 
 		return s.setPlacement(caption, keyPlace, value, placeSpellings, string(PlaceBottom))
 	case FieldCaptionAlign:
 		return s.setPlacement(caption, keyAlign, value, alignSpellings, string(AlignMiddle))
+	case FieldCaptionOffset:
+		return s.setCaptionOffset(caption, value)
+	case FieldCaptionPosition:
+		return s.setCaptionPosition(caption, value)
 	case FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor,
 		FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut:
 		return s.setCaptionStyle(caption, board.Frame.FontSize, field, value)
@@ -139,7 +144,8 @@ func (s *splicer) setCaptionText(caption yamledit.Path, value json.RawMessage) e
 }
 
 // setPlacement writes the caption's place or align key, value typed as a JSON string holding one
-// of spellings, or deletes the key for absent, the value it takes when left out.
+// of spellings, or deletes the key for absent, the value it takes when left out; either way it
+// deletes the caption's position, which comes instead of place and align.
 func (s *splicer) setPlacement(
 	caption yamledit.Path,
 	key string,
@@ -149,6 +155,9 @@ func (s *splicer) setPlacement(
 ) error {
 	spelling, err := decodeSpelling(value, spellings)
 	if err != nil {
+		return err
+	}
+	if err := s.doc.DeleteIfPresent(under(caption, keyPosition)); err != nil {
 		return err
 	}
 	if spelling == absent {

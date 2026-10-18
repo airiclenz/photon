@@ -1,6 +1,7 @@
 package storyboard
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -21,6 +22,13 @@ const (
 	FieldCaptionFadeOut    = "caption.fade.out"
 )
 
+// The caption placement fields an [Edit] names past place and align: the caption's offset from
+// where those put it, and its position, which comes instead of all three.
+const (
+	FieldCaptionOffset   = "caption.offset"
+	FieldCaptionPosition = "caption.position"
+)
+
 // The storyboard keys a caption style edit addresses: the caption's nested font, box and fade
 // mappings and the keys in them, and its own color key, which the box shares.
 const (
@@ -34,6 +42,15 @@ const (
 	keyIn      = "in"
 	keyOut     = "out"
 )
+
+// The storyboard keys of a caption's offset and position.
+const (
+	keyOffset   = "offset"
+	keyPosition = "position"
+)
+
+// positionReplaced is the caption keys a position comes instead of.
+var positionReplaced = []string{keyPlace, keyAlign, keyOffset}
 
 // The key orders of a caption's nested style mappings, in their struct field order.
 var (
@@ -190,6 +207,77 @@ func (s *splicer) deleteNestedKey(mapping yamledit.Path, site styleSite) error {
 func (s *splicer) isMapping(path yamledit.Path) bool {
 	_, isScalar := s.doc.Scalar(path)
 	return s.doc.Has(path) && !isScalar
+}
+
+// setCaptionOffset writes the caption's offset, value typed as design pixels, or deletes the key
+// for {0, 0}, the offset it takes when left out; either way it deletes the caption's position,
+// which comes instead of the offset.
+func (s *splicer) setCaptionOffset(caption yamledit.Path, value json.RawMessage) error {
+	offset, err := decodePixels(value)
+	if err != nil {
+		return err
+	}
+	if err := s.doc.DeleteIfPresent(under(caption, keyPosition)); err != nil {
+		return err
+	}
+	if offset == (Pixels{}) {
+		return s.doc.DeleteIfPresent(under(caption, keyOffset))
+	}
+	return s.writePixels(caption, keyOffset, offset)
+}
+
+// setCaptionPosition writes the caption's position, value typed as design pixels, and deletes
+// its place, align and offset, which the position comes instead of. A null deletes the position:
+// the caption then sits where an absent place and align put it, bottom middle.
+func (s *splicer) setCaptionPosition(caption yamledit.Path, value json.RawMessage) error {
+	if isNull(value) {
+		return s.doc.DeleteIfPresent(under(caption, keyPosition))
+	}
+	position, err := decodePixels(value)
+	if err != nil {
+		return err
+	}
+	for _, key := range positionReplaced {
+		if err := s.doc.DeleteIfPresent(under(caption, key)); err != nil {
+			return err
+		}
+	}
+	return s.writePixels(caption, keyPosition, position)
+}
+
+// writePixels writes pixels as the caption's key, a {x: 8, y: -4} flow mapping in place of
+// whatever form the key held, or after the keys that precede it when the key is absent. A key
+// holding no text, the null an empty `offset:` holds, is deleted and inserted anew:
+// [yamledit.Document.Replace] cannot splice over it.
+func (s *splicer) writePixels(caption yamledit.Path, key string, pixels Pixels) error {
+	path := under(caption, key)
+	if !s.isMapping(path) {
+		if err := s.doc.DeleteIfPresent(path); err != nil {
+			return err
+		}
+	}
+	flow := "{x: " + strconv.Itoa(pixels.X) + ", y: " + strconv.Itoa(pixels.Y) + "}"
+	return s.replaceOrInsert(caption, key, flow, captionKeyOrder)
+}
+
+// wirePixels is a caption's offset or position as an [Edit] types it, {"x": 8, "y": -4}: whole
+// design pixels, X to the right and Y down. Both keys are required.
+type wirePixels struct {
+	X *int `json:"x"`
+	Y *int `json:"y"`
+}
+
+// decodePixels reads design pixels typed as {"x", "y"}, refusing any other key, a missing one
+// and a length that is not a whole number.
+func decodePixels(value json.RawMessage) (Pixels, error) {
+	decoder := json.NewDecoder(bytes.NewReader(value))
+	decoder.DisallowUnknownFields()
+	var wire wirePixels
+	if err := decoder.Decode(&wire); err != nil || wire.X == nil || wire.Y == nil {
+		return Pixels{}, fmt.Errorf(
+			`want whole design pixels such as {"x": 8, "y": -4}, got %s`, value)
+	}
+	return Pixels{X: *wire.X, Y: *wire.Y}, nil
 }
 
 // decodeCaptionSize reads a caption's font size, typed as a JSON number above 0; whether it lies

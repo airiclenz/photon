@@ -855,6 +855,7 @@ func TestApply_CaptionNull_IsRefusedButForUntil(t *testing.T) {
 		{"a null text", captionEdit(1, FieldCaptionText, nil), "captions[1]: caption.text: want a value, got null"},
 		{"a null place", captionEdit(1, FieldCaptionPlace, nil), "captions[1]: caption.place: want a value, got null"},
 		{"a null align", captionEdit(1, FieldCaptionAlign, nil), "captions[1]: caption.align: want a value, got null"},
+		{"a null offset", captionEdit(1, FieldCaptionOffset, nil), "captions[1]: caption.offset: want a value, got null"},
 		{"an until with no value", Edit{Owner: Owner{Kind: OwnerCaption, Index: 1}, Field: FieldCaptionUntil},
 			"captions[1]: caption.until: want a value, got none"},
 	}

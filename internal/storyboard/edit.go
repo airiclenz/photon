@@ -42,6 +42,11 @@ import (
 //   - caption.text: a string, its lines separated by \n;
 //   - caption.place: "top", "middle" or "bottom", which removes the key;
 //   - caption.align: "left", "middle", which removes the key, or "right";
+//   - caption.offset: design pixels, {"x": 8, "y": -4}, whole numbers with X to the right and Y
+//     down, {"x": 0, "y": 0} removing the key;
+//   - caption.position: design pixels, the caption box's top-left corner, which removes the
+//     caption's place, align and offset; null removes the position, as caption.place,
+//     caption.align and caption.offset each do;
 //   - caption.font.size: a number above 0, frame.font_size removing the key;
 //   - caption.font.weight: "regular", which removes the key, or "bold";
 //   - caption.color, caption.box.color: a colour, "#ffcc00", its default — "#ffffff" for the
@@ -55,9 +60,9 @@ import (
 //   - camera.remove, caption.remove: null, which removes the owner's entry;
 //   - camera.move, caption.move: a whole number, the index the owner's entry moves to.
 //
-// A value of another JSON type or spelling, a null or absent value but zoom's, caption.until's
-// and a remove's, and an owner of another kind than the field's are refused with an error
-// naming the field.
+// A value of another JSON type or spelling, a null or absent value but zoom's, caption.until's,
+// caption.position's and a remove's, and an owner of another kind than the field's are refused
+// with an error naming the field.
 type Edit struct {
 	Owner Owner           `json:"owner"`
 	Field string          `json:"field"`
@@ -86,7 +91,7 @@ var editFields = []string{
 	FieldCaptionPlace, FieldCaptionAlign, FieldCameraInsert, FieldCameraRemove, FieldCameraMove,
 	FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove, FieldCaptionFontSize,
 	FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity,
-	FieldCaptionFadeIn, FieldCaptionFadeOut,
+	FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionOffset, FieldCaptionPosition,
 }
 
 // EditFields returns every field an [Edit] names for [Apply], in a new slice.
@@ -122,21 +127,24 @@ const (
 // time.Duration.String(). A new key goes after the keys that precede it in the storyboard's
 // field order, its yaml struct tags; a value equal to the default of a key that is absent writes
 // nothing; cut false, zoom.factor 0 (auto), camera.ease smooth, caption.place bottom,
-// caption.align middle and a caption's font, colour, box or fade at the default [Load] fills in
-// delete their key, and a caption's font, box or fade mapping left holding no key goes with it,
-// while a style value a caption lacks the mapping for creates it as a one-key flow mapping. A
-// colour is written quoted, '#ffcc00', and compared to its default case-insensitively. A target is written as the flow mapping
-// [Target.YAMLFlow] spells, and a zoom.target on a zoom holding nothing but its target rewrites
-// that zoom as a flow mapping. A camera.at, caption.at or caption.until is written as a clip time
+// caption.align middle, caption.offset {0, 0} and a caption's font, colour, box or fade at the
+// default [Load] fills in delete their key, and a caption's font, box or fade mapping left
+// holding no key goes with it, while a style value a caption lacks the mapping for creates it as
+// a one-key flow mapping. A colour is written quoted, '#ffcc00', and compared to its default
+// case-insensitively. A target is written as the flow mapping [Target.YAMLFlow] spells, and a
+// zoom.target on a zoom holding nothing but its target rewrites that zoom as a flow mapping. A camera.at, caption.at or caption.until is written as a clip time
 // in ms or a {beat: 3, offset: 200ms} flow mapping, and a pan's cell as {cell: {x: 3, y: 4}}; a
 // camera.at, a caption.at or caption.until, or a pan's camera.to replaces its whole node with the
 // value's flow text, and a caption.text replaces its whole node, a block scalar too, with one
-// double-quoted line; a caption.for deletes the caption's until and a caption.until its for, or,
-// as null, writes the for that keeps the caption's stretch in place of its until. An insert writes
-// its entry as one flow line from presets — a zoom to 1.5 or a pan to the frame's centre cell,
-// over 600ms, or a caption "Caption" for 2s — and creates a camera or captions key the storyboard
-// lacks as a flow list after the keys that precede it; a remove or move splices only its list's
-// items, and removing a list's only entry deletes its key. The edit is
+// double-quoted line; a caption.offset or caption.position is written as an {x: 8, y: -4} flow
+// mapping in place of its whole node, a position deletes the caption's place, align and offset,
+// a place, align or offset deletes its position, and a null position deletes the key; a
+// caption.for deletes the caption's until and a caption.until its for, or, as null, writes the
+// for that keeps the caption's stretch in place of its until. An insert writes its entry as one
+// flow line from presets — a zoom to 1.5 or a pan to the frame's centre cell, over 600ms, or a
+// caption "Caption" for 2s — and creates a camera or captions key the storyboard lacks as a flow
+// list after the keys that precede it; a remove or move splices only its list's items, and
+// removing a list's only entry deletes its key. The edit is
 // refused with an error led by its owner and field — the beat, camera move or caption, or
 // nothing for a frame field — when its value is of the wrong JSON type or misspelled, when its
 // owner is of another kind than the field's, when it names a beat, zoom, camera move or caption
@@ -213,7 +221,8 @@ func (s *splicer) apply(board *Storyboard, edit Edit) error {
 	if len(edit.Value) == 0 {
 		return errors.New("want a value, got none")
 	}
-	isNullTaken := edit.Field == FieldZoom || edit.Field == FieldCaptionUntil || isRemoveField(edit.Field)
+	isNullTaken := edit.Field == FieldZoom || edit.Field == FieldCaptionUntil ||
+		edit.Field == FieldCaptionPosition || isRemoveField(edit.Field)
 	if isNull(edit.Value) && !isNullTaken {
 		return errors.New("want a value, got null")
 	}

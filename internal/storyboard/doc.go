@@ -36,7 +36,7 @@
 //   - edit_beat.go: the beat and frame edits — duration, hold, cut, zoom and its fields, frame.width and frame.fps — and [Target.YAMLFlow].
 //   - edit_camera.go: the camera move edits — camera.at, camera.over, camera.ease and camera.to.
 //   - edit_caption.go: the caption edits — caption.at, caption.for, caption.until, caption.text, caption.place and caption.align.
-//   - edit_caption_style.go: the caption style edits — caption.font.size and .weight, caption.color, caption.box.color and .opacity, caption.fade.in and .out.
+//   - edit_caption_style.go: the caption style edits — caption.font.size and .weight, caption.color, caption.box.color and .opacity, caption.fade.in and .out — and caption.offset and caption.position.
 //   - edit_list.go: the list edits that add, remove and reorder camera moves and captions — camera.insert|remove|move and caption.insert|remove|move.
 //   - fields.go: [Fields], each owner's editable and read-only [Field] with its [FieldKind], choices and default.
 //   - clock.go: the clip's [OutputClock], from [Storyboard.Clock]: section starts, moments and length.
