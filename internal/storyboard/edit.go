@@ -37,6 +37,8 @@ import (
 //   - camera.ease: "smooth", which removes the key, or "linear";
 //   - camera.to: a number, the factor, for a zoom move; for a pan, a target as zoom.target
 //     takes it or a cell, {"cell": {"x": 3, "y": 4}}, refused on a pan along a via path;
+//   - camera.target: a zoom move's target, as zoom.target takes it; null removes it, the zoom
+//     then aiming nowhere; refused on a pan;
 //   - camera.via, camera.via.insert: a waypoint of a pan's via path, {"index": 1, "point":
 //     {"cell": {"x": 3, "y": 4}}}, its point a target or cell as a pan's camera.to takes it, set
 //     at one of the path's indexes, or added so that it is the waypoint at an index from 0
@@ -72,9 +74,9 @@ import (
 //   - camera.remove, caption.remove: null, which removes the owner's entry;
 //   - camera.move, caption.move: a whole number, the index the owner's entry moves to.
 //
-// A value of another JSON type or spelling, a null or absent value but zoom's, caption.until's,
-// caption.position's and a remove's, and an owner of another kind than the field's are refused
-// with an error naming the field.
+// A value of another JSON type or spelling, a null or absent value but zoom's, camera.target's,
+// caption.until's, caption.position's and a remove's, and an owner of another kind than the
+// field's are refused with an error naming the field.
 type Edit struct {
 	Owner Owner           `json:"owner"`
 	Field string          `json:"field"`
@@ -110,7 +112,7 @@ var editFields = []string{
 	FieldCameraMove, FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove, FieldCaptionFontSize,
 	FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity,
 	FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionOffset, FieldCaptionPosition,
-	FieldCameraVia, FieldCameraViaInsert, FieldCameraViaRemove, FieldCameraPath,
+	FieldCameraVia, FieldCameraViaInsert, FieldCameraViaRemove, FieldCameraPath, FieldCameraTarget,
 }
 
 // EditFields returns every field an [Edit] names for [Apply], in a new slice.
@@ -151,8 +153,9 @@ const (
 // holding no key goes with it, while a style value a caption lacks the mapping for creates it as
 // a one-key flow mapping. A colour is written quoted, '#ffcc00', and compared to its default
 // case-insensitively. A target is written as the flow mapping [Target.YAMLFlow] spells, and a
-// zoom.target on a zoom holding nothing but its target rewrites that zoom as a flow mapping. A
-// camera.at, caption.at or caption.until is written as a clip time in ms or a
+// zoom.target on a zoom holding nothing but its target rewrites that zoom as a flow mapping; a
+// camera.target replaces a zoom move's whole target node or goes after its to, and as null
+// deletes the key. A camera.at, caption.at or caption.until is written as a clip time in ms or a
 // {beat: 3, offset: 200ms} flow mapping, and a pan's cell as {cell: {x: 3, y: 4}}; a camera.at, a
 // caption.at or caption.until, or a pan's camera.to replaces its whole node with the value's flow
 // text, and a caption.text replaces its whole node, a block scalar too, with one double-quoted
@@ -170,11 +173,11 @@ const (
 // writes `via: [<centre cell>, <old to>]` in place of the pan's to, and one to "to" writes
 // `to: <last waypoint>` in place of its via. The edit is refused with an error led by its owner and
 // field — the beat, camera move or caption, or nothing for a frame field — when its value is of the
-// wrong JSON type or misspelled, when its owner is of another kind than the field's, when it names
-// a beat, zoom, camera move, caption or waypoint that is not there, an insert index past the list's
-// length among them, or when the result fails validation, an inserted move overlapping another on
-// its track and a via path left with one waypoint among them; the last wraps the
-// *[ValidationError].
+// wrong JSON type or misspelled, when its owner is of another kind than the field's or, for a
+// camera.target, is a pan, when it names a beat, zoom, camera move, caption or waypoint that is not
+// there, an insert index past the list's length among them, or when the result fails validation,
+// an inserted move overlapping another on its track, a targeted zoom overlapping a pan and a via
+// path left with one waypoint among them; the last wraps the *[ValidationError].
 func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 	board, err := Parse(src, path)
 	if err != nil {
@@ -246,7 +249,8 @@ func (s *splicer) apply(board *Storyboard, edit Edit) error {
 		return errors.New("want a value, got none")
 	}
 	isNullTaken := edit.Field == FieldZoom || edit.Field == FieldCaptionUntil ||
-		edit.Field == FieldCaptionPosition || isRemoveField(edit.Field)
+		edit.Field == FieldCaptionPosition || edit.Field == FieldCameraTarget ||
+		isRemoveField(edit.Field)
 	if isNull(edit.Value) && !isNullTaken {
 		return errors.New("want a value, got null")
 	}

@@ -558,6 +558,7 @@ func TestApply_CameraEditToWhatAnAbsentKeyMeans_LeavesTheSourceAsItIs(t *testing
 		edit Edit
 	}{
 		{"a clip start on a move without at", cameraEdit(4, FieldCameraAt, moment(0, 0))},
+		{"no target on a zoom without one", cameraEdit(4, FieldCameraTarget, nil)},
 		{"smooth on a move without ease", cameraEdit(1, FieldCameraEase, "smooth")},
 	}
 	for _, tc := range cases {
@@ -620,6 +621,97 @@ func TestApply_CameraEditOnWhatIsNotThere_IsRefused(t *testing.T) {
 			t.Parallel()
 
 			_, _, err := Apply([]byte(tc.board), cameraEditPath, tc.edit)
+
+			if err == nil || !strings.Contains(err.Error(), tc.message) {
+				t.Errorf("Apply(%+v) = %v, want an error containing %q", tc.edit, err, tc.message)
+			}
+		})
+	}
+}
+
+// zoomTargetBoard is editBaseBoard with four zooms in beat 1, one after another so that each
+// may aim: a block and a flow zoom with a target, and a block and a flow zoom without one.
+const zoomTargetBoard = editBaseBoard + `camera:
+  - zoom:
+      to: 1.5
+      target:
+        text: 'failing'
+      at: 100ms
+      over: 200ms
+  - zoom:
+      to: 2
+      at: 300ms # after the first
+      over: 200ms
+  - zoom: {to: 1.2, target: {text: 'tests', nth: last}, at: 500ms, over: 200ms}
+  - zoom: {to: 1.8, at: 700ms, over: 200ms}
+`
+
+func TestApply_CameraTarget_ChangesOnlyTheTarget(t *testing.T) {
+	t.Parallel()
+	ok := json.RawMessage(`{"text": "ok", "nth": 2, "area": "list"}`)
+	cases := []struct {
+		name     string
+		edit     Edit
+		old, new string
+	}{
+		{"a block target is replaced", cameraEdit(0, FieldCameraTarget, ok),
+			"      target:\n        text: 'failing'\n", "      target: {text: 'ok', nth: 2, area: 'list'}\n"},
+		{"a block target is set after to", cameraEdit(1, FieldCameraTarget, ok),
+			"      to: 2\n", "      to: 2\n      target: {text: 'ok', nth: 2, area: 'list'}\n"},
+		{"a block target is removed", cameraEdit(0, FieldCameraTarget, nil),
+			"      target:\n        text: 'failing'\n", ""},
+		{"a flow target is replaced", cameraEdit(2, FieldCameraTarget, ok),
+			"target: {text: 'tests', nth: last}", "target: {text: 'ok', nth: 2, area: 'list'}"},
+		{"a flow target is set after to", cameraEdit(3, FieldCameraTarget, ok),
+			"{to: 1.8, at:", "{to: 1.8, target: {text: 'ok', nth: 2, area: 'list'}, at:"},
+		{"a flow target is removed", cameraEdit(2, FieldCameraTarget, nil),
+			"target: {text: 'tests', nth: last}, ", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if count := strings.Count(zoomTargetBoard, tc.old); count != 1 {
+				t.Fatalf("the board holds %q %d times, want once", tc.old, count)
+			}
+			want := strings.Replace(zoomTargetBoard, tc.old, tc.new, 1)
+
+			got, _, err := Apply([]byte(zoomTargetBoard), cameraEditPath, tc.edit)
+
+			if err != nil {
+				t.Fatalf("Apply(%+v): %v", tc.edit, err)
+			}
+			if string(got) != want {
+				t.Errorf("Apply(%+v) =\n%s\nwant\n%s", tc.edit, got, want)
+			}
+		})
+	}
+}
+
+func TestApply_CameraTarget_IsRefused(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		edit    Edit
+		message string
+	}{
+		{"a target on a pan", cameraEdit(1, FieldCameraTarget, json.RawMessage(`{"text": "x"}`)),
+			"camera[1]: camera.target: a pan takes no target"},
+		{"a null target on a pan", cameraEdit(2, FieldCameraTarget, nil),
+			"camera[2]: camera.target: a pan takes no target"},
+		{"a target with an unknown key", cameraEdit(4, FieldCameraTarget, json.RawMessage(`{"text": "x", "size": 2}`)),
+			"camera[4]: camera.target: want a target"},
+		{"a target as YAML text", cameraEdit(4, FieldCameraTarget, "{text: x}"),
+			"camera[4]: camera.target: want a target"},
+		{"a target without text", cameraEdit(4, FieldCameraTarget, json.RawMessage(`{"area": "list"}`)),
+			"camera[4]: zoom.target.text: missing"},
+		{"a targeted zoom overlapping a pan", cameraEdit(0, FieldCameraTarget, json.RawMessage(`{"text": "x"}`)),
+			"camera[1]: pan: overlaps camera[0] on the pan track"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, _, err := Apply([]byte(cameraEditBoard), cameraEditPath, tc.edit)
 
 			if err == nil || !strings.Contains(err.Error(), tc.message) {
 				t.Errorf("Apply(%+v) = %v, want an error containing %q", tc.edit, err, tc.message)

@@ -447,7 +447,7 @@ undeclared area; the `ZoomMove` key-order pin and the new camera[5]'s `defaultRe
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard/ ./internal/clip/`; `LLL ./internal/storyboard/... ./internal/clip/...`
 **Commit:** `feat(storyboard): give a camera zoom move a target`
 
-## 13. Edit a camera zoom's target
+## 13. Edit a camera zoom's target — ✅ DONE (2026-10-18)
 
 **What:** Depends on item 12.
 **Regression guard.** Item 13 adds `camera.target` to the same unsent-fields list in

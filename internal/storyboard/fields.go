@@ -102,11 +102,11 @@ var (
 // frame fields in the frame's key order, then each beat's, camera move's and caption's in
 // storyboard order, the camera's and the captions' insert after their entries', owned by index 0,
 // whether or not the list holds an entry. A beat lists its zoom's fields only when it zooms, a
-// camera move's camera.to is a decimal on a zoom move and a point on a pan, and a pan lists its
-// camera.path, a via pan its waypoint fields too. The frame's cols and rows are read-only because
-// they size the terminal the take was recorded in, so a change needs a new `photon record`, and
-// its max_colors because the page draws its preview before the palette is quantized, so the
-// preview could not show a change.
+// camera move's camera.to is a decimal on a zoom move and a point on a pan, a zoom move lists its
+// camera.target, and a pan its camera.path, a via pan its waypoint fields too. The frame's cols
+// and rows are read-only because they size the terminal the take was recorded in, so a change
+// needs a new `photon record`, and its max_colors because the page draws its preview before the
+// palette is quantized, so the preview could not show a change.
 func Fields(board *Storyboard) []Field {
 	fields := clipFields()
 	for _, beat := range board.Beats {
@@ -191,7 +191,8 @@ func beatFields(beat Beat) []Field {
 
 // cameraFields describes the fields of move, the camera move at index: its start, length and
 // ease, its destination — a zoom move's factor, or a pan's target or cell, which a via path has
-// none of — a pan's path and a via path's waypoints, and its remove and move.
+// none of — a zoom move's target, defaulting to null, a pan's path and a via path's waypoints,
+// and its remove and move.
 func cameraFields(index int, move CameraMove) []Field {
 	owner := Owner{Kind: OwnerCamera, Index: index}
 	to := Field{Owner: owner, Name: FieldCameraTo, Kind: KindDecimal, Default: raw(defaultZero)}
@@ -206,6 +207,10 @@ func cameraFields(index int, move CameraMove) []Field {
 			Choices: slices.Clone(easeChoices), Default: quoted(string(EaseSmooth)),
 		},
 		to,
+	}
+	if move.Zoom != nil {
+		fields = append(fields,
+			Field{Owner: owner, Name: FieldCameraTarget, Kind: KindTarget, Default: raw(jsonNull)})
 	}
 	if move.Pan != nil {
 		fields = append(fields, pathFields(owner, *move.Pan)...)
