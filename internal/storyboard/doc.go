@@ -12,13 +12,13 @@
 //
 // [Apply] changes one field by a typed [Edit] — a beat's duration, hold, cut or zoom, the clip's
 // frame.width or frame.fps, a camera move's start, length, ease or destination, a pan's via
-// waypoints or its path, or a caption's start, end, text, place, align, font, colours, box or
-// fade, or adds, removes or reorders a camera move or caption — splicing the new value into the
-// source so only the edited key's text changes, a new key placed by the order of the
-// storyboard's yaml struct tags, and refuses an edit whose result fails Parse. [Fields] describes
-// every field of a storyboard's owners as photon tune's page shows them: each editable field an
-// Edit names and the frame's read-only fields, with its [FieldKind], an enum's choices and the
-// default an absent key means.
+// waypoints or its path, or a caption's start, end — or both at once, shifted — text, place,
+// align, font, colours, box or fade, or adds, removes or reorders a camera move or caption —
+// splicing the new value into the source so only the edited key's text changes, a new key placed
+// by the order of the storyboard's yaml struct tags, and refuses an edit whose result fails Parse.
+// [Fields] describes every field of a storyboard's owners as photon tune's page shows them: each
+// editable field an Edit names and the frame's read-only fields, with its [FieldKind], an enum's
+// choices and the default an absent key means.
 //
 // It imports keys, to check that a `key` action names a key photon can send, and yamledit, to
 // splice an edit into the source. Whether an area a target or expect names is declared in the
@@ -39,8 +39,8 @@
 //   - edit_beat.go: the beat and frame edits — duration, hold, cut, zoom and its fields,
 //     frame.width and frame.fps — and [Target.YAMLFlow].
 //   - edit_camera.go: the camera move edits — camera.at, camera.over, camera.ease and camera.to.
-//   - edit_caption.go: the caption edits — caption.at, caption.for, caption.until, caption.text,
-//     caption.place and caption.align.
+//   - edit_caption.go: the caption edits — caption.at, caption.for, caption.until,
+//     caption.shift, caption.text, caption.place and caption.align.
 //   - edit_caption_style.go: the caption style edits — caption.font.size and .weight,
 //     caption.color, caption.box.color and .opacity, caption.fade.in and .out — and caption.offset
 //     and caption.position.

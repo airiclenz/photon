@@ -47,6 +47,8 @@ import (
 //   - caption.for: a whole number of milliseconds above 0, which removes the caption's until;
 //   - caption.until: a moment, which removes the caption's for; null clears the until, the
 //     caption then ending after a for of the length it shows now;
+//   - caption.shift: a whole number of milliseconds, negative for earlier, added to the offset of
+//     the caption's at and of its until, if it has one, each keeping its beat;
 //   - caption.text: a string, its lines separated by \n;
 //   - caption.place: "top", "middle" or "bottom", which removes the key;
 //   - caption.align: "left", "middle", which removes the key, or "right";
@@ -95,9 +97,9 @@ const (
 var editFields = []string{
 	FieldDuration, FieldHold, FieldCut, FieldZoom, FieldZoomTarget, FieldZoomFactor, FieldZoomIn,
 	FieldZoomOut, FieldFrameWidth, FieldFrameFPS, FieldCameraAt, FieldCameraOver, FieldCameraEase,
-	FieldCameraTo, FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionText,
-	FieldCaptionPlace, FieldCaptionAlign, FieldCameraInsert, FieldCameraRemove, FieldCameraMove,
-	FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove, FieldCaptionFontSize,
+	FieldCameraTo, FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionShift,
+	FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCameraInsert, FieldCameraRemove,
+	FieldCameraMove, FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove, FieldCaptionFontSize,
 	FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity,
 	FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionOffset, FieldCaptionPosition,
 	FieldCameraVia, FieldCameraViaInsert, FieldCameraViaRemove, FieldCameraPath,
@@ -150,8 +152,10 @@ const (
 // of its whole node, a position deletes the caption's place, align and offset, a place, align or
 // offset deletes its position, and a null position deletes the key; a caption.for deletes the
 // caption's until and a caption.until its for, or, as null, writes the for that keeps the caption's
-// stretch in place of its until. An insert writes its entry as one flow line from presets — a zoom
-// to 1.5 or a pan to the frame's centre cell, over 600ms, or a caption "Caption" for 2s — and
+// stretch in place of its until. A caption.shift rewrites the caption's at and, if it has one, its
+// until as caption.at and caption.until write them, each keeping its beat, and a shift of 0 writes
+// nothing. An insert writes its entry as one flow line from presets — a zoom to 1.5 or a pan to
+// the frame's centre cell, over 600ms, or a caption "Caption" for 2s — and
 // creates a camera or captions key the storyboard lacks as a flow list after the keys that precede
 // it; a remove or move splices only its list's items, and removing a list's only entry deletes its
 // key. A waypoint set, insert or remove splices only its item of the via list, a camera.path to via

@@ -139,7 +139,10 @@ since `testDOM.dispatch` finds elements only by id); `TestPage_IndexReferences_A
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/ -run 'TestPage'`
 **Commit:** `refactor(tune): move the timeline's pointer drag into drag.js`
 
-## 4. Add a caption.shift edit
+## 4. Add a caption.shift edit — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): caption.shift sits after caption.until in editFields and in captionFields (and so in the pinned textOwner lists); no CHANGELOG entry — the page does not send the edit until item 5, which carries the user-facing change.
+NOTES (2026-10-18): TestPage_EntryFields_AreEditFields also fails when the page sends a field unsentPageFields still lists, so item 5 must drop caption.shift from the list when entries/drag start sending it.
 
 **What:** `storyboard.Apply` gains the field `caption.shift` (value: whole ms, may be negative):
 it adds the delta to the caption's `at` offset and, when present, its `until` offset, keeping

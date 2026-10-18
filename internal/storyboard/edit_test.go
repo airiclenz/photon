@@ -722,6 +722,70 @@ func TestApply_CaptionEdit_ChangesOnlyTheEditedText(t *testing.T) {
 	}
 }
 
+func TestApply_CaptionShift_MovesTheStartAndEndTogether(t *testing.T) {
+	t.Parallel()
+	commentedBoard := strings.Replace(captionEditBoard, "until: 2s\n", "until: 2s # the end\n", 1)
+	cases := []struct {
+		name     string
+		board    string
+		edit     Edit
+		old, new string
+	}{
+		{"a block beat at keeps its beat and its for", captionEditBoard, captionEdit(0, FieldCaptionShift, 200),
+			"    at:\n      beat: 1\n      offset: 100ms\n", "    at: {beat: 1, offset: 300ms}\n"},
+		{"a flow until caption shifts earlier, each moment on its beat", captionEditBoard,
+			captionEdit(1, FieldCaptionShift, -100),
+			"at: {beat: 2}, until: {beat: 2, offset: 1200ms}", "at: {beat: 2, offset: -100ms}, until: {beat: 2, offset: 1100ms}"},
+		{"a block until caption shifts later", captionEditBoard, captionEdit(2, FieldCaptionShift, 300),
+			"    at: 1200ms\n    until: 2s\n", "    at: 1500ms\n    until: 2300ms\n"},
+		{"an until's comment stays", commentedBoard, captionEdit(2, FieldCaptionShift, -200),
+			"    at: 1200ms\n    until: 2s # the end\n", "    at: 1000ms\n    until: 1800ms # the end\n"},
+		{"an absent at is inserted after text", captionEditBoard, captionEdit(3, FieldCaptionShift, 100),
+			"{text: 'Start', for: 300ms}", "{text: 'Start', at: 100ms, for: 300ms}"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if count := strings.Count(tc.board, tc.old); count != 1 {
+				t.Fatalf("the board holds %q %d times, want once", tc.old, count)
+			}
+			want := strings.Replace(tc.board, tc.old, tc.new, 1)
+
+			got, _, err := Apply([]byte(tc.board), captionEditPath, tc.edit)
+
+			if err != nil {
+				t.Fatalf("Apply(%+v): %v", tc.edit, err)
+			}
+			if string(got) != want {
+				t.Errorf("Apply(%+v) =\n%s\nwant\n%s", tc.edit, got, want)
+			}
+		})
+	}
+}
+
+func TestApply_CaptionShift_KeepsEachCaptionsLength(t *testing.T) {
+	t.Parallel()
+	const delta = 100 * time.Millisecond
+	before, err := Parse([]byte(captionEditBoard), captionEditPath)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	for index, old := range before.Captions {
+		_, board, err := Apply([]byte(captionEditBoard), captionEditPath,
+			captionEdit(index, FieldCaptionShift, delta.Milliseconds()))
+
+		if err != nil {
+			t.Fatalf("shift caption %d: %v", index, err)
+		}
+		shifted := board.Captions[index]
+		if shifted.Start() != old.Start()+delta || shifted.Stop() != old.Stop()+delta {
+			t.Errorf("caption %d runs %v to %v, want %v to %v", index, shifted.Start(), shifted.Stop(),
+				old.Start()+delta, old.Stop()+delta)
+		}
+	}
+}
+
 func TestApply_CaptionEditToWhatAnAbsentKeyMeans_LeavesTheSourceAsItIs(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -730,6 +794,7 @@ func TestApply_CaptionEditToWhatAnAbsentKeyMeans_LeavesTheSourceAsItIs(t *testin
 	}{
 		{"a clip start on a caption without at", captionEdit(3, FieldCaptionAt, moment(0, 0))},
 		{"a null until on a caption without until", captionEdit(3, FieldCaptionUntil, nil)},
+		{"a shift of 0", captionEdit(1, FieldCaptionShift, 0)},
 		{"bottom on a caption without place", captionEdit(2, FieldCaptionPlace, "bottom")},
 		{"middle on a caption without align", captionEdit(2, FieldCaptionAlign, "middle")},
 	}
@@ -793,6 +858,9 @@ func TestApply_CaptionEditFailingValidation_IsRefused(t *testing.T) {
 		{"a for past the clip's end", captionEdit(0, FieldCaptionFor, 5000), "for: want the caption to end by the clip's end"},
 		{"a start past the clip's end", captionEdit(3, FieldCaptionAt, moment(0, 3000)), "at: want a start in"},
 		{"an empty text", captionEdit(1, FieldCaptionText, ""), "text: missing"},
+		{"a shift before the clip's start", captionEdit(2, FieldCaptionShift, -1300), "at: want a start in"},
+		{"a shift past the clip's end", captionEdit(2, FieldCaptionShift, 600),
+			"until: want the caption to end by the clip's end"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -856,6 +924,7 @@ func TestApply_CaptionNull_IsRefusedButForUntil(t *testing.T) {
 		{"a null place", captionEdit(1, FieldCaptionPlace, nil), "captions[1]: caption.place: want a value, got null"},
 		{"a null align", captionEdit(1, FieldCaptionAlign, nil), "captions[1]: caption.align: want a value, got null"},
 		{"a null offset", captionEdit(1, FieldCaptionOffset, nil), "captions[1]: caption.offset: want a value, got null"},
+		{"a null shift", captionEdit(1, FieldCaptionShift, nil), "captions[1]: caption.shift: want a value, got null"},
 		{"an until with no value", Edit{Owner: Owner{Kind: OwnerCaption, Index: 1}, Field: FieldCaptionUntil},
 			"captions[1]: caption.until: want a value, got none"},
 	}
@@ -906,6 +975,13 @@ func TestApply_CaptionWireSpellings(t *testing.T) {
 		{"a for of 0", captionEdit(0, FieldCaptionFor, 0), false},
 		{"an until as a clip time", captionEdit(1, FieldCaptionUntil, json.RawMessage(`{"beat": 0, "offset_ms": 2000}`)), true},
 		{"an until as YAML text", captionEdit(1, FieldCaptionUntil, "2s"), false},
+		{"a negative shift", captionEdit(1, FieldCaptionShift, -100), true},
+		{"a shift as text", captionEdit(1, FieldCaptionShift, "100"), false},
+		{"a shift with a unit", captionEdit(1, FieldCaptionShift, "100ms"), false},
+		{"a shift with a fraction", captionEdit(1, FieldCaptionShift, 100.5), false},
+		{"a shift no duration holds", captionEdit(1, FieldCaptionShift, json.RawMessage(`9223372036855`)), false},
+		{"a shift taking a moment past what a duration holds", captionEdit(0, FieldCaptionShift,
+			json.RawMessage(`9223372036854`)), false},
 		{"a text", captionEdit(0, FieldCaptionText, "Look"), true},
 		{"a text as a number", captionEdit(0, FieldCaptionText, 42), false},
 		{"a place", captionEdit(0, FieldCaptionPlace, "middle"), true},

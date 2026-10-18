@@ -58,8 +58,9 @@ const (
 // a value it takes: an insert's entry of its first choice at the clip's start, a remove's null,
 // a move's own index. A waypoint field, which sets, adds or removes the waypoint its value
 // indexes, defaults to null, and a pan's camera.path, which has no key either, to the path the
-// pan follows. An editable field's Name is the field an [Edit] names; a read-only field is one of
-// the frame's keys photon tune shows but does not edit, named by that key alone.
+// pan follows. A caption's caption.shift, which has no key either, defaults to 0, the shift that
+// changes nothing. An editable field's Name is the field an [Edit] names; a read-only field is
+// one of the frame's keys photon tune shows but does not edit, named by that key alone.
 type Field struct {
 	Owner      Owner           `json:"owner"`
 	Name       string          `json:"name"`
@@ -238,14 +239,16 @@ func pathFields(owner Owner, pan PanMove) []Field {
 }
 
 // captionFields describes the fields of the caption at index: its start, its end — a for or an
-// until — its text, where it sits — its place, align and offset, or its position — its font, its
-// size defaulting to frameFontSize, its colours, its box and its fade, and its remove and move.
+// until — the shift of both, its text, where it sits — its place, align and offset, or its
+// position — its font, its size defaulting to frameFontSize, its colours, its box and its fade,
+// and its remove and move.
 func captionFields(index int, frameFontSize float64) []Field {
 	owner := Owner{Kind: OwnerCaption, Index: index}
 	fields := []Field{
 		{Owner: owner, Name: FieldCaptionAt, Kind: KindMoment, Default: raw(defaultClipStart)},
 		{Owner: owner, Name: FieldCaptionFor, Kind: KindDuration, Default: raw(defaultZero)},
 		{Owner: owner, Name: FieldCaptionUntil, Kind: KindMoment, Default: raw(jsonNull)},
+		{Owner: owner, Name: FieldCaptionShift, Kind: KindCount, Default: raw(defaultZero)},
 		{Owner: owner, Name: FieldCaptionText, Kind: KindText, Default: raw(defaultText)},
 		{
 			Owner: owner, Name: FieldCaptionPlace, Kind: KindEnum,

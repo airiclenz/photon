@@ -18,6 +18,7 @@ const (
 	FieldCaptionAt    = "caption.at"
 	FieldCaptionFor   = "caption.for"
 	FieldCaptionUntil = "caption.until"
+	FieldCaptionShift = "caption.shift"
 	FieldCaptionText  = "caption.text"
 	FieldCaptionPlace = "caption.place"
 	FieldCaptionAlign = "caption.align"
@@ -53,9 +54,9 @@ func isCaptionField(field string) bool {
 }
 
 // editCaption sets field, typed as value, on the caption at index in board, the storyboard s.doc
-// holds — its timing, text, place and align here, its offset and position by
-// [splicer.setCaptionOffset] and [splicer.setCaptionPosition], its font, colours, box and fade by
-// [splicer.setCaptionStyle] — or adds, removes or reorders a caption for a list field.
+// holds — its timing, a shift of its start and end, text, place and align here, its offset and
+// position by [splicer.setCaptionOffset] and [splicer.setCaptionPosition], its font, colours, box
+// and fade by [splicer.setCaptionStyle] — or adds, removes or reorders a caption for a list field.
 func (s *splicer) editCaption(
 	board *Storyboard, index int, field string, value json.RawMessage,
 ) error {
@@ -74,6 +75,8 @@ func (s *splicer) editCaption(
 		return s.setCaptionFor(caption, value)
 	case FieldCaptionUntil:
 		return s.setCaptionUntil(caption, board.Captions[index], value)
+	case FieldCaptionShift:
+		return s.shiftCaption(caption, board.Captions[index], value)
 	case FieldCaptionText:
 		return s.setCaptionText(caption, value)
 	case FieldCaptionPlace:
@@ -135,6 +138,59 @@ func (s *splicer) setCaptionUntil(
 		return err
 	}
 	return s.doc.DeleteIfPresent(under(caption, keyFor))
+}
+
+// shiftCaption moves the caption shown, at caption, by the whole milliseconds value types, which
+// may be negative: it adds them to the offset of its at and, when it ends by an until, of its
+// until, each moment keeping its beat, so a for caption keeps its length. A shift of 0 writes
+// nothing; a moment the shift takes past what a time.Duration holds is refused, and one it takes
+// before the clip's start is left for validation to refuse.
+func (s *splicer) shiftCaption(caption yamledit.Path, shown Caption, value json.RawMessage) error {
+	delta, err := decodeShift(value)
+	if err != nil {
+		return err
+	}
+	if delta == 0 {
+		return nil
+	}
+
+	at, err := shiftMoment(shown.At, delta)
+	if err != nil {
+		return err
+	}
+	if err := s.replaceOrInsert(caption, keyAt, momentFlow(at), captionKeyOrder); err != nil {
+		return err
+	}
+	if shown.Until == nil {
+		return nil
+	}
+	until, err := shiftMoment(*shown.Until, delta)
+	if err != nil {
+		return err
+	}
+	return s.replaceOrInsert(caption, keyUntil, momentFlow(until), captionKeyOrder)
+}
+
+// decodeShift reads a shift typed as a whole JSON number of milliseconds, negative for earlier.
+func decodeShift(value json.RawMessage) (int64, error) {
+	var milliseconds int64
+	err := json.Unmarshal(value, &milliseconds)
+	if err != nil || milliseconds > maxMilliseconds || milliseconds < -maxMilliseconds {
+		return 0, fmt.Errorf(
+			"want a whole number of milliseconds such as 250 or -250, got %s", value)
+	}
+	return milliseconds, nil
+}
+
+// shiftMoment is moment with delta milliseconds added to its offset, its beat kept, refused when
+// the offset leaves what a time.Duration holds.
+func shiftMoment(moment Moment, delta int64) (Moment, error) {
+	offset := moment.Offset.Milliseconds() + delta
+	if offset > maxMilliseconds || offset < -maxMilliseconds {
+		return Moment{}, fmt.Errorf(
+			"want a shift that keeps the caption on the clock, got %dms", delta)
+	}
+	return Moment{Beat: moment.Beat, Offset: time.Duration(offset) * time.Millisecond}, nil
 }
 
 // setCaptionText writes value, typed as a JSON string, as the caption's text: one double-quoted

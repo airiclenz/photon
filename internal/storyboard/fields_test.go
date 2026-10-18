@@ -161,8 +161,8 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		{moveOwner(0), []string{FieldCameraAt, FieldCameraOver, FieldCameraEase, FieldCameraTo, FieldCameraRemove, FieldCameraMove, FieldCameraInsert}},
 		{moveOwner(2), []string{FieldCameraAt, FieldCameraOver, FieldCameraEase, FieldCameraTo, FieldCameraPath, FieldCameraRemove, FieldCameraMove}},
 		{moveOwner(4), []string{FieldCameraAt, FieldCameraOver, FieldCameraEase, FieldCameraTo, FieldCameraPath, FieldCameraVia, FieldCameraViaInsert, FieldCameraViaRemove, FieldCameraRemove, FieldCameraMove}},
-		{textOwner(0), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionOffset, FieldCaptionPosition, FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionRemove, FieldCaptionMove, FieldCaptionInsert}},
-		{textOwner(2), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionOffset, FieldCaptionPosition, FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionRemove, FieldCaptionMove}},
+		{textOwner(0), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionShift, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionOffset, FieldCaptionPosition, FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionRemove, FieldCaptionMove, FieldCaptionInsert}},
+		{textOwner(2), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionShift, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionOffset, FieldCaptionPosition, FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionRemove, FieldCaptionMove}},
 	}
 	for _, test := range owners {
 		if got := byOwner[test.owner]; !slices.Equal(got, test.want) {
@@ -194,6 +194,7 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		{fieldKey{moveOwner(4), FieldCameraViaInsert}, KindWaypoint, nil, "null", false},
 		{fieldKey{moveOwner(4), FieldCameraViaRemove}, KindWaypointRemoval, nil, "null", false},
 		{fieldKey{textOwner(0), FieldCaptionUntil}, KindMoment, nil, "null", false},
+		{fieldKey{textOwner(0), FieldCaptionShift}, KindCount, nil, "0", false},
 		{fieldKey{textOwner(0), FieldCaptionText}, KindText, nil, `""`, false},
 		{fieldKey{textOwner(0), FieldCaptionPlace}, KindEnum, []string{"top", "middle", "bottom"}, `"bottom"`, false},
 		{fieldKey{textOwner(0), FieldCaptionAlign}, KindEnum, []string{"left", "middle", "right"}, `"middle"`, false},

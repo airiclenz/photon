@@ -280,6 +280,10 @@ func TestPage_Picker_CallsPickAndClipboard(t *testing.T) {
 	}
 }
 
+// unsentPageFields are the camera and caption fields the storyboard describes as editable that the
+// page does not send yet; a field leaves the list when a page script starts sending it.
+var unsentPageFields = []string{storyboard.FieldCaptionShift}
+
 func TestPage_EntryFields_AreEditFields(t *testing.T) {
 	t.Parallel()
 	editable := map[string]bool{}
@@ -302,8 +306,12 @@ func TestPage_EntryFields_AreEditFields(t *testing.T) {
 
 	for field := range editable {
 		isEntryField := strings.HasPrefix(field, "camera.") || strings.HasPrefix(field, "caption.")
-		if isEntryField && !sent[field] {
+		isUnsent := slices.Contains(unsentPageFields, field)
+		if isEntryField && !sent[field] && !isUnsent {
 			t.Errorf("the page sends no %s edit", field)
+		}
+		if isUnsent && sent[field] {
+			t.Errorf("the page sends the %s edit, which unsentPageFields still lists", field)
 		}
 	}
 }
