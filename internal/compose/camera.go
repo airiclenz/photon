@@ -2,6 +2,7 @@ package compose
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
+	"github.com/airiclenz/photon/internal/take"
+	"github.com/airiclenz/photon/internal/target"
 )
 
 // move is one move of a camera track on the output clock: from Start it eases the track from the
@@ -40,7 +43,7 @@ type camera struct {
 	rest pointF
 	// waypoints holds, for each via pan of the storyboard's camera list keyed by its index there,
 	// the source pixels its points resolve to, in order, the last its destination. The pan track
-	// sorts its moves by start among the beats' zoom aims, so it cannot be indexed so.
+	// sorts its moves by start and holds no zoom move, so it cannot be indexed so.
 	waypoints map[int][]pointF
 }
 
@@ -49,7 +52,7 @@ type camera struct {
 // start: the frame's centre where the factor there is 1 or below, else the centre the track
 // holds, clamped as the crop clamps it. A zoom-out to 1× so hides the centre an earlier pan ended
 // on, and a later push-in never heads back to it; the track still holds that centre, so the next
-// zoom aims there.
+// push-in centres there.
 func newCamera(layout Layout, zooms []move[float64], pans []move[pointF]) camera {
 	sortByStart(zooms)
 	sortByStart(pans)
@@ -125,13 +128,34 @@ func trackAt[V any, M interface{ timing() move[V] }](
 	return value
 }
 
+// zoomPlanner plans the camera of one clip from its storyboard's camera moves, resolving their
+// targets on the take's snapshots.
+type zoomPlanner struct {
+	board    *storyboard.Storyboard
+	recorded *take.Take
+	resolver target.Resolver
+	layout   Layout
+}
+
+// plan plans every camera move of the storyboard onto the camera's tracks, as
+// [zoomPlanner.planMoves] does, and keeps each via pan's resolved points.
+func (p zoomPlanner) plan(clipSchedule *schedule.Schedule) (camera, error) {
+	zooms, pans, waypoints, err := p.planMoves(clipSchedule)
+	if err != nil {
+		return camera{}, err
+	}
+	clipCamera := newCamera(p.layout, zooms, pans)
+	clipCamera.waypoints = waypoints
+	return clipCamera, nil
+}
+
 // planMoves plans every camera move of the storyboard onto the camera's tracks, each starting at
 // the start Parse resolved on the output clock and lasting its `over`, and lists each via pan's
-// resolved points as waypoints, keyed by the pan's index in the storyboard's camera list. A
-// targeted zoom also aims the pan track at its target, as [zoomPlanner.planZoomAim] plans. A
-// pan's points and a zoom's target resolve as [zoomPlanner.panPoint] does, on the screens
-// clipSchedule shows across the move. It fails, under camera[i] as a [storyboard.LocatedError],
-// on a pan or zoom target that no screen of its move shows, wrapping [target.ErrNotOnScreen].
+// resolved points as waypoints, keyed by the pan's index in the storyboard's camera list. A zoom
+// move goes on the zoom track alone; only a pan moves the pan track. A pan's points resolve as
+// [zoomPlanner.panPoint] does, on the screens clipSchedule shows across the move. It fails, under
+// camera[i] as a [storyboard.LocatedError], on a pan target that no screen of its move shows,
+// wrapping [target.ErrNotOnScreen].
 func (p zoomPlanner) planMoves(
 	clipSchedule *schedule.Schedule,
 ) (zooms []move[float64], pans []move[pointF], waypoints map[int][]pointF, err error) {
@@ -143,15 +167,6 @@ func (p zoomPlanner) planMoves(
 			zooms = append(zooms, move[float64]{
 				Start: zoom.Start(), Over: zoom.Over, To: zoom.To, Ease: zoom.Ease,
 			})
-			if zoom.Target == nil {
-				continue
-			}
-			aim, err := p.planZoomAim(*zoom, clipSchedule)
-			if err != nil {
-				located := storyboard.AtCamera(index, fmt.Errorf("zoom: target: %w", err))
-				return nil, nil, nil, fmt.Errorf("compose: %w", located)
-			}
-			pans = append(pans, aim)
 		case cameraMove.Pan != nil:
 			pan, err := p.planPan(*cameraMove.Pan, clipSchedule)
 			if err != nil {
@@ -198,22 +213,6 @@ func (p zoomPlanner) planPan(
 	}, nil
 }
 
-// planZoomAim is the pan move a targeted zoom aims the camera with: to its target box's centre
-// over the zoom's own `over` with its ease, the box resolved as a pan's target point is, on the
-// screens clipSchedule shows across the move. The zoom must have a Target.
-func (p zoomPlanner) planZoomAim(
-	zoom storyboard.ZoomMove,
-	clipSchedule *schedule.Schedule,
-) (move[pointF], error) {
-	start := zoom.Start()
-	since, until := shownAt(clipSchedule, start), shownAt(clipSchedule, start+zoom.Over)
-	centre, err := p.panPoint(storyboard.Point{Target: *zoom.Target}, since, until)
-	if err != nil {
-		return move[pointF]{}, err
-	}
-	return move[pointF]{Start: start, Over: zoom.Over, To: centre, Ease: zoom.Ease}, nil
-}
-
 // panPoint is the source pixel a pan's point aims at: a cell's centre, or the centre of the box
 // its target resolves to on the screen shown at source time until — the move's end — walking
 // back to the screen shown at source time since, the move's start, while the target is absent.
@@ -226,6 +225,32 @@ func (p zoomPlanner) panPoint(point storyboard.Point, since, until time.Duration
 		return pointF{}, err
 	}
 	return p.layout.boxRect(box).centre(), nil
+}
+
+// resolveShown resolves goal on the shown snapshots, indices into the take's oldest first: the
+// newest one that shows it, walking back to the oldest. It fails with the last
+// [target.ErrNotOnScreen] when none of them shows goal, at once on any other resolver error, and
+// when shown is empty, naming the stretch where.
+func (p zoomPlanner) resolveShown(
+	goal storyboard.Target,
+	shown []int,
+	where string,
+) (take.Box, error) {
+	var lastErr error
+	for _, index := range slices.Backward(shown) {
+		box, err := p.resolver.Target(p.recorded.Snapshots[index], goal)
+		if err == nil {
+			return box, nil
+		}
+		if !errors.Is(err, target.ErrNotOnScreen) {
+			return take.Box{}, err
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("target /%s/: the take has no snapshot in %s", goal.Text, where)
+	}
+	return take.Box{}, lastErr
 }
 
 // shownAt is the source time of the screen clipSchedule shows at output time out, clamped into

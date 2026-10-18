@@ -69,8 +69,8 @@ func (l Layout) home() pointF {
 	}
 }
 
-// Compositor turns each scheduled snapshot, rasterized, into a shipped frame: it pushes into
-// the section's zoom target, scales to the shipped width, draws the cursor of the clicks and
+// Compositor turns each scheduled snapshot, rasterized, into a shipped frame: it crops through
+// the camera's zoom and pan, scales to the shipped width, draws the cursor of the clicks and
 // drags on top at constant size and the storyboard's captions over everything. Everything it
 // needs is fixed at construction, so composing is a pure function of the output time and the
 // source frame, and a Compositor is safe for concurrent use.
@@ -86,16 +86,15 @@ type Compositor struct {
 	captions *caption.Layer
 }
 
-// New plans the camera and the cursor of a clip: board's frame gives the shipped width, its
-// beats the zooms and its camera the moves beside them, recorded the clicks, the drags and the
-// snapshots a zoom or pan target resolves on (through resolver), clipSchedule the output clock,
-// layout where cells sit in a source frame, background the colour a zoomed frame is cleared to
-// before the push is drawn, and captionFaces the faces board's captions are drawn in (unread when
-// it has none, so it may then be the zero set). board must be one [storyboard.Parse] returned, so
+// New plans the camera and the cursor of a clip: board's frame gives the shipped width and its
+// camera the pan and zoom moves, recorded the clicks, the drags and the snapshots a pan target
+// resolves on (through resolver), clipSchedule the output clock, layout where cells sit in a
+// source frame, background the colour a zoomed frame is cleared to before the crop is drawn,
+// and captionFaces the faces board's captions are drawn in (unread when it has none, so it may
+// then be the zero set). board must be one [storyboard.Parse] returned, so
 // its camera moves and captions carry the starts, stops and colours Parse resolved. It fails on a
-// layout with no size, a frame width that is not positive, a zoomed beat whose target resolves on
-// none of its snapshots, a pan target no screen of its move shows, and a caption [caption.New]
-// refuses.
+// layout with no size, a frame width that is not positive, a pan target no screen of its move
+// shows, and a caption [caption.New] refuses.
 func New(
 	board *storyboard.Storyboard,
 	recorded *take.Take,

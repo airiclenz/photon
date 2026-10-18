@@ -87,7 +87,7 @@ type BuildOptions struct {
 // Build checks that the take at takePath, recorded, was recorded at the storyboard's frame size,
 // schedules it, and builds the rasterizer and the compositor over loaded's config: frames are
 // rasterized at frame.scale — padding and font size multiplied through — so a zoom has pixels to
-// draw on, and composed at frame.width, with zoom and pan targets resolved through the config's
+// draw on, and composed at frame.width, with pan targets resolved through the config's
 // areas. Rasterized snapshots are kept in options.Cache, or in the reused pipeline's cache along
 // with its rasterizer; with options.DraftCache set, a draft rasterizer draws at scale 1 into it,
 // or the reused pipeline's draft rasterizer and draft cache are taken over; the caption fonts are

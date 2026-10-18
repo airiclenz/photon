@@ -235,3 +235,14 @@ func blendPixel(dst *image.RGBA, x, y int, colour color.RGBA, alpha float64) {
 func lerp(a, b pointF, share float64) pointF {
 	return pointF{a.X + (b.X-a.X)*share, a.Y + (b.Y-a.Y)*share}
 }
+
+// easeInOut is the smootherstep ease over progress clamped to [0, 1]: speed and acceleration
+// are both zero at either end, so a glide or a zoom gathers speed and settles rather than
+// starting and stopping on a jolt.
+func easeInOut(progress float64) float64 {
+	p := clamp01(progress)
+	return p * p * p * (p*(6*p-15) + 10)
+}
+
+// clamp01 clamps f to [0, 1].
+func clamp01(f float64) float64 { return math.Min(math.Max(f, 0), 1) }

@@ -323,7 +323,12 @@ TestBuild_AZoomTargetNotOnScreen_LeavesAPartialPipeline
 
 **Commit:** `test(compose): build zoom fixtures from camera moves`
 
-## 7. Drop beat zoom and zoom aims from compose
+## 7. Drop beat zoom and zoom aims from compose — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): zoom.go deleted whole; zoomPlanner, its plan (now planMoves plus newCamera only) and resolveShown moved to camera.go, which holds every other zoomPlanner method; easeInOut and clamp01 moved to cursor.go, their heaviest user (beside lerp); doc.go file map updated to match.
+NOTES (2026-10-18): dragFromText and dragToText kept as one const block in cursor_test.go; only dragFromText is read now, the block keeps dragToText clear of the unused lint.
+NOTES (2026-10-18): newCamera's comment now says the held centre is where "the next push-in centres", not where "the next zoom aims", to keep zoom aiming out of the comments; behaviour unchanged.
+NOTES (2026-10-18): until item 10 lands, a beat's `zoom:` still parses but compose ignores it; internal/render/pipeline_test.go's TestBuild_AZoomTargetNotOnScreen_LeavesAPartialPipeline keeps its name (outside this item's Files) although its storyboard already fails on a pan target.
 
 **What:**
 Part of `zoom-target-removal` and `beat-zoom-removal`. Depends on items 3 and 6.

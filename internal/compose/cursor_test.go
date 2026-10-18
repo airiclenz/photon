@@ -4,12 +4,17 @@ import (
 	"image"
 	"image/color"
 	"math"
-	"slices"
 	"testing"
 	"time"
 
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
+)
+
+// The Text of a test drag's two target events in a take, naming which end of the drag the Box is.
+const (
+	dragFromText = "from"
+	dragToText   = "to"
 )
 
 // dragTestGap is the source time between a test drag's press, its moves and its release.
@@ -194,48 +199,6 @@ func TestComposeDragInsideACutBeatDrawsNoCursor(t *testing.T) {
 		if _, count := centroidWhere(composed, func(c color.RGBA) bool { return c != testBackground }); count != 0 {
 			t.Fatalf("frame at %s: want nothing drawn over the background, got %d pixels", frame.Out, count)
 		}
-	}
-}
-
-func TestComposeZoomAimsAtADragsLoggedBox(t *testing.T) {
-	t.Parallel()
-	handle := storyboard.Target{Text: "handle"}
-	slot := storyboard.Target{Text: "slot"}
-	fromBox := take.Box{X: dragPress.X, Y: dragPress.Y, W: 1, H: 1}
-	toBox := take.Box{X: 14, Y: 2, W: 5, H: 1}
-
-	for _, tc := range []struct {
-		name   string
-		zoomed storyboard.Target
-		want   take.Box
-	}{
-		{name: "on the drag's from target", zoomed: handle, want: fromBox},
-		{name: "on the drag's to target", zoomed: slot, want: toBox},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			drag := &storyboard.DragAction{From: handle, To: storyboard.DragEnd{Target: slot}}
-			board := &storyboard.Storyboard{Beats: []storyboard.Beat{{
-				ID: 1, Duration: 10 * sec,
-				Do:   []storyboard.Action{{Drag: drag}},
-				Zoom: &storyboard.Zoom{Target: tc.zoomed, Factor: 2},
-			}}}
-			dragged := dragAt(dragPressAt, 1, dragPress, dragMoves...)
-			logged := toBox
-			dragged = slices.Insert(dragged, 1, take.Event{
-				At: dragPressAt, Kind: take.EventTarget, Beat: 1, Form: "drag", Text: dragToText, Box: &logged,
-			})
-			// No snapshot shows either target, so only the logged box can aim the zoom.
-			recorded := &take.Take{
-				Snapshots: []take.Snapshot{{At: 0}, {At: 10 * sec}},
-				Events:    append([]take.Event{beatStart(0, 1)}, dragged...),
-			}
-			compositor, _ := newTestCompositor(t, board, recorded)
-
-			want := testLayout.boxRect(tc.want).centre()
-			if got := beatZoomAim(t, compositor); got != want {
-				t.Errorf("pan centre: want the logged box's centre %+v, got %+v", want, got)
-			}
-		})
 	}
 }
 

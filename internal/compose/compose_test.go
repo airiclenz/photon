@@ -2,7 +2,6 @@ package compose
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -131,26 +130,6 @@ func zoomClickTake(t *testing.T, box take.Box) (*storyboard.Storyboard, *take.Ta
 		Events:    append(events, clickAt(3*sec, 2, box)...),
 	}
 	return board, recorded
-}
-
-// beatZoomAim is where the pan track of compositor's camera aims, failing unless one beat zoom
-// set it.
-func beatZoomAim(t *testing.T, compositor *Compositor) pointF {
-	t.Helper()
-	if len(compositor.camera.pan) != 1 {
-		t.Fatalf("pan track: want one beat zoom's aim, got %+v", compositor.camera.pan)
-	}
-	return compositor.camera.pan[0].To
-}
-
-// beatZoomRamps is the push and the pull on the zoom track of compositor's camera, failing
-// unless one beat zoom planned them.
-func beatZoomRamps(t *testing.T, compositor *Compositor) (push, pull move[float64]) {
-	t.Helper()
-	if len(compositor.camera.zoom) != 2 {
-		t.Fatalf("zoom track: want one beat zoom's push and pull, got %+v", compositor.camera.zoom)
-	}
-	return compositor.camera.zoom[0], compositor.camera.zoom[1]
 }
 
 // screen is a blank testCols × testRows snapshot at source time at, with text written into the
@@ -373,103 +352,6 @@ func TestComposeClickInsideACutBeatDrawsNoCursor(t *testing.T) {
 	}
 }
 
-func TestComposeZoomResolvesItsTargetOnTheSnapshot(t *testing.T) {
-	t.Parallel()
-	gauge := screen(0, map[int]string{3: "     ctx 42%"})
-	board := &storyboard.Storyboard{Beats: []storyboard.Beat{
-		{ID: 1, Duration: 4 * sec, Zoom: &storyboard.Zoom{Target: storyboard.Target{Text: `ctx \d+%`}}},
-	}}
-	end := gauge
-	end.At = 4 * sec
-	recorded := &take.Take{
-		Snapshots: []take.Snapshot{gauge, end},
-		Events:    []take.Event{beatStart(0, 1)},
-	}
-
-	compositor, _ := newTestCompositor(t, board, recorded)
-
-	want := testLayout.boxRect(take.Box{X: 5, Y: 3, W: 7, H: 1}).centre()
-	if got := beatZoomAim(t, compositor); got != want {
-		t.Errorf("pan centre: want the resolved box's %+v, got %+v", want, got)
-	}
-	push, pull := beatZoomRamps(t, compositor)
-	if push.Over != storyboard.DefaultZoomRamp || pull.Over != storyboard.DefaultZoomRamp {
-		t.Errorf("ramps: want the %s default, got in %s out %s", storyboard.DefaultZoomRamp, push.Over, pull.Over)
-	}
-	// Auto-fit: (7 + 4) cells × 20 px = 220 px filling 70 % of 1000 px is 3.18×, clamped to 2.5.
-	if push.To != autoFitMax {
-		t.Errorf("auto-fit factor: want %g, got %g", autoFitMax, push.To)
-	}
-}
-
-func TestComposeZoomBoxWalksBackThroughTheBeat(t *testing.T) {
-	t.Parallel()
-	shown := map[int]string{3: "     ctx 42%"}
-	wantCentre := testLayout.boxRect(take.Box{X: 5, Y: 3, W: 7, H: 1}).centre()
-	for _, tc := range []struct {
-		name      string
-		snapshots []take.Snapshot
-	}{
-		{
-			name:      "shown mid-beat, gone by its end",
-			snapshots: []take.Snapshot{screen(0, nil), screen(2*sec, nil), screen(3*sec, shown), screen(5*sec, nil), screen(8*sec, nil)},
-		},
-		{
-			name:      "shown only on the snapshot in effect at the beat's start",
-			snapshots: []take.Snapshot{screen(0, nil), screen(1*sec, shown), screen(3*sec, nil), screen(8*sec, nil)},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			board := &storyboard.Storyboard{Beats: []storyboard.Beat{
-				{ID: 1, Duration: 2 * sec},
-				{ID: 2, Duration: 4 * sec, Zoom: &storyboard.Zoom{Target: storyboard.Target{Text: `ctx \d+%`}, Factor: 2}},
-				{ID: 3, Duration: 2 * sec},
-			}}
-			recorded := &take.Take{
-				Snapshots: tc.snapshots,
-				Events:    []take.Event{beatStart(0, 1), beatStart(2*sec, 2), beatStart(6*sec, 3)},
-			}
-
-			compositor, _ := newTestCompositor(t, board, recorded)
-
-			if got := beatZoomAim(t, compositor); got != wantCentre {
-				t.Errorf("pan centre: want %+v, got %+v", wantCentre, got)
-			}
-		})
-	}
-}
-
-func TestNewRefusesAZoomTargetTheBeatNeverShows(t *testing.T) {
-	t.Parallel()
-	shown := map[int]string{3: "     ctx 42%"}
-	board := &storyboard.Storyboard{
-		Frame: storyboard.Frame{Width: testWidth},
-		Beats: []storyboard.Beat{
-			{ID: 1, Duration: 2 * sec, Zoom: &storyboard.Zoom{Target: storyboard.Target{Text: `ctx \d+%`}}},
-			{ID: 2, Duration: 2 * sec},
-		},
-	}
-	// Before the beat, and from the next beat's start on: never inside beat 1's span.
-	recorded := &take.Take{
-		Snapshots: []take.Snapshot{screen(0, nil), screen(2*sec, shown), screen(4*sec, shown)},
-		Events:    []take.Event{beatStart(1*sec, 1), beatStart(2*sec, 2)},
-	}
-	clipSchedule, err := schedule.New(board, recorded)
-	if err != nil {
-		t.Fatalf("schedule.New: %v", err)
-	}
-
-	_, err = New(board, recorded, clipSchedule, target.Resolver{}, testLayout, testBackground, fonts.CaptionSet{})
-
-	if !errors.Is(err, target.ErrNotOnScreen) || !strings.HasPrefix(err.Error(), "compose: beat 1: zoom: ") {
-		t.Errorf("New: want beat 1's zoom target not on screen, got %v", err)
-	}
-	if got, want := storyboard.OwnerOf(err), (storyboard.Owner{Kind: storyboard.OwnerBeat, Index: 1}); got != want {
-		t.Errorf("OwnerOf(New error) = %+v, want %+v", got, want)
-	}
-}
-
 func TestNewRefusesAnUnusableFrame(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -494,25 +376,6 @@ func TestNewRefusesAnUnusableFrame(t *testing.T) {
 
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("New: want an error naming %q, got %v", tc.want, err)
-			}
-		})
-	}
-}
-
-func TestComposeAutoFitFactor(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		name  string
-		width int
-		want  float64
-	}{
-		{name: "narrow target clamps to the maximum", width: 6, want: autoFitMax}, // 700 / 200 = 3.5
-		{name: "fits between the bounds", width: 21, want: 1.4},                   // 700 / 500
-		{name: "wide target clamps to the minimum", width: 36, want: autoFitMin},  // 700 / 800
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := autoFitFactor(take.Box{W: tc.width, H: 1}, testLayout); math.Abs(got-tc.want) > 1e-9 {
-				t.Errorf("auto-fit for %d cells: want %g, got %g", tc.width, tc.want, got)
 			}
 		})
 	}

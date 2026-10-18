@@ -1,32 +1,23 @@
-// Package compose turns each rasterized frame of a clip into the shipped frame: it pushes into
-// the beat's zoom target, scales to the storyboard's `frame.width`, draws a cursor over the
+// Package compose turns each rasterized frame of a clip into the shipped frame: it crops through
+// the storyboard's camera, scales to the storyboard's `frame.width`, draws a cursor over the
 // clicks and drags on top and the storyboard's captions over everything. [New] plans everything
 // from the storyboard, the take, its schedule, the frame [Layout] and the caption faces;
 // [Compositor.Compose] is then a pure function of the output time and the source frame.
 //
 // The crop comes from a camera of two tracks, each holding its last state between moves: a zoom
 // track of the magnification, at rest at 1, and a pan track of the crop's centre, at rest at the
-// frame's centre. A zoomed beat is planned as moves on both: its section's start aims the pan
-// track at the zoom box's centre, the zoom pushes in over its `in` ramp from there, holds, and
-// eases back out over its `out` ramp, ending as the section ends; ramps that together outrun the
-// section shrink in proportion. Each zoom move runs smootherstep on the factor's exponent, so
-// every frame scales by the same ratio at the same eased pace. A pan move carries the centre along
-// a centripetal Catmull-Rom path from the centre the crop shows at its start — the frame's centre
-// at a factor of 1, else the held centre clamped as the crop clamps it — through any waypoints,
-// to its end, walked by arc length, so it turns without a corner at a waypoint; its progress runs
-// smootherstep, or straight when its ease is linear. With no `factor`, the zoom fits the target:
-// the target box plus two cells either side fills 70 percent of the frame width, clamped to
-// [1.25, 2.5]. The zoom box is the one the take logged for a click of the same beat on the
-// identical target, or for a drag of the same beat whose `from` or `to` target is identical, else
-// the target resolved on the latest snapshot inside the beat's span that shows it, walking back to
-// the snapshot in effect at the beat's start. The storyboard's `camera` moves join the tracks
-// beside the beat zooms, each at its `at` on the output clock for its `over`: a zoom move eases to
-// its factor, and a pan move's points are a cell's centre or a target's box centre, resolved on the
-// screen shown at the move's end and walking back to the one shown at its start. A zoom move with a
-// `target` also pans to its target's box centre over its own `over` with its `ease`, the box
-// resolved as a pan's target is. A zoomed frame is cleared to the background colour [New] is given
-// before the push is drawn, and the cursor is mapped through the same crop, so it follows the
-// camera.
+// frame's centre. The storyboard's `camera` moves are planned onto them, each at its `at` on the
+// output clock for its `over`: a zoom move goes on the zoom track alone and eases to its factor,
+// and a pan move is the only move of the pan track. Each zoom move runs smootherstep on the
+// factor's exponent, so every frame scales by the same ratio at the same eased pace. A pan move
+// carries the centre along a centripetal Catmull-Rom path from the centre the crop shows at its
+// start — the frame's centre at a factor of 1, else the held centre clamped as the crop clamps
+// it — through any waypoints, to its end, walked by arc length, so it turns without a corner at a
+// waypoint; its progress runs smootherstep, or straight when its ease is linear. A pan's points
+// are a cell's centre or a target's box centre, resolved on the screen shown at the move's end
+// and walking back to the one shown at its start. A zoomed frame is cleared to the background
+// colour [New] is given before the crop is drawn, and the cursor is mapped through the same crop,
+// so it follows the camera.
 //
 // The cursor is drawn, not recorded: a white dot in a dark outline that fades in, glides
 // (smootherstep) from the previous point — the bottom row's centre before the first — to each
@@ -52,10 +43,9 @@
 //     and mapping between shipped pixels and cells ([Compositor.Cell], [Compositor.Rect]) and a
 //     via pan's points onto the shipped frame ([Compositor.Path]).
 //   - camera.go: the camera's zoom and pan tracks of moves, their factor and centre at a time,
-//     and planning the storyboard's camera moves onto them, a via pan's points kept by its index.
+//     planning the storyboard's camera moves onto them, a via pan's points kept by its index,
+//     and resolving a target on the screens a stretch of the take shows.
 //   - path.go: a pan's smooth path through its points, walked by arc length.
-//   - zoom.go: planning a beat's zoom onto the camera, the zoom box, resolving a target on the
-//     screens a stretch of the take shows, the auto-fit factor and the smootherstep ease.
-//   - cursor.go: the cursor's track of clicks and drags, its position, opacity and ring, and
-//     painting it.
+//   - cursor.go: the cursor's track of clicks and drags, its position, opacity and ring,
+//     painting it, and the smootherstep ease.
 package compose

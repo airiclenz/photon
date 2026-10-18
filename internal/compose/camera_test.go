@@ -333,39 +333,6 @@ func TestNewRefusesAPanTargetItsMoveNeverShows(t *testing.T) {
 	}
 }
 
-func TestComposeTargetedZoomAimsAtItsTarget(t *testing.T) {
-	t.Parallel()
-	lines := map[int]string{9: "                              alpha"}
-	const camera = "  - zoom: {to: 2, target: {text: alpha}, at: {beat: 1, offset: 1s}, over: 2s, ease: linear}\n"
-	board, recorded := cameraTake(t, []take.Snapshot{screen(0, lines), screen(4*sec, lines)}, camera, 4*sec)
-
-	compositor, _ := newTestCompositor(t, board, recorded)
-
-	rest := pointF{X: 500, Y: 300}
-	alpha := testLayout.boxRect(take.Box{X: 30, Y: 9, W: 5, H: 1}).centre()
-	for _, tc := range []struct {
-		name       string
-		at         time.Duration
-		wantFactor float64
-		wantCentre pointF
-	}{
-		{name: "zoom starts", at: sec, wantFactor: 1, wantCentre: rest},
-		{name: "zoom half-way", at: 2 * sec, wantFactor: math.Sqrt2, wantCentre: lerp(rest, alpha, 0.5)},
-		{name: "zoom ends on the target", at: 3 * sec, wantFactor: 2, wantCentre: alpha},
-		{name: "camera holds on the target", at: 3500 * time.Millisecond, wantFactor: 2, wantCentre: alpha},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := compositor.camera.factorAt(tc.at); math.Abs(got-tc.wantFactor) > 1e-9 {
-				t.Errorf("factor at %s: want %g, got %g", tc.at, tc.wantFactor, got)
-			}
-			got := compositor.camera.centreAt(tc.at)
-			if math.Abs(got.X-tc.wantCentre.X) > 1e-6 || math.Abs(got.Y-tc.wantCentre.Y) > 1e-6 {
-				t.Errorf("centre at %s: want %+v, got %+v", tc.at, tc.wantCentre, got)
-			}
-		})
-	}
-}
-
 func TestComposeUntargetedZoomLeavesThePanTrack(t *testing.T) {
 	t.Parallel()
 	const camera = "  - zoom: {to: 2, at: {beat: 1, offset: 1s}, over: 2s}\n"
@@ -375,30 +342,6 @@ func TestComposeUntargetedZoomLeavesThePanTrack(t *testing.T) {
 
 	if got := len(compositor.camera.pan); got != 0 {
 		t.Errorf("pan track: want no moves, got %d", got)
-	}
-}
-
-func TestNewRefusesAZoomTargetItsMoveNeverShows(t *testing.T) {
-	t.Parallel()
-	shown := map[int]string{3: "     ghost"}
-	// Shown before the move and from the second beat on: never across the move's [1s, 2s].
-	board, recorded := cameraTake(t,
-		[]take.Snapshot{screen(0, shown), screen(500*time.Millisecond, nil), screen(4*sec, shown)},
-		"  - zoom: {to: 2, target: {text: ghost}, at: {beat: 1, offset: 1s}, over: 1s}\n",
-		4*sec, 4*sec,
-	)
-	clipSchedule, err := schedule.New(board, recorded)
-	if err != nil {
-		t.Fatalf("schedule.New: %v", err)
-	}
-
-	_, err = New(board, recorded, clipSchedule, target.Resolver{}, testLayout, testBackground, fonts.CaptionSet{})
-
-	if !errors.Is(err, target.ErrNotOnScreen) || !strings.HasPrefix(err.Error(), "compose: camera[0]: zoom: target") {
-		t.Errorf("New: want camera[0]'s zoom target not on screen, got %v", err)
-	}
-	if got, want := storyboard.OwnerOf(err), (storyboard.Owner{Kind: storyboard.OwnerCamera, Index: 0}); got != want {
-		t.Errorf("OwnerOf(New error) = %+v, want %+v", got, want)
 	}
 }
 
