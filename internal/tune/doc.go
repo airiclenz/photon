@@ -17,8 +17,9 @@
 // rebuilds the render pipeline on the new bytes, as `photon render` builds it, handing render
 // the last good pipeline to reuse: its rasterizer and rasterized snapshots while the take and the
 // frame's raster geometry stay, and its caption faces, so the caption fonts load once a session;
-// a build that fails leaves its error standing on the beat or the clip it names, and the last
-// good pipeline stays the preview's. [Session.Refresh] takes in outside writes — a rewritten take is read again, a
+// a build that fails leaves each of its errors standing on the beat, camera move or caption it is
+// located on ([storyboard.OwnerOf]), or on the clip, and the last good pipeline stays the
+// preview's. [Session.Refresh] takes in outside writes — a rewritten take is read again, a
 // changed storyboard is loaded when nothing is unsaved and turns the session stale otherwise —
 // and [Session.Save] writes in place, refused while stale ([ErrStale]) or while an error stands
 // ([ErrInvalid]). [Session.State] reports everything the page shows, and [Session.Frame] the
@@ -46,7 +47,7 @@
 //   - run.go: [Run] and its [Options]: listen on 127.0.0.1, print the address, serve until done.
 //   - server.go: the HTTP handler: the embedded page, the JSON API and its Host and POST guards.
 //   - session.go: the [Session]: its pipelines, history, refresh from disk and guarded save.
-//   - state.go: the [State] a session reports and the errors attributed to beats.
+//   - state.go: the [State] a session reports and the errors attributed to their owners.
 //   - value.go: reading an edit's value spellings and writing a duration in its old unit.
 //   - page/index.html, page/style.css: the page and its styles.
 //   - page/app.js: the window.tune contract, the session's API, the selection and the wiring.

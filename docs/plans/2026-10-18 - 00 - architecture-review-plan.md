@@ -280,7 +280,12 @@ NOTES (2026-10-18): doc.go's file map now names every page asset, as issue tune-
 **Closes:** tune-page-app-split
 **Commit:** `refactor(tune): split the page script below the file-size guide`
 
-## 11. Tune attributes problems by owner
+## 11. Tune attributes problems by owner — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): re-derived from the assumption that errorRows/errorMark and the beat select's options live together in app.js: item 10 moved errorRows and errorMark into controls.js, while the camera and caption options of the beat select stay in app.js (renderBeatSelect), so app.js gets the error mark on those options; panels.js and entries.js needed no change, since their errorRows(beat.id / CLIP / {kind, index}) calls keep the page's owner spelling and controls.js maps it onto a problem's owner.
+NOTES (2026-10-18): errorMark now takes the same owner errorRows does (beat id, CLIP, or a {kind, index} entry), not only a beat id; both filter through one problemsOn helper.
+NOTES (2026-10-18): TestSession_Refresh_CameraProblemNamingABeat_IsOnTheClip renamed to TestSession_Refresh_CameraProblemNamingABeat_IsOnTheMove, since it now asserts owner camera 0 and its old name would be false.
+NOTES (2026-10-18): the new pan-target and caption-box session tests write the bad storyboard and Refresh (as the camera test does), since NewSession refuses a storyboard whose first build fails.
 
 Depends on items 7, 9 and 10.
 

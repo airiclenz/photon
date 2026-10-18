@@ -14,6 +14,7 @@ import (
 
 	"github.com/airiclenz/photon/internal/clip"
 	"github.com/airiclenz/photon/internal/render"
+	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 )
 
@@ -313,7 +314,7 @@ func TestSession_State_CaptionTimesFollowABeatDuration(t *testing.T) {
 	}
 }
 
-func TestSession_Refresh_CameraProblemNamingABeat_IsOnTheClip(t *testing.T) {
+func TestSession_Refresh_CameraProblemNamingABeat_IsOnTheMove(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixture(t)
 	writeTestFile(t, f.boardPath, sessionStoryboard+"camera:\n  - zoom: {to: 2, at: 1200ms, over: 300ms}\n")
@@ -323,12 +324,63 @@ func TestSession_Refresh_CameraProblemNamingABeat_IsOnTheClip(t *testing.T) {
 	}
 
 	errs := f.session.State().Errors
-	isOnTheClip := slices.ContainsFunc(errs, func(problem Problem) bool {
-		return problem.Beat == 0 && strings.HasPrefix(problem.Message, "camera[0]:") &&
-			strings.Contains(problem.Message, "beat 2")
+	isOnTheMove := slices.ContainsFunc(errs, func(problem Problem) bool {
+		return problem.Owner == storyboard.Owner{Kind: storyboard.OwnerCamera, Index: 0} &&
+			strings.HasPrefix(problem.Message, "camera[0]:") && strings.Contains(problem.Message, "beat 2")
 	})
-	if !isOnTheClip {
-		t.Errorf("errors %+v, want camera[0]'s problem naming beat 2 on beat 0", errs)
+	if !isOnTheMove {
+		t.Errorf("errors %+v, want camera[0]'s problem naming beat 2 on camera 0", errs)
+	}
+}
+
+func TestSession_PanTargetNotOnScreen_IsOnTheMove(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixture(t)
+	writeTestFile(t, f.boardPath, sessionStoryboard+"camera:\n  - pan: {to: {text: 'nowhere'}, at: 100ms, over: 300ms}\n")
+
+	if err := f.session.Refresh(); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	errs := f.session.State().Errors
+
+	want := storyboard.Owner{Kind: storyboard.OwnerCamera, Index: 0}
+	if len(errs) != 1 || errs[0].Owner != want || !strings.HasPrefix(errs[0].Message, "compose: camera[0]: ") {
+		t.Errorf("errors %+v, want one compose problem on camera 0", errs)
+	}
+}
+
+func TestSession_CaptionBoxLargerThanTheFrame_IsOnTheCaption(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixture(t)
+	wide := strings.Repeat("too wide ", 20)
+	writeTestFile(t, f.boardPath, sessionStoryboard+"captions:\n  - {text: '"+wide+"', at: 100ms, for: 300ms}\n")
+
+	if err := f.session.Refresh(); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	errs := f.session.State().Errors
+
+	want := storyboard.Owner{Kind: storyboard.OwnerCaption, Index: 0}
+	if len(errs) != 1 || errs[0].Owner != want || !strings.HasPrefix(errs[0].Message, "caption: captions[0]: ") {
+		t.Errorf("errors %+v, want one caption problem on caption 0", errs)
+	}
+}
+
+func TestSession_BeatTheTakeNeverStarted_IsOnTheBeat(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixture(t)
+	writeTestFile(t, f.boardPath, sessionStoryboard+"  - id: 3\n    title: extra\n    duration: 1s\n")
+
+	if err := f.session.Refresh(); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	errs := f.session.State().Errors
+	want := storyboard.Owner{Kind: storyboard.OwnerBeat, Index: 3}
+	if len(errs) != 1 || errs[0].Owner != want || !strings.Contains(errs[0].Message, "never started") {
+		t.Errorf("errors %+v, want one on beat 3 saying the take never started it", errs)
 	}
 }
 
@@ -363,11 +415,12 @@ func TestSession_ZoomTargetNotOnScreen_KeepsTheLastGoodPipelineAndBlocksSave(t *
 	t.Parallel()
 	f := newSessionFixture(t)
 	good := f.session.good.frames
+	beatTwo := storyboard.Owner{Kind: storyboard.OwnerBeat, Index: 2}
 
 	f.apply(t, Edit{Beat: 2, Field: fieldZoomTarget, Value: "{text: 'nowhere'}"})
 
 	state := f.session.State()
-	if len(state.Errors) != 1 || state.Errors[0].Beat != 2 || !strings.Contains(state.Errors[0].Message, "nowhere") {
+	if len(state.Errors) != 1 || state.Errors[0].Owner != beatTwo || !strings.Contains(state.Errors[0].Message, "nowhere") {
 		t.Errorf("errors %+v, want one on beat 2 naming the target", state.Errors)
 	}
 	if f.session.good.frames != good {
@@ -558,7 +611,7 @@ func TestSession_RewrittenTake_IsReadAgain(t *testing.T) {
 		t.Fatalf("Refresh: %v", err)
 	}
 	errs := f.session.State().Errors
-	if len(errs) != 1 || errs[0].Beat != 0 || !strings.Contains(errs[0].Message, "recorded at 30×4") {
+	if len(errs) != 1 || errs[0].Owner != (storyboard.Owner{Kind: storyboard.OwnerClip}) || !strings.Contains(errs[0].Message, "recorded at 30×4") {
 		t.Fatalf("errors %+v, want the take's size on the clip", errs)
 	}
 	saveSessionTake(t, f.takePath, fixtureCols, later.Add(time.Hour))

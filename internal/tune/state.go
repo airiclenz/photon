@@ -1,10 +1,7 @@
 package tune
 
 import (
-	"regexp"
 	"slices"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/airiclenz/photon/internal/render"
@@ -139,19 +136,12 @@ type SectionState struct {
 	Report     string  `json:"report"`
 }
 
-// Problem is one error standing on the storyboard: Beat is the beat it names, or 0 for one on
-// the clip as a whole.
+// Problem is one error standing on the storyboard: Owner is the beat, camera move or caption it
+// belongs to, or the clip as a whole.
 type Problem struct {
-	Beat    int    `json:"beat"`
-	Message string `json:"message"`
+	Owner   storyboard.Owner `json:"owner"`
+	Message string           `json:"message"`
 }
-
-// beatMention finds the beat an error message is about: `beat 2: hold: …`.
-var beatMention = regexp.MustCompile(`\bbeat (\d+)\b`)
-
-// clipLevelPrefixes start the messages of problems filed under a camera move or a caption, which
-// are on the clip as a whole even when they mention a beat.
-var clipLevelPrefixes = []string{"camera[", "captions["}
 
 // State reports the session as the page shows it.
 func (s *Session) State() State {
@@ -330,14 +320,14 @@ func sectionStates(clipSchedule *schedule.Schedule) []SectionState {
 }
 
 // problemsOf splits err into one problem per error it joins — each rule a validation error
-// lists counts once — attributing each to the beat of board its message names.
+// lists counts once — attributing each to the owner its [storyboard.LocatedError] names.
 func problemsOf(err error, board *storyboard.Storyboard) []Problem {
 	if err == nil {
 		return nil
 	}
 	joined, isJoined := err.(interface{ Unwrap() []error })
 	if !isJoined {
-		return []Problem{{Beat: beatNamed(err.Error(), board), Message: err.Error()}}
+		return []Problem{{Owner: ownerOn(storyboard.OwnerOf(err), board), Message: err.Error()}}
 	}
 	var problems []Problem
 	for _, part := range joined.Unwrap() {
@@ -346,23 +336,17 @@ func problemsOf(err error, board *storyboard.Storyboard) []Problem {
 	return problems
 }
 
-// beatNamed returns the id of the beat of board that message names first, or 0 when it names
-// none board has or is about a camera move or a caption, whose problems are on the clip as a
-// whole.
-func beatNamed(message string, board *storyboard.Storyboard) int {
-	if slices.ContainsFunc(clipLevelPrefixes, func(prefix string) bool { return strings.HasPrefix(message, prefix) }) {
-		return 0
+// ownerOn returns owner, or the clip when owner is a beat board does not have, so the problem
+// still shows on a panel.
+func ownerOn(owner storyboard.Owner, board *storyboard.Storyboard) storyboard.Owner {
+	if owner.Kind != storyboard.OwnerBeat {
+		return owner
 	}
-	match := beatMention.FindStringSubmatch(message)
-	if match == nil || board == nil {
-		return 0
+	isOnBoard := board != nil && slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool {
+		return beat.ID == owner.Index
+	})
+	if !isOnBoard {
+		return storyboard.Owner{Kind: storyboard.OwnerClip}
 	}
-	id, err := strconv.Atoi(match[1])
-	if err != nil {
-		return 0
-	}
-	if !slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool { return beat.ID == id }) {
-		return 0
-	}
-	return id
+	return owner
 }

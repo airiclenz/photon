@@ -8,13 +8,13 @@
 
 (() => {
   const page = window.tunePage;
-  const { CLIP, ENTRY_CAMERA, ENTRY_CAPTION, applyEdit, element, isEntry, entryValue } = page;
+  const { CLIP, applyEdit, element, isEntry, entryValue } = page;
   const NEEDS_RECORD = "needs photon record";
   const MOMENT_PLACEHOLDER = "{beat: 3, offset: 200ms} or 4500ms";
   const TARGET_PLACEHOLDER = "{text: 'ok', area: list}";
-  // ENTRY_ERROR_PREFIXES start the messages of the errors standing on a camera move or caption,
-  // followed by its index and "]", as the storyboard's validation and a refused edit spell them.
-  const ENTRY_ERROR_PREFIXES = { [ENTRY_CAMERA]: "camera[", [ENTRY_CAPTION]: "captions[" };
+  // The kinds of a problem's owner besides a camera move's and a caption's, as /api/state sends them.
+  const OWNER_CLIP = "clip";
+  const OWNER_BEAT = "beat";
 
   function fieldRow(label, control) {
     return element("label", { className: "field" }, element("span", {}, label), control);
@@ -52,13 +52,9 @@
   }
 
   // errorRows are the errors standing on owner — a beat id, 0 for the clip, or a camera move's
-  // or caption's {kind, index} entry, whose errors stand on the clip and name it — and a refused
-  // edit of it.
+  // or caption's {kind, index} entry — and a refused edit of it.
   function errorRows(owner) {
-    const isOwnedBy = isEntry(owner)
-      ? (problem) => problem.beat === CLIP && problem.message.startsWith(entryErrorPrefix(owner))
-      : (problem) => problem.beat === owner;
-    const messages = page.state().errors.filter(isOwnedBy).map((problem) => problem.message);
+    const messages = problemsOn(owner).map((problem) => problem.message);
     const key = isEntry(owner) ? entryValue(owner.kind, owner.index) : String(owner);
     const refusal = page.refusal();
     if (refusal && refusal.owner === key) {
@@ -67,14 +63,26 @@
     return messages.map((message) => element("p", { className: "error" }, message));
   }
 
-  // entryErrorPrefix starts every error message standing on entry: camera[2] or captions[0].
-  function entryErrorPrefix(entry) {
-    return ENTRY_ERROR_PREFIXES[entry.kind] + entry.index + "]";
+  // errorMark marks a beat select option whose owner has an error standing on it.
+  function errorMark(owner) {
+    return problemsOn(owner).length > 0 ? "  (error)" : "";
   }
 
-  function errorMark(beat) {
-    const hasError = page.state().errors.some((problem) => problem.beat === beat);
-    return hasError ? "  (error)" : "";
+  // problemsOn are the problems standing on owner, matched by the owner each problem carries.
+  function problemsOn(owner) {
+    const wanted = problemOwner(owner);
+    return page
+      .state()
+      .errors.filter((problem) => problem.owner.kind === wanted.kind && problem.owner.index === wanted.index);
+  }
+
+  // problemOwner spells owner as a problem's {kind, index}: the clip, a beat by its id, or the
+  // camera move's or caption's entry, whose kinds a problem's owner spells the same.
+  function problemOwner(owner) {
+    if (isEntry(owner)) {
+      return owner;
+    }
+    return owner === CLIP ? { kind: OWNER_CLIP, index: 0 } : { kind: OWNER_BEAT, index: owner };
   }
 
   function needsRecord() {

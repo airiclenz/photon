@@ -241,10 +241,13 @@
       options.push(option(String(beat.id), "beat " + beat.id + " " + beat.title + page.errorMark(beat.id)));
     }
     for (const move of current.camera) {
-      options.push(option(entryValue(ENTRY_CAMERA, move.index), "camera " + move.index + " " + move.kind));
+      const mark = page.errorMark({ kind: ENTRY_CAMERA, index: move.index });
+      const label = "camera " + move.index + " " + move.kind + mark;
+      options.push(option(entryValue(ENTRY_CAMERA, move.index), label));
     }
     for (const caption of current.captions) {
-      const label = "caption " + caption.index + " " + caption.text;
+      const mark = page.errorMark({ kind: ENTRY_CAPTION, index: caption.index });
+      const label = "caption " + caption.index + " " + caption.text + mark;
       options.push(option(entryValue(ENTRY_CAPTION, caption.index), label));
     }
     view.beatSelect.replaceChildren(...options);

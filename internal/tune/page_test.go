@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/airiclenz/photon/internal/storyboard"
 )
 
 // pageScriptPattern finds every script of the page among the embedded files.
@@ -49,7 +51,8 @@ var registeredLanes = []struct {
 }
 
 // entryReaders are the variables the page reads state entries through, each with the state type
-// whose json keys it may name: state.<key>, move.<key>, caption.<key> and moment.<key>.
+// whose json keys it may name: state.<key>, move.<key>, caption.<key>, moment.<key>,
+// problem.<key> and owner.<key>.
 var entryReaders = []struct {
 	variable string
 	of       any
@@ -58,6 +61,8 @@ var entryReaders = []struct {
 	{"move", CameraState{}},
 	{"caption", CaptionState{}},
 	{"moment", MomentState{}},
+	{"problem", Problem{}},
+	{"owner", storyboard.Owner{}},
 }
 
 // entryFieldName finds a camera move's or caption's edit field written as a string literal.
