@@ -1,10 +1,12 @@
 // photon tune's camera move and caption panels: what the inspector shows for a selected entry —
-// its timing, where a camera move goes, a caption's text, placement and style, when it is on the
-// output clock and the errors standing on it — and the buttons that move it up or down its list
-// or remove it.
+// its timing, where a camera move goes and the waypoints of a via pan's path, a caption's text,
+// placement and style, when it is on the output clock and the errors standing on it — and the
+// buttons that move it up or down its list or remove it.
 //
 // It loads after controls.js and adds entryPanel to window.tunePage, the page's internal
-// namespace, where app.js's inspector draws it; every field is a control from controls.js.
+// namespace, where app.js's inspector draws it; every field is a control from controls.js. A
+// waypoint's Set from pick reads the standing pick through the pickProposal and reportPick that
+// picker.js, which loads later, adds there.
 "use strict";
 
 (() => {
@@ -37,6 +39,13 @@
   // The list fields that move an entry within its list, or remove it, by list.
   const CAMERA_LIST = Object.freeze({ move: "camera.move", remove: "camera.remove" });
   const CAPTION_LIST = Object.freeze({ move: "caption.move", remove: "caption.remove" });
+  // The fields that set, insert and remove a waypoint of a via pan's path.
+  const VIA_FIELDS = Object.freeze({
+    set: "camera.via",
+    insert: "camera.via.insert",
+    remove: "camera.via.remove",
+  });
+  const PICK_FIRST = "Pick a target first: ⌖ Pick, then drag across the preview.";
 
   // entryPanel is a camera move's or caption's fields; what the page does not edit shows
   // read-only, and the YAML edits it.
@@ -61,38 +70,128 @@
   }
 
   // aimRows edit where a camera move goes, each sending a typed camera.to: a zoom's factor, or
-  // a pan's target or cell, which a pick replaces with a target; the points of a pan's path
-  // show read-only.
+  // a pan's target or cell, which a pick replaces with a target. A pan's path select moves it
+  // straight to its to or along a via path, and a via pan lists the waypoints of its path.
   function aimRows(owner, move) {
     if (move.kind === KIND_ZOOM) {
       const input = element("input", { type: "number", step: "0.1", value: String(move.factor) });
       input.addEventListener("change", () => applyEdit(owner, "camera.to", numberOf(input.value)));
       return [fieldRow("to (×)", input)];
     }
+    // The pan's camera.path field defaults to the path it follows.
+    const path = choiceField("path", owner, "camera.path", null);
     if (move.target) {
       const inputs = targetInputs(move.target);
       for (const input of Object.values(inputs)) {
         input.addEventListener("change", () => applyEdit(owner, "camera.to", targetOf(inputs)));
       }
-      return targetRows("to", inputs);
+      return [path, ...targetRows("to", inputs)];
     }
     if (move.cell) {
-      return [cellRow(owner, move.cell)];
+      return [path, cellRow(owner, move.cell)];
     }
-    return [readOnlyRow("via", move.via_count + " points")];
+    return [path, ...(move.via || []).flatMap((point, index) => waypointRows(owner, point, index))];
   }
 
   // cellRow edits the cell a pan goes to, its column x and row y from 0.
   function cellRow(owner, cell) {
-    const input = (value) =>
-      element("input", { type: "number", min: "0", step: "1", value: String(value) });
-    const x = input(cell.x);
-    const y = input(cell.y);
+    const x = cellInput(cell.x);
+    const y = cellInput(cell.y);
     const send = () =>
       applyEdit(owner, "camera.to", { cell: { x: numberOf(x.value), y: numberOf(y.value) } });
     x.addEventListener("change", send);
     y.addEventListener("change", send);
     return fieldRow("to (x, y)", element("span", { className: "inline" }, x, y));
+  }
+
+  // cellInput is a cell's column or row input, holding value.
+  function cellInput(value) {
+    return element("input", { type: "number", min: "0", step: "1", value: String(value) });
+  }
+
+  // waypointRows edit the waypoint at index of a via pan's path, point as /api/state sends it, a
+  // target or a cell. A target shows read-only and its cell inputs start empty; typing both of a
+  // waypoint's cell inputs makes it that cell. Its buttons set it to the standing pick's target,
+  // insert a copy of it after it, or remove it.
+  function waypointRows(owner, point, index) {
+    const label = "waypoint " + index;
+    const rows = point.target ? [readOnlyRow(label, targetText(point.target))] : [];
+    rows.push(waypointCellRow(owner, point, index, label), waypointActions(owner, point, index));
+    return rows;
+  }
+
+  // waypointCellRow edits the waypoint at index as a cell, its column x and row y from 0, empty
+  // while it is a target.
+  function waypointCellRow(owner, point, index, label) {
+    const cell = point.cell || { x: "", y: "" };
+    const x = cellInput(cell.x);
+    const y = cellInput(cell.y);
+    const send = () => {
+      if (x.value.trim() === "" || y.value.trim() === "") {
+        return;
+      }
+      const value = { index, point: { cell: { x: numberOf(x.value), y: numberOf(y.value) } } };
+      applyEdit(owner, VIA_FIELDS.set, value);
+    };
+    x.addEventListener("change", send);
+    y.addEventListener("change", send);
+    return fieldRow(label + " (x, y)", element("span", { className: "inline" }, x, y));
+  }
+
+  // waypointActions are the buttons of the waypoint at index: Set from pick sets it to the
+  // standing pick's target, or, with none standing, says to pick one first; Insert after adds a
+  // copy of it after it; Remove removes it. Each button's title names its waypoint.
+  function waypointActions(owner, point, index) {
+    const fromPick = waypointButton(
+      "Set from pick",
+      "Set waypoint " + index + " from the pick",
+      () => {
+        const target = page.pickProposal();
+        if (target === null) {
+          page.reportPick(PICK_FIRST, true);
+          return;
+        }
+        applyEdit(owner, VIA_FIELDS.set, { index, point: target });
+      },
+    );
+    const insert = waypointButton(
+      "Insert after",
+      "Insert a copy of waypoint " + index + " after it",
+      () => applyEdit(owner, VIA_FIELDS.insert, { index: index + 1, point: wirePoint(point) }),
+    );
+    const remove = waypointButton("Remove", "Remove waypoint " + index, () =>
+      applyEdit(owner, VIA_FIELDS.remove, { index }),
+    );
+    return element("div", { className: "waypoint-actions" }, fromPick, insert, remove);
+  }
+
+  function waypointButton(label, title, onClick) {
+    const button = element("button", { type: "button", title }, label);
+    button.addEventListener("click", onClick);
+    return button;
+  }
+
+  // wirePoint is a waypoint as /api/state sends it, spelled as an edit's point takes it: its cell,
+  // or its target as the target inputs type it.
+  function wirePoint(point) {
+    if (point.cell) {
+      return { cell: { x: point.cell.x, y: point.cell.y } };
+    }
+    return targetOf(targetInputs(point.target));
+  }
+
+  // targetText describes a waypoint's target: its text, and its nth and area where it has them,
+  // each spelled as the target inputs show it.
+  function targetText(target) {
+    const inputs = targetInputs(target);
+    const parts = ["target " + inputs.text.value];
+    if (inputs.nth.value !== "") {
+      parts.push("nth " + inputs.nth.value);
+    }
+    if (inputs.area.value !== "") {
+      parts.push("in " + inputs.area.value);
+    }
+    return parts.join(", ");
   }
 
   // captionPanel edits a caption's text, timing, placement and style, and shows when it is on

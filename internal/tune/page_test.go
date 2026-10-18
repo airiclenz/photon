@@ -25,8 +25,11 @@ const pageScriptPattern = "*.js"
 // pageAssetNames are the files index.html loads besides its scripts.
 var pageAssetNames = []string{"style.css"}
 
-// splitScripts are app.js and the scripts split from it, each kept under maxScriptLines.
-var splitScripts = []string{"app.js", "transport.js", "controls.js", "panels.js", "entries.js"}
+// splitScripts are app.js, the scripts split from it and the via path overlay's, each kept under
+// maxScriptLines.
+var splitScripts = []string{
+	"app.js", "transport.js", "controls.js", "panels.js", "entries.js", "path.js",
+}
 
 // maxScriptLines is the file-size guide of Note coding-conventions a split script stays below.
 const maxScriptLines = 400
@@ -67,16 +70,6 @@ var entryReaders = []struct {
 	{"problem", Problem{}},
 	{"owner", storyboard.Owner{}},
 	{"field", storyboard.Field{}},
-}
-
-// pendingPageFields are the storyboard's editable entry fields the page does not send yet; each
-// is exempt from the check that the page sends every entry field, never from the check that every
-// field the page sends is one the storyboard describes.
-var pendingPageFields = map[string]bool{
-	storyboard.FieldCameraVia:       true,
-	storyboard.FieldCameraViaInsert: true,
-	storyboard.FieldCameraViaRemove: true,
-	storyboard.FieldCameraPath:      true,
 }
 
 // entryFieldName finds a camera move's or caption's edit field written as a string literal, its
@@ -309,7 +302,7 @@ func TestPage_EntryFields_AreEditFields(t *testing.T) {
 
 	for field := range editable {
 		isEntryField := strings.HasPrefix(field, "camera.") || strings.HasPrefix(field, "caption.")
-		if isEntryField && !sent[field] && !pendingPageFields[field] {
+		if isEntryField && !sent[field] {
 			t.Errorf("the page sends no %s edit", field)
 		}
 	}

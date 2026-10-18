@@ -1,9 +1,11 @@
 // photon tune's target picker: ⌖ arms pick mode on the paused preview, and a drag across the
 // cells of one row asks the server for the target that names them.
-// It builds on app.js's window.tune alone: frame for the preview <img>, pause() to hold the
-// frame still, frameTime() for the output time of the frame the <img> shows, selected() and
-// state() for the beat a zoom target goes on, selectedEntry() for the pan move a pan target goes
-// on, onState(fn) to offer that only while a pan exists, and edit(edit) to set either. Nothing
+// It builds on app.js's window.tune: frame for the preview <img>, pause() to hold the frame
+// still, frameTime() for the output time of the frame the <img> shows, selected() and state()
+// for the beat a zoom target goes on, selectedEntry() for the pan move a pan target goes on,
+// onState(fn) to offer that only while a pan exists, and edit(edit) to set either. It adds
+// pickProposal() and reportPick(message, isFailure) to window.tunePage, the page's internal
+// namespace, where entries.js's via waypoints read the standing proposal's target. Nothing
 // here maps pixels to cells or resolves a target: the drag's two corners go to /api/pick in
 // output-frame pixels, and the server answers the resolver-checked proposal: its target as a
 // zoom or camera.to edit takes it, its box in output-frame pixels and the YAML snippets that
@@ -297,5 +299,12 @@
     }
   }
 
+  // pickProposal is the standing proposal's target, as a camera.to or waypoint edit takes it, or
+  // null while none stands.
+  function pickProposal() {
+    return proposal ? proposal.target : null;
+  }
+
+  Object.assign(window.tunePage, { pickProposal, reportPick: report });
   wire();
 })();

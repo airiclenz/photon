@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dop251/goja"
 
@@ -667,5 +668,192 @@ func TestPageJS_CaptionPosition_SeedsTheLaidOutCorner(t *testing.T) {
 		storyboard.OwnerCaption, styledCaption, storyboard.FieldCaptionPosition))
 	if got := session.State().Captions[styledCaption].Position; got != nil {
 		t.Errorf("the caption's position after the uncheck: want none, got %+v", *got)
+	}
+}
+
+// The via path overlay's elements and the class that shows it.
+const (
+	elementViaPath = "via-path"
+	elementViaLine = "via-line"
+	viaPathDrawn   = "drawn"
+)
+
+// pickAcross picks the cells from column first to last of row on the preview and returns the
+// proposal's target the pick answered.
+func (p *pageHarness) pickAcross(session *Session, row, first, last int) json.RawMessage {
+	p.t.Helper()
+	p.fitFrame()
+	p.dispatch(elementPick, "click", nil)
+	p.dispatch(elementStage, "pointerdown", pointerAt(cellPixel(p.t, session, first, row)))
+	p.dispatch(elementStage, "pointerup", pointerAt(cellPixel(p.t, session, last, row)))
+	p.settle()
+	picked := p.lastRequest("/api/pick")
+	if picked.status != http.StatusOK {
+		p.t.Fatalf("the pick: want 200, got %d: %s", picked.status, picked.answer)
+	}
+	var proposal struct {
+		Target json.RawMessage `json:"target"`
+	}
+	if err := json.Unmarshal([]byte(picked.answer), &proposal); err != nil {
+		p.t.Fatalf("decode the pick's answer %s: %v", picked.answer, err)
+	}
+	return proposal.Target
+}
+
+// chooseField chooses value in the select of the inspector's one field row labelled label,
+// fires its change and settles the page.
+func (p *pageHarness) chooseField(label, value string) {
+	p.t.Helper()
+	found := p.eval(fmt.Sprintf(`{
+		const rows = document.getElementById(%q).querySelectorAll("label")
+			.filter((row) => row.children.length > 0 && row.children[0].textContent === %q);
+		const input = rows.length === 1 ? rows[0].querySelectorAll("select")[0] : undefined;
+		if (input) {
+			input.value = %q;
+			input.dispatchEvent(new Event("change"));
+		}
+		Boolean(input);
+	}`, elementInspector, label, value)).ToBoolean()
+	if !found {
+		p.t.Fatalf("no one select in a field row labelled %q under #%s", label, elementInspector)
+	}
+	p.settle()
+}
+
+// isViaPathDrawn says the via path overlay shows.
+func (p *pageHarness) isViaPathDrawn() bool {
+	p.t.Helper()
+	return p.eval(fmt.Sprintf(`document.getElementById(%q).classList.contains(%q)`,
+		elementViaPath, viaPathDrawn)).ToBoolean()
+}
+
+// assertViaPath fails the test unless the page asked for the via pan's path on the frame it
+// shows and its line draws the points the session answers for it.
+func (p *pageHarness) assertViaPath(session *Session) {
+	p.t.Helper()
+	ms := p.eval("window.tune.frameTime()").ToInteger()
+	asked := p.lastRequest(fmt.Sprintf("/api/path?camera=%d&t=%d", viaPan, ms))
+	if asked.status != http.StatusOK {
+		p.t.Fatalf("the path request at %dms: want 200, got %d: %s", ms, asked.status, asked.answer)
+	}
+	points, err := session.Path(time.Duration(ms)*time.Millisecond, viaPan)
+	if err != nil {
+		p.t.Fatalf("the session's path at %dms: %v", ms, err)
+	}
+	spelled := make([]string, 0, len(points))
+	for _, point := range points {
+		spelled = append(spelled, fmt.Sprintf("%d,%d", point.X, point.Y))
+	}
+	want := strings.Join(spelled, " ")
+	got := p.eval(fmt.Sprintf(`document.getElementById(%q).getAttribute("points")`,
+		elementViaLine)).String()
+	if got != want {
+		p.t.Errorf("the via line at %dms: want points %q, got %q", ms, want, got)
+	}
+	if !p.isViaPathDrawn() {
+		p.t.Errorf("the via path at %dms is not drawn", ms)
+	}
+}
+
+func TestPageJS_ViaWaypoint_SetFromPick(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	page := loadPage(t, session)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, viaPan))
+	page.settle()
+
+	page.click(elementInspector, "Set waypoint 0 from the pick")
+
+	if got := page.text(elementPickStatus); !strings.HasPrefix(got, "Pick a target first") {
+		t.Errorf("the pick status with no pick standing: want it to ask for a pick, got %q", got)
+	}
+	for _, request := range page.requests {
+		if request.path == "/api/edit" {
+			t.Fatalf("the page sent an edit with no pick standing: %s", request.body)
+		}
+	}
+
+	target := page.pickAcross(session, 0, 2, 4)
+	page.click(elementInspector, "Set waypoint 0 from the pick")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
+		`"value":{"index":0,"point":%s}}`,
+		storyboard.OwnerCamera, viaPan, storyboard.FieldCameraVia, target))
+	if got := session.State().Camera[viaPan].Via[0]; got.Target == nil {
+		t.Errorf("waypoint 0 after the set: want the picked target, got %+v", got)
+	}
+}
+
+func TestPageJS_ViaWaypoint_InsertAndRemove(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	first := *session.State().Camera[viaPan].Via[0].Cell
+	page := loadPage(t, session)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, viaPan))
+	page.settle()
+	owner := fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerCamera, viaPan)
+
+	page.click(elementInspector, "Insert a copy of waypoint 0 after it")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":%s,"field":%q,`+
+		`"value":{"index":1,"point":{"cell":{"x":%d,"y":%d}}}}`,
+		owner, storyboard.FieldCameraViaInsert, first.X, first.Y))
+	via := session.State().Camera[viaPan].Via
+	if len(via) != 3 || via[1].Cell == nil || *via[1].Cell != first {
+		t.Fatalf("the via path after the insert: want 3 waypoints, the second %+v, got %+v", first, via)
+	}
+
+	page.click(elementInspector, "Remove waypoint 2")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":%s,"field":%q,"value":{"index":2}}`,
+		owner, storyboard.FieldCameraViaRemove))
+	if via := session.State().Camera[viaPan].Via; len(via) != 2 || via[1].Cell == nil {
+		t.Fatalf("the via path after the remove: want the two cells, got %+v", via)
+	}
+
+	page.setField("waypoint 1 (x, y)", "value", "5")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":%s,"field":%q,`+
+		`"value":{"index":1,"point":{"cell":{"x":5,"y":%d}}}}`,
+		owner, storyboard.FieldCameraVia, first.Y))
+
+	page.chooseField("path", "to")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":%s,"field":%q,"value":"to"}`,
+		owner, storyboard.FieldCameraPath))
+	moved := session.State().Camera[viaPan]
+	if moved.Via != nil || moved.Cell == nil || moved.Cell.X != 5 {
+		t.Errorf("the pan after the path change: want it straight to the last waypoint, got %+v", moved)
+	}
+}
+
+func TestPageJS_ViaPath_IsDrawnForTheSelectedPan(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	page := loadPage(t, session)
+	page.fitFrame()
+
+	if page.isViaPathDrawn() {
+		t.Fatal("the via path is drawn with nothing selected")
+	}
+
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, viaPan))
+	page.settle()
+
+	page.assertViaPath(session)
+
+	page.eval(fmt.Sprintf("window.tune.seek(%d)", beatOneMS))
+	page.settle()
+
+	if got := page.eval("window.tune.frameTime()").ToInteger(); got != beatOneMS {
+		t.Fatalf("the frame shown after the seek: want the one at %dms, got %d", beatOneMS, got)
+	}
+	page.assertViaPath(session)
+
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, panToTarget))
+	page.settle()
+
+	if page.isViaPathDrawn() {
+		t.Error("the via path is drawn with a pan to selected")
 	}
 }

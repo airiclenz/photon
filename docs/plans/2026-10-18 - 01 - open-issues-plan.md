@@ -572,7 +572,19 @@ its two waypoints; a compose test that a zoom before the via pan does not shift 
 - `GOMEMLIMIT=2GiB go test ./internal/tune/`
 **Commit:** `feat(tune): report a via pan's waypoints and path`
 
-## 16. Page: edit a via pan and draw its path
+## 16. Page: edit a via pan and draw its path — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the path overlay lives in a new script, internal/tune/page/path.js (loaded after picker.js, built on window.tune alone), joined to index.html and splitScripts; it redraws on frame load, resize, every new state and after any click or change on the page body, since window.tune announces no selection change and app.js code stays untouched.
+
+NOTES (2026-10-18): the overlay is shown and hidden by a `drawn` class, not `hidden`, because an `<svg>` element has no `hidden` property; its viewBox is the `<img>`'s natural size, so /api/path's output-frame pixels need no scaling.
+
+NOTES (2026-10-18): picker.js adds `pickProposal()` and `reportPick(message, isFailure)` to window.tunePage; a waypoint's Set from pick with no proposal standing sends nothing and reports "Pick a target first…" in the pick status. A target waypoint shows read-only above its (empty) cell inputs; waypoint buttons carry titles naming their waypoint ("Set waypoint 0 from the pick", "Insert a copy of waypoint 0 after it", "Remove waypoint 0").
+
+NOTES (2026-10-18): pendingPageFields and its use in TestPage_EntryFields_AreEditFields are deleted (the set would have been empty).
+
+NOTES (2026-10-18): consequential edit — internal/tune/doc.go: made necessary by the new page/path.js (the package doc's file map).
+
+NOTES (2026-10-18): consequential edit — README.md: made necessary by the inspector now editing a pan's via path ("A pan's `via` … change in the YAML" became false); the same sentence's caption half, already stale since item 13, is folded into the rewrite.
 
 **What:** Depends on items 6, 13 and 15.
 **Regression guard.** Also depends on item 13; removes item 14's fields from `pendingPageFields` and deletes the set, which must then be empty.

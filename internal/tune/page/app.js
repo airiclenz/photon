@@ -2,7 +2,8 @@
 // It holds no timing logic of its own: every value it shows comes from /api/state, every change
 // is an edit the server applies and validates, and every frame is one the server composes.
 //
-// window.tune is the contract the timeline lanes and the target picker build on:
+// window.tune is the contract the timeline lanes, the target picker and the via path overlay
+// build on:
 //   state()      the last /api/state JSON, or null before the first arrives
 //   selected()   the id of the beat the inspector shows, or null for the clip's frame or an entry
 //   select(id)   show beat id in the inspector, or the clip's frame for null
@@ -23,10 +24,11 @@
 // load after it — transport.js (the frame clock and the transport), controls.js (the inspector's
 // field controls and error rows), panels.js (the beat and frame panels) and entries.js (the
 // camera move and caption panels) — share its state through window.tunePage, an internal
-// namespace no other script reads and no part of the contract: app.js puts in it the state they
-// read and the helpers they build with, and each of them adds what it does. app.js calls those
-// only once every script has run, so the wiring, and with it the first /api/state request, waits
-// for DOMContentLoaded.
+// namespace no part of the contract: app.js puts in it the state they read and the helpers they
+// build with, and each of them adds what it does. Of the other scripts only picker.js touches
+// it, adding the standing pick's proposal that entries.js's via waypoints read. app.js calls
+// those only once every script has run, so the wiring, and with it the first /api/state
+// request, waits for DOMContentLoaded.
 "use strict";
 
 (() => {

@@ -56,4 +56,5 @@
 //   - page/panels.js: the inspector's beat and frame panels.
 //   - page/entries.js: the inspector's camera move and caption panels.
 //   - page/lanes.js, page/timeline.js, page/picker.js: the timeline, its lanes and the target picker.
+//   - page/path.js: the via path overlay on the preview.
 package tune

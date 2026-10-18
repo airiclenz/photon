@@ -13,6 +13,7 @@
 <script src="/assets/lanes.js" defer></script>
 <script src="/assets/timeline.js" defer></script>
 <script src="/assets/picker.js" defer></script>
+<script src="/assets/path.js" defer></script>
 </head>
 <body>
 <div id="banner" class="banner" hidden>
@@ -25,6 +26,7 @@
       <img id="frame" alt="The composed frame at the playhead" draggable="false">
       <div id="pick-drag" class="pick-drag" hidden></div>
       <div id="pick-box" class="pick-box" hidden></div>
+      <svg id="via-path" class="via-path" preserveAspectRatio="none" aria-hidden="true"><polyline id="via-line" class="via-line"></polyline></svg>
     </div>
     <p id="frame-message" class="frame-message" hidden></p>
     <div class="picker">
