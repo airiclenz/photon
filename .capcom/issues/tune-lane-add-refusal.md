@@ -4,6 +4,7 @@ status: open
 type: bug
 priority: 3
 labels: [tune]
+plan: 2026-10-18 - 02 - tune-polish-plan
 created: 2026-10-18T12:32:57Z
 ---
 

@@ -4,6 +4,7 @@ status: open
 type: task
 priority: 2
 labels: [tune]
+plan: 2026-10-18 - 02 - tune-polish-plan
 created: 2026-10-18T14:21:41Z
 ---
 
