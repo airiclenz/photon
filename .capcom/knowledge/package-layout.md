@@ -25,9 +25,9 @@ imports upward, and there are no cycles.
 | `internal/raster` | a snapshot's cells to pixels; box drawing drawn, not looked up | `take`, `fonts`, `config` |
 | `internal/caption` | a storyboard's captions laid out, timed and drawn over a shipped frame, in output space | `storyboard`, `fonts` |
 | `internal/compose` | camera, drawn cursor and captions over each frame | `schedule`, `target`, `take`, `storyboard`, `caption`, `fonts` |
-| `internal/render` | the render run: frames through ffmpeg, then gifsicle | `clip`, `schedule`, `raster`, `compose`, `fonts`, `target`, `storyboard`, `take` |
+| `internal/render` | the render run: frames through ffmpeg, then gifsicle; the frame pipeline (`Build`) every shipped and previewed frame comes from, reusing an earlier pipeline's rasterizer, raster cache and caption faces where they hold | `clip`, `schedule`, `raster`, `compose`, `fonts`, `target`, `storyboard`, `take` |
 | `internal/yamledit` | YAML source splicing: replace, insert or remove one scalar or key, leaving the rest of the bytes as written | — |
-| `internal/tune` | the timing editor behind `photon tune`: session, edits spliced into the storyboard, undo, guarded save, frames on demand, target picks, and the embedded page served on 127.0.0.1; nothing imports it but `cmd/photon` | `clip`, `render`, `schedule`, `compose`, `raster`, `target`, `storyboard`, `take`, `yamledit`, `config` |
+| `internal/tune` | the timing editor behind `photon tune`: session, edits spliced into the storyboard, undo, guarded save, frames on demand, target picks, and the embedded page served on 127.0.0.1; nothing imports it but `cmd/photon`; frames come from render's pipeline, rebuilt on each edit over the last good one | `clip`, `render`, `schedule`, `target`, `storyboard`, `take`, `yamledit`, `config` |
 | `internal/testkit` | test support: doc-map check, fixture TUI build, polling | — |
 | `cmd/photon` | the Cobra commands and the exit-code mapping only | the packages above |
 | `photon` (module root) | `Version()`, embedded from the root `VERSION` file, photon's one version source | — |

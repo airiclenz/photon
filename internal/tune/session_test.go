@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
+	"github.com/airiclenz/photon/internal/render"
 	"github.com/airiclenz/photon/internal/take"
 )
 
@@ -377,6 +378,37 @@ func TestSession_ZoomTargetNotOnScreen_KeepsTheLastGoodPipelineAndBlocksSave(t *
 	}
 	if got := f.readDisk(t); got != sessionStoryboard {
 		t.Errorf("the storyboard on disk changed:\n%s", got)
+	}
+}
+
+func TestSession_EveryEditsBuild_ReusesTheGoodPipeline(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixture(t)
+	var reused []bool
+	f.session.buildPipeline = func(
+		loaded *clip.Clip,
+		takePath string,
+		recorded *take.Take,
+		options render.BuildOptions,
+	) (*render.Pipeline, error) {
+		// build runs under the session's lock, so good is the one this build replaces.
+		reused = append(reused, options.Reuse != nil && options.Reuse == f.session.good.frames)
+		return render.Build(loaded, takePath, recorded, options)
+	}
+	edits := []Edit{
+		{Beat: 1, Field: fieldDuration, Value: "1100"},
+		{Beat: 2, Field: fieldZoomTarget, Value: "{text: 'nowhere'}"},
+		{Beat: 1, Field: fieldDuration, Value: "1200"},
+		{Field: fieldFrameWidth, Value: "120"},
+	}
+
+	for _, edit := range edits {
+		f.apply(t, edit)
+	}
+
+	want := []bool{true, true, true, true}
+	if !slices.Equal(reused, want) {
+		t.Errorf("each build given the good pipeline to reuse: %v, want %v", reused, want)
 	}
 }
 

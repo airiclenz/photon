@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
+	"github.com/airiclenz/photon/internal/fonts"
 	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/take"
 	"github.com/airiclenz/photon/internal/target"
@@ -58,13 +59,21 @@ func oracleFrames(t *testing.T, loaded *clip.Clip, recorded *take.Take) ([]sched
 	if err != nil {
 		t.Fatalf("schedule.New: %v", err)
 	}
-	rasterizer, err := NewRasterizer(loaded)
+	rasterizer, err := newRasterizer(loaded)
 	if err != nil {
-		t.Fatalf("NewRasterizer: %v", err)
+		t.Fatalf("newRasterizer: %v", err)
 	}
-	compositor, err := NewCompositor(loaded, recorded, clipSchedule, rasterizer)
+	resolver, err := target.New(loaded.Config.Areas)
 	if err != nil {
-		t.Fatalf("NewCompositor: %v", err)
+		t.Fatalf("target.New: %v", err)
+	}
+	captionFaces, err := fonts.LoadCaption(loaded.Config.CaptionFont.Regular, loaded.Config.CaptionFont.Bold)
+	if err != nil {
+		t.Fatalf("fonts.LoadCaption: %v", err)
+	}
+	compositor, err := newCompositor(loaded, recorded, clipSchedule, rasterizer, resolver, captionFaces)
+	if err != nil {
+		t.Fatalf("newCompositor: %v", err)
 	}
 	frames := clipSchedule.Frames(loaded.Storyboard.Frame.FPS)
 	composed := make([]*image.RGBA, 0, len(frames))
@@ -81,7 +90,7 @@ func TestPipeline_FrameAt_EveryScheduledFrame_EqualsThePipelineFreeOracle(t *tes
 	takePath, recorded := loadRenderTake(t, 20)
 	frames, want := oracleFrames(t, loaded, recorded)
 
-	built, err := Build(loaded, takePath, recorded, newLastRaster())
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster()})
 
 	if err != nil {
 		t.Fatalf("Build: %v", err)
@@ -104,7 +113,7 @@ func TestPipeline_ScreenAt_ShowsTheScheduledSnapshot(t *testing.T) {
 	t.Parallel()
 	loaded := loadRenderClip(t)
 	takePath, recorded := loadRenderTake(t, 20)
-	built, err := Build(loaded, takePath, recorded, newLastRaster())
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster()})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -125,7 +134,7 @@ func TestPipeline_OutsideTheClip_IsRefused(t *testing.T) {
 	t.Parallel()
 	loaded := loadRenderClip(t)
 	takePath, recorded := loadRenderTake(t, 20)
-	built, err := Build(loaded, takePath, recorded, newLastRaster())
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster()})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -148,7 +157,7 @@ func TestBuild_ATakeOfAnotherFrame_IsRefusedWithoutAPipeline(t *testing.T) {
 	loaded := loadRenderClip(t)
 	takePath, recorded := loadRenderTake(t, 30)
 
-	built, err := Build(loaded, takePath, recorded, newLastRaster())
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster()})
 
 	if built != nil {
 		t.Error("want no pipeline for a take of another frame")
@@ -164,7 +173,7 @@ func TestBuild_AZoomTargetNotOnScreen_LeavesAPartialPipeline(t *testing.T) {
 	loaded := loadRenderClipOf(t, lostZoomStoryboard)
 	takePath, recorded := loadRenderTake(t, 20)
 
-	built, err := Build(loaded, takePath, recorded, newLastRaster())
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster()})
 
 	if !errors.Is(err, target.ErrNotOnScreen) {
 		t.Fatalf("want the zoom target not on screen, got %v", err)
@@ -183,6 +192,101 @@ func TestBuild_AZoomTargetNotOnScreen_LeavesAPartialPipeline(t *testing.T) {
 	}
 	if size := built.Size(); size != (image.Point{}) {
 		t.Errorf("Size: want zero on a partial pipeline, got %v", size)
+	}
+}
+
+// resizedStoryboard is renderStoryboard at another font size: another raster geometry.
+const resizedStoryboard = `clip: rendered
+ship: out/rendered.gif
+frame: {cols: 20, rows: 4, padding: 4, font_size: 12, line_height: 1.2, scale: 2, width: 160, fps: 10, max_colors: 16}
+beats:
+  - id: 1
+    title: typing
+    duration: 1s
+  - id: 2
+    title: hold
+    duration: 1500ms
+`
+
+// rewidthedStoryboard is renderStoryboard shipped at another width, which only the compositor
+// applies.
+const rewidthedStoryboard = `clip: rendered
+ship: out/rendered.gif
+frame: {cols: 20, rows: 4, padding: 4, font_size: 10, line_height: 1.2, scale: 2, width: 120, fps: 10, max_colors: 16}
+beats:
+  - id: 1
+    title: typing
+    duration: 1s
+  - id: 2
+    title: hold
+    duration: 1500ms
+`
+
+func TestBuild_Reuse_SharesTheRastersOnlyWhileTheyHold(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		storyboard   string
+		isOtherTake  bool
+		wantsRasters bool
+	}{
+		{name: "the same clip", storyboard: renderStoryboard, wantsRasters: true},
+		{name: "another width", storyboard: rewidthedStoryboard, wantsRasters: true},
+		{name: "another raster geometry", storyboard: resizedStoryboard},
+		{name: "another take", storyboard: renderStoryboard, isOtherTake: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			takePath, recorded := loadRenderTake(t, 20)
+			previous, err := Build(loadRenderClip(t), takePath, recorded, BuildOptions{Cache: newLastRaster()})
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			if tc.isOtherTake {
+				takePath, recorded = loadRenderTake(t, 20)
+			}
+			cache := newLastRaster()
+			loaded := loadRenderClipOf(t, tc.storyboard)
+
+			built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: cache, Reuse: previous})
+
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			isSharingRasters := built.rasterizer == previous.rasterizer && built.cache == previous.cache
+			if isSharingRasters != tc.wantsRasters {
+				t.Errorf("shares the rasterizer and its cache: %v, want %v", isSharingRasters, tc.wantsRasters)
+			}
+			if !tc.wantsRasters && (built.rasterizer == previous.rasterizer || built.cache != RasterCache(cache)) {
+				t.Error("want a rasterizer of its own over the cache it was given")
+			}
+			if built.captionFaces.Regular.Font != previous.captionFaces.Regular.Font {
+				t.Error("want the previous pipeline's caption faces")
+			}
+		})
+	}
+}
+
+// TestBuild_TenReusedBuilds_LoadCaptionFontsOnce counts the process-wide caption loads, so it
+// runs before the parallel tests are let go.
+func TestBuild_TenReusedBuilds_LoadCaptionFontsOnce(t *testing.T) {
+	const builds = 10
+	loaded := loadRenderClipOf(t, captionedStoryboard)
+	takePath, recorded := loadRenderTake(t, 20)
+	before := captionLoads.Load()
+
+	var previous *Pipeline
+	for range builds {
+		built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster(), Reuse: previous})
+		if err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		previous = built
+	}
+
+	if loads := captionLoads.Load() - before; loads != 1 {
+		t.Errorf("%d builds loaded the caption fonts %d times, want once", builds, loads)
 	}
 }
 

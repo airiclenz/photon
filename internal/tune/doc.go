@@ -14,10 +14,11 @@
 // it causes.
 //
 // A [Session] holds one clip and take being tuned. Every applied edit, undo, redo or revert
-// rebuilds the schedule and the compositor on the new bytes, as `photon render` builds them,
-// reusing the rasterizer while the take and the frame's raster geometry stay; a build that fails
-// leaves its error standing on the beat or the clip it names, and the last good pipeline stays
-// the preview's. [Session.Refresh] takes in outside writes — a rewritten take is read again, a
+// rebuilds the render pipeline on the new bytes, as `photon render` builds it, handing render
+// the last good pipeline to reuse: its rasterizer and rasterized snapshots while the take and the
+// frame's raster geometry stay, and its caption faces, so the caption fonts load once a session;
+// a build that fails leaves its error standing on the beat or the clip it names, and the last
+// good pipeline stays the preview's. [Session.Refresh] takes in outside writes — a rewritten take is read again, a
 // changed storyboard is loaded when nothing is unsaved and turns the session stale otherwise —
 // and [Session.Save] writes in place, refused while stale ([ErrStale]) or while an error stands
 // ([ErrInvalid]). [Session.State] reports everything the page shows, and [Session.Frame] the

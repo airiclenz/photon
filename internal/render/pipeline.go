@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"slices"
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
 	"github.com/airiclenz/photon/internal/compose"
+	"github.com/airiclenz/photon/internal/fonts"
 	"github.com/airiclenz/photon/internal/raster"
 	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
@@ -37,26 +39,49 @@ type RasterCache interface {
 // rectangle and [Pipeline.Size] the zero size. It is safe for concurrent use when its
 // [RasterCache] is.
 type Pipeline struct {
-	recorded   *take.Take
-	schedule   *schedule.Schedule
-	rasterizer *raster.Rasterizer
-	compositor *compose.Compositor
-	cache      RasterCache
+	// loaded is the clip the pipeline was built over: its frame and config decide what a later
+	// [Build] may reuse.
+	loaded       *clip.Clip
+	recorded     *take.Take
+	schedule     *schedule.Schedule
+	rasterizer   *raster.Rasterizer
+	compositor   *compose.Compositor
+	cache        RasterCache
+	captionFaces fonts.CaptionSet
 	// err is the stage error that left the pipeline without a rasterizer or compositor.
 	err error
+}
+
+// BuildOptions is what [Build] is given beside the clip and its take. Cache keeps the rasterized
+// snapshots of a pipeline that builds its own rasterizer; it must not be nil. Reuse, when not
+// nil, is an earlier pipeline whose parts the new one takes over where they come out the same:
+// its rasterizer and its raster cache while the take, the frame's raster geometry, the config's
+// terminal fonts and its theme match, and its caption faces while the config's caption fonts do.
+// A reused cache is then shared by both pipelines, so it must be safe for both to use at once
+// when they are.
+type BuildOptions struct {
+	Cache RasterCache
+	Reuse *Pipeline
 }
 
 // Build checks that the take at takePath, recorded, was recorded at the storyboard's frame size,
 // schedules it, and builds the rasterizer and the compositor over loaded's config: frames are
 // rasterized at frame.scale — padding and font size multiplied through — so a zoom has pixels to
 // draw on, and composed at frame.width, with zoom and pan targets resolved through the config's
-// areas. Rasterized snapshots are kept in cache, which must not be nil.
+// areas. Rasterized snapshots are kept in options.Cache, or in the reused pipeline's cache along
+// with its rasterizer; the caption fonts are loaded only when options.Reuse holds none that match
+// (see [BuildOptions]).
 //
 // It fails with a nil pipeline when the frame sizes differ or the take does not schedule. When a
 // later stage fails — a font or an area that does not load, a target not on screen, a caption
 // that does not lay out — it returns that error together with a partial pipeline whose
 // [Pipeline.Schedule] is set. Errors are returned as their stage reports them, unwrapped.
-func Build(loaded *clip.Clip, takePath string, recorded *take.Take, cache RasterCache) (*Pipeline, error) {
+func Build(
+	loaded *clip.Clip,
+	takePath string,
+	recorded *take.Take,
+	options BuildOptions,
+) (*Pipeline, error) {
 	if err := checkFrame(takePath, recorded, loaded.Storyboard.Frame); err != nil {
 		return nil, err
 	}
@@ -64,30 +89,67 @@ func Build(loaded *clip.Clip, takePath string, recorded *take.Take, cache Raster
 	if err != nil {
 		return nil, err
 	}
-	built := &Pipeline{recorded: recorded, schedule: clipSchedule, cache: cache}
-	if built.err = built.buildFrames(loaded); built.err != nil {
+	built := &Pipeline{loaded: loaded, recorded: recorded, schedule: clipSchedule, cache: options.Cache}
+	if built.err = built.buildFrames(options.Reuse); built.err != nil {
 		return built, built.err
 	}
 	return built, nil
 }
 
-// buildFrames builds the rasterizer, the target resolver and the compositor over loaded, keeping
-// both stages or neither.
-func (p *Pipeline) buildFrames(loaded *clip.Clip) error {
-	rasterizer, err := NewRasterizer(loaded)
+// buildFrames builds the rasterizer, the caption faces, the target resolver and the compositor
+// over the pipeline's clip, taking from previous what it can reuse, and keeps every stage or
+// none.
+func (p *Pipeline) buildFrames(previous *Pipeline) error {
+	rasterizer, cache := p.rasterizer, p.cache
+	if p.canReuseRasters(previous) {
+		rasterizer, cache = previous.rasterizer, previous.cache
+	} else {
+		var err error
+		if rasterizer, err = newRasterizer(p.loaded); err != nil {
+			return err
+		}
+	}
+	captionFaces, err := p.captionFacesFrom(previous)
 	if err != nil {
 		return err
 	}
-	resolver, err := target.New(loaded.Config.Areas)
+	resolver, err := target.New(p.loaded.Config.Areas)
 	if err != nil {
 		return err
 	}
-	compositor, err := newCompositor(loaded, p.recorded, p.schedule, rasterizer, resolver)
+	compositor, err := newCompositor(p.loaded, p.recorded, p.schedule, rasterizer, resolver, captionFaces)
 	if err != nil {
 		return err
 	}
-	p.rasterizer, p.compositor = rasterizer, compositor
+	p.rasterizer, p.cache, p.captionFaces, p.compositor = rasterizer, cache, captionFaces, compositor
 	return nil
+}
+
+// canReuseRasters says previous built in full over the same take with a rasterizer p's clip
+// would build alike — the same raster geometry, terminal fonts and theme — so its rasterizer
+// draws p's snapshots as p's own would and the rasters in its cache hold for p.
+func (p *Pipeline) canReuseRasters(previous *Pipeline) bool {
+	if previous == nil || previous.compositor == nil || previous.recorded != p.recorded {
+		return false
+	}
+	was, is := previous.loaded, p.loaded
+	return rasterGeometry(was.Storyboard.Frame) == rasterGeometry(is.Storyboard.Frame) &&
+		was.Config.Fonts == is.Config.Fonts &&
+		was.Config.Theme.FG == is.Config.Theme.FG &&
+		was.Config.Theme.BG == is.Config.Theme.BG &&
+		slices.Equal(was.Config.Theme.ANSI, is.Config.Theme.ANSI)
+}
+
+// captionFacesFrom returns previous's caption faces when it built in full over the same caption
+// font files as p's config names, and loads them otherwise. The faces do not depend on the take
+// or the frame, so a session's edits load them once.
+func (p *Pipeline) captionFacesFrom(previous *Pipeline) (fonts.CaptionSet, error) {
+	isReusable := previous != nil && previous.compositor != nil &&
+		previous.loaded.Config.CaptionFont == p.loaded.Config.CaptionFont
+	if isReusable {
+		return previous.captionFaces, nil
+	}
+	return loadCaptionFaces(p.loaded)
 }
 
 // checkFrame refuses a take recorded at another size than the storyboard's frame: its cells are

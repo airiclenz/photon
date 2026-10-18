@@ -143,7 +143,15 @@ Depends on item 3.
 - `! grep -nE 'ErrOutsideClip *=|recorded\.ScreenAt' internal/tune/*.go`
 **Commit:** `refactor(tune): take frames from the render pipeline`
 
-## 5. Render's surface shrinks and caption fonts load once
+## 5. Render's surface shrinks and caption fonts load once — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): re-derived from tune's `Session.rasterizerFor`: at HEAD it is `Session.rasterCacheFor`, which reused only the raster cache (the rasterizer and the caption faces were rebuilt on every edit); the reuse rule now lives in render (`Pipeline.canReuseRasters`, `Pipeline.captionFacesFrom`) and tune passes `BuildOptions{Cache, Reuse: s.good.frames}`.
+NOTES (2026-10-18): the raster-geometry key is render's `rasterGeometry(frame) raster.Geometry` (cols, rows, padding×scale, font_size×scale, line_height — what `raster.New` is given), shared with `newRasterizer`, in place of the frame with width/fps/max_colors zeroed; rasterizer reuse also requires the config's terminal `fonts` dir and theme to match.
+NOTES (2026-10-18): caption faces are reused whenever the previous pipeline built in full over the same `caption_font` paths, independent of the take and raster geometry, so a font-size edit or a rewritten take loads no caption font either (the Goal's "once a session").
+NOTES (2026-10-18): the tune test observes `Reuse` through a new unexported `Session.buildPipeline` field (set to `render.Build` in NewSession, wrapped by the test); tune's `pipeline.recorded` and `pipeline.rasters` fields were deleted, dead once the reuse rule moved to render.
+NOTES (2026-10-18): consequential edit — internal/tune/doc.go: made necessary by the rebuild now reusing the rasterizer and caption faces through render (the old "reusing the rasterizer" sentence was false since item 4).
+NOTES (2026-10-18): consequential edit — internal/tune/frame_test.go: made necessary by `render.Build` taking `BuildOptions`.
+NOTES (2026-10-18): package-layout's tune row drops `compose` and `raster` from its imports (no non-test tune file imports them since item 4).
 
 Depends on item 4.
 

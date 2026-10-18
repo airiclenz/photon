@@ -44,7 +44,7 @@ func (f sessionFixture) renderedFrame(t *testing.T, out time.Duration) *image.RG
 	if err != nil {
 		t.Fatalf("take.Load: %v", err)
 	}
-	built, err := render.Build(loaded, f.takePath, recorded, newRasterCache(rasterCacheBytes))
+	built, err := render.Build(loaded, f.takePath, recorded, render.BuildOptions{Cache: newRasterCache(rasterCacheBytes)})
 	if err != nil {
 		t.Fatalf("render.Build: %v", err)
 	}

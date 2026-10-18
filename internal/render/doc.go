@@ -18,9 +18,13 @@
 // resolved on.
 //
 // Every frame comes from one [Pipeline]: [Build] checks the take's frame size, schedules it and
-// builds the rasterizer, the target resolver and the compositor, and the pipeline answers the
-// frame, the screen, a cell or a cell box's pixels by output time, rasterized snapshots kept in
-// the [RasterCache] it is given (a render keeps the last one).
+// builds the rasterizer, the caption faces, the target resolver and the compositor, and the
+// pipeline answers the frame, the screen, a cell or a cell box's pixels by output time,
+// rasterized snapshots kept in the [RasterCache] it is given (a render keeps the last one).
+// [BuildOptions] may name an earlier pipeline to reuse: its rasterizer and raster cache carry
+// over while the take, the raster geometry, the terminal fonts and the theme match, and its
+// caption faces while the caption font files do, so a rebuild after an edit loads no caption
+// font again.
 //
 // It imports clip, schedule, raster, compose, fonts, target, storyboard and take, and runs ffmpeg
 // and gifsicle as programs.
@@ -28,9 +32,11 @@
 // The file map:
 //   - doc.go: this package comment and file map.
 //   - render.go: [Run], its [Options], the render plan (take, pipeline, palette and output
-//     paths) and the summary.
-//   - pipeline.go: [Pipeline] and [Build], the frame-size check, [ErrOutsideClip], the
-//     [RasterCache] seam and the render's reuse-last cache.
+//     paths), the rasterizer, caption faces and compositor a pipeline is built from, and the
+//     summary.
+//   - pipeline.go: [Pipeline], [Build] and its [BuildOptions] with the reuse rules, the
+//     frame-size check, [ErrOutsideClip], the [RasterCache] seam and the render's reuse-last
+//     cache.
 //   - encode.go: the palette pass's and the GIF pass's ffmpeg command lines, streaming the frames
 //     into each, and the gifsicle pass.
 package render

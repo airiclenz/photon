@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
@@ -131,7 +132,7 @@ func newPlan(loaded *clip.Clip, options Options, stderr io.Writer) (*plan, error
 	if err != nil {
 		return nil, err
 	}
-	frames, err := Build(loaded, takePath, recorded, newLastRaster())
+	frames, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster()})
 	if frames != nil {
 		if warnErr := writeWarnings(stderr, frames.Schedule()); warnErr != nil {
 			return nil, warnErr
@@ -187,50 +188,52 @@ func palettePath(loaded *clip.Clip) (string, error) {
 	return filepath.Join(work, loaded.Storyboard.Clip+paletteSuffix), nil
 }
 
-// NewRasterizer builds the rasterizer over the config's fonts and theme at the geometry of the
-// storyboard's frame, scaled by frame.scale. It fails when a font cannot be loaded or the geometry
-// is refused by [raster.New].
-func NewRasterizer(loaded *clip.Clip) (*raster.Rasterizer, error) {
-	frame := loaded.Storyboard.Frame
+// newRasterizer builds the rasterizer over the config's fonts and theme at the frame's
+// [rasterGeometry]. It fails when a font cannot be loaded or the geometry is refused by
+// [raster.New].
+func newRasterizer(loaded *clip.Clip) (*raster.Rasterizer, error) {
 	faces, err := fonts.Load(loaded.Config.Fonts)
 	if err != nil {
 		return nil, err
 	}
-	return raster.New(faces, loaded.Config.Theme, raster.Geometry{
+	return raster.New(faces, loaded.Config.Theme, rasterGeometry(loaded.Storyboard.Frame))
+}
+
+// rasterGeometry is the geometry a rasterizer draws frame at: its cells, padding and font size
+// scaled by frame.scale. Width, fps and max_colors apply after rasterizing and play no part.
+func rasterGeometry(frame storyboard.Frame) raster.Geometry {
+	return raster.Geometry{
 		Cols:       frame.Cols,
 		Rows:       frame.Rows,
 		Padding:    frame.Padding * frame.Scale,
 		FontSize:   frame.FontSize * float64(frame.Scale),
 		LineHeight: frame.LineHeight,
-	})
-}
-
-// NewCompositor plans the camera, the cursor and the captions over the rasterizer's cell layout,
-// resolving zoom and pan targets through the config's areas, clearing a zoomed frame to the theme
-// background and drawing captions in the config's caption faces. The rasterizer must be the one
-// [NewRasterizer] built for the same clip, so the layout matches the frames it draws. It fails
-// when an area, a zoom target or a camera pan's target does not resolve, when a caption face
-// cannot be loaded, and when a caption cannot be laid out.
-func NewCompositor(
-	loaded *clip.Clip,
-	recorded *take.Take,
-	clipSchedule *schedule.Schedule,
-	rasterizer *raster.Rasterizer,
-) (*compose.Compositor, error) {
-	resolver, err := target.New(loaded.Config.Areas)
-	if err != nil {
-		return nil, err
 	}
-	return newCompositor(loaded, recorded, clipSchedule, rasterizer, resolver)
 }
 
-// newCompositor is [NewCompositor] over a target resolver already built from the config's areas.
+// captionLoads counts the caption-font loads [loadCaptionFaces] made in this process, so a test
+// can tell a reused build from one that loaded its own faces.
+var captionLoads atomic.Int64
+
+// loadCaptionFaces parses the caption faces the config's `caption_font` names, or the embedded
+// ones. It fails when a caption face cannot be loaded.
+func loadCaptionFaces(loaded *clip.Clip) (fonts.CaptionSet, error) {
+	captionLoads.Add(1)
+	return fonts.LoadCaption(loaded.Config.CaptionFont.Regular, loaded.Config.CaptionFont.Bold)
+}
+
+// newCompositor plans the camera, the cursor and the captions over the rasterizer's cell layout,
+// resolving zoom and pan targets through resolver, clearing a zoomed frame to the theme
+// background and drawing captions in captionFaces. The rasterizer must be one built at the
+// clip's [rasterGeometry], so the layout matches the frames it draws. It fails when a zoom target
+// or a camera pan's target does not resolve and when a caption cannot be laid out.
 func newCompositor(
 	loaded *clip.Clip,
 	recorded *take.Take,
 	clipSchedule *schedule.Schedule,
 	rasterizer *raster.Rasterizer,
 	resolver target.Resolver,
+	captionFaces fonts.CaptionSet,
 ) (*compose.Compositor, error) {
 	frame := loaded.Storyboard.Frame
 	layout := compose.Layout{
@@ -239,10 +242,6 @@ func newCompositor(
 		CellWidth:  rasterizer.CellWidth(),
 		LineHeight: rasterizer.LineHeight(),
 		Scale:      frame.Scale,
-	}
-	captionFaces, err := fonts.LoadCaption(loaded.Config.CaptionFont.Regular, loaded.Config.CaptionFont.Bold)
-	if err != nil {
-		return nil, err
 	}
 	background := loaded.Config.Theme.BG.RGBA()
 	return compose.New(loaded.Storyboard, recorded, clipSchedule, resolver, layout, background, captionFaces)

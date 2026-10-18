@@ -53,7 +53,9 @@ type Session struct {
 	takeErr error
 	// recorded is the take every build schedules and composes.
 	recorded *take.Take
-	history  history
+	// buildPipeline is [render.Build]; a test wraps it to see what each build is given.
+	buildPipeline func(*clip.Clip, string, *take.Take, render.BuildOptions) (*render.Pipeline, error)
+	history       history
 	// current is what the current bytes built, up to the stage that failed; good is the last
 	// pipeline that built in full.
 	current pipeline
@@ -70,14 +72,11 @@ type Session struct {
 // clip cross-checked, and the render pipeline every frame, screen, cell and rect of the preview
 // comes from. A pipeline that failed to build holds the stages before the failure and nil for the
 // rest; frames is nil when the take was recorded at another frame size or does not schedule, and
-// partial when a later stage failed. recorded is the take frames was built on, and rasters the
-// cache it keeps its rasterized snapshots in.
+// partial when a later stage failed.
 type pipeline struct {
-	board    *storyboard.Storyboard
-	loaded   *clip.Clip
-	recorded *take.Take
-	rasters  *rasterCache
-	frames   *render.Pipeline
+	board  *storyboard.Storyboard
+	loaded *clip.Clip
+	frames *render.Pipeline
 }
 
 // fileStamp is what tells a rewritten take apart without reading it.
@@ -112,13 +111,14 @@ func NewSession(loaded *clip.Clip, takePath string) (*Session, error) {
 	}
 
 	s := &Session{
-		path:      loaded.Storyboard.Path,
-		takePath:  takePath,
-		base:      loaded,
-		disk:      src,
-		takeStamp: stamp,
-		recorded:  recorded,
-		history:   newHistory(src),
+		path:          loaded.Storyboard.Path,
+		takePath:      takePath,
+		base:          loaded,
+		disk:          src,
+		takeStamp:     stamp,
+		recorded:      recorded,
+		buildPipeline: render.Build,
+		history:       newHistory(src),
 	}
 	built, err := s.build(src)
 	if err != nil {
@@ -331,10 +331,11 @@ func (s *Session) rebuild() {
 }
 
 // build parses src and builds the render pipeline on it against the take. On an error the
-// pipeline returned holds the stages built before it. The raster cache is the good pipeline's own
-// while the take and the frame's raster geometry are unchanged.
+// pipeline returned holds the stages built before it. The build is given the good pipeline to
+// reuse, so its rasterizer, raster cache and caption faces carry over where render finds them
+// unchanged, and the caption fonts load once a session.
 func (s *Session) build(src []byte) (pipeline, error) {
-	built := pipeline{recorded: s.recorded}
+	var built pipeline
 	board, err := storyboard.Parse(src, s.path)
 	if err != nil {
 		return built, err
@@ -343,30 +344,11 @@ func (s *Session) build(src []byte) (pipeline, error) {
 	if built.loaded, err = s.base.WithStoryboard(board); err != nil {
 		return built, err
 	}
-	built.rasters = s.rasterCacheFor(board.Frame)
-	built.frames, err = render.Build(built.loaded, s.takePath, s.recorded, built.rasters)
+	built.frames, err = s.buildPipeline(built.loaded, s.takePath, s.recorded, render.BuildOptions{
+		Cache: newRasterCache(rasterCacheBytes),
+		Reuse: s.good.frames,
+	})
 	return built, err
-}
-
-// rasterCacheFor returns the good pipeline's raster cache when it drew the same take at the same
-// raster geometry as frame, else a new, empty cache. The old cache is left as it is, never
-// emptied, so a frame still drawn against the old pipeline cannot put its rasters into the new
-// one.
-func (s *Session) rasterCacheFor(frame storyboard.Frame) *rasterCache {
-	good := s.good
-	isReusable := good.rasters != nil && good.recorded == s.recorded &&
-		rasterGeometry(good.board.Frame) == rasterGeometry(frame)
-	if isReusable {
-		return good.rasters
-	}
-	return newRasterCache(rasterCacheBytes)
-}
-
-// rasterGeometry is frame without the fields the compositor and encoder apply after
-// rasterizing — width, fps and max_colors — which a rasterizer does not depend on.
-func rasterGeometry(frame storyboard.Frame) storyboard.Frame {
-	frame.Width, frame.FPS, frame.MaxColors = 0, 0, 0
-	return frame
 }
 
 // stampOf reads the size and modification time of the file at path.
