@@ -132,7 +132,11 @@ measured time per request on this host is logged on `tune-preview-playback-speed
 
 **Commit:** `test(tune): benchmark a draft frame request`
 
-## 3. Start a pan from the centre the crop shows
+## 3. Start a pan from the centre the crop shows — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the shared clamp is `cropAround(size, factor, centre)` in compose.go; `(*Compositor).crop` now always evaluates `centreAt`, also at a factor of 1, where it used to skip it.
+NOTES (2026-10-18): no CHANGELOG entry: camera pan moves (the only pans with a laid path; beat-zoom aims are instant) are still unreleased under [Unreleased], so no shipped version had the defect.
+NOTES (2026-10-18): rewrapped the reflowed camera paragraph of internal/compose/doc.go (from "every frame scales" to its end) so every line is at most 100 columns.
 
 **What:**
 Fix for `zoom-target-bleed`, a defect in `newCamera`'s path laying since camera pans landed: each

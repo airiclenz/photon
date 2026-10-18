@@ -23,7 +23,7 @@ type move[V any] struct {
 }
 
 // panSegment is a move of the pan track with the path it carries the crop's centre along: from
-// the centre the track holds at the move's start, through the move's Via, to its To.
+// the centre the crop shows at the move's start, through the move's Via, to its To.
 type panSegment struct {
 	move[pointF]
 	route path
@@ -45,20 +45,26 @@ type camera struct {
 }
 
 // newCamera is the camera of zooms and pans over a frame laid out as layout, each track sorted
-// by start. Each pan's path is laid once here, from where the pan track rests or the previous pan
-// ended.
+// by start. Each pan's path is laid once here, from the centre of the crop shown at the pan's
+// start: the frame's centre where the factor there is 1 or below, else the centre the track
+// holds, clamped as the crop clamps it. A zoom-out to 1× so hides the centre an earlier pan ended
+// on, and a later push-in never heads back to it; the track still holds that centre, so the next
+// zoom aims there.
 func newCamera(layout Layout, zooms []move[float64], pans []move[pointF]) camera {
 	sortByStart(zooms)
 	sortByStart(pans)
 	rest := pointF{X: float64(layout.Size.X) / 2, Y: float64(layout.Size.Y) / 2}
+	clipCamera := camera{zoom: zooms, rest: rest}
 	segments := make([]panSegment, 0, len(pans))
 	held := rest
 	for _, pan := range pans {
-		route := newPath(held, append(slices.Clone(pan.Via), pan.To))
+		shown := cropAround(layout.Size, clipCamera.factorAt(pan.Start), held).centre()
+		route := newPath(shown, append(slices.Clone(pan.Via), pan.To))
 		segments = append(segments, panSegment{move: pan, route: route})
 		held = pan.To
 	}
-	return camera{zoom: zooms, pan: segments, rest: rest}
+	clipCamera.pan = segments
+	return clipCamera
 }
 
 // factorAt is the magnification at output time t. A zoom move eases the factor's exponent, so
@@ -163,7 +169,7 @@ func (p zoomPlanner) planMoves(
 
 // planPan is the pan move on the output clock with its points resolved to source pixels: its To,
 // or the last of its Via as the destination and the rest as the waypoints between. Where the
-// path starts is the camera's business: the centre its pan track holds at the move's start. The
+// path starts is the camera's business: the centre its crop shows at the move's start. The
 // pan comes from a parsed storyboard, so it has a To or a Via of at least two points.
 func (p zoomPlanner) planPan(
 	pan storyboard.PanMove,

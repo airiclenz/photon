@@ -220,16 +220,20 @@ func (c *Compositor) compose(
 	return dst
 }
 
-// crop is the source rectangle the camera shows at output time t: the whole frame at a factor of
-// 1, else a frame-shaped rectangle 1/factor its size centred on the camera's centre and clamped
-// inside the frame.
+// crop is the source rectangle the camera shows at output time t, as [cropAround] lays it from
+// the camera's factor and centre at t.
 func (c *Compositor) crop(t time.Duration) rectF {
-	full := rectF{W: float64(c.layout.Size.X), H: float64(c.layout.Size.Y)}
-	factor := c.camera.factorAt(t)
+	return cropAround(c.layout.Size, c.camera.factorAt(t), c.camera.centreAt(t))
+}
+
+// cropAround is the source rectangle a camera magnified by factor shows around centre on a frame
+// of size: the whole frame at a factor of 1 or below, else a frame-shaped rectangle 1/factor its
+// size centred on centre and clamped inside the frame.
+func cropAround(size image.Point, factor float64, centre pointF) rectF {
+	full := rectF{W: float64(size.X), H: float64(size.Y)}
 	if factor <= 1 {
 		return full
 	}
-	centre := c.camera.centreAt(t)
 	w, h := full.W/factor, full.H/factor
 	return rectF{
 		X: math.Min(math.Max(centre.X-w/2, 0), full.W-w),

@@ -108,6 +108,51 @@ func TestCameraTracksHoldBetweenMoves(t *testing.T) {
 	}
 }
 
+func TestCameraPanAfterAZoomOutStartsFromTheFrameCentre(t *testing.T) {
+	t.Parallel()
+	rest, first, second := pointF{X: 500, Y: 300}, pointF{X: 300, Y: 200}, pointF{X: 700, Y: 400}
+	clipCamera := newCamera(cameraLayout, []move[float64]{
+		{Start: 0, Over: sec, To: 2},
+		{Start: 2 * sec, Over: sec, To: 1},
+		{Start: 4 * sec, Over: sec, To: 2},
+	}, []move[pointF]{
+		{Start: 0, Over: sec, To: first},
+		{Start: 4 * sec, Over: sec, To: second},
+	})
+	const samples = 20
+
+	path := make([]pointF, 0, samples+1)
+	for step := range samples + 1 {
+		path = append(path, clipCamera.centreAt(4*sec+time.Duration(step)*sec/samples))
+	}
+
+	if start := path[0]; math.Abs(start.X-rest.X) > 1e-6 || math.Abs(start.Y-rest.Y) > 1e-6 {
+		t.Errorf("second pan's start: want the frame centre %+v, got %+v", rest, start)
+	}
+	for step := 1; step < len(path); step++ {
+		if distance(path[step], first) < distance(path[step-1], first)-1e-9 {
+			t.Errorf("sample %d at %+v is nearer the first pan's end %+v than sample %d at %+v",
+				step, path[step], first, step-1, path[step-1])
+		}
+	}
+}
+
+func TestCameraPanStartsFromTheClampedCentre(t *testing.T) {
+	t.Parallel()
+	corner, clamped := pointF{X: 100, Y: 100}, pointF{X: 250, Y: 150}
+	clipCamera := newCamera(cameraLayout, []move[float64]{{Start: 0, To: 2}}, []move[pointF]{
+		{Start: 0, Over: sec, To: corner},
+		{Start: 2 * sec, Over: sec, To: pointF{X: 700, Y: 300}},
+	})
+
+	got := clipCamera.centreAt(2 * sec)
+
+	// At 2x the crop is 500 x 300, so its centre stays at least 250 x 150 inside the frame.
+	if math.Abs(got.X-clamped.X) > 1e-6 || math.Abs(got.Y-clamped.Y) > 1e-6 {
+		t.Errorf("centre at the second pan's start: want %+v, got %+v", clamped, got)
+	}
+}
+
 func TestCameraPanFollowsItsPath(t *testing.T) {
 	t.Parallel()
 	rest, peak, side := pointF{X: 500, Y: 300}, pointF{X: 700, Y: 100}, pointF{X: 900, Y: 300}
@@ -136,8 +181,8 @@ func TestCameraPanFollowsItsPath(t *testing.T) {
 			want: lerp(rest, side, easeInOut(0.25)),
 		},
 		{
-			name: "a pan starts where the previous one ended",
-			pans: []move[pointF]{{Start: 3 * sec, Over: 2 * sec, To: rest}, {Start: 0, Over: sec, To: side}},
+			name: "a pan at 1x starts from the frame centre",
+			pans: []move[pointF]{{Start: 3 * sec, Over: 2 * sec, To: side}, {Start: 0, Over: sec, To: peak}},
 			at:   4 * sec,
 			want: pointF{X: 700, Y: 300},
 		},
@@ -196,7 +241,9 @@ func TestComposePlansOverlappingCameraMovesAcrossBeats(t *testing.T) {
 	rest := pointF{X: 500, Y: 300}
 	alpha := testLayout.boxRect(take.Box{X: 5, Y: 2, W: 5, H: 1}).centre()
 	omega := testLayout.boxRect(take.Box{X: 30, Y: 11, W: 5, H: 1}).centre()
-	curve := newPath(alpha, []pointF{testLayout.cellCentre(10, 3), omega})
+	// The crop is clamped at 2x, so the via pan starts from the centre it shows, not alpha's.
+	clampedAlpha := pointF{X: 250, Y: 150}
+	curve := newPath(clampedAlpha, []pointF{testLayout.cellCentre(10, 3), omega})
 	for _, tc := range []struct {
 		name       string
 		at         time.Duration
@@ -207,7 +254,7 @@ func TestComposePlansOverlappingCameraMovesAcrossBeats(t *testing.T) {
 		{name: "zoom-in half-way, first pan starts", at: 2 * sec, wantFactor: math.Sqrt2, wantCentre: rest},
 		{name: "zoom-in ends, first pan half-way", at: 3 * sec, wantFactor: 2, wantCentre: lerp(rest, alpha, 0.5)},
 		{name: "first pan ends on the next beat", at: 4 * sec, wantFactor: 2, wantCentre: alpha},
-		{name: "via pan starts", at: 5 * sec, wantFactor: 2, wantCentre: alpha},
+		{name: "via pan starts", at: 5 * sec, wantFactor: 2, wantCentre: clampedAlpha},
 		{name: "zoom-out starts during the via pan", at: 6 * sec, wantFactor: 2, wantCentre: curve.at(easeInOut(1.0 / 3))},
 		{
 			name:       "via pan half-way",
