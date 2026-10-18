@@ -548,7 +548,11 @@ Depends on item 21.
 - `test ! -e internal/tune/value.go && test ! -e internal/tune/edit_camera.go && test ! -e internal/tune/edit_caption.go`
 **Commit:** `refactor(storyboard): own typed camera and caption edits`
 
-## 23. Storyboard describes its editable fields
+## 23. Storyboard describes its editable fields — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): Field's read-only flag is the Go field `IsReadOnly` (json `read_only`), not `ReadOnly`: the house boolean rule wants an is/has/can prefix; the json tags are exactly owner, name, kind, choices, default, read_only (pinned by TestField_JSONKeys).
+NOTES (2026-10-18): Default is uniformly the value an absent key means — the decoded zero value, or what applyDefaults fills (zoom ramps 1000, ease "smooth", place "bottom", align "middle") — typed as an Edit types it, with null for a pointer an absent key leaves unset (zoom, caption.until, a pan's camera.to) and `{"text":""}` for zoom.target. On every-form.yaml that refuses more Defaults than the plan listed: besides cut on beat 4, duration on beats 1–3, frame.width, caption.for, zoom null on beats 1 and 4 and camera.to on camera[4], also frame.fps 0, zoom.target on beats 2–3, camera.over 0 on every move, camera.to on camera[0]–[3] (0 on a zoom move, null on a pan), camera.at at the clip start on camera[1], [3] and [4] (overlaps), and caption.text "". All of them are listed in fields_test.go's defaultRefusals with a valid sample each, and two have none: beat 1's zoom (it overlaps beat 1's camera moves) and camera[4]'s camera.to (a via pan).
+NOTES (2026-10-18): the read-only fields are the clip's frame keys only (cols, rows, padding, font_size, line_height, scale, max_colors), derived from Frame's yaml tags; a beat's pauses and a via pan's points are not described. A zoomless beat lists no zoom.* sub-field, since Apply refuses them there; camera.to is a decimal on a zoom move and a point on a pan.
 
 Depends on item 22.
 

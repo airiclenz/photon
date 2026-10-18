@@ -1,0 +1,171 @@
+package storyboard
+
+import (
+	"encoding/json"
+	"reflect"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+// FieldKind is the kind of value a [Field] holds, which says how an [Edit] types it.
+type FieldKind string
+
+// The spellings of FieldKind.
+const (
+	// KindDuration is a whole number of milliseconds.
+	KindDuration FieldKind = "duration"
+	// KindCount is a whole number.
+	KindCount FieldKind = "count"
+	// KindDecimal is a number.
+	KindDecimal FieldKind = "decimal"
+	// KindBool is true or false.
+	KindBool FieldKind = "bool"
+	// KindEnum is one of the field's Choices.
+	KindEnum FieldKind = "enum"
+	// KindText is a string.
+	KindText FieldKind = "text"
+	// KindMoment is a moment on the clip's output clock, {"beat": 3, "offset_ms": 200}.
+	KindMoment FieldKind = "moment"
+	// KindTarget is an on-screen target, {"text": "ok", "nth": 2, "area": "list"}.
+	KindTarget FieldKind = "target"
+	// KindPoint is a target or a cell of the terminal grid, {"cell": {"x": 3, "y": 4}}.
+	KindPoint FieldKind = "point"
+)
+
+// Field describes one field of a storyboard's owner — the clip, a beat, a camera move or a
+// caption — as photon tune's page shows it: its Name, the kind of value it holds, the Choices of
+// an enum, and its Default, the value it holds when the storyboard leaves its key out (the zero
+// value, or what [Load] fills in), typed as an [Edit] types it; null is a field an absent key
+// leaves unset. An editable field's Name is the field an [Edit] names; a read-only field is one of
+// the frame's keys photon tune shows but does not edit, named by that key alone.
+type Field struct {
+	Owner      Owner           `json:"owner"`
+	Name       string          `json:"name"`
+	Kind       FieldKind       `json:"kind"`
+	Choices    []string        `json:"choices"`
+	Default    json.RawMessage `json:"default"`
+	IsReadOnly bool            `json:"read_only"`
+}
+
+// frameFieldPrefix starts the name of the frame fields an [Edit] names.
+const frameFieldPrefix = "frame."
+
+// The defaults a field's absent key means, typed as an [Edit] types them: zero, false,
+// no text, a target with no text, and a moment at the clip's first frame.
+const (
+	defaultZero      = "0"
+	defaultFalse     = "false"
+	defaultText      = `""`
+	defaultTarget    = `{"text":""}`
+	defaultClipStart = `{"beat":0,"offset_ms":0}`
+)
+
+// The choices of the enum fields, in the order the page offers them.
+var (
+	easeChoices  = []string{string(EaseSmooth), string(EaseLinear)}
+	placeChoices = []string{string(PlaceTop), string(PlaceMiddle), string(PlaceBottom)}
+	alignChoices = []string{string(AlignLeft), string(AlignMiddle), string(AlignRight)}
+)
+
+// Fields describes every field of board's owners, the editable and the read-only: the clip's
+// frame fields in the frame's key order, then each beat's, camera move's and caption's in
+// storyboard order. A beat lists its zoom's fields only when it zooms, and a camera move's
+// camera.to is a decimal on a zoom move and a point on a pan.
+func Fields(board *Storyboard) []Field {
+	fields := clipFields()
+	for _, beat := range board.Beats {
+		fields = append(fields, beatFields(beat)...)
+	}
+	for index, move := range board.Camera {
+		fields = append(fields, cameraFields(index, move)...)
+	}
+	for index := range board.Captions {
+		fields = append(fields, captionFields(index)...)
+	}
+	return fields
+}
+
+// clipFields describes the frame's fields in its field order, each keyed as its yaml tag names it:
+// frame.width and frame.fps, which an [Edit] names, and the rest read-only under their bare key.
+// A floating-point field is a decimal and every other a count; each defaults to zero.
+func clipFields() []Field {
+	frame := reflect.TypeFor[Frame]()
+	owner := Owner{Kind: OwnerClip}
+	fields := make([]Field, 0, frame.NumField())
+	for goField := range frame.Fields() {
+		key, _, _ := strings.Cut(goField.Tag.Get(yamlTag), tagSeparator)
+		described := Field{Owner: owner, Name: frameFieldPrefix + key, Kind: KindCount, Default: raw(defaultZero)}
+		if kind := goField.Type.Kind(); kind == reflect.Float32 || kind == reflect.Float64 {
+			described.Kind = KindDecimal
+		}
+		if !slices.Contains(editFields, described.Name) {
+			described.Name, described.IsReadOnly = key, true
+		}
+		fields = append(fields, described)
+	}
+	return fields
+}
+
+// beatFields describes beat's fields: its timing, its cut and its zoom, with the zoom's own
+// fields when it zooms. An absent zoom ramp runs [DefaultZoomRamp].
+func beatFields(beat Beat) []Field {
+	owner := Owner{Kind: OwnerBeat, Index: beat.ID}
+	fields := []Field{
+		{Owner: owner, Name: FieldDuration, Kind: KindDuration, Default: raw(defaultZero)},
+		{Owner: owner, Name: FieldHold, Kind: KindDuration, Default: raw(defaultZero)},
+		{Owner: owner, Name: FieldCut, Kind: KindBool, Default: raw(defaultFalse)},
+		{Owner: owner, Name: FieldZoom, Kind: KindTarget, Default: raw(jsonNull)},
+	}
+	if beat.Zoom == nil {
+		return fields
+	}
+	ramp := strconv.FormatInt(DefaultZoomRamp.Milliseconds(), 10)
+	return append(fields,
+		Field{Owner: owner, Name: FieldZoomTarget, Kind: KindTarget, Default: raw(defaultTarget)},
+		Field{Owner: owner, Name: FieldZoomFactor, Kind: KindDecimal, Default: raw(defaultZero)},
+		Field{Owner: owner, Name: FieldZoomIn, Kind: KindDuration, Default: raw(ramp)},
+		Field{Owner: owner, Name: FieldZoomOut, Kind: KindDuration, Default: raw(ramp)},
+	)
+}
+
+// cameraFields describes the fields of move, the camera move at index: its start, length and
+// ease, and its destination — a zoom move's factor, or a pan's target or cell, which a via path
+// has none of.
+func cameraFields(index int, move CameraMove) []Field {
+	owner := Owner{Kind: OwnerCamera, Index: index}
+	to := Field{Owner: owner, Name: FieldCameraTo, Kind: KindDecimal, Default: raw(defaultZero)}
+	if move.Pan != nil {
+		to.Kind, to.Default = KindPoint, raw(jsonNull)
+	}
+	return []Field{
+		{Owner: owner, Name: FieldCameraAt, Kind: KindMoment, Default: raw(defaultClipStart)},
+		{Owner: owner, Name: FieldCameraOver, Kind: KindDuration, Default: raw(defaultZero)},
+		{Owner: owner, Name: FieldCameraEase, Kind: KindEnum, Choices: slices.Clone(easeChoices), Default: quoted(string(EaseSmooth))},
+		to,
+	}
+}
+
+// captionFields describes the fields of the caption at index: its start, its end — a for or an
+// until — its text, and where it sits.
+func captionFields(index int) []Field {
+	owner := Owner{Kind: OwnerCaption, Index: index}
+	return []Field{
+		{Owner: owner, Name: FieldCaptionAt, Kind: KindMoment, Default: raw(defaultClipStart)},
+		{Owner: owner, Name: FieldCaptionFor, Kind: KindDuration, Default: raw(defaultZero)},
+		{Owner: owner, Name: FieldCaptionUntil, Kind: KindMoment, Default: raw(jsonNull)},
+		{Owner: owner, Name: FieldCaptionText, Kind: KindText, Default: raw(defaultText)},
+		{Owner: owner, Name: FieldCaptionPlace, Kind: KindEnum, Choices: slices.Clone(placeChoices), Default: quoted(string(PlaceBottom))},
+		{Owner: owner, Name: FieldCaptionAlign, Kind: KindEnum, Choices: slices.Clone(alignChoices), Default: quoted(string(AlignMiddle))},
+	}
+}
+
+// raw is text, a JSON value, in bytes of its own, so no two fields share a Default.
+func raw(text string) json.RawMessage {
+	return json.RawMessage(text)
+}
+
+// quoted is text as a JSON string.
+func quoted(text string) json.RawMessage {
+	return json.RawMessage(strconv.Quote(text))
+}

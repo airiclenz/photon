@@ -267,6 +267,29 @@ func TestSession_State_ReportsTheReadOnlyFrame(t *testing.T) {
 	}
 }
 
+func TestSession_State_ReadOnlyClipFields_AreStateKeys(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixture(t)
+	stateKeys := jsonKeys(t, State{})
+
+	state := f.session.State()
+
+	var readOnly []string
+	for _, field := range state.Fields {
+		if field.IsReadOnly && field.Owner.Kind == storyboard.OwnerClip {
+			readOnly = append(readOnly, field.Name)
+		}
+	}
+	if len(readOnly) == 0 {
+		t.Fatalf("state fields %+v describe no read-only clip field", state.Fields)
+	}
+	for _, name := range readOnly {
+		if !stateKeys[name] {
+			t.Errorf("the read-only clip field %s is no key /api/state sends", name)
+		}
+	}
+}
+
 func TestSession_State_ReportsCameraMovesAndCaptions(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)

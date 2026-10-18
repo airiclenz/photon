@@ -11,9 +11,10 @@ import (
 
 // State is everything the page shows of a session, as `/api/state` sends it. Durations are
 // whole milliseconds, the spelling an [Edit] takes. Beats, Camera and Captions come from the
-// current storyboard; Sections, Warnings and Length from its schedule, or from the last good
-// pipeline's while the current bytes do not schedule. Version rises on every change, so a page that saw it already
-// has nothing new to draw.
+// current storyboard, and so does Fields, the description of every field the page shows; Sections,
+// Warnings and Length from its schedule, or from the last good pipeline's while the current bytes
+// do not schedule. Version rises on every change, so a page that saw it already has nothing new
+// to draw.
 type State struct {
 	Version  int            `json:"version"`
 	Beats    []BeatState    `json:"beats"`
@@ -33,6 +34,10 @@ type State struct {
 	LineHeight float64 `json:"line_height"`
 	Scale      int     `json:"scale"`
 	MaxColors  int     `json:"max_colors"`
+
+	// Fields describes every field of the storyboard's owners, a read-only frame field under the
+	// key it is sent as above.
+	Fields []storyboard.Field `json:"fields"`
 
 	Errors  []Problem `json:"errors"`
 	IsDirty bool      `json:"dirty"`
@@ -175,6 +180,7 @@ func (s *Session) State() State {
 		LineHeight: board.Frame.LineHeight,
 		Scale:      board.Frame.Scale,
 		MaxColors:  board.Frame.MaxColors,
+		Fields:     storyboard.Fields(board),
 		Errors:     append([]Problem{}, s.problems...),
 		IsDirty:    s.isDirty(),
 		IsStale:    s.isStale,
