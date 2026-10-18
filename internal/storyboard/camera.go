@@ -94,13 +94,13 @@ type moveTiming struct {
 
 // validateCamera checks every camera move's form and its place on the clip's clock, then that no
 // two moves on one track overlap and that no move overlaps a kept beat's zoom section. Problems
-// are filed under camera[i].
-func (s *Storyboard) validateCamera(report reporter) {
+// are filed under camera[i], an overlap under the later move.
+func (s *Storyboard) validateCamera(collect collector) {
 	held := map[string][]span{trackZoom: nil, trackPan: nil}
 	beatZooms := s.beatZoomSpans()
 	for index, move := range s.Camera {
 		holder := fmt.Sprintf("camera[%d]", index)
-		moveReport := prefixed(report, holder+": ")
+		moveReport := collect.at(Owner{Kind: OwnerCamera, Index: index})
 		track, timing, isFormValid := move.validateForm(s.Frame, moveReport)
 		if !isFormValid {
 			continue

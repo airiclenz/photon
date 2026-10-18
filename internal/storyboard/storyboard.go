@@ -118,7 +118,8 @@ func (s *Storyboard) applyDefaults() {
 	}
 }
 
-// ValidationError lists every rule a storyboard breaks.
+// ValidationError lists every rule a storyboard breaks. A problem that belongs to one beat,
+// camera move or caption is a *[LocatedError]; [OwnerOf] names any problem's owner.
 type ValidationError struct {
 	Path     string
 	Problems []error

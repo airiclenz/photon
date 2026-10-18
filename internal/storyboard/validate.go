@@ -11,6 +11,24 @@ import (
 // reporter collects one validation problem.
 type reporter func(format string, args ...any)
 
+// collector gathers finished validation problems.
+type collector func(problem error)
+
+// unlocated returns a reporter that files every problem as phrased, on the clip as a whole.
+func (c collector) unlocated() reporter {
+	return func(format string, args ...any) {
+		c(fmt.Errorf(format, args...))
+	}
+}
+
+// at returns a reporter that files every problem under owner, as a *[LocatedError] whose own
+// message carries the owner's prefix.
+func (c collector) at(owner Owner) reporter {
+	return func(format string, args ...any) {
+		c(&LocatedError{Owner: owner, Err: fmt.Errorf(format, args...)})
+	}
+}
+
 // prefixed returns a reporter that files every problem under prefix.
 func prefixed(report reporter, prefix string) reporter {
 	return func(format string, args ...any) {
@@ -37,9 +55,8 @@ var areaName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
 // validate applies every schema rule and returns the ones the storyboard breaks.
 func (s *Storyboard) validate() []error {
 	var problems []error
-	report := func(format string, args ...any) {
-		problems = append(problems, fmt.Errorf(format, args...))
-	}
+	collect := collector(func(problem error) { problems = append(problems, problem) })
+	report := collect.unlocated()
 
 	s.validateHeader(report)
 	for index, expect := range s.Expect {
@@ -49,12 +66,12 @@ func (s *Storyboard) validate() []error {
 		report("beats: none declared")
 		return problems
 	}
-	s.validateIDs(report)
+	s.validateIDs(collect)
 	for _, beat := range s.Beats {
-		beat.validate(prefixed(report, fmt.Sprintf("beat %d: ", beat.ID)))
+		beat.validate(collect.at(Owner{Kind: OwnerBeat, Index: beat.ID}))
 	}
-	s.validateCamera(report)
-	s.validateCaptions(report)
+	s.validateCamera(collect)
+	s.validateCaptions(collect)
 	return problems
 }
 
@@ -91,18 +108,20 @@ func (s *Storyboard) validateHeader(report reporter) {
 	}
 }
 
-// validateIDs checks that beat ids are positive, unique and ascending.
-func (s *Storyboard) validateIDs(report reporter) {
+// validateIDs checks that beat ids are positive, unique and ascending. Problems are filed under
+// the beat.
+func (s *Storyboard) validateIDs(collect collector) {
 	seen := make(map[int]bool, len(s.Beats))
 	previous := 0
 	for _, beat := range s.Beats {
+		report := collect.at(Owner{Kind: OwnerBeat, Index: beat.ID})
 		switch {
 		case beat.ID < 1:
-			report("beat %d: id: want ≥1", beat.ID)
+			report("id: want ≥1")
 		case seen[beat.ID]:
-			report("beat %d: id: duplicate", beat.ID)
+			report("id: duplicate")
 		case beat.ID < previous:
-			report("beat %d: id: not ascending (follows %d)", beat.ID, previous)
+			report("id: not ascending (follows %d)", previous)
 		}
 		seen[beat.ID] = true
 		previous = beat.ID

@@ -1,7 +1,6 @@
 package storyboard
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -112,9 +111,9 @@ var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
 // validateCaptions checks every caption's text, font, placement, colours, timing and fades.
 // Problems are filed under captions[i].
-func (s *Storyboard) validateCaptions(report reporter) {
+func (s *Storyboard) validateCaptions(collect collector) {
 	for index, caption := range s.Captions {
-		caption.validate(s, prefixed(report, fmt.Sprintf("captions[%d]: ", index)))
+		caption.validate(s, collect.at(Owner{Kind: OwnerCaption, Index: index}))
 	}
 }
 

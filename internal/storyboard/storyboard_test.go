@@ -2,6 +2,7 @@ package storyboard
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -274,7 +275,11 @@ func TestLoadRejects_Camera(t *testing.T) {
 				t.Fatalf("want a *ValidationError, got %T: %v", err, err)
 			}
 			if got := len(invalid.Problems); got != 1 {
-				t.Errorf("problems: want exactly the one broken rule, got %d:\n%v", got, err)
+				t.Fatalf("problems: want exactly the one broken rule, got %d:\n%v", got, err)
+			}
+			owner := OwnerOf(invalid.Problems[0])
+			if owner.Kind != OwnerCamera || !strings.HasPrefix(tc.want, fmt.Sprintf("camera[%d]: ", owner.Index)) {
+				t.Errorf("owner: want the one %q names, got %+v", tc.want, owner)
 			}
 		})
 	}
@@ -367,7 +372,11 @@ func TestLoadRejects_Captions(t *testing.T) {
 				t.Fatalf("want a *ValidationError, got %T: %v", err, err)
 			}
 			if got := len(invalid.Problems); got != 1 {
-				t.Errorf("problems: want exactly the one broken rule, got %d:\n%v", got, err)
+				t.Fatalf("problems: want exactly the one broken rule, got %d:\n%v", got, err)
+			}
+			owner := OwnerOf(invalid.Problems[0])
+			if owner.Kind != OwnerCaption || !strings.HasPrefix(tc.want, fmt.Sprintf("captions[%d]: ", owner.Index)) {
+				t.Errorf("owner: want the one %q names, got %+v", tc.want, owner)
 			}
 		})
 	}
@@ -542,12 +551,17 @@ beats:
 		`beat 1: do[1]: key.name: unknown key "hyper"`,
 		"beat 1: expect[0]: want exactly one of seen or run",
 	}
+	clip, beat := Owner{Kind: OwnerClip}, Owner{Kind: OwnerBeat, Index: 1}
+	wantOwners := []Owner{clip, clip, beat, beat, beat}
 	if got := len(invalid.Problems); got != len(want) {
 		t.Fatalf("problems: want %d, got %d:\n%v", len(want), got, err)
 	}
 	for index, problem := range invalid.Problems {
 		if !strings.Contains(problem.Error(), want[index]) {
 			t.Errorf("problem %d: want %q, got %q", index, want[index], problem)
+		}
+		if got := OwnerOf(problem); got != wantOwners[index] {
+			t.Errorf("problem %d: owner: want %+v, got %+v", index, wantOwners[index], got)
 		}
 	}
 	if !strings.HasPrefix(err.Error(), path+": 5 problem(s)\n") {

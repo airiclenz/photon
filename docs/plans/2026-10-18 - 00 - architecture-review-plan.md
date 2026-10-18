@@ -171,7 +171,11 @@ Depends on item 4.
 **Closes:** frame-pipeline
 **Commit:** `refactor(render): build the pipeline once and reuse its fonts`
 
-## 6. Storyboard errors carry a typed owner
+## 6. Storyboard errors carry a typed owner — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): consequential edit — internal/storyboard/storyboard.go: made necessary by located.go (the ValidationError doc comment now says a beat, camera or caption problem is a *LocatedError)
+NOTES (2026-10-18): the located reporter is a `collector` type (`unlocated()` and `at(owner)`) beside `prefixed`; validateIDs, validateCamera and validateCaptions now take the collector instead of a reporter
+NOTES (2026-10-18): TestLoadRejects_Camera/_Captions now stop (Fatalf, was Errorf) when the problem count is not one, so the new owner check can read the single problem
 
 **What:**
 **Goal:** `storyboard` exports `Owner{Kind OwnerKind; Index int}` (json `kind`, `index`; kinds `clip`, `beat`, `camera`, `caption`), `LocatedError{Owner; Err}` whose `Error()` renders today's prefix (`beat N: `, `camera[i]: `, `captions[i]: `) before `Err`, `AtBeat`/`AtCamera`/`AtCaption` constructors and `OwnerOf(err) Owner` (outermost located error via `errors.As`, else clip); every storyboard problem that names a beat, camera move or caption is a `LocatedError`; every message text is byte-identical.
