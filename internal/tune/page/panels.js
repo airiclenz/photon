@@ -15,6 +15,7 @@
     fieldRow,
     millisecondsField,
     countField,
+    fieldsOf,
     errorRows,
     needsRecord,
     numberOf,
@@ -24,17 +25,6 @@
   } = page;
   const AUTO_FACTOR = 0;
   const DEFAULT_FACTOR = "2";
-  // READ_ONLY_FRAME_FIELDS are the frame's keys photon tune shows but does not edit, named as the
-  // storyboard and /api/state both spell them.
-  const READ_ONLY_FRAME_FIELDS = [
-    "cols",
-    "rows",
-    "padding",
-    "font_size",
-    "line_height",
-    "scale",
-    "max_colors",
-  ];
 
   // beatPanel is the selected beat's fields, its zoom, its read-only pauses, its report row and
   // the errors standing on it.
@@ -51,15 +41,17 @@
     ];
   }
 
-  // framePanel is the clip's frame: width and fps edit, the rest is read-only here.
+  // framePanel is the clip's frame: width and fps edit, and the fields /api/state describes as
+  // read-only show under their key, which the state sends their value under.
   function framePanel() {
     const state = page.state();
+    const readOnly = fieldsOf(CLIP).filter((field) => field.read_only);
     return [
       element("h2", {}, "Clip frame"),
       countField("width (px)", "frame.width", state.width),
       countField("fps", "frame.fps", state.fps),
-      ...READ_ONLY_FRAME_FIELDS.map((name) =>
-        fieldRow(name, element("span", { className: "read-only" }, String(state[name]))),
+      ...readOnly.map((field) =>
+        fieldRow(field.name, element("span", { className: "read-only" }, String(state[field.name]))),
       ),
       element("p", { className: "read-only" }, "Length " + formatTime(state.length_ms)),
       ...state.warnings.map((warning) => element("p", { className: "error" }, warning)),

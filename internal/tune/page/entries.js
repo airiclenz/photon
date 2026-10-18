@@ -26,9 +26,6 @@
     targetOf,
   } = page;
   const KIND_ZOOM = "zoom";
-  const EASES = ["smooth", "linear"];
-  const PLACES = ["top", "middle", "bottom"];
-  const ALIGNS = ["left", "middle", "right"];
   const CAPTION_TEXT_ROWS = 3;
 
   // entryPanel is a camera move's or caption's fields; what the page does not edit shows
@@ -45,7 +42,7 @@
       element("h2", {}, "camera " + move.index + " " + move.kind),
       momentField("at", owner, "camera.at", move.at),
       millisecondsField("over", owner, "camera.over", move.over_ms),
-      choiceField("ease", owner, "camera.ease", EASES, move.ease),
+      choiceField("ease", owner, "camera.ease", move.ease),
       ...aimRows(owner, move),
       readOnlyRow("plays", formatTime(move.start_ms) + " – " + formatTime(move.end_ms)),
       ...errorRows(owner),
@@ -95,8 +92,8 @@
     const owner = { kind: ENTRY_CAPTION, index: caption.index };
     const placement = caption.place
       ? [
-          choiceField("place", owner, "caption.place", PLACES, caption.place),
-          choiceField("align", owner, "caption.align", ALIGNS, caption.align),
+          choiceField("place", owner, "caption.place", caption.place),
+          choiceField("align", owner, "caption.align", caption.align),
         ]
       : [];
     return [

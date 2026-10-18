@@ -65,11 +65,13 @@
     return fieldRow(label + " (ms)", element("span", { className: "inline" }, beat, after, offset));
   }
 
-  // choiceField edits field as one of choices, chosen now.
-  function choiceField(label, owner, field, choices, chosen) {
-    const input = element("select", {}, ...choices.map((choice) => page.option(choice, choice)));
-    input.value = chosen;
-    input.addEventListener("change", () => applyEdit(owner, field, input.value));
+  // choiceField edits owner's enum field name as one of the choices /api/state describes for it,
+  // chosen now, or the field's default while chosen is empty.
+  function choiceField(label, owner, name, chosen) {
+    const field = fieldsOf(owner).find((candidate) => candidate.name === name);
+    const input = element("select", {}, ...field.choices.map((choice) => page.option(choice, choice)));
+    input.value = chosen || field.default;
+    input.addEventListener("change", () => applyEdit(owner, field.name, input.value));
     return fieldRow(label, input);
   }
 
@@ -110,6 +112,15 @@
     return page
       .state()
       .errors.filter((problem) => problem.owner.kind === wanted.kind && problem.owner.index === wanted.index);
+  }
+
+  // fieldsOf are the fields of owner as /api/state describes them, matched by the owner each
+  // field carries.
+  function fieldsOf(owner) {
+    const wanted = problemOwner(owner);
+    return page
+      .state()
+      .fields.filter((field) => field.owner.kind === wanted.kind && field.owner.index === wanted.index);
   }
 
   // problemOwner spells owner as a problem's or an edit's {kind, index}: the clip, a beat by its
@@ -171,6 +182,7 @@
     momentField,
     choiceField,
     countField,
+    fieldsOf,
     errorRows,
     errorMark,
     problemOwner,

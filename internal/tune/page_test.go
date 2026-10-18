@@ -2,7 +2,6 @@ package tune
 
 import (
 	"bytes"
-	"encoding/json"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -52,7 +51,7 @@ var registeredLanes = []struct {
 
 // entryReaders are the variables the page reads state entries through, each with the state type
 // whose json keys it may name: state.<key>, move.<key>, caption.<key>, moment.<key>,
-// problem.<key> and owner.<key>.
+// problem.<key>, owner.<key> and field.<key>.
 var entryReaders = []struct {
 	variable string
 	of       any
@@ -63,6 +62,7 @@ var entryReaders = []struct {
 	{"moment", MomentState{}},
 	{"problem", Problem{}},
 	{"owner", storyboard.Owner{}},
+	{"field", storyboard.Field{}},
 }
 
 // entryFieldName finds a camera move's or caption's edit field written as a string literal.
@@ -86,15 +86,6 @@ func yamlSpellings(script []byte) []string {
 	}
 	return spellings
 }
-
-// readOnlyFrameFields are the frame keys the Clip frame panel prints, read-only, from the state.
-var readOnlyFrameFields = []string{"cols", "rows", "padding", "font_size", "line_height", "scale", "max_colors"}
-
-// readOnlyFrameList is the READ_ONLY_FRAME_FIELDS array in panels.js; quotedName finds each name in it.
-var (
-	readOnlyFrameList = regexp.MustCompile(`(?s)READ_ONLY_FRAME_FIELDS\s*=\s*\[(.*?)\]`)
-	quotedName        = regexp.MustCompile(`"([^"]+)"`)
-)
 
 // externalFetch finds a URL in fetch position — an attribute, a CSS url(), an ES import or a
 // fetch() — that leaves this server: absolute or protocol-relative. A namespace URI is no fetch.
@@ -270,37 +261,6 @@ func TestPage_App_DefinesTheTuneContract(t *testing.T) {
 	}
 }
 
-func TestPage_App_ReadOnlyFrameFields_AreStateKeys(t *testing.T) {
-	t.Parallel()
-	panels := readPageFile(t, "panels.js")
-	encoded, err := json.Marshal(State{})
-	if err != nil {
-		t.Fatalf("marshal State: %v", err)
-	}
-	var stateKeys map[string]any
-	if err := json.Unmarshal(encoded, &stateKeys); err != nil {
-		t.Fatalf("unmarshal State: %v", err)
-	}
-
-	list := readOnlyFrameList.FindSubmatch(panels)
-
-	if list == nil {
-		t.Fatal("panels.js does not define READ_ONLY_FRAME_FIELDS = [...]")
-	}
-	var names []string
-	for _, match := range quotedName.FindAllSubmatch(list[1], -1) {
-		names = append(names, string(match[1]))
-	}
-	if !slices.Equal(names, readOnlyFrameFields) {
-		t.Errorf("READ_ONLY_FRAME_FIELDS %q, want %q", names, readOnlyFrameFields)
-	}
-	for _, name := range names {
-		if _, ok := stateKeys[name]; !ok {
-			t.Errorf("READ_ONLY_FRAME_FIELDS names %s, which /api/state does not send", name)
-		}
-	}
-}
-
 func TestPage_Picker_CallsPickAndClipboard(t *testing.T) {
 	t.Parallel()
 	picker := string(readPageFile(t, "picker.js"))
@@ -314,20 +274,25 @@ func TestPage_Picker_CallsPickAndClipboard(t *testing.T) {
 
 func TestPage_EntryFields_AreEditFields(t *testing.T) {
 	t.Parallel()
-	fields := storyboard.EditFields()
+	editable := map[string]bool{}
+	for _, field := range newSessionFixtureOf(t, cameraCaptionsStoryboard).session.State().Fields {
+		if !field.IsReadOnly {
+			editable[field.Name] = true
+		}
+	}
 	sent := map[string]bool{}
 
 	for _, name := range pageScripts(t) {
 		for _, match := range entryFieldName.FindAllSubmatch(readPageFile(t, name), -1) {
 			field := string(match[1])
 			sent[field] = true
-			if !slices.Contains(fields, field) {
-				t.Errorf("%s sends the field %s, which an edit does not accept", name, field)
+			if !editable[field] {
+				t.Errorf("%s sends the field %s, which the storyboard does not describe as editable", name, field)
 			}
 		}
 	}
 
-	for _, field := range fields {
+	for field := range editable {
 		isEntryField := strings.HasPrefix(field, "camera.") || strings.HasPrefix(field, "caption.")
 		if isEntryField && !sent[field] {
 			t.Errorf("the page sends no %s edit", field)
@@ -404,8 +369,9 @@ func TestPage_EntryReads_AreStateKeys(t *testing.T) {
 		content := readPageFile(t, name)
 		for _, reader := range entryReaders {
 			keys := jsonKeys(t, reader.of)
-			// A quoted name is an edit field, such as "caption.for", not a read.
-			access := regexp.MustCompile(`(?:^|[^"\w])` + reader.variable + `\.([a-z_]+)`)
+			// A quoted name is an edit field, such as "caption.for", not a read, and a name after
+			// a dot, as in change.field.split, is another variable's member.
+			access := regexp.MustCompile(`(?:^|[^"\w.])` + reader.variable + `\.([a-z_]+)`)
 			for _, match := range access.FindAllSubmatch(content, -1) {
 				if key := string(match[1]); !keys[key] {
 					t.Errorf("%s reads %s.%s, which /api/state does not send", name, reader.variable, key)

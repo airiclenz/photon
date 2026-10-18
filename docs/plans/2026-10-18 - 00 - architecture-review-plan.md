@@ -568,7 +568,10 @@ Depends on item 22.
 - `GOMEMLIMIT=2GiB go test ./internal/tune/`
 **Commit:** `feat(storyboard): describe the editable fields`
 
-## 24. The tune page renders fields from the description
+## 24. The tune page renders fields from the description — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): re-derived from EASES/PLACES/ALIGNS living in app.js — they now sit in entries.js and READ_ONLY_FRAME_FIELDS in panels.js (item 10's split); controls.js gains fieldsOf(owner), the state's Fields matched by owner, which choiceField (now label, owner, name, chosen) reads for choices and the default and framePanel reads for the read-only clip fields.
+NOTES (2026-10-18): TestPage_EntryFields_AreEditFields reads the editable names from the session State's Fields (storyboard.Fields of cameraCaptionsStoryboard) rather than calling storyboard.Fields on a hand-parsed board; storyboard.EditFields stays, still used by storyboard's own fields_test.go.
 
 Depends on item 23.
 
