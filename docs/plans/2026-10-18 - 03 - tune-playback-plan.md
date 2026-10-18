@@ -204,7 +204,12 @@ edit while paused requests the exact frame only; `TestPageJS_LoadsAndWires` and
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune -run 'PageJS|Page'`
 **Commit:** `feat(tune): show draft frames while the preview moves`
 
-## 5. Fetch frames ahead of the playhead
+## 5. Fetch frames ahead of the playhead — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): a play fetches ahead within a window of 8 frames starting at the playhead's frame (PREFETCH_FRAMES), nearest first, with at most 4 requests in flight; the plan does not set the window size.
+NOTES (2026-10-18): item 4's tests TestPageJS_Play_RequestsDraftFrames and TestPageJS_StepWhilePlaying_RequestsNoFrameAtTheStalePlayhead now expect the prefetched drafts (the play asks for the 8-frame window; the step shows the prefetched draft from the cache and asks only for the exact frame), because this item's goal changes what they pinned.
+NOTES (2026-10-18): testdata/dom.js also drops an image load whose src was set again before its task ran, as a browser does, so a replaced load cannot fire the new frame's onload or onerror; testDOM.heldFetches() reports how many answers are held. testDOM.holdFetches takes a resource prefix so edits and state requests still answer at once.
+NOTES (2026-10-18): a frame's object URL is created only when its answer is kept, so an ignored answer (old state version, or a prefetched frame the playhead passed) never makes one to revoke.
 
 Depends on item 4.
 

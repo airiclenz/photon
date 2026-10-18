@@ -1454,7 +1454,21 @@ const (
 const (
 	keyPlay      = " "
 	keyStepAhead = "ArrowRight"
+	keyStepBack  = "ArrowLeft"
 )
+
+// The prefetch of frames.js while playing: the requests it keeps in flight and the frames, the
+// playhead's first, it fetches ahead.
+const (
+	prefetchRequests = 4
+	prefetchFrames   = 8
+)
+
+// elementFrameMessage is the note under the preview that tells why a frame is missing.
+const elementFrameMessage = "frame-message"
+
+// frameStepMS is the output time one frame of sessionStoryboard's 10 fps lasts.
+const frameStepMS = 100
 
 // exactFrame is the path of the request for the exact frame at ms.
 func exactFrame(ms int) string {
@@ -1477,6 +1491,42 @@ func (p *pageHarness) framesAfter(mark int) []string {
 		}
 	}
 	return frames
+}
+
+// draftFramesFrom are the paths of the draft frame requests for count frames from the one at ms.
+func draftFramesFrom(ms, count int) []string {
+	frames := make([]string, 0, count)
+	for i := range count {
+		frames = append(frames, draftFrame(ms+i*frameStepMS))
+	}
+	return frames
+}
+
+// holdFrames holds the answers of the preview frame requests from now on.
+func (p *pageHarness) holdFrames() {
+	p.t.Helper()
+	p.call("holdFetches", frameAPIPrefix)
+}
+
+// releaseFrames delivers every held frame answer and settles the page.
+func (p *pageHarness) releaseFrames() {
+	p.t.Helper()
+	p.call("releaseFetches")
+	p.settle()
+}
+
+// heldFrames is how many frame requests have answers held.
+func (p *pageHarness) heldFrames() int64 {
+	p.t.Helper()
+	return p.call("heldFetches").ToInteger()
+}
+
+// assertFrameTime fails the test unless the preview shows the frame at ms.
+func (p *pageHarness) assertFrameTime(ms int) {
+	p.t.Helper()
+	if got := p.eval("window.tune.frameTime()").Export(); got != int64(ms) {
+		p.t.Errorf("the frame shown: want the one at %dms, got %v", ms, got)
+	}
 }
 
 // pressKey fires a keydown of key on the document, as the transport hears it, without settling.
@@ -1527,7 +1577,7 @@ func TestPageJS_Play_RequestsDraftFrames(t *testing.T) {
 
 	page.playFor(playedMS)
 
-	page.assertFrames(mark, draftFrame(playedMS))
+	page.assertFrames(mark, draftFramesFrom(playedMS, prefetchFrames)...)
 }
 
 func TestPageJS_Pause_RequestsTheExactFrameAtThePlayhead(t *testing.T) {
@@ -1578,10 +1628,9 @@ func TestPageJS_StepWhilePlaying_RequestsNoFrameAtTheStalePlayhead(t *testing.T)
 	page.pressKey(keyStepAhead)
 	page.settle()
 
-	page.assertFrames(mark, draftFrame(steppedMS), exactFrame(steppedMS))
-	if got := page.eval("window.tune.frameTime()").Export(); got != int64(steppedMS) {
-		t.Errorf("the frame shown after the step: want the one at %dms, got %v", steppedMS, got)
-	}
+	// The play fetched the draft at steppedMS ahead, so the step shows it without a request.
+	page.assertFrames(mark, exactFrame(steppedMS))
+	page.assertFrameTime(steppedMS)
 }
 
 func TestPageJS_EditWhilePaused_RequestsTheExactFrameOnly(t *testing.T) {
@@ -1598,4 +1647,93 @@ func TestPageJS_EditWhilePaused_RequestsTheExactFrameOnly(t *testing.T) {
 	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":1},"field":%q,"value":%d}`,
 		storyboard.OwnerBeat, storyboard.FieldDuration, draggedDurationMS))
 	page.assertFrames(mark, exactFrame(playedMS))
+}
+
+func TestPageJS_Play_KeepsFourDraftRequestsInFlightAhead(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	page.holdFrames()
+	mark := len(page.requests)
+
+	page.playFor(playedMS)
+
+	page.assertFrames(mark, draftFramesFrom(playedMS, prefetchRequests)...)
+	if got := page.heldFrames(); got != prefetchRequests {
+		t.Errorf("the frame requests in flight: want %d, got %d", prefetchRequests, got)
+	}
+}
+
+func TestPageJS_Play_ShowsACachedFrameWithoutARequest(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	page.holdFrames()
+	page.playFor(playedMS)
+	page.releaseFrames()
+	mark := len(page.requests)
+
+	page.call("advance", frameStepMS)
+	page.settle()
+
+	page.assertFrames(mark)
+	page.assertFrameTime(playedMS + frameStepMS)
+}
+
+func TestPageJS_EditWhilePlaying_ShowsNoFrameOfTheOldVersion(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	page.holdFrames()
+	page.playFor(playedMS)
+
+	page.eval(fmt.Sprintf(`window.tune.edit({owner: {kind: %q, index: 1}, field: %q, value: %d});`,
+		storyboard.OwnerBeat, storyboard.FieldDuration, draggedDurationMS))
+	page.settle()
+	page.releaseFrames()
+
+	page.assertFrameTime(0)
+	if got := page.heldFrames(); got != prefetchRequests {
+		t.Errorf("the frame requests of the new version in flight: want %d, got %d", prefetchRequests, got)
+	}
+	page.releaseFrames()
+	page.assertFrameTime(playedMS)
+}
+
+func TestPageJS_Paused_HasAtMostOneFrameRequestOpen(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	page.holdFrames()
+	page.playFor(playedMS)
+	mark := len(page.requests)
+
+	page.pressKey(keyPlay)
+	page.settle()
+	page.pressKey(keyStepAhead)
+	page.settle()
+
+	page.assertFrames(mark, exactFrame(playedMS))
+	page.releaseFrames()
+	page.assertFrames(mark, exactFrame(playedMS), exactFrame(steppedMS))
+	if got := page.heldFrames(); got != 1 {
+		t.Errorf("the frame requests in flight while paused: want 1, got %d", got)
+	}
+	page.releaseFrames()
+	page.assertFrameTime(steppedMS)
+}
+
+func TestPageJS_StepBackWhilePaused_ShowsTheCachedFrame(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	page.eval(fmt.Sprintf("window.tune.seek(%d);", playedMS))
+	page.settle()
+	page.pressKey(keyStepAhead)
+	page.settle()
+	mark := len(page.requests)
+
+	page.pressKey(keyStepBack)
+	page.settle()
+
+	page.assertFrames(mark)
+	page.assertFrameTime(playedMS)
+	if !page.isHidden(elementFrameMessage) {
+		t.Errorf("the frame message after the step back: want hidden, got %q", page.text(elementFrameMessage))
+	}
 }

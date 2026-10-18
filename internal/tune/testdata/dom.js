@@ -28,6 +28,10 @@
   const listenersOf = new WeakMap();
   let nextHandle = 1;
   let nextBlob = 1;
+  // heldAnswers deliver the answers of the fetches held under heldPrefix, in the order they went
+  // out; null holds none.
+  const heldAnswers = [];
+  let heldPrefix = null;
   let clock = 0;
 
   // --- events ---
@@ -272,7 +276,7 @@
 
   // HTMLImageElement loads what its src names in a queued task: a blob URL of a decodable image
   // fires onload and load with naturalWidth and naturalHeight set to the image's, anything else
-  // onerror.
+  // onerror. A src set again before the task runs drops the earlier load, as a browser does.
   class HTMLImageElement extends HTMLElement {
     constructor(tag) {
       super(tag);
@@ -288,9 +292,13 @@
     }
 
     set src(address) {
-      this.source = String(address);
-      const blob = blobs.get(this.source);
+      const source = String(address);
+      this.source = source;
+      const blob = blobs.get(source);
       queueTask(() => {
+        if (this.source !== source) {
+          return;
+        }
         if (!blob || !(blob.width > 0)) {
           this.fire("error", this.onerror);
           return;
@@ -504,11 +512,19 @@
     }
   }
 
+  // fetch serves the request at once; its answer arrives at once too, unless its resource starts
+  // with the prefix testDOM.holdFetches holds, when it waits for testDOM.releaseFetches.
   function fetch(resource, options = {}) {
     const headers = options.headers || {};
     const method = options.method || "GET";
-    const answer = host.serve(method, String(resource), headers["Content-Type"] || "", options.body || "");
-    return Promise.resolve(new Response(answer));
+    const address = String(resource);
+    const answer = host.serve(method, address, headers["Content-Type"] || "", options.body || "");
+    if (heldPrefix === null || !address.startsWith(heldPrefix)) {
+      return Promise.resolve(new Response(answer));
+    }
+    return new Promise((resolve) => {
+      heldAnswers.push(() => resolve(new Response(answer)));
+    });
   }
 
   const URL = {
@@ -595,6 +611,19 @@
       }
     },
     hasTasks: () => tasks.length > 0,
+    // holdFetches holds the answers of the fetches whose resource starts with prefix from now on.
+    holdFetches(prefix) {
+      heldPrefix = String(prefix);
+    },
+    // releaseFetches delivers the first count held answers, all of them without a count; the
+    // fetches that go out afterwards are held still.
+    releaseFetches(count) {
+      const released = heldAnswers.splice(0, count === undefined ? heldAnswers.length : count);
+      for (const deliver of released) {
+        deliver();
+      }
+    },
+    heldFetches: () => heldAnswers.length,
     advance(ms) {
       clock += ms;
     },
