@@ -263,6 +263,25 @@ func (c *Compositor) Rect(t time.Duration, b take.Box) image.Rectangle {
 	return rect.Intersect(image.Rectangle{Max: c.out})
 }
 
+// Path returns the points the via pan at index of the storyboard's camera list passes through,
+// in order and the last its destination, each mapped through the zoom's crop at output time t and
+// the scale to the shipped width onto the shipped frame and rounded to whole pixels. A point the
+// crop leaves out comes back off the frame, unclipped. ok is false when the camera move at index
+// is not a via pan, or there is none.
+func (c *Compositor) Path(t time.Duration, index int) (points []image.Point, ok bool) {
+	waypoints, ok := c.camera.waypoints[index]
+	if !ok {
+		return nil, false
+	}
+	crop := c.crop(t)
+	points = make([]image.Point, 0, len(waypoints))
+	for _, waypoint := range waypoints {
+		shipped := c.toOutput(waypoint, crop)
+		points = append(points, image.Pt(int(math.Round(shipped.X)), int(math.Round(shipped.Y))))
+	}
+	return points, true
+}
+
 // drawCursor draws the ring of a click, press or release and then the dot at output time t, each
 // positioned through the crop and sized in design pixels.
 func (c *Compositor) drawCursor(dst *image.RGBA, t time.Duration, crop rectF) {

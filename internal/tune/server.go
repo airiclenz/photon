@@ -42,6 +42,7 @@ const (
 	routeReload  = "POST /api/reload"
 	routeSave    = "POST /api/save"
 	routePick    = "POST /api/pick"
+	routePath    = "GET /api/path"
 )
 
 // The headers and media types the API reads and writes.
@@ -55,8 +56,12 @@ const (
 	noSniff            = "nosniff"
 )
 
-// frameTimeParam is the frame route's query parameter: the output time in whole milliseconds.
+// frameTimeParam is the frame and path routes' query parameter: the output time in whole
+// milliseconds.
 const frameTimeParam = "t"
+
+// pathCameraParam is the path route's query parameter: the via pan's index in the camera list.
+const pathCameraParam = "camera"
 
 // localhostName is the other host name, beside the listen address's own IP, a request may name.
 const localhostName = "localhost"
@@ -92,6 +97,11 @@ type pixelPoint struct {
 	Y int `json:"y"`
 }
 
+// pathResponse is a path's answer: the via pan's points in order, in output-frame pixels.
+type pathResponse struct {
+	Points []pixelPoint `json:"points"`
+}
+
 // pickResponse is a pick's answer: the target, the cell box it resolves to, that box in
 // output-frame pixels, and the snippets keyed by place.
 type pickResponse struct {
@@ -124,9 +134,10 @@ type pixelRect struct {
 // A request whose Host is neither addr nor localhost on addr's port is refused with 403, and a
 // POST whose body is not application/json with 415, so another site's page can reach neither
 // the session nor the storyboard on disk. Every POST answers with the session's state after it
-// but a pick, which answers with its proposal. A refused edit, undo or redo, a frame or pick
-// the session cannot give, and a save refused while an error stands answer 422; a save refused
-// while the storyboard changed on disk answers 409. Every failure's body is {"error": "…"}.
+// but a pick, which answers with its proposal. A refused edit, undo or redo, a frame, pick or
+// path the session cannot give, and a save refused while an error stands answer 422; a save
+// refused while the storyboard changed on disk answers 409. Every failure's body is
+// {"error": "…"}.
 func newHandler(session *Session, addr string) http.Handler {
 	serving := &server{session: session, hosts: map[string]bool{addr: true}, page: pageFS()}
 	if _, port, err := net.SplitHostPort(addr); err == nil {
@@ -148,6 +159,7 @@ func newHandler(session *Session, addr string) http.Handler {
 	mux.HandleFunc(routeReload, serving.stateAfter(session.Reload))
 	mux.HandleFunc(routeSave, serving.stateAfter(session.Save))
 	mux.HandleFunc(routePick, serving.handlePick)
+	mux.HandleFunc(routePath, serving.handlePath)
 	return serving.guard(mux)
 }
 
@@ -200,12 +212,11 @@ func (s *server) handleState(w http.ResponseWriter, _ *http.Request) {
 
 // handleFrame answers the PNG of the frame at the output time ?t=, in whole milliseconds.
 func (s *server) handleFrame(w http.ResponseWriter, r *http.Request) {
-	ms, err := strconv.ParseInt(r.URL.Query().Get(frameTimeParam), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "the frame time t must be whole milliseconds")
+	out, ok := frameTimeOf(w, r)
+	if !ok {
 		return
 	}
-	frame, err := s.session.Frame(time.Duration(ms) * time.Millisecond)
+	frame, err := s.session.Frame(out)
 	if err != nil {
 		writeError(w, statusOf(err), err.Error())
 		return
@@ -216,6 +227,41 @@ func (s *server) handleFrame(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	//nolint:errcheck,gosec // a failed write means the page went away; nothing is left to tell
 	w.Write(frame)
+}
+
+// handlePath answers the points of the via pan ?camera= on the frame at the output time ?t=, in
+// whole milliseconds, or 422 when that camera move is not a via pan.
+func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
+	out, ok := frameTimeOf(w, r)
+	if !ok {
+		return
+	}
+	index, err := strconv.Atoi(r.URL.Query().Get(pathCameraParam))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "the camera index must be a whole number")
+		return
+	}
+	points, err := s.session.Path(out, index)
+	if err != nil {
+		writeError(w, statusOf(err), err.Error())
+		return
+	}
+	response := pathResponse{Points: make([]pixelPoint, 0, len(points))}
+	for _, point := range points {
+		response.Points = append(response.Points, pixelPoint{X: point.X, Y: point.Y})
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+// frameTimeOf is r's output time ?t=, in whole milliseconds; when it is not one, it answers 400
+// and reports false.
+func frameTimeOf(w http.ResponseWriter, r *http.Request) (time.Duration, bool) {
+	ms, err := strconv.ParseInt(r.URL.Query().Get(frameTimeParam), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "the frame time t must be whole milliseconds")
+		return 0, false
+	}
+	return time.Duration(ms) * time.Millisecond, true
 }
 
 // handleEdit applies the [Edit] in the body and answers the state, or 422 when it is refused.
@@ -299,7 +345,8 @@ func statusOf(err error) int {
 	case errors.Is(err, ErrStale):
 		return http.StatusConflict
 	case errors.Is(err, ErrInvalid), errors.Is(err, ErrNoUndo), errors.Is(err, ErrNoRedo),
-		errors.Is(err, render.ErrOutsideClip), errors.Is(err, ErrNoProposal):
+		errors.Is(err, render.ErrOutsideClip), errors.Is(err, ErrNoProposal),
+		errors.Is(err, ErrNoPath):
 		return http.StatusUnprocessableEntity
 	default:
 		return http.StatusInternalServerError

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"image"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -26,6 +27,9 @@ var (
 	ErrNoUndo = errors.New("nothing to undo")
 	// ErrNoRedo is Redo with no undone version to go forward to.
 	ErrNoRedo = errors.New("nothing to redo")
+	// ErrNoPath is a path asked of a camera move that is not a via pan, or of one the camera list
+	// does not have.
+	ErrNoPath = errors.New("not a via pan")
 )
 
 // tempPattern names the temporary file a save writes beside the storyboard before renaming it
@@ -268,6 +272,20 @@ func (s *Session) Save() error {
 	s.disk = src
 	s.version++
 	return nil
+}
+
+// Path returns the points the via pan at index of the storyboard's camera list passes through,
+// in order and the last its destination, in pixels of the frame [Session.Frame] composes at
+// output time out: like the frame, from the last pipeline that built in full, its camera's crop
+// at out mapping each point onto the frame. A point the crop leaves out comes back off the
+// frame, unclipped. It fails with [ErrNoPath] when the camera move at index is not a via pan or
+// there is none.
+func (s *Session) Path(out time.Duration, index int) ([]image.Point, error) {
+	points, ok := s.goodPipeline().frames.Path(out, index)
+	if !ok {
+		return nil, fmt.Errorf("camera[%d]: %w", index, ErrNoPath)
+	}
+	return points, nil
 }
 
 // validate checks src once more as the storyboard loader and the clip's cross-check do.

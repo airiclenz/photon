@@ -229,6 +229,16 @@ func (p *Pipeline) Rect(out time.Duration, box take.Box) image.Rectangle {
 	return p.compositor.Rect(out, box)
 }
 
+// Path returns the points the via pan at index of the storyboard's camera list passes through, in
+// pixels of the shipped frame at output time out, as [compose.Compositor.Path] maps them. ok is
+// false when the camera move at index is not a via pan, and on a partial pipeline.
+func (p *Pipeline) Path(out time.Duration, index int) (points []image.Point, ok bool) {
+	if p.compositor == nil {
+		return nil, false
+	}
+	return p.compositor.Path(out, index)
+}
+
 // Size is the shipped frame's pixel size; the zero size on a partial pipeline.
 func (p *Pipeline) Size() image.Point {
 	if p.compositor == nil {

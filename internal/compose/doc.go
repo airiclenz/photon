@@ -46,9 +46,10 @@
 // The file map:
 //   - doc.go: this package comment and file map.
 //   - compose.go: [New], [Output], the [Compositor], its [Layout], cropping, drawing the cursor
-//     and mapping between shipped pixels and cells ([Compositor.Cell], [Compositor.Rect]).
+//     and mapping between shipped pixels and cells ([Compositor.Cell], [Compositor.Rect]) and a
+//     via pan's points onto the shipped frame ([Compositor.Path]).
 //   - camera.go: the camera's zoom and pan tracks of moves, their factor and centre at a time,
-//     and planning the storyboard's camera moves onto them.
+//     and planning the storyboard's camera moves onto them, a via pan's points kept by its index.
 //   - path.go: a pan's smooth path through its points, walked by arc length.
 //   - zoom.go: planning a beat's zoom onto the camera, the zoom box, resolving a target on the
 //     screens a stretch of the take shows, the auto-fit factor and the smootherstep ease.

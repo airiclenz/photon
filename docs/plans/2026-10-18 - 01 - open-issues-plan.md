@@ -534,7 +534,15 @@ waypoint refused; switch both ways and undo by re-applying the inverse.
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ -run TestPage_EntryFields_AreEditFields`
 **Commit:** `feat(storyboard): edit a pan's via waypoints`
 
-## 15. Tune state carries a via pan's waypoints and its path in frame pixels
+## 15. Tune state carries a via pan's waypoints and its path in frame pixels — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): re-derived from the assumption that the camera is assembled in camera.go/compose.go: `zoomPlanner.plan`, which calls `planMoves` and `newCamera`, lives in internal/compose/zoom.go, so it now takes `planMoves`' new `waypoints` result (each via pan's resolved points, keyed by its storyboard camera index) and sets it on the camera; internal/compose/path.go needed no change.
+
+NOTES (2026-10-18): consequential edit — internal/compose/doc.go: made necessary by the new `Compositor.Path` and the camera's per-index via points (file map lines for compose.go and camera.go).
+
+NOTES (2026-10-18): wire: camera entries gain `via: [{cell: {x,y}} | {target: {text,nth,area}}]` (omitted unless a via pan; `via_count` kept); `GET /api/path?camera=<i>&t=<ms>` answers `{"points": [{"x","y"}, ...]}`, one per via point in order (the last the destination), whole output pixels through the crop at t, unclipped; 422 (`ErrNoPath`) for a zoom, a pan to or an index out of range, 400 for a non-integer camera or t. Accessor chain: `compose.Compositor.Path` -> `render.Pipeline.Path` (false on a partial pipeline) -> `tune.Session.Path` (last good pipeline, like Frame). Out-of-clip t is not refused: the crop is defined at any t.
+
+NOTES (2026-10-18): `pointState` in state.go now spells both a pan's to and its via points (the to branch refactored onto it, same output). The t-parse of handleFrame moved into a shared `frameTimeOf` (same 400 message). internal/tune/session.go is now 415 lines, past the ~400 guideline.
 
 **What:** Depends on item 14.
 **Regression guard.** Waypoints are reported as `via: [{target?: TargetState, cell?: CellState}]`

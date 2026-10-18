@@ -62,11 +62,13 @@ func (p zoomPlanner) plan(clipSchedule *schedule.Schedule) (camera, error) {
 		zooms = append(zooms, push, pull)
 		pans = append(pans, aim)
 	}
-	moveZooms, movePans, err := p.planMoves(clipSchedule)
+	moveZooms, movePans, waypoints, err := p.planMoves(clipSchedule)
 	if err != nil {
 		return camera{}, err
 	}
-	return newCamera(p.layout, append(zooms, moveZooms...), append(pans, movePans...)), nil
+	clipCamera := newCamera(p.layout, append(zooms, moveZooms...), append(pans, movePans...))
+	clipCamera.waypoints = waypoints
+	return clipCamera, nil
 }
 
 // planSection is the zoom of one section onto box as camera moves: aim sets the pan track to the

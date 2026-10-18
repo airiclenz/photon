@@ -27,13 +27,15 @@
 // snapshots kept in a cache bounded at 1 GiB that a new take or raster geometry starts afresh.
 // [Session.Pick] turns cells picked on that frame into a [Proposal]: the picked text, escaped, as a
 // target the resolver resolves back onto them, with its area and nth, and its YAML for a zoom, a
-// click, a seen expect and either end of a drag.
+// click, a seen expect and either end of a drag. [Session.Path] maps a via pan's points onto that
+// frame, through its camera's crop at the output time.
 //
 // [Run] serves a session to a browser on this machine: it listens on 127.0.0.1 only, prints the
 // page's address, and serves the embedded page under page/ and a JSON API over the session —
-// its state, frames as PNG, edits, undo, redo, revert, reload, save and picks — until its
-// context ends. A request naming any Host but the printed address or localhost on its port is
-// refused, as is a POST whose body is not JSON, so another site's page reaches neither.
+// its state, frames as PNG, a via pan's path on a frame, edits, undo, redo, revert, reload, save
+// and picks — until its context ends. A request naming any Host but the printed address or
+// localhost on its port is refused, as is a POST whose body is not JSON, so another site's page
+// reaches neither.
 //
 // The file map:
 //   - cache.go: the bounded, least-recently-used cache of a take's rasterized snapshots.
@@ -44,7 +46,8 @@
 //   - pick.go: [Session.Pick], a resolver-checked target [Proposal] from picked cells.
 //   - run.go: [Run] and its [Options]: listen on 127.0.0.1, print the address, serve until done.
 //   - server.go: the HTTP handler: the embedded page, the JSON API and its Host and POST guards.
-//   - session.go: the [Session]: its pipelines, history, refresh from disk and guarded save.
+//   - session.go: the [Session]: its pipelines, history, refresh from disk, guarded save and a via
+//     pan's path.
 //   - state.go: the [State] a session reports and the errors attributed to their owners.
 //   - page/index.html, page/style.css: the page and its styles.
 //   - page/app.js: the window.tune contract, the session's API, the selection and the wiring.

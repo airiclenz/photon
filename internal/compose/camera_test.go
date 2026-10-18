@@ -3,8 +3,10 @@ package compose
 import (
 	"errors"
 	"fmt"
+	"image"
 	"image/color"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -305,5 +307,41 @@ func TestComposeCursorMapsThroughAPannedCrop(t *testing.T) {
 	}
 	if want := (pointF{X: 310, Y: 190}); math.Hypot(cursor.X-want.X, cursor.Y-want.Y) > 1 {
 		t.Errorf("cursor at the press: want %+v through the panned crop, got %+v", want, cursor)
+	}
+}
+
+func TestCompositorPath_MapsAViaPansPointsThroughTheCrop(t *testing.T) {
+	t.Parallel()
+	// The zoom before the via pan takes camera index 0, so the via pan is still index 1.
+	const camera = `  - zoom: {to: 2, at: {beat: 1}, over: 1s}
+  - pan: {via: [{cell: {x: 10, y: 3}}, {cell: {x: 30, y: 8}}], at: {beat: 1}, over: 1s}
+  - pan: {to: {cell: {x: 40, y: 12}}, at: {beat: 1, offset: 3500ms}, over: 500ms}
+`
+	board, recorded := cameraTake(t, []take.Snapshot{{At: 0}, {At: 4 * sec}}, camera, 4*sec)
+	compositor, _ := newTestCompositor(t, board, recorded)
+
+	// Cells (10, 3) and (30, 8) centre on source pixels (220, 150) and (620, 350). At 0 the whole
+	// frame shows at half size; at 3s the crop is 500 × 300 at (370, 200), shown 1:1, which
+	// leaves the first point off the frame.
+	for _, tc := range []struct {
+		name string
+		at   time.Duration
+		want []image.Point
+	}{
+		{name: "whole frame", at: 0, want: []image.Point{{X: 110, Y: 75}, {X: 310, Y: 175}}},
+		{name: "zoomed and panned", at: 3 * sec, want: []image.Point{{X: -150, Y: -50}, {X: 250, Y: 150}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := compositor.Path(tc.at, 1)
+
+			if !ok || !slices.Equal(got, tc.want) {
+				t.Errorf("Path(%s, 1): want %v, true; got %v, %t", tc.at, tc.want, got, ok)
+			}
+		})
+	}
+	for _, index := range []int{-1, 0, 2, 3} {
+		if got, ok := compositor.Path(0, index); ok {
+			t.Errorf("Path(0, %d): want no via pan, got %v", index, got)
+		}
 	}
 }

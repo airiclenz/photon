@@ -8,10 +8,12 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -394,6 +396,92 @@ func TestHandler_PickOnBlanks_Is422(t *testing.T) {
 	decodeResponse(t, response, &failure)
 	if failure.Error == "" {
 		t.Error("the refusal carries no message")
+	}
+}
+
+// viaPanIndex is the index of cameraCaptionsStoryboard's via pan, whose two points are cell
+// (2, 1) and the target failing.
+const viaPanIndex = 1
+
+func TestHandler_State_SpellsAViaPansPoints(t *testing.T) {
+	t.Parallel()
+	handler := newHandler(newSessionFixtureOf(t, cameraCaptionsStoryboard).session, testAddr)
+
+	response := get(t, handler, "/api/state")
+
+	assertStatus(t, response, http.StatusOK)
+	var state struct {
+		Camera []map[string]json.RawMessage `json:"camera"`
+	}
+	decodeResponse(t, response, &state)
+	var via []map[string]json.RawMessage
+	if err := json.Unmarshal(state.Camera[viaPanIndex]["via"], &via); err != nil {
+		t.Fatalf("decode the via pan's via %s: %v", state.Camera[viaPanIndex]["via"], err)
+	}
+	if len(via) != 2 || keysOf(via[0]) != "cell" || keysOf(via[1]) != "target" {
+		t.Errorf("via: want a cell point then a target point, got %s", state.Camera[viaPanIndex]["via"])
+	}
+	for _, index := range []int{0, 2, 3} {
+		if _, ok := state.Camera[index]["via"]; ok {
+			t.Errorf("camera[%d]: want no via key on a move that is not a via pan", index)
+		}
+	}
+}
+
+// keysOf is the keys of object, sorted and joined by commas.
+func keysOf(object map[string]json.RawMessage) string {
+	return strings.Join(slices.Sorted(maps.Keys(object)), ",")
+}
+
+func TestHandler_Path_IsTheViaPansPointsOnTheFrame(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	handler := newHandler(session, testAddr)
+
+	response := get(t, handler, "/api/path?camera=1&t=0")
+
+	assertStatus(t, response, http.StatusOK)
+	var path pathResponse
+	decodeResponse(t, response, &path)
+	frames := session.goodPipeline().frames
+	if len(path.Points) != 2 {
+		t.Fatalf("points: want one per waypoint, 2, got %+v", path.Points)
+	}
+	for _, point := range path.Points {
+		if !image.Pt(point.X, point.Y).In(image.Rectangle{Max: frames.Size()}) {
+			t.Errorf("point %+v: want it inside the %v frame", point, frames.Size())
+		}
+	}
+	first := path.Points[0]
+	if col, row, ok := frames.Cell(0, image.Pt(first.X, first.Y)); !ok || col != 2 || row != 1 {
+		t.Errorf("first point %+v: want on cell (2, 1), got (%d, %d) on the grid %t", first, col, row, ok)
+	}
+}
+
+func TestHandler_Path_BadQuery_IsRefused(t *testing.T) {
+	t.Parallel()
+	handler := newHandler(newSessionFixtureOf(t, cameraCaptionsStoryboard).session, testAddr)
+	tests := []struct {
+		name   string
+		query  string
+		status int
+	}{
+		{name: "a zoom", query: "camera=0&t=0", status: http.StatusUnprocessableEntity},
+		{name: "a pan to", query: "camera=2&t=0", status: http.StatusUnprocessableEntity},
+		{name: "past the camera list", query: "camera=4&t=0", status: http.StatusUnprocessableEntity},
+		{name: "before the camera list", query: "camera=-1&t=0", status: http.StatusUnprocessableEntity},
+		{name: "camera not a number", query: "camera=first&t=0", status: http.StatusBadRequest},
+		{name: "camera missing", query: "t=0", status: http.StatusBadRequest},
+		{name: "time not a number", query: "camera=1&t=soon", status: http.StatusBadRequest},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			response := get(t, handler, "/api/path?"+test.query)
+
+			assertStatus(t, response, test.status)
+		})
 	}
 }
 

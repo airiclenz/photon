@@ -298,7 +298,11 @@ func TestSession_State_ReportsCameraMovesAndCaptions(t *testing.T) {
 
 	wantCamera := []CameraState{
 		{Index: 0, Kind: "zoom", StartMS: 100, EndMS: 400, At: MomentState{0, 100}, OverMS: 300, Ease: "smooth", Factor: 2},
-		{Index: 1, Kind: "pan", StartMS: 200, EndMS: 800, At: MomentState{1, 200}, OverMS: 600, Ease: "linear", ViaCount: 2},
+		{
+			Index: 1, Kind: "pan", StartMS: 200, EndMS: 800, At: MomentState{1, 200}, OverMS: 600, Ease: "linear",
+			Via:      []PointState{{Cell: &CellState{X: 2, Y: 1}}, {Target: &TargetState{Text: "failing"}}},
+			ViaCount: 2,
+		},
 		{
 			Index: 2, Kind: "pan", StartMS: 800, EndMS: 900, At: MomentState{0, 800}, OverMS: 100, Ease: "smooth",
 			Target: &TargetState{Text: "tests", Nth: -1},

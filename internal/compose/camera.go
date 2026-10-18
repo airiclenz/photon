@@ -38,6 +38,10 @@ type camera struct {
 	zoom []move[float64]
 	pan  []panSegment
 	rest pointF
+	// waypoints holds, for each via pan of the storyboard's camera list keyed by its index there,
+	// the source pixels its points resolve to, in order, the last its destination. The pan track
+	// sorts its moves by start among the beats' zoom aims, so it cannot be indexed so.
+	waypoints map[int][]pointF
 }
 
 // newCamera is the camera of zooms and pans over a frame laid out as layout, each track sorted
@@ -116,11 +120,15 @@ func trackAt[V any, M interface{ timing() move[V] }](
 }
 
 // planMoves plans every camera move of the storyboard onto the camera's tracks, each starting at
-// the start Parse resolved on the output clock and lasting its `over`. A pan's points resolve as
-// [zoomPlanner.panPoint] does, on the screens clipSchedule shows across the move. It fails,
-// under camera[i] as a [storyboard.LocatedError], on a pan target that no screen of its move
-// shows, wrapping [target.ErrNotOnScreen].
-func (p zoomPlanner) planMoves(clipSchedule *schedule.Schedule) (zooms []move[float64], pans []move[pointF], err error) {
+// the start Parse resolved on the output clock and lasting its `over`, and lists each via pan's
+// resolved points as waypoints, keyed by the pan's index in the storyboard's camera list. A pan's
+// points resolve as [zoomPlanner.panPoint] does, on the screens clipSchedule shows across the
+// move. It fails, under camera[i] as a [storyboard.LocatedError], on a pan target that no screen
+// of its move shows, wrapping [target.ErrNotOnScreen].
+func (p zoomPlanner) planMoves(
+	clipSchedule *schedule.Schedule,
+) (zooms []move[float64], pans []move[pointF], waypoints map[int][]pointF, err error) {
+	waypoints = map[int][]pointF{}
 	for index, cameraMove := range p.board.Camera {
 		switch {
 		case cameraMove.Zoom != nil:
@@ -129,12 +137,16 @@ func (p zoomPlanner) planMoves(clipSchedule *schedule.Schedule) (zooms []move[fl
 		case cameraMove.Pan != nil:
 			pan, err := p.planPan(*cameraMove.Pan, clipSchedule)
 			if err != nil {
-				return nil, nil, fmt.Errorf("compose: %w", storyboard.AtCamera(index, fmt.Errorf("pan: %w", err)))
+				located := storyboard.AtCamera(index, fmt.Errorf("pan: %w", err))
+				return nil, nil, nil, fmt.Errorf("compose: %w", located)
 			}
 			pans = append(pans, pan)
+			if len(cameraMove.Pan.Via) > 0 {
+				waypoints[index] = append(slices.Clone(pan.Via), pan.To)
+			}
 		}
 	}
-	return zooms, pans, nil
+	return zooms, pans, waypoints, nil
 }
 
 // planPan is the pan move on the output clock with its points resolved to source pixels: its To,

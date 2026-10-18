@@ -81,8 +81,9 @@ type TargetState struct {
 // CameraState is one camera move, in storyboard order: its Index in the storyboard's camera
 // list, its Kind (zoom or pan), where it starts and ends on the output clock, and its fields.
 // Factor is a zoom's destination magnification. A pan to aims at its Target or its Cell, one of
-// the two; a via pan has neither and reports ViaCount, the points of its path, instead, which
-// photon tune shows but does not edit.
+// the two; a via pan has neither and reports Via, the points of its path in order, each spelled
+// as a pan to's destination is, and ViaCount, how many there are. Where the path runs on a frame
+// is [Session.Path]'s.
 type CameraState struct {
 	Index    int          `json:"index"`
 	Kind     string       `json:"kind"`
@@ -94,7 +95,14 @@ type CameraState struct {
 	Factor   float64      `json:"factor,omitempty"`
 	Target   *TargetState `json:"target,omitempty"`
 	Cell     *CellState   `json:"cell,omitempty"`
+	Via      []PointState `json:"via,omitempty"`
 	ViaCount int          `json:"via_count"`
+}
+
+// PointState is one point a pan aims at: a Target or a Cell, one of the two.
+type PointState struct {
+	Target *TargetState `json:"target,omitempty"`
+	Cell   *CellState   `json:"cell,omitempty"`
 }
 
 // The spellings of CameraState's Kind.
@@ -263,16 +271,26 @@ func cameraStates(board *storyboard.Storyboard) []CameraState {
 			pan := move.Pan
 			state = movedState(cameraKindPan, pan.Start(), pan.At, pan.Over, pan.Ease)
 			state.ViaCount = len(pan.Via)
-			if to := pan.To; to != nil && to.Cell != nil {
-				state.Cell = &CellState{X: to.Cell.X, Y: to.Cell.Y}
-			} else if to != nil {
-				state.Target = &TargetState{Text: to.Text, Nth: int(to.Nth), Area: to.Area}
+			if to := pan.To; to != nil {
+				aimed := pointState(*to)
+				state.Target, state.Cell = aimed.Target, aimed.Cell
+			}
+			for _, point := range pan.Via {
+				state.Via = append(state.Via, pointState(point))
 			}
 		}
 		state.Index = index
 		moves = append(moves, state)
 	}
 	return moves
+}
+
+// pointState spells point, a pan's destination or one of its via points, as the page reads it.
+func pointState(point storyboard.Point) PointState {
+	if point.Cell != nil {
+		return PointState{Cell: &CellState{X: point.Cell.X, Y: point.Cell.Y}}
+	}
+	return PointState{Target: &TargetState{Text: point.Text, Nth: int(point.Nth), Area: point.Area}}
 }
 
 // movedState is the part of a camera move's state every form shares: its kind, its timing as
