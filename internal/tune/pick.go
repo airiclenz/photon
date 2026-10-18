@@ -35,8 +35,8 @@ const (
 // Proposal is the target a pick proposes: the Target, the cell Box it resolves to on the picked
 // snapshot, that box's Rect in output-frame pixels at the picked time, and the YAML that writes
 // the target in each place a storyboard takes one, keyed by place:
-//   - zoom: the bare target flow mapping ({text: 'ok', nth: 2, area: 'list'}), the value a
-//     zoom or zoom.target [Edit] takes;
+//   - zoom: the bare target flow mapping ({text: 'ok', nth: 2, area: 'list'}), the text a
+//     zoom or zoom.target [Edit] writes;
 //   - click: a click action, click: {target: {…}};
 //   - seen: an expect, seen: '…', or {seen: '…', area: '…'} when the target names an area;
 //   - drag-from and drag-to: a drag's two ends, from: {…} and to: {…}.
@@ -261,11 +261,18 @@ func snippetsOf(proposed storyboard.Target) map[string]string {
 	}
 }
 
-// targetFlow writes a target as a YAML flow mapping, leaving out an nth of first and an empty
-// area.
+// nthLast spells the last match's nth, in YAML and on the wire alike.
+const nthLast = "last"
+
+// targetFlow writes a target as a YAML flow mapping, the one spelling of a target a pick's
+// snippets and a zoom or zoom.target [Edit] write: the last match is nth: last, and an nth of
+// first and an empty area are left out.
 func targetFlow(proposed storyboard.Target) string {
 	fields := []string{"text: " + yamledit.Quote(proposed.Text)}
-	if proposed.Nth > storyboard.NthFirst {
+	switch {
+	case proposed.Nth == storyboard.NthLast:
+		fields = append(fields, "nth: "+nthLast)
+	case proposed.Nth > storyboard.NthFirst:
 		fields = append(fields, "nth: "+strconv.Itoa(int(proposed.Nth)))
 	}
 	if proposed.Area != "" {

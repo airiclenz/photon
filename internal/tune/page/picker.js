@@ -5,8 +5,8 @@
 // state() for the beat a zoom target goes on, selectedEntry() for the pan move a pan target goes
 // on, onState(fn) to offer that only while a pan exists, and edit(edit) to set either. Nothing
 // here maps pixels to cells or resolves a target: the drag's two corners go to /api/pick in
-// output-frame pixels, and the server answers the resolver-checked proposal, its box in
-// output-frame pixels and the YAML snippets that write it.
+// output-frame pixels, and the server answers the resolver-checked proposal: its target as a
+// zoom edit takes it, its box in output-frame pixels and the YAML snippets that write it.
 "use strict";
 
 (() => {
@@ -17,6 +17,7 @@
   const FIELD_ZOOM_TARGET = "zoom.target";
   const FIELD_CAMERA_TO = "camera.to";
   const ENTRY_CAMERA = "camera";
+  const OWNER_BEAT = "beat";
   const KIND_PAN = "pan";
   const ESCAPE_KEY = "Escape";
   const ARMED_HINT = "Drag across the cells of one row on the preview; Esc cancels.";
@@ -203,7 +204,7 @@
       return;
     }
     const field = beat.zoom ? FIELD_ZOOM_TARGET : FIELD_ZOOM;
-    tune.edit({ beat: beat.id, field, value: proposal.snippets[SNIPPET_ZOOM] }).then(
+    tune.edit({ owner: { kind: OWNER_BEAT, index: beat.id }, field, value: proposal.target }).then(
       () => report("Zoom target set on beat " + beat.id, false),
       (error) => report(error.message, true),
     );
@@ -217,7 +218,11 @@
       report("Select a pan move first.", true);
       return;
     }
-    const change = { index: move.index, field: FIELD_CAMERA_TO, value: proposal.snippets[SNIPPET_ZOOM] };
+    const change = {
+      owner: { kind: ENTRY_CAMERA, index: move.index },
+      field: FIELD_CAMERA_TO,
+      value: proposal.snippets[SNIPPET_ZOOM],
+    };
     tune.edit(change).then(
       () => report("Pan target set on camera " + move.index, false),
       (error) => report(error.message, true),

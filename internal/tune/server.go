@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"io/fs"
 	"mime"
@@ -101,12 +102,54 @@ type pickResponse struct {
 	Snippets map[string]string `json:"snippets"`
 }
 
-// pickTarget is a proposed target on the wire: nth is left out when it is the first match, and
-// area when the target searches the whole screen.
+// pickTarget is a target on the wire, as a pick proposes it and a zoom or zoom.target [Edit]
+// takes it: nth is left out when it is the first match, and area when the target searches the
+// whole screen.
 type pickTarget struct {
-	Text string `json:"text"`
-	Nth  int    `json:"nth,omitempty"`
-	Area string `json:"area,omitempty"`
+	Text string  `json:"text"`
+	Nth  wireNth `json:"nth,omitempty"`
+	Area string  `json:"area,omitempty"`
+}
+
+// wireNth is a target's nth on the wire: a whole number from 1, or "last" for the last match;
+// its zero value, left out, is the first match.
+type wireNth int
+
+// MarshalJSON writes the last match as "last" and any other nth as its number.
+func (n wireNth) MarshalJSON() ([]byte, error) {
+	if storyboard.Nth(n) == storyboard.NthLast {
+		return json.Marshal(nthLast)
+	}
+	return json.Marshal(int(n))
+}
+
+// UnmarshalJSON reads a whole number from 1 or "last", and refuses anything else.
+func (n *wireNth) UnmarshalJSON(data []byte) error {
+	var count int
+	if err := json.Unmarshal(data, &count); err == nil && count >= int(storyboard.NthFirst) {
+		*n = wireNth(count)
+		return nil
+	}
+	var word string
+	if err := json.Unmarshal(data, &word); err == nil && word == nthLast {
+		*n = wireNth(storyboard.NthLast)
+		return nil
+	}
+	return fmt.Errorf("nth: want a whole number from 1 or %q, got %s", nthLast, data)
+}
+
+// pickTargetOf is target on the wire, its nth left out when it is the first match.
+func pickTargetOf(target storyboard.Target) pickTarget {
+	wire := pickTarget{Text: target.Text, Area: target.Area}
+	if target.Nth > storyboard.NthFirst || target.Nth == storyboard.NthLast {
+		wire.Nth = wireNth(target.Nth)
+	}
+	return wire
+}
+
+// target is the storyboard target t spells.
+func (t pickTarget) target() storyboard.Target {
+	return storyboard.Target{Text: t.Text, Nth: storyboard.Nth(t.Nth), Area: t.Area}
 }
 
 // pixelRect is a rectangle on the output frame, in pixels.
@@ -261,13 +304,9 @@ func (s *server) handlePick(w http.ResponseWriter, r *http.Request) {
 
 // responseOf is proposal as a pick answers it.
 func responseOf(proposal Proposal) pickResponse {
-	target := pickTarget{Text: proposal.Target.Text, Area: proposal.Target.Area}
-	if proposal.Target.Nth > storyboard.NthFirst {
-		target.Nth = int(proposal.Target.Nth)
-	}
 	rect := proposal.Rect
 	return pickResponse{
-		Target:   target,
+		Target:   pickTargetOf(proposal.Target),
 		Box:      proposal.Box,
 		Rect:     pixelRect{X: rect.Min.X, Y: rect.Min.Y, W: rect.Dx(), H: rect.Dy()},
 		Snippets: proposal.Snippets,

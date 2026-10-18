@@ -29,6 +29,7 @@
   const AXIS_NAME = "time";
   const TOO_FAST_GLYPH = "⚠";
   const AUTO_FACTOR = "auto";
+  const OWNER_BEAT = "beat";
 
   const root = document.getElementById("timeline");
 
@@ -356,7 +357,7 @@
       return;
     }
     tune
-      .edit({ beat: handle.beat, field: handle.field, value: String(value) })
+      .edit({ owner: { kind: OWNER_BEAT, index: handle.beat }, field: handle.field, value })
       .catch(() => render(tune.state()));
   }
 

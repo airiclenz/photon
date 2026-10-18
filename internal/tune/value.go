@@ -1,6 +1,8 @@
 package tune
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"regexp"
@@ -41,17 +43,73 @@ func parseMilliseconds(value string) (time.Duration, error) {
 	return time.Duration(count) * time.Millisecond, nil
 }
 
-// parseCount reads a frame field spelled as a decimal integer.
-func parseCount(value string) (int, error) {
-	spellingError := fmt.Errorf("want a decimal integer, got %q", value)
-	if !wholeNumber.MatchString(value) {
-		return 0, spellingError
+// jsonNull is the JSON null literal.
+const jsonNull = "null"
+
+// isNull reports whether value is the JSON null.
+func isNull(value json.RawMessage) bool {
+	return string(bytes.TrimSpace(value)) == jsonNull
+}
+
+// decodeMilliseconds reads a duration typed as a whole JSON number of milliseconds.
+func decodeMilliseconds(value json.RawMessage) (time.Duration, error) {
+	var count int64
+	err := json.Unmarshal(value, &count)
+	if err != nil || count < 0 || count > maxMilliseconds {
+		return 0, fmt.Errorf("want a whole number of milliseconds such as 1850, got %s", value)
 	}
-	count, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, spellingError
+	return time.Duration(count) * time.Millisecond, nil
+}
+
+// decodeCount reads a frame field typed as a whole JSON number.
+func decodeCount(value json.RawMessage) (int, error) {
+	var count int
+	err := json.Unmarshal(value, &count)
+	if err != nil || count < 0 {
+		return 0, fmt.Errorf("want a whole number, got %s", value)
 	}
 	return count, nil
+}
+
+// decodeBool reads cut typed as a JSON bool.
+func decodeBool(value json.RawMessage) (bool, error) {
+	var isOn bool
+	if err := json.Unmarshal(value, &isOn); err != nil {
+		return false, fmt.Errorf("want true or false, got %s", value)
+	}
+	return isOn, nil
+}
+
+// decodeFactor reads a zoom factor typed as a JSON number, 0 for auto.
+func decodeFactor(value json.RawMessage) (float64, error) {
+	var factor float64
+	err := json.Unmarshal(value, &factor)
+	if err != nil || factor < 0 {
+		return 0, fmt.Errorf("want a number above 0, or 0 for auto, got %s", value)
+	}
+	return factor, nil
+}
+
+// decodeTarget reads a target typed as a pick answers it, {"text", "nth", "area"}, refusing any
+// other key.
+func decodeTarget(value json.RawMessage) (storyboard.Target, error) {
+	decoder := json.NewDecoder(bytes.NewReader(value))
+	decoder.DisallowUnknownFields()
+	var wire pickTarget
+	if err := decoder.Decode(&wire); err != nil {
+		return storyboard.Target{}, fmt.Errorf(
+			`want a target such as {"text": "ok", "nth": 2, "area": "list"}, got %s: %w`, value, err)
+	}
+	return wire.target(), nil
+}
+
+// decodeText reads a camera or caption field's text, typed as a JSON string.
+func decodeText(value json.RawMessage) (string, error) {
+	var text string
+	if err := json.Unmarshal(value, &text); err != nil {
+		return "", fmt.Errorf("want the field's text as a JSON string, got %s", value)
+	}
+	return text, nil
 }
 
 // parseDecimal reads a camera zoom move's factor spelled as a decimal.
@@ -65,13 +123,6 @@ func parseDecimal(value string) (float64, error) {
 		return 0, spellingError
 	}
 	return factor, nil
-}
-
-// parseTarget checks that value is a target as one line of YAML flow text — a flow mapping of
-// a target's own keys, with no comment — and returns it trimmed.
-func parseTarget(value string) (string, error) {
-	var target storyboard.Target
-	return parseFlowMapping(value, &target, "a target as YAML flow text such as {text: 'ok', area: list}")
 }
 
 // parsePoint checks that value is a pan's point as one line of YAML flow text — a target's flow

@@ -165,7 +165,7 @@ func TestHandler_EditThenFrame_ChangesTheFrame(t *testing.T) {
 	handler := newHandler(newSessionFixture(t).session, testAddr)
 	before := frameOf(t, handler, "500")
 
-	response := post(t, handler, "/api/edit", `{"beat": 1, "field": "duration", "value": "2000"}`)
+	response := post(t, handler, "/api/edit", `{"owner": {"kind": "beat", "index": 1}, "field": "duration", "value": 2000}`)
 
 	assertStatus(t, response, http.StatusOK)
 	var state State
@@ -178,11 +178,39 @@ func TestHandler_EditThenFrame_ChangesTheFrame(t *testing.T) {
 	}
 }
 
+func TestHandler_EditsAsThePageSendsThem_AreApplied(t *testing.T) {
+	t.Parallel()
+	session := newPickSession(t)
+	handler := newHandler(session, testAddr)
+	picked := post(t, handler, "/api/pick", pickBody(t, 0, cellPixel(t, session, 0, 5), cellPixel(t, session, 5, 5)))
+	assertStatus(t, picked, http.StatusOK)
+	var answer struct {
+		Target json.RawMessage `json:"target"`
+	}
+	decodeResponse(t, picked, &answer)
+	drag := `{"owner":{"kind":"beat","index":1},"field":"duration","value":1500}`
+	target := `{"owner":{"kind":"beat","index":1},"field":"zoom.target","value":` + string(answer.Target) + `}`
+
+	dragged := post(t, handler, "/api/edit", drag)
+	targeted := post(t, handler, "/api/edit", target)
+
+	assertStatus(t, dragged, http.StatusOK)
+	assertStatus(t, targeted, http.StatusOK)
+	var state State
+	decodeResponse(t, targeted, &state)
+	if got := beatDuration(t, state, 1); got != 1500 {
+		t.Errorf("beat 1 after the drag: want 1500ms, got %dms", got)
+	}
+	if zoom := state.Beats[0].Zoom; zoom == nil || zoom.Target != (TargetState{Text: "unique"}) {
+		t.Errorf("beat 1's zoom after the picked target: want unique, got %+v", zoom)
+	}
+}
+
 func TestHandler_RefusedEdit_Is422(t *testing.T) {
 	t.Parallel()
 	handler := newHandler(newSessionFixture(t).session, testAddr)
 
-	response := post(t, handler, "/api/edit", `{"beat": 9, "field": "duration", "value": "2000"}`)
+	response := post(t, handler, "/api/edit", `{"owner": {"kind": "beat", "index": 9}, "field": "duration", "value": 2000}`)
 
 	assertStatus(t, response, http.StatusUnprocessableEntity)
 	var failure apiError
@@ -196,7 +224,7 @@ func TestHandler_UndoRedoRevert_MoveThroughVersions(t *testing.T) {
 	t.Parallel()
 	handler := newHandler(newSessionFixture(t).session, testAddr)
 	assertStatus(t, post(t, handler, "/api/undo", `{}`), http.StatusUnprocessableEntity)
-	assertStatus(t, post(t, handler, "/api/edit", `{"beat": 1, "field": "duration", "value": "2000"}`), http.StatusOK)
+	assertStatus(t, post(t, handler, "/api/edit", `{"owner": {"kind": "beat", "index": 1}, "field": "duration", "value": 2000}`), http.StatusOK)
 	steps := []struct {
 		route  string
 		wantMS int64
@@ -221,13 +249,13 @@ func TestHandler_SaveAfterOutsideWrite_Is409UntilReload(t *testing.T) {
 	t.Parallel()
 	fixture := newSessionFixture(t)
 	handler := newHandler(fixture.session, testAddr)
-	assertStatus(t, post(t, handler, "/api/edit", `{"beat": 2, "field": "duration", "value": "1800"}`), http.StatusOK)
+	assertStatus(t, post(t, handler, "/api/edit", `{"owner": {"kind": "beat", "index": 2}, "field": "duration", "value": 1800}`), http.StatusOK)
 	fixture.writeOutside(t)
 
 	assertStatus(t, post(t, handler, "/api/save", `{}`), http.StatusConflict)
 
 	assertStatus(t, post(t, handler, "/api/reload", `{}`), http.StatusOK)
-	assertStatus(t, post(t, handler, "/api/edit", `{"beat": 2, "field": "duration", "value": "1800"}`), http.StatusOK)
+	assertStatus(t, post(t, handler, "/api/edit", `{"owner": {"kind": "beat", "index": 2}, "field": "duration", "value": 1800}`), http.StatusOK)
 	assertStatus(t, post(t, handler, "/api/save", `{}`), http.StatusOK)
 	saved := fixture.readDisk(t)
 	if !strings.Contains(saved, beatOneNew) || !strings.Contains(saved, "duration: 1800ms") {
@@ -246,7 +274,7 @@ func TestHandler_FrameAndEdit_RunConcurrently(t *testing.T) {
 		defer wait.Done()
 		durations := []string{"1200", "1000"}
 		for index := range rounds {
-			body := `{"beat": 1, "field": "duration", "value": "` + durations[index%2] + `"}`
+			body := `{"owner": {"kind": "beat", "index": 1}, "field": "duration", "value": ` + durations[index%2] + `}`
 			if response := post(t, handler, "/api/edit", body); response.Code != http.StatusOK {
 				t.Errorf("edit: status %d: %s", response.Code, response.Body.String())
 			}

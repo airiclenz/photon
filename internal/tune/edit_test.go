@@ -1,7 +1,9 @@
 package tune
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -23,6 +25,26 @@ func readBoard(t *testing.T) []byte {
 	return src
 }
 
+// typedValue is value as an Edit's JSON value; nil is the JSON null.
+func typedValue(value any) json.RawMessage {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		panic(fmt.Sprintf("encode the test value %v: %v", value, err))
+	}
+	return encoded
+}
+
+// beatEdit is an Edit of field on the beat with id, its value typed as value encodes.
+func beatEdit(id int, field string, value any) Edit {
+	owner := storyboard.Owner{Kind: storyboard.OwnerBeat, Index: id}
+	return Edit{Owner: owner, Field: field, Value: typedValue(value)}
+}
+
+// frameEdit is an Edit of the clip's frame field, its value typed as value encodes.
+func frameEdit(field string, value any) Edit {
+	return Edit{Owner: storyboard.Owner{Kind: storyboard.OwnerClip}, Field: field, Value: typedValue(value)}
+}
+
 func TestApply_Edit_ChangesOnlyTheEditedText(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -30,46 +52,48 @@ func TestApply_Edit_ChangesOnlyTheEditedText(t *testing.T) {
 		edit     Edit
 		old, new string
 	}{
-		{"duration in ms stays in ms", Edit{Beat: 1, Field: fieldDuration, Value: "1850"},
+		{"duration in ms stays in ms", beatEdit(1, fieldDuration, 1850),
 			"duration: 1800ms # kept", "duration: 1850ms # kept"},
-		{"duration in seconds stays in seconds", Edit{Beat: 2, Field: fieldDuration, Value: "2350"},
+		{"duration in seconds stays in seconds", beatEdit(2, fieldDuration, 2350),
 			"    duration: 2s\n    hold", "    duration: 2.35s\n    hold"},
-		{"whole seconds have no decimals", Edit{Beat: 2, Field: fieldDuration, Value: "3000"},
+		{"whole seconds have no decimals", beatEdit(2, fieldDuration, 3000),
 			"    duration: 2s\n    hold", "    duration: 3s\n    hold"},
-		{"another form is written as a Go duration", Edit{Beat: 4, Field: fieldDuration, Value: "91500"},
+		{"another form is written as a Go duration", beatEdit(4, fieldDuration, 91500),
 			"duration: 1m30s", "duration: 1m31.5s"},
-		{"hold is set", Edit{Beat: 2, Field: fieldHold, Value: "250"}, "hold: 500ms", "hold: 250ms"},
-		{"hold goes after the do list", Edit{Beat: 5, Field: fieldHold, Value: "400"},
+		{"hold is set", beatEdit(2, fieldHold, 250), "hold: 500ms", "hold: 250ms"},
+		{"hold goes after the do list", beatEdit(5, fieldHold, 400),
 			"      - pause: {for: 1s}\n", "      - pause: {for: 1s}\n    hold: 400ms\n"},
-		{"hold goes before the blank line after the beat", Edit{Beat: 1, Field: fieldHold, Value: "400"},
+		{"hold goes before the blank line after the beat", beatEdit(1, fieldHold, 400),
 			"timeout: 5s}\n", "timeout: 5s}\n    hold: 400ms\n"},
-		{"cut on is inserted", Edit{Beat: 5, Field: fieldCut, Value: valueTrue},
+		{"cut on is inserted", beatEdit(5, fieldCut, true),
 			"      - pause: {for: 1s}\n", "      - pause: {for: 1s}\n    cut: true\n"},
-		{"duration is inserted into a cut beat", Edit{Beat: 3, Field: fieldDuration, Value: "1200"},
+		{"duration is inserted into a cut beat", beatEdit(3, fieldDuration, 1200),
 			"      - key: {name: enter}\n", "      - key: {name: enter}\n    duration: 1.2s\n"},
-		{"auto factor deletes a block key", Edit{Beat: 2, Field: fieldZoomFactor, Value: valueAuto}, "      factor: 1.5\n", ""},
-		{"auto factor deletes a flow key", Edit{Beat: 4, Field: fieldZoomFactor, Value: valueAuto},
+		{"auto factor deletes a block key", beatEdit(2, fieldZoomFactor, 0), "      factor: 1.5\n", ""},
+		{"auto factor deletes a flow key", beatEdit(4, fieldZoomFactor, 0),
 			"{target: {text: 'beta', nth: 2}, factor: 2}", "{target: {text: 'beta', nth: 2}}"},
-		{"factor is set", Edit{Beat: 2, Field: fieldZoomFactor, Value: "1.8"}, "factor: 1.5", "factor: 1.8"},
-		{"factor goes after a block target", Edit{Beat: 6, Field: fieldZoomFactor, Value: "2.5"},
+		{"factor is set", beatEdit(2, fieldZoomFactor, 1.8), "factor: 1.5", "factor: 1.8"},
+		{"factor goes after a block target", beatEdit(6, fieldZoomFactor, 2.5),
 			"        text: 'gamma'\n", "        text: 'gamma'\n      factor: 2.5\n"},
-		{"target on a block zoom", Edit{Beat: 2, Field: fieldZoomTarget, Value: "{text: 'hi', nth: 2}"},
+		{"target on a block zoom", beatEdit(2, fieldZoomTarget, json.RawMessage(`{"text": "hi", "nth": 2}`)),
 			"target: {text: 'hello', area: status}", "target: {text: 'hi', nth: 2}"},
-		{"target on a flow zoom", Edit{Beat: 4, Field: fieldZoomTarget, Value: "{text: 'gamma', area: list}"},
-			"{target: {text: 'beta', nth: 2}, factor: 2}", "{target: {text: 'gamma', area: list}, factor: 2}"},
-		{"target on a block zoom holding only its target", Edit{Beat: 6, Field: fieldZoomTarget, Value: "{text: 'delta'}"},
+		{"target on a flow zoom", beatEdit(4, fieldZoomTarget, json.RawMessage(`{"text": "gamma", "area": "list"}`)),
+			"{target: {text: 'beta', nth: 2}, factor: 2}", "{target: {text: 'gamma', area: 'list'}, factor: 2}"},
+		{"a target's last match is written as nth: last", beatEdit(2, fieldZoomTarget, json.RawMessage(`{"text": "hi", "nth": "last"}`)),
+			"target: {text: 'hello', area: status}", "target: {text: 'hi', nth: last}"},
+		{"target on a block zoom holding only its target", beatEdit(6, fieldZoomTarget, json.RawMessage(`{"text": "delta"}`)),
 			"    zoom:\n      target:\n        text: 'gamma'\n", "    zoom: {target: {text: 'delta'}}\n"},
-		{"zoom in goes after the factor", Edit{Beat: 2, Field: fieldZoomIn, Value: "1500"},
+		{"zoom in goes after the factor", beatEdit(2, fieldZoomIn, 1500),
 			"      factor: 1.5\n", "      factor: 1.5\n      in: 1.5s\n"},
-		{"zoom out goes last in a flow zoom", Edit{Beat: 4, Field: fieldZoomOut, Value: "750"}, "factor: 2}", "factor: 2, out: 750ms}"},
-		{"zoom is added as a flow mapping", Edit{Beat: 5, Field: fieldZoom, Value: "{text: 'x', area: list}"},
-			"      - pause: {for: 1s}\n", "      - pause: {for: 1s}\n    zoom: {target: {text: 'x', area: list}}\n"},
-		{"a block zoom is removed", Edit{Beat: 2, Field: fieldZoom, Value: ""},
+		{"zoom out goes last in a flow zoom", beatEdit(4, fieldZoomOut, 750), "factor: 2}", "factor: 2, out: 750ms}"},
+		{"zoom is added as a flow mapping", beatEdit(5, fieldZoom, json.RawMessage(`{"text": "x", "area": "list"}`)),
+			"      - pause: {for: 1s}\n", "      - pause: {for: 1s}\n    zoom: {target: {text: 'x', area: 'list'}}\n"},
+		{"a block zoom is removed", beatEdit(2, fieldZoom, nil),
 			"    zoom:\n      target: {text: 'hello', area: status}\n      factor: 1.5\n", ""},
-		{"a flow zoom is removed", Edit{Beat: 4, Field: fieldZoom, Value: ""},
+		{"a flow zoom is removed", beatEdit(4, fieldZoom, nil),
 			"    zoom: {target: {text: 'beta', nth: 2}, factor: 2}\n", ""},
-		{"frame width in a flow frame", Edit{Beat: 0, Field: fieldFrameWidth, Value: "640"}, "width: 600", "width: 640"},
-		{"frame fps in a flow frame", Edit{Beat: 0, Field: fieldFrameFPS, Value: "30"}, "fps: 24", "fps: 30"},
+		{"frame width in a flow frame", frameEdit(fieldFrameWidth, 640), "width: 600", "width: 640"},
+		{"frame fps in a flow frame", frameEdit(fieldFrameFPS, 30), "fps: 24", "fps: 30"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -98,10 +122,10 @@ func TestApply_DefaultOrAbsentKey_LeavesTheSourceAsItIs(t *testing.T) {
 		name string
 		edit Edit
 	}{
-		{"a zero hold is not written out", Edit{Beat: 5, Field: fieldHold, Value: "0"}},
-		{"cut off on a beat with no cut", Edit{Beat: 5, Field: fieldCut, Value: valueFalse}},
-		{"auto factor on a zoom with no factor", Edit{Beat: 6, Field: fieldZoomFactor, Value: valueAuto}},
-		{"a default ramp is not written out", Edit{Beat: 2, Field: fieldZoomIn, Value: "1000"}},
+		{"a zero hold is not written out", beatEdit(5, fieldHold, 0)},
+		{"cut off on a beat with no cut", beatEdit(5, fieldCut, false)},
+		{"auto factor on a zoom with no factor", beatEdit(6, fieldZoomFactor, 0)},
+		{"a default ramp is not written out", beatEdit(2, fieldZoomIn, 1000)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -124,7 +148,7 @@ func TestApply_Edit_ReturnsTheStoryboardTheBytesDecodeTo(t *testing.T) {
 	t.Parallel()
 	src := readBoard(t)
 
-	_, board, err := apply(src, boardPath, Edit{Beat: 2, Field: fieldHold, Value: "250"})
+	_, board, err := apply(src, boardPath, beatEdit(2, fieldHold, 250))
 
 	if err != nil {
 		t.Fatalf("apply: %v", err)
@@ -140,11 +164,11 @@ func TestApply_InvalidResult_IsRefusedWithTheValidationError(t *testing.T) {
 		name string
 		edit Edit
 	}{
-		{"hold reaching the duration", Edit{Beat: 1, Field: fieldHold, Value: "1800"}},
-		{"cut off on a beat with no duration", Edit{Beat: 3, Field: fieldCut, Value: valueFalse}},
-		{"a factor beyond the range", Edit{Beat: 2, Field: fieldZoomFactor, Value: "3.5"}},
-		{"a target with no text", Edit{Beat: 2, Field: fieldZoomTarget, Value: "{area: list}"}},
-		{"a zero frame width", Edit{Beat: 0, Field: fieldFrameWidth, Value: "0"}},
+		{"hold reaching the duration", beatEdit(1, fieldHold, 1800)},
+		{"cut off on a beat with no duration", beatEdit(3, fieldCut, false)},
+		{"a factor beyond the range", beatEdit(2, fieldZoomFactor, 3.5)},
+		{"a target with no text", beatEdit(2, fieldZoomTarget, json.RawMessage(`{"area": "list"}`))},
+		{"a zero frame width", frameEdit(fieldFrameWidth, 0)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -171,14 +195,21 @@ func TestApply_EditOnWhatIsNotThere_IsRefused(t *testing.T) {
 		edit    Edit
 		message string
 	}{
-		{"a zero ramp names the default", Edit{Beat: 2, Field: fieldZoomIn, Value: "0"}, "zoom.in: want a ramp longer than 0ms; a ramp left out runs the 1s default"},
-		{"a zero out ramp names the default", Edit{Beat: 4, Field: fieldZoomOut, Value: "0"}, "zoom.out: want a ramp longer than 0ms; a ramp left out runs the 1s default"},
-		{"a zoom field on a beat with no zoom", Edit{Beat: 5, Field: fieldZoomTarget, Value: "{text: 'x'}"}, "beat 5: zoom.target: the beat has no zoom"},
-		{"a second zoom", Edit{Beat: 2, Field: fieldZoom, Value: "{text: 'x'}"}, "beat 2: zoom: the beat already zooms"},
-		{"removing a zoom that is not there", Edit{Beat: 5, Field: fieldZoom, Value: ""}, "beat 5: zoom: the beat has no zoom to remove"},
-		{"an unknown beat", Edit{Beat: 9, Field: fieldDuration, Value: "1000"}, "beat 9: duration: the storyboard has no beat with id 9"},
-		{"an unknown field", Edit{Beat: 1, Field: "title", Value: "x"}, "beat 1: title: unknown field"},
-		{"a frame field on a beat", Edit{Beat: 1, Field: fieldFrameFPS, Value: "30"}, "frame.fps: want beat 0"},
+		{"a zero ramp names the default", beatEdit(2, fieldZoomIn, 0), "zoom.in: want a ramp longer than 0ms; a ramp left out runs the 1s default"},
+		{"a zero out ramp names the default", beatEdit(4, fieldZoomOut, 0), "zoom.out: want a ramp longer than 0ms; a ramp left out runs the 1s default"},
+		{"a zoom field on a beat with no zoom", beatEdit(5, fieldZoomTarget, json.RawMessage(`{"text": "x"}`)), "beat 5: zoom.target: the beat has no zoom"},
+		{"a second zoom", beatEdit(2, fieldZoom, json.RawMessage(`{"text": "x"}`)), "beat 2: zoom: the beat already zooms"},
+		{"removing a zoom that is not there", beatEdit(5, fieldZoom, nil), "beat 5: zoom: the beat has no zoom to remove"},
+		{"an unknown beat", beatEdit(9, fieldDuration, 1000), "beat 9: duration: the storyboard has no beat with id 9"},
+		{"an unknown field", beatEdit(1, "title", "x"), "beat 1: title: unknown field"},
+		{"a frame field on a beat", beatEdit(1, fieldFrameFPS, 30), "beat 1: frame.fps: want a clip owner"},
+		{"a frame field on a clip index past 0", Edit{Owner: storyboard.Owner{Kind: storyboard.OwnerClip, Index: 1},
+			Field: fieldFrameFPS, Value: typedValue(30)}, "frame.fps: want the clip at index 0"},
+		{"a beat field on a camera move", cameraEdit(0, fieldDuration, "1000"), "camera[0]: duration: want a beat owner"},
+		{"a null duration", beatEdit(2, fieldDuration, nil), "beat 2: duration: want a value, got null"},
+		{"an absent duration", Edit{Owner: storyboard.Owner{Kind: storyboard.OwnerBeat, Index: 2}, Field: fieldDuration},
+			"beat 2: duration: want a value, got none"},
+		{"a null zoom target", beatEdit(2, fieldZoomTarget, nil), "beat 2: zoom.target: want a value, got null"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -201,30 +232,37 @@ func TestApply_WireSpellings(t *testing.T) {
 		edit       Edit
 		isAccepted bool
 	}{
-		{"milliseconds", Edit{Beat: 2, Field: fieldDuration, Value: "1850"}, true},
-		{"a duration with a unit", Edit{Beat: 2, Field: fieldDuration, Value: "1.85s"}, false},
-		{"a negative hold", Edit{Beat: 2, Field: fieldHold, Value: "-5"}, false},
-		{"a ramp with a unit", Edit{Beat: 2, Field: fieldZoomIn, Value: "1s"}, false},
-		{"a ramp as words", Edit{Beat: 2, Field: fieldZoomOut, Value: "long"}, false},
-		{"cut true", Edit{Beat: 5, Field: fieldCut, Value: "true"}, true},
-		{"cut false", Edit{Beat: 2, Field: fieldCut, Value: "false"}, true},
-		{"cut as yes", Edit{Beat: 2, Field: fieldCut, Value: "yes"}, false},
-		{"a decimal factor", Edit{Beat: 2, Field: fieldZoomFactor, Value: "1.8"}, true},
-		{"a whole factor", Edit{Beat: 2, Field: fieldZoomFactor, Value: "2"}, true},
-		{"auto factor", Edit{Beat: 2, Field: fieldZoomFactor, Value: "auto"}, true},
-		{"factor 0 for auto", Edit{Beat: 2, Field: fieldZoomFactor, Value: "0"}, false},
-		{"a factor as words", Edit{Beat: 2, Field: fieldZoomFactor, Value: "fast"}, false},
-		{"a frame integer", Edit{Beat: 0, Field: fieldFrameWidth, Value: "640"}, true},
-		{"a frame decimal", Edit{Beat: 0, Field: fieldFrameWidth, Value: "6.5"}, false},
-		{"an empty frame value", Edit{Beat: 0, Field: fieldFrameFPS, Value: ""}, false},
-		{"a target flow mapping", Edit{Beat: 2, Field: fieldZoomTarget, Value: "{text: 'ok', area: list, nth: 2}"}, true},
-		{"a target with nth last", Edit{Beat: 2, Field: fieldZoomTarget, Value: "{text: 'ok', nth: last}"}, true},
-		{"a target as a block mapping", Edit{Beat: 2, Field: fieldZoomTarget, Value: "text: ok"}, false},
-		{"a target with an unknown key", Edit{Beat: 2, Field: fieldZoomTarget, Value: "{text: ok, bogus: 1}"}, false},
-		{"a target with a comment", Edit{Beat: 2, Field: fieldZoomTarget, Value: "{text: ok} # note }"}, false},
-		{"a zoom added onto a target", Edit{Beat: 5, Field: fieldZoom, Value: "{text: 'ok', area: list}"}, true},
-		{"a zoom added onto a sequence", Edit{Beat: 5, Field: fieldZoom, Value: "[ok]"}, false},
-		{"a zoom removed", Edit{Beat: 2, Field: fieldZoom, Value: ""}, true},
+		{"milliseconds", beatEdit(2, fieldDuration, 1850), true},
+		{"milliseconds as a string", beatEdit(2, fieldDuration, "1850"), false},
+		{"a duration with a unit", beatEdit(2, fieldDuration, "1.85s"), false},
+		{"fractional milliseconds", beatEdit(2, fieldDuration, 1850.5), false},
+		{"a negative hold", beatEdit(2, fieldHold, -5), false},
+		{"a ramp with a unit", beatEdit(2, fieldZoomIn, "1s"), false},
+		{"a ramp as a bool", beatEdit(2, fieldZoomOut, true), false},
+		{"cut true", beatEdit(5, fieldCut, true), true},
+		{"cut false", beatEdit(2, fieldCut, false), true},
+		{"cut as a string", beatEdit(2, fieldCut, "true"), false},
+		{"cut as a number", beatEdit(2, fieldCut, 1), false},
+		{"a decimal factor", beatEdit(2, fieldZoomFactor, 1.8), true},
+		{"a whole factor", beatEdit(2, fieldZoomFactor, 2), true},
+		{"factor 0 for auto", beatEdit(2, fieldZoomFactor, 0), true},
+		{"a negative factor", beatEdit(2, fieldZoomFactor, -1.5), false},
+		{"auto as a string", beatEdit(2, fieldZoomFactor, "auto"), false},
+		{"a frame integer", frameEdit(fieldFrameWidth, 640), true},
+		{"a frame decimal", frameEdit(fieldFrameWidth, 6.5), false},
+		{"a frame integer as a string", frameEdit(fieldFrameFPS, "30"), false},
+		{"a negative frame integer", frameEdit(fieldFrameFPS, -30), false},
+		{"a target", beatEdit(2, fieldZoomTarget, json.RawMessage(`{"text": "ok", "area": "list", "nth": 2}`)), true},
+		{"a target with nth last", beatEdit(2, fieldZoomTarget, json.RawMessage(`{"text": "ok", "nth": "last"}`)), true},
+		{"a target with nth 0", beatEdit(2, fieldZoomTarget, json.RawMessage(`{"text": "ok", "nth": 0}`)), false},
+		{"a target with nth first", beatEdit(2, fieldZoomTarget, json.RawMessage(`{"text": "ok", "nth": "first"}`)), false},
+		{"a target with nth as a decimal", beatEdit(2, fieldZoomTarget, json.RawMessage(`{"text": "ok", "nth": 1.5}`)), false},
+		{"a target as YAML flow text", beatEdit(2, fieldZoomTarget, "{text: 'ok'}"), false},
+		{"a target with an unknown key", beatEdit(2, fieldZoomTarget, json.RawMessage(`{"text": "ok", "bogus": 1}`)), false},
+		{"a target with a numeric text", beatEdit(2, fieldZoomTarget, json.RawMessage(`{"text": 7}`)), false},
+		{"a zoom added onto a target", beatEdit(5, fieldZoom, json.RawMessage(`{"text": "ok", "area": "list"}`)), true},
+		{"a zoom added onto a sequence", beatEdit(5, fieldZoom, []string{"ok"}), false},
+		{"a zoom removed", beatEdit(2, fieldZoom, nil), true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -267,9 +305,10 @@ const cameraEditBoard = sessionStoryboard + `camera:
   - zoom: {to: 1.2, over: 50ms}
 `
 
-// cameraEdit is an Edit of the camera move at index.
+// cameraEdit is an Edit of the camera move at index, its text value sent as a JSON string.
 func cameraEdit(index int, field, value string) Edit {
-	return Edit{Index: index, Field: field, Value: value}
+	owner := storyboard.Owner{Kind: storyboard.OwnerCamera, Index: index}
+	return Edit{Owner: owner, Field: field, Value: typedValue(value)}
 }
 
 func TestApply_CameraEdit_ChangesOnlyTheEditedText(t *testing.T) {
@@ -466,9 +505,10 @@ const captionEditBoard = sessionStoryboard + `captions:
   - {text: 'Start', for: 300ms}
 `
 
-// captionEdit is an Edit of the caption at index.
+// captionEdit is an Edit of the caption at index, its text value sent as a JSON string.
 func captionEdit(index int, field, value string) Edit {
-	return Edit{Index: index, Field: field, Value: value}
+	owner := storyboard.Owner{Kind: storyboard.OwnerCaption, Index: index}
+	return Edit{Owner: owner, Field: field, Value: typedValue(value)}
 }
 
 func TestApply_CaptionEdit_ChangesOnlyTheEditedText(t *testing.T) {
@@ -684,7 +724,7 @@ func TestSession_CaptionEdit_SwapsTheEndAndUndoes(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
 
-	f.apply(t, Edit{Index: 1, Field: fieldCaptionFor, Value: "1000"})
+	f.apply(t, captionEdit(1, fieldCaptionFor, "1000"))
 	edited := f.session.State()
 	undoErr := f.session.Undo()
 	undone := f.session.State()

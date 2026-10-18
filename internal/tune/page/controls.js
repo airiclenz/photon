@@ -24,9 +24,13 @@
     return fieldRow(label, element("span", { className: "read-only" }, text));
   }
 
+  // millisecondsField edits field as whole milliseconds: a number for a beat's field, the text
+  // typed for a camera move's.
   function millisecondsField(label, owner, field, ms) {
     const input = element("input", { type: "number", min: "0", step: "1", value: String(ms) });
-    input.addEventListener("change", () => applyEdit(owner, field, input.value.trim()));
+    input.addEventListener("change", () =>
+      applyEdit(owner, field, isEntry(owner) ? input.value.trim() : numberOf(input.value)),
+    );
     return fieldRow(label + " (ms)", input);
   }
 
@@ -47,8 +51,16 @@
 
   function countField(label, field, count) {
     const input = element("input", { type: "number", min: "1", step: "1", value: String(count) });
-    input.addEventListener("change", () => applyEdit(CLIP, field, input.value.trim()));
+    input.addEventListener("change", () => applyEdit(CLIP, field, numberOf(input.value)));
     return fieldRow(label, input);
+  }
+
+  // numberOf is text typed into a number input as the number an edit takes, or the text itself
+  // when it holds no number, so the server's refusal names what was typed.
+  function numberOf(text) {
+    const trimmed = text.trim();
+    const number = Number(trimmed);
+    return trimmed !== "" && Number.isFinite(number) ? number : trimmed;
   }
 
   // errorRows are the errors standing on owner — a beat id, 0 for the clip, or a camera move's
@@ -76,8 +88,8 @@
       .errors.filter((problem) => problem.owner.kind === wanted.kind && problem.owner.index === wanted.index);
   }
 
-  // problemOwner spells owner as a problem's {kind, index}: the clip, a beat by its id, or the
-  // camera move's or caption's entry, whose kinds a problem's owner spells the same.
+  // problemOwner spells owner as a problem's or an edit's {kind, index}: the clip, a beat by its
+  // id, or the camera move's or caption's entry, whose kinds a problem's owner spells the same.
   function problemOwner(owner) {
     if (isEntry(owner)) {
       return owner;
@@ -126,6 +138,8 @@
     countField,
     errorRows,
     errorMark,
+    problemOwner,
+    numberOf,
     needsRecord,
     momentText,
     flowTarget,

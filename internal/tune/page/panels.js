@@ -17,13 +17,18 @@
     countField,
     errorRows,
     needsRecord,
-    flowTarget,
-    TARGET_PLACEHOLDER,
+    numberOf,
   } = page;
-  const VALUE_AUTO = "auto";
-  const VALUE_TRUE = "true";
-  const VALUE_FALSE = "false";
+  const AUTO_FACTOR = 0;
   const DEFAULT_FACTOR = "2";
+  // A target's nth: /api/state sends 0 for the first match and -1 for the last; an edit leaves
+  // the first out and spells the last "last".
+  const STATE_NTH_FIRST = 0;
+  const STATE_NTH_LAST = -1;
+  const NTH_LAST = "last";
+  const TEXT_PLACEHOLDER = "a regex, such as ok";
+  const NTH_PLACEHOLDER = "blank for the first; 2, 3 … or last";
+  const AREA_PLACEHOLDER = "the whole screen";
   // READ_ONLY_FRAME_FIELDS are the frame's keys photon tune shows but does not edit, named as the
   // storyboard and /api/state both spell them.
   const READ_ONLY_FRAME_FIELDS = [
@@ -69,27 +74,29 @@
 
   function cutField(beat) {
     const box = element("input", { type: "checkbox", checked: beat.cut });
-    box.addEventListener("change", () => applyEdit(beat.id, "cut", box.checked ? VALUE_TRUE : VALUE_FALSE));
+    box.addEventListener("change", () => applyEdit(beat.id, "cut", box.checked));
     return fieldRow("cut", box);
   }
 
   // zoomPanel edits the beat's zoom, or offers to add one by its target.
   function zoomPanel(beat) {
     const heading = element("h3", {}, "zoom");
-    if (!beat.zoom) {
-      const target = element("input", { type: "text", placeholder: TARGET_PLACEHOLDER });
-      const add = element("button", { type: "button" }, "Add zoom");
-      add.addEventListener("click", () => applyEdit(beat.id, "zoom", target.value.trim()));
-      return [heading, fieldRow("target", target), add];
-    }
     const zoom = beat.zoom;
-    const target = element("input", { type: "text", value: flowTarget(zoom.target) });
-    target.addEventListener("change", () => applyEdit(beat.id, "zoom.target", target.value.trim()));
+    const inputs = targetInputs(zoom ? zoom.target : null);
+    const targetRows = [fieldRow("target", inputs.text), fieldRow("nth", inputs.nth), fieldRow("area", inputs.area)];
+    if (!zoom) {
+      const add = element("button", { type: "button" }, "Add zoom");
+      add.addEventListener("click", () => applyEdit(beat.id, "zoom", targetOf(inputs)));
+      return [heading, ...targetRows, add];
+    }
+    for (const input of Object.values(inputs)) {
+      input.addEventListener("change", () => applyEdit(beat.id, "zoom.target", targetOf(inputs)));
+    }
     const remove = element("button", { type: "button" }, "Remove zoom");
-    remove.addEventListener("click", () => applyEdit(beat.id, "zoom", ""));
+    remove.addEventListener("click", () => applyEdit(beat.id, "zoom", null));
     return [
       heading,
-      fieldRow("target", target),
+      ...targetRows,
       factorField(beat.id, zoom.factor),
       millisecondsField("in", beat.id, "zoom.in", zoom.in_ms),
       millisecondsField("out", beat.id, "zoom.out", zoom.out_ms),
@@ -97,9 +104,43 @@
     ];
   }
 
+  // targetInputs are a target's text, nth and area inputs, holding target when there is one.
+  function targetInputs(target) {
+    const input = (value, placeholder) => element("input", { type: "text", value, placeholder });
+    return {
+      text: input(target ? target.text : "", TEXT_PLACEHOLDER),
+      nth: input(target ? nthText(target.nth) : "", NTH_PLACEHOLDER),
+      area: input(target ? target.area : "", AREA_PLACEHOLDER),
+    };
+  }
+
+  // nthText spells a state target's nth for its input: blank for the first match, "last" for the
+  // last, else its number.
+  function nthText(nth) {
+    if (nth === STATE_NTH_FIRST) {
+      return "";
+    }
+    return nth === STATE_NTH_LAST ? NTH_LAST : String(nth);
+  }
+
+  // targetOf is the typed target the inputs hold, as an edit takes it: nth left out for the
+  // first match and area for the whole screen.
+  function targetOf(inputs) {
+    const target = { text: inputs.text.value };
+    const nth = inputs.nth.value.trim();
+    if (nth !== "") {
+      target.nth = nth === NTH_LAST ? NTH_LAST : numberOf(nth);
+    }
+    const area = inputs.area.value.trim();
+    if (area !== "") {
+      target.area = area;
+    }
+    return target;
+  }
+
   // factorField edits the zoom factor; factor 0 is auto, fitted to the target.
   function factorField(beat, factor) {
-    const isAuto = factor === 0;
+    const isAuto = factor === AUTO_FACTOR;
     const input = element("input", {
       type: "number",
       step: "0.1",
@@ -107,9 +148,9 @@
       disabled: isAuto,
     });
     const auto = element("input", { type: "checkbox", checked: isAuto });
-    input.addEventListener("change", () => applyEdit(beat, "zoom.factor", input.value.trim()));
+    input.addEventListener("change", () => applyEdit(beat, "zoom.factor", numberOf(input.value)));
     auto.addEventListener("change", () =>
-      applyEdit(beat, "zoom.factor", auto.checked ? VALUE_AUTO : input.value.trim()),
+      applyEdit(beat, "zoom.factor", auto.checked ? AUTO_FACTOR : numberOf(input.value)),
     );
     const autoLabel = element("label", { className: "inline" }, auto, "auto");
     return fieldRow("factor", element("span", { className: "inline" }, input, autoLabel));

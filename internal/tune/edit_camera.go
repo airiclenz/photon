@@ -10,7 +10,7 @@ import (
 	"github.com/airiclenz/photon/internal/yamledit"
 )
 
-// The camera move fields an Edit names; each edits the move at the Edit's Index.
+// The camera move fields an Edit names; each edits the move its owner's index names.
 const (
 	fieldCameraAt   = "camera.at"
 	fieldCameraOver = "camera.over"
@@ -43,35 +43,35 @@ func isCameraField(field string) bool {
 	return strings.HasPrefix(field, cameraFieldPrefix)
 }
 
-// editCamera applies a camera move field's edit to the move at edit.Index in board, the
-// storyboard s.doc holds.
-func (s *splicer) editCamera(board *storyboard.Storyboard, edit Edit) error {
-	if edit.Index < 0 || edit.Index >= len(board.Camera) {
-		return fmt.Errorf("the storyboard has no camera move at index %d", edit.Index)
+// editCamera sets field, spelled as value, on the move at index in board, the storyboard s.doc
+// holds.
+func (s *splicer) editCamera(board *storyboard.Storyboard, index int, field, value string) error {
+	if index < 0 || index >= len(board.Camera) {
+		return fmt.Errorf("the storyboard has no camera move at index %d", index)
 	}
-	camera := board.Camera[edit.Index]
+	camera := board.Camera[index]
 	kind, order := keyZoom, zoomMoveKeyOrder
 	if camera.Pan != nil {
 		kind, order = keyPan, panMoveKeyOrder
 	}
-	move := yamledit.Path{keyCamera, strconv.Itoa(edit.Index), kind}
+	move := yamledit.Path{keyCamera, strconv.Itoa(index), kind}
 
-	switch edit.Field {
+	switch field {
 	case fieldCameraAt:
-		return s.setMoment(move, order, edit.Value)
+		return s.setMoment(move, order, value)
 	case fieldCameraOver:
-		length, err := parseMilliseconds(edit.Value)
+		length, err := parseMilliseconds(value)
 		if err != nil {
 			return err
 		}
 		return s.writeDuration(move, keyOver, order, 0, length)
 	case fieldCameraEase:
-		return s.setEase(move, order, edit.Value)
+		return s.setEase(move, order, value)
 	default:
 		if camera.Zoom != nil {
-			return s.setZoomTo(move, edit.Value)
+			return s.setZoomTo(move, value)
 		}
-		return s.setPanTo(move, camera.Pan.Via != nil, edit.Value)
+		return s.setPanTo(move, camera.Pan.Via != nil, value)
 	}
 }
 

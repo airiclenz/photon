@@ -427,7 +427,12 @@ internal/tune/testdata/board.yaml — beats 2, 4, 6; internal/yamledit/scan.go �
 **Closes:** yamledit-upsert
 **Commit:** `refactor(tune): edit through yamledit's own tree`
 
-## 18. Typed edit wire for beats and the frame
+## 18. Typed edit wire for beats and the frame — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): re-derived from the assumption that only edit.go and value.go read an Edit's Beat/Index/Value: editCamera (edit_camera.go) and editCaption (edit_caption.go) read edit.Index and edit.Value too, so they now take the owner's index, the field and the text decoded from the JSON-string value.
+NOTES (2026-10-18): entries.js needed no change: its senders all go through app.js's applyEdit, which now builds {owner, field, value} from the shared problemOwner (exported from controls.js); millisecondsField still sends text for a camera owner's camera.over until item 19 types it.
+NOTES (2026-10-18): a null caption.until is refused like every other null for now; item 20 makes it clear the until. An absent value is refused for every field, zoom included; only an explicit null removes a zoom.
+NOTES (2026-10-18): targets an edit writes now go through pick.go's targetFlow, so the area is single-quoted (`area: 'list'`) as the pick snippets already wrote it; /api/state's TargetState still sends nth as 0 (first) / -1 (last), which panels.js maps to the inputs.
 
 Depends on items 11 and 17.
 

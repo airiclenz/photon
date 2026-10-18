@@ -1,6 +1,7 @@
 package tune
 
 import (
+	"encoding/json"
 	"errors"
 	"image"
 	"path/filepath"
@@ -261,7 +262,7 @@ func TestSession_Pick_NoTarget_IsRefused(t *testing.T) {
 	}
 }
 
-func TestSession_Pick_ZoomSnippetIsAZoomTargetEdit(t *testing.T) {
+func TestSession_Pick_ProposedTargetIsAZoomTargetEdit(t *testing.T) {
 	t.Parallel()
 	session := newPickSession(t)
 	proposal, err := session.Pick(0, cellPixel(t, session, 0, 4), cellPixel(t, session, 6, 4))
@@ -269,10 +270,10 @@ func TestSession_Pick_ZoomSnippetIsAZoomTargetEdit(t *testing.T) {
 		t.Fatalf("Pick: %v", err)
 	}
 
-	err = session.Apply(Edit{Beat: 1, Field: fieldZoomTarget, Value: proposal.Snippets[snippetZoom]})
+	err = session.Apply(beatEdit(1, fieldZoomTarget, responseOf(proposal).Target))
 
 	if err != nil {
-		t.Fatalf("Apply the zoom snippet: %v", err)
+		t.Fatalf("Apply the proposed target: %v", err)
 	}
 	state := session.State()
 	if len(state.Errors) != 0 {
@@ -280,6 +281,33 @@ func TestSession_Pick_ZoomSnippetIsAZoomTargetEdit(t *testing.T) {
 	}
 	want := TargetState{Text: proposal.Target.Text, Nth: int(proposal.Target.Nth), Area: proposal.Target.Area}
 	if zoom := state.Beats[0].Zoom; zoom == nil || zoom.Target != want {
+		t.Errorf("beat 1's zoom: want the target %+v, got %+v", want, zoom)
+	}
+}
+
+func TestSession_LastMatchTarget_RoundTripsThroughTheProposalAndItsApply(t *testing.T) {
+	t.Parallel()
+	session := newPickSession(t)
+	last := storyboard.Target{Text: "beta", Nth: storyboard.NthLast}
+	response := responseOf(Proposal{Target: last, Snippets: snippetsOf(last)})
+
+	encoded, encodeErr := json.Marshal(response.Target)
+	applyErr := session.Apply(beatEdit(1, fieldZoomTarget, json.RawMessage(encoded)))
+
+	if encodeErr != nil {
+		t.Fatalf("encode the proposed target: %v", encodeErr)
+	}
+	if want := `{"text":"beta","nth":"last"}`; string(encoded) != want {
+		t.Errorf("the proposed target on the wire: want %s, got %s", want, encoded)
+	}
+	if want := "{text: 'beta', nth: last}"; response.Snippets[snippetZoom] != want {
+		t.Errorf("the zoom snippet: want %q, got %q", want, response.Snippets[snippetZoom])
+	}
+	if applyErr != nil {
+		t.Fatalf("Apply the proposed target: %v", applyErr)
+	}
+	want := TargetState{Text: "beta", Nth: int(storyboard.NthLast)}
+	if zoom := session.State().Beats[0].Zoom; zoom == nil || zoom.Target != want {
 		t.Errorf("beat 1's zoom: want the target %+v, got %+v", want, zoom)
 	}
 }

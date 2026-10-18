@@ -11,7 +11,7 @@ import (
 	"github.com/airiclenz/photon/internal/yamledit"
 )
 
-// The caption fields an Edit names; each edits the caption at the Edit's Index.
+// The caption fields an Edit names; each edits the caption its owner's index names.
 const (
 	fieldCaptionAt    = "caption.at"
 	fieldCaptionFor   = "caption.for"
@@ -52,27 +52,27 @@ func isCaptionField(field string) bool {
 	return strings.HasPrefix(field, captionFieldPrefix)
 }
 
-// editCaption applies a caption field's edit to the caption at edit.Index in board, the
-// storyboard s.doc holds.
-func (s *splicer) editCaption(board *storyboard.Storyboard, edit Edit) error {
-	if edit.Index < 0 || edit.Index >= len(board.Captions) {
-		return fmt.Errorf("the storyboard has no caption at index %d", edit.Index)
+// editCaption sets field, spelled as value, on the caption at index in board, the storyboard
+// s.doc holds.
+func (s *splicer) editCaption(board *storyboard.Storyboard, index int, field, value string) error {
+	if index < 0 || index >= len(board.Captions) {
+		return fmt.Errorf("the storyboard has no caption at index %d", index)
 	}
-	caption := yamledit.Path{keyCaptions, strconv.Itoa(edit.Index)}
+	caption := yamledit.Path{keyCaptions, strconv.Itoa(index)}
 
-	switch edit.Field {
+	switch field {
 	case fieldCaptionAt:
-		return s.setMoment(caption, captionKeyOrder, edit.Value)
+		return s.setMoment(caption, captionKeyOrder, value)
 	case fieldCaptionFor:
-		return s.setCaptionFor(caption, edit.Value)
+		return s.setCaptionFor(caption, value)
 	case fieldCaptionUntil:
-		return s.setCaptionUntil(caption, edit.Value)
+		return s.setCaptionUntil(caption, value)
 	case fieldCaptionText:
-		return s.setCaptionText(caption, edit.Value)
+		return s.setCaptionText(caption, value)
 	case fieldCaptionPlace:
-		return s.setPlacement(caption, keyPlace, edit.Value, placeSpellings, string(storyboard.PlaceBottom))
+		return s.setPlacement(caption, keyPlace, value, placeSpellings, string(storyboard.PlaceBottom))
 	default:
-		return s.setPlacement(caption, keyAlign, edit.Value, alignSpellings, string(storyboard.AlignMiddle))
+		return s.setPlacement(caption, keyAlign, value, alignSpellings, string(storyboard.AlignMiddle))
 	}
 }
 

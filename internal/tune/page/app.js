@@ -13,8 +13,9 @@
 //   frameTime()  the output milliseconds of the frame the preview <img> shows, or null
 //   seek(ms)     move the playhead to ms, clamped to the clip
 //   pause()      stop playing
-//   edit(edit)   apply {beat, field, value}, or {index, field, value} for a camera move's or
-//                caption's field; a Promise of the new state, rejected when refused
+//   edit(edit)   apply {owner: {kind, index}, field, value}: owner a beat by its id, the clip
+//                with index 0, or a camera move or caption by its index, value typed per
+//                field; a Promise of the new state, rejected when refused
 //   onState(fn)  call fn(state) with every new state
 //   frame        the preview <img> element
 //
@@ -45,7 +46,6 @@
   const ENTRY_CAMERA = "camera";
   const ENTRY_CAPTION = "caption";
   const ENTRY_SEPARATOR = ":";
-  const FIELD_SEPARATOR = ".";
 
   const frameImage = byId("frame");
   const view = {
@@ -143,18 +143,17 @@
   // field, so nothing more is done with it. owner is the beat id, 0 for the clip, or the
   // {kind, index} entry of a camera move's or caption's field.
   function applyEdit(owner, field, value) {
-    const change = isEntry(owner) ? { index: owner.index, field, value } : { beat: owner, field, value };
-    edit(change).catch(() => {});
+    edit({ owner: page.problemOwner(owner), field, value }).catch(() => {});
   }
 
   // ownerKey names what change stands on: its entry's beat select value for a camera move's or
-  // caption's field, else its beat's id.
+  // caption's field, else its beat's id, or the clip's 0.
   function ownerKey(change) {
-    const [kind] = change.field.split(FIELD_SEPARATOR);
+    const { kind, index } = change.owner;
     if (kind === ENTRY_CAMERA || kind === ENTRY_CAPTION) {
-      return entryValue(kind, change.index);
+      return entryValue(kind, index);
     }
-    return String(change.beat);
+    return String(index);
   }
 
   // poll asks for the state every second, so outside writes and reloads show up.
