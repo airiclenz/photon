@@ -75,10 +75,11 @@
     }
 
     // dispatchEvent calls the listeners on this node, then on each parent while the event
-    // bubbles; a listener that throws fails the dispatch, so the test sees it.
+    // bubbles, from the body on to the document and the window as a browser does; a listener
+    // that throws fails the dispatch, so the test sees it.
     dispatchEvent(event) {
       event.target = event.target || this;
-      for (let node = this; node; node = event.bubbles ? node.parentNode : null) {
+      for (let node = this; node; node = event.bubbles ? bubbleParent(node) : null) {
         event.currentTarget = node;
         const ofType = (listenersOf.get(node) || new Map()).get(event.type) || [];
         for (const listener of [...ofType]) {
@@ -425,6 +426,18 @@
   }
 
   const windowEvents = new EventTarget();
+
+  // bubbleParent is where an event bubbles to from node: its parent, the document from the body
+  // and the window from the document.
+  function bubbleParent(node) {
+    if (node === body) {
+      return document;
+    }
+    if (node === document) {
+      return windowEvents;
+    }
+    return node.parentNode;
+  }
 
   // --- the queues ---
 

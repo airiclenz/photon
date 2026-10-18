@@ -41,7 +41,10 @@ the pan track the camera's only aim by removing zoom targets and beat zoom.
 **Out of scope:**
 - Draft/exact frame caching or encoding; any auto-migration of old storyboards.
 
-## 1. End a scrub on any pointer release
+## 1. End a scrub on any pointer release — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the DOM stub now bubbles body → document → window (bubbleParent in testdata/dom.js), so the existing scrub test's move/up dispatched on the track are heard on the window unchanged; scrubAxis itself was not modified.
+NOTES (2026-10-18): no CHANGELOG entry: the stuck flag came with the draft-frame preview (68a294f), which is still unreleased under [Unreleased], so no shipped version had the defect.
 
 **What:**
 Fix for a defect from `68a294f` (feat(tune): show draft frames while the preview moves), filed

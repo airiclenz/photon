@@ -5,8 +5,9 @@
 // edit(edit) for a lane's add, which the server applies, validates and schedules; a drag sends
 // its edit through window.tuneDrag. From the page's internal window.tunePage it takes
 // reportStatus, to show a refused add or bar drag in the transport bar, and beginScrub and
-// endScrub, to tell the transport a scrub's pointer went down or up. Nothing here
-// computes timing: every position comes from the state's sections, beats, camera moves and
+// endScrub, to tell the transport a scrub's pointer went down or up. A scrub starts on a press on
+// the axis and ends on a pointer release or cancel anywhere in the window, so a redraw that
+// replaces the axis mid-drag does not leave it running. Nothing here computes timing: every position comes from the state's sections, beats, camera moves and
 // captions.
 //
 // The timeline is two lists of lanes, drawn top to bottom. Its own lanes follow the beats: such a
@@ -62,6 +63,8 @@
   let shownTime = null;
   let shownSelection = null;
   let isScrubbing = false;
+  // axisTrack is the axis track the timeline shows now; a redraw replaces it.
+  let axisTrack = null;
 
   // --- the lanes ---
 
@@ -303,10 +306,8 @@
       tick.style.left = percentOf(ms) + "%";
       track.append(tick);
     }
-    track.addEventListener("pointerdown", (event) => startScrub(event, track));
-    track.addEventListener("pointermove", (event) => moveScrub(event, track));
-    track.addEventListener("pointerup", endScrub);
-    track.addEventListener("pointercancel", endScrub);
+    track.addEventListener("pointerdown", startScrub);
+    axisTrack = track;
     return element("div", { className: "lane" }, element("span", { className: "lane-name" }, AXIS_NAME), track);
   }
 
@@ -401,7 +402,9 @@
 
   // --- scrubbing the axis ---
 
-  function startScrub(event, track) {
+  // startScrub seeks to the press on the axis and follows the pointer on the window until it is
+  // let go: the axis it was pressed on may be replaced by a redraw before then.
+  function startScrub(event) {
     if (clipLength <= 0) {
       return;
     }
@@ -409,23 +412,36 @@
     isScrubbing = true;
     // Marked before the pause, so pausing a play to scrub does not settle the preview.
     page.beginScrub();
-    track.setPointerCapture(event.pointerId);
+    axisTrack.setPointerCapture(event.pointerId);
+    window.addEventListener("pointermove", moveScrub);
+    window.addEventListener("pointerup", endScrub);
+    window.addEventListener("pointercancel", endScrub);
     tune.pause();
-    tune.seek(msAt(event.clientX, track.getBoundingClientRect()));
+    seekTo(event);
   }
 
-  function moveScrub(event, track) {
+  // moveScrub seeks to the pointer, measured against the axis the timeline shows now.
+  function moveScrub(event) {
     if (isScrubbing) {
-      tune.seek(msAt(event.clientX, track.getBoundingClientRect()));
+      seekTo(event);
     }
   }
 
+  // endScrub ends the scrub once, however many releases arrive, and settles the preview.
   function endScrub() {
     if (!isScrubbing) {
       return;
     }
     isScrubbing = false;
+    window.removeEventListener("pointermove", moveScrub);
+    window.removeEventListener("pointerup", endScrub);
+    window.removeEventListener("pointercancel", endScrub);
     page.endScrub();
+  }
+
+  // seekTo moves the playhead to the output time under the pointer of event on the axis.
+  function seekTo(event) {
+    tune.seek(msAt(event.clientX, axisTrack.getBoundingClientRect()));
   }
 
   // --- helpers ---

@@ -1619,6 +1619,27 @@ func TestPageJS_Scrub_RequestsDraftsAndItsReleaseTheExactFrame(t *testing.T) {
 	page.assertFrames(scrubbed, exactFrame(scrubReleaseMS))
 }
 
+func TestPageJS_Scrub_ReleasedOffARebuiltAxisSettlesOnTheExactFrame(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+	page.scrubAxis("pointerdown", scrubPressMS)
+	page.call("resized", elementTimeline)
+	page.settle()
+	mark := len(page.requests)
+
+	page.scrubAxis("pointermove", scrubReleaseMS)
+	page.dispatch(elementWindow, "pointerup", nil)
+	page.settle()
+	page.playFor(playedMS)
+	page.pressKey(keyPlay)
+	page.settle()
+
+	// The release settles on the exact frame, and so does the pause after a later play.
+	want := []string{draftFrame(scrubReleaseMS), exactFrame(scrubReleaseMS)}
+	want = append(want, draftFramesFrom(scrubReleaseMS+playedMS, prefetchFrames)...)
+	page.assertFrames(mark, append(want, exactFrame(scrubReleaseMS+playedMS))...)
+}
+
 func TestPageJS_StepWhilePlaying_RequestsNoFrameAtTheStalePlayhead(t *testing.T) {
 	t.Parallel()
 	page := loadPage(t, newSessionFixture(t).session)
