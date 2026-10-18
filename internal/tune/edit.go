@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/yamledit"
 )
@@ -103,9 +101,8 @@ var (
 // other or new value as time.Duration.String(). A new key goes after the keys that precede it in
 // the storyboard's field order; a value equal to the default of a key that is absent writes
 // nothing; cut false, zoom.factor auto and camera.ease smooth delete their key, as do a
-// caption.place of bottom and a caption.align of middle. A zoom.target on a block zoom
-// holding nothing but its target rewrites that zoom as a flow mapping, since removing its only
-// key would leave nothing to insert into. A camera.at, a caption.at or caption.until, or a pan's
+// caption.place of bottom and a caption.align of middle. A zoom.target on a zoom holding
+// nothing but its target rewrites that zoom as a flow mapping. A camera.at, a caption.at or caption.until, or a pan's
 // camera.to replaces its whole node with the value's flow text, and a caption.text replaces its
 // whole node, a block scalar too, with one double-quoted line; a caption.for deletes the
 // caption's until and a caption.until its for. The edit is refused with an error naming the
@@ -121,12 +118,8 @@ func apply(src []byte, path string, edit Edit) ([]byte, *storyboard.Storyboard, 
 	if err != nil {
 		return nil, nil, fmt.Errorf("hold the storyboard for editing: %w", err)
 	}
-	var tree yaml.Node
-	if err := yaml.Unmarshal(src, &tree); err != nil {
-		return nil, nil, fmt.Errorf("read the storyboard's nodes: %w", err)
-	}
 
-	edits := &splicer{doc: doc, root: tree.Content[0]}
+	edits := &splicer{doc: doc}
 	if err := edits.apply(board, edit); err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", editName(edit), err)
 	}
@@ -158,11 +151,10 @@ func isFrameField(field string) bool {
 	return field == fieldFrameWidth || field == fieldFrameFPS
 }
 
-// splicer applies one edit to doc. root is the storyboard's node tree as it stood before the
-// edit, which says what keys are present and how the old values are written.
+// splicer applies one edit to doc, which says what keys are present and how the old values are
+// written as each splice of the edit lands.
 type splicer struct {
-	doc  *yamledit.Document
-	root *yaml.Node
+	doc *yamledit.Document
 }
 
 // apply routes edit to the frame, to a camera move, to a caption or to its beat in board, the
@@ -198,7 +190,7 @@ func (s *splicer) editFrame(edit Edit) error {
 		return err
 	}
 	key := strings.TrimPrefix(edit.Field, keyFrame+".")
-	return s.writeScalar(yamledit.Path{keyFrame}, key, frameKeyOrder, strconv.Itoa(count))
+	return s.doc.Upsert(yamledit.Path{keyFrame}, key, strconv.Itoa(count), frameKeyOrder)
 }
 
 // editBeat applies a beat field's edit to the beat at beat; hasZoom says whether it zooms.
@@ -239,14 +231,15 @@ func (s *splicer) writeDuration(
 	absent time.Duration,
 	length time.Duration,
 ) error {
-	old := s.lookup(under(mapping, key))
-	if old == nil {
+	path := under(mapping, key)
+	if !s.doc.Has(path) {
 		if length == absent {
 			return nil
 		}
-		return s.doc.Insert(mapping, key, length.String(), keysBefore(order, key))
+		return s.doc.Upsert(mapping, key, length.String(), order)
 	}
-	return s.doc.Set(under(mapping, key), formatDuration(length, old.Value))
+	old, _ := s.doc.Scalar(path)
+	return s.doc.Upsert(mapping, key, formatDuration(length, old), order)
 }
 
 // setRamp writes a zoom's in or out ramp. A ramp of 0 is refused: an absent ramp already runs
@@ -266,9 +259,9 @@ func (s *splicer) setRamp(zoom yamledit.Path, key, value string) error {
 func (s *splicer) setCut(beat yamledit.Path, value string) error {
 	switch value {
 	case valueTrue:
-		return s.writeScalar(beat, keyCut, beatKeyOrder, valueTrue)
+		return s.doc.Upsert(beat, keyCut, valueTrue, beatKeyOrder)
 	case valueFalse:
-		return s.deleteKey(under(beat, keyCut))
+		return s.doc.DeleteIfPresent(under(beat, keyCut))
 	default:
 		return fmt.Errorf("want %s or %s, got %q", valueTrue, valueFalse, value)
 	}
@@ -277,7 +270,7 @@ func (s *splicer) setCut(beat yamledit.Path, value string) error {
 // setFactor writes a zoom's factor, or deletes the key for auto.
 func (s *splicer) setFactor(zoom yamledit.Path, value string) error {
 	if value == valueAuto {
-		return s.deleteKey(under(zoom, keyFactor))
+		return s.doc.DeleteIfPresent(under(zoom, keyFactor))
 	}
 	spellingError := fmt.Errorf("want a decimal above 0 or %s, got %q", valueAuto, value)
 	if !decimal.MatchString(value) {
@@ -287,7 +280,7 @@ func (s *splicer) setFactor(zoom yamledit.Path, value string) error {
 	if err != nil || factor == 0 {
 		return spellingError
 	}
-	return s.writeScalar(zoom, keyFactor, zoomKeyOrder, strconv.FormatFloat(factor, 'f', -1, 64))
+	return s.doc.Upsert(zoom, keyFactor, strconv.FormatFloat(factor, 'f', -1, 64), zoomKeyOrder)
 }
 
 // addOrRemoveZoom adds a zoom onto the target value spells, or removes the beat's zoom when
@@ -306,87 +299,43 @@ func (s *splicer) addOrRemoveZoom(beat yamledit.Path, hasZoom bool, value string
 	if err != nil {
 		return err
 	}
-	return s.doc.Insert(beat, keyZoom, zoomOnto(target), keysBefore(beatKeyOrder, keyZoom))
+	return s.doc.Upsert(beat, keyZoom, zoomOnto(target), beatKeyOrder)
 }
 
-// replaceTarget swaps the zoom's target for the one value spells, in its place as the zoom's
-// first key.
+// replaceTarget swaps the zoom's target for the one value spells, in its place. A zoom holding
+// nothing but its target is replaced whole by a flow zoom onto the new target, the form a zoom
+// is added in.
 func (s *splicer) replaceTarget(beat yamledit.Path, value string) error {
 	target, err := parseTarget(value)
 	if err != nil {
 		return err
 	}
-	zoomPath := under(beat, keyZoom)
-	zoom := s.lookup(zoomPath)
-	isOnlyTarget := zoom.Kind == yaml.MappingNode && len(zoom.Content) == 2
-	if isOnlyTarget && zoom.Style&yaml.FlowStyle == 0 {
-		// Deleting a block zoom's only key leaves an empty value no insert can fill.
-		if err := s.doc.Delete(zoomPath); err != nil {
-			return err
-		}
-		return s.doc.Insert(beat, keyZoom, zoomOnto(target), keysBefore(beatKeyOrder, keyZoom))
+	zoom := under(beat, keyZoom)
+	isOnlyTarget := true
+	for _, key := range zoomKeyOrder[1:] {
+		isOnlyTarget = isOnlyTarget && !s.doc.Has(under(zoom, key))
 	}
-	if err := s.deleteKey(under(zoomPath, keyTarget)); err != nil {
-		return err
+	if isOnlyTarget {
+		return s.doc.Replace(zoom, zoomOnto(target))
 	}
-	return s.doc.Insert(zoomPath, keyTarget, target, nil)
+	return s.doc.Replace(under(zoom, keyTarget), target)
 }
 
-// writeScalar sets the key in mapping to text, inserting it in order when it is absent.
-func (s *splicer) writeScalar(mapping yamledit.Path, key string, order []string, text string) error {
-	if s.lookup(under(mapping, key)) == nil {
-		return s.doc.Insert(mapping, key, text, keysBefore(order, key))
+// replaceOrInsert puts text, a value's one line of YAML, in place of the whole node at key in
+// mapping, whatever its form, a block scalar too, or inserts `key: text` after the keys that
+// precede it in order when the key is absent. Upsert serves only the absent case: its Set
+// refuses a present block scalar.
+func (s *splicer) replaceOrInsert(mapping yamledit.Path, key, text string, order []string) error {
+	path := under(mapping, key)
+	if s.doc.Has(path) {
+		return s.doc.Replace(path, text)
 	}
-	return s.doc.Set(under(mapping, key), text)
-}
-
-// deleteKey removes the key at path; an absent key is already what the edit wants.
-func (s *splicer) deleteKey(path yamledit.Path) error {
-	if s.lookup(path) == nil {
-		return nil
-	}
-	return s.doc.Delete(path)
-}
-
-// lookup returns the node at path in the tree as it stood before the edit, or nil.
-func (s *splicer) lookup(path yamledit.Path) *yaml.Node {
-	node := s.root
-	for _, step := range path {
-		node = childNode(node, step)
-		if node == nil {
-			return nil
-		}
-	}
-	return node
-}
-
-// childNode takes one step from node: a key of a mapping, an index of a sequence; nil when
-// there is no such child.
-func childNode(node *yaml.Node, step string) *yaml.Node {
-	switch node.Kind {
-	case yaml.MappingNode:
-		for index := 0; index+1 < len(node.Content); index += 2 {
-			if node.Content[index].Value == step {
-				return node.Content[index+1]
-			}
-		}
-	case yaml.SequenceNode:
-		index, err := strconv.Atoi(step)
-		if err == nil && index >= 0 && index < len(node.Content) {
-			return node.Content[index]
-		}
-	}
-	return nil
+	return s.doc.Upsert(mapping, key, text, order)
 }
 
 // under returns path extended by key, never sharing path's backing array.
 func under(path yamledit.Path, key string) yamledit.Path {
 	return append(append(yamledit.Path{}, path...), key)
-}
-
-// keysBefore returns the keys that precede key in order.
-func keysBefore(order []string, key string) []string {
-	return order[:slices.Index(order, key)]
 }
 
 // zoomOnto spells a zoom onto target, a target's flow text, with every other key left out.

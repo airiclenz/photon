@@ -89,7 +89,7 @@ func (s *splicer) setCaptionFor(caption yamledit.Path, value string) error {
 	if err := s.writeDuration(caption, keyFor, captionKeyOrder, 0, length); err != nil {
 		return err
 	}
-	return s.deleteKey(under(caption, keyUntil))
+	return s.doc.DeleteIfPresent(under(caption, keyUntil))
 }
 
 // setCaptionUntil replaces the caption's whole until, whatever its form, with the moment value
@@ -99,27 +99,16 @@ func (s *splicer) setCaptionUntil(caption yamledit.Path, value string) error {
 	if err != nil {
 		return err
 	}
-	until := under(caption, keyUntil)
-	if s.lookup(until) == nil {
-		err = s.doc.Insert(caption, keyUntil, text, keysBefore(captionKeyOrder, keyUntil))
-	} else {
-		err = s.doc.Replace(until, text)
-	}
-	if err != nil {
+	if err := s.replaceOrInsert(caption, keyUntil, text, captionKeyOrder); err != nil {
 		return err
 	}
-	return s.deleteKey(under(caption, keyFor))
+	return s.doc.DeleteIfPresent(under(caption, keyFor))
 }
 
 // setCaptionText writes value as the caption's text: one double-quoted line, its line breaks
 // escaped as \n, in place of whatever form the old text took, a block scalar too.
 func (s *splicer) setCaptionText(caption yamledit.Path, value string) error {
-	quoted := strconv.Quote(value)
-	text := under(caption, keyText)
-	if s.lookup(text) == nil {
-		return s.doc.Insert(caption, keyText, quoted, nil)
-	}
-	return s.doc.Replace(text, quoted)
+	return s.replaceOrInsert(caption, keyText, strconv.Quote(value), captionKeyOrder)
 }
 
 // setPlacement writes the caption's place or align key, one of spellings, or deletes the key
@@ -130,7 +119,7 @@ func (s *splicer) setPlacement(caption yamledit.Path, key, value string, spellin
 		return fmt.Errorf("want %s or %s, got %q", strings.Join(spellings[:last], ", "), spellings[last], value)
 	}
 	if value == absent {
-		return s.deleteKey(under(caption, key))
+		return s.doc.DeleteIfPresent(under(caption, key))
 	}
-	return s.writeScalar(caption, key, captionKeyOrder, value)
+	return s.doc.Upsert(caption, key, value, captionKeyOrder)
 }

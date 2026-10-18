@@ -404,7 +404,10 @@ NOTES (2026-10-18): Upsert refuses a mapping path that names a sequence (`Upsert
 - `GOMEMLIMIT=2GiB go test ./internal/yamledit/`
 **Commit:** `feat(yamledit): add query, upsert and delete-if-present`
 
-## 17. Tune edits through yamledit's own tree
+## 17. Tune edits through yamledit's own tree — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the whole-node replacers (setMoment, setCaptionUntil, setCaptionText) share a new splicer.replaceOrInsert in edit.go: Has + Replace when the key is present, and for the absent case Upsert (exactly Insert after the order's preceding keys) in place of a literal Insert, so no tune-side copy of keysBefore survives; setCaptionText now passes captionKeyOrder where it passed nil (text is first in that order, so the insert point is unchanged).
+NOTES (2026-10-18): replaceTarget now replaces a target-only zoom whole with the flow `{target: …}` for a flow zoom too (previously delete + insert of its target, same result), and a target-only block zoom is Replaced in its place rather than deleted and re-inserted in beat key order; edit_test.go passes unchanged. internal/tune/doc.go needed no change (it never described the node tree).
 
 Depends on item 16.
 

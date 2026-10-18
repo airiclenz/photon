@@ -82,23 +82,19 @@ func (s *splicer) setMoment(move yamledit.Path, order []string, value string) er
 	if err != nil {
 		return err
 	}
-	at := under(move, keyAt)
-	if s.lookup(at) == nil {
-		if moment == (storyboard.Moment{}) {
-			return nil
-		}
-		return s.doc.Insert(move, keyAt, text, keysBefore(order, keyAt))
+	if moment == (storyboard.Moment{}) && !s.doc.Has(under(move, keyAt)) {
+		return nil
 	}
-	return s.doc.Replace(at, text)
+	return s.replaceOrInsert(move, keyAt, text, order)
 }
 
 // setEase writes `ease: linear`, or deletes the key for smooth, the ease an absent key means.
 func (s *splicer) setEase(move yamledit.Path, order []string, value string) error {
 	switch storyboard.Ease(value) {
 	case storyboard.EaseSmooth:
-		return s.deleteKey(under(move, keyEase))
+		return s.doc.DeleteIfPresent(under(move, keyEase))
 	case storyboard.EaseLinear:
-		return s.writeScalar(move, keyEase, order, value)
+		return s.doc.Upsert(move, keyEase, value, order)
 	default:
 		return fmt.Errorf("want %s or %s, got %q", storyboard.EaseSmooth, storyboard.EaseLinear, value)
 	}
@@ -110,7 +106,7 @@ func (s *splicer) setZoomTo(move yamledit.Path, value string) error {
 	if err != nil {
 		return err
 	}
-	return s.writeScalar(move, keyTo, zoomMoveKeyOrder, strconv.FormatFloat(factor, 'f', -1, 64))
+	return s.doc.Upsert(move, keyTo, strconv.FormatFloat(factor, 'f', -1, 64), zoomMoveKeyOrder)
 }
 
 // setPanTo replaces a straight pan's destination with the target or cell value spells. A pan
