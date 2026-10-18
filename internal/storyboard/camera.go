@@ -3,14 +3,15 @@ package storyboard
 import (
 	"fmt"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // CameraMove is one move of the clip's camera, placed on the clip's output clock. Exactly one of
 // Zoom and Pan is set. The camera has two tracks: a zoom move runs on the zoom track and a pan
-// move on the pan track, so an untargeted zoom and a pan may overlap, while two moves on one track
-// may not. A zoom with a Target aims the camera too, so it holds the pan track as well. A kept
-// beat's [Zoom] holds both tracks for the whole of its section. A move whose `at` is absent
-// starts at the clip's first frame.
+// move on the pan track, so a zoom and a pan may overlap, while two moves on one track may not.
+// A kept beat's [Zoom] holds both tracks for the whole of its section. A move whose `at` is
+// absent starts at the clip's first frame.
 //
 // A move's authored At stays as written; [Load] also resolves it onto the output clock, which
 // [ZoomMove.Start] and [PanMove.Start] report. A move built as a struct literal rather than loaded
@@ -20,18 +21,28 @@ type CameraMove struct {
 	Pan  *PanMove  `yaml:"pan"`
 }
 
-// ZoomMove changes the magnification to To, a factor in [1, 3], starting At and lasting Over.
-// Target, when set, is what the zoom aims at: the camera pans to its box's centre over the same
-// stretch, so a targeted zoom holds the pan track as well as the zoom track. Its box resolves on
-// the screen shown at the move's end, walking back to the move's start when it is absent there.
+// ZoomMove changes the magnification to To, a factor in [1, 3], starting At and lasting Over. It
+// holds the zoom track only and aims nowhere: a pan move over the same stretch aims the camera.
+// RemovedTarget marks a `target` key, which a zoom move no longer takes; validation refuses it.
 type ZoomMove struct {
-	To     float64       `yaml:"to"`
-	Target *Target       `yaml:"target"`
-	At     Moment        `yaml:"at"`
-	Over   time.Duration `yaml:"over"`
-	Ease   Ease          `yaml:"ease"`
+	To            float64       `yaml:"to"`
+	RemovedTarget removedKey    `yaml:"target"`
+	At            Moment        `yaml:"at"`
+	Over          time.Duration `yaml:"over"`
+	Ease          Ease          `yaml:"ease"`
 
 	start time.Duration
+}
+
+// removedKey records that a key the schema no longer takes is present. It accepts any value, so
+// the strict decode lets the key through to validation, which refuses it naming what replaces
+// it; the generic unknown-field error would not.
+type removedKey bool
+
+// UnmarshalYAML marks the key present, whatever its value.
+func (k *removedKey) UnmarshalYAML(*yaml.Node) error {
+	*k = true
+	return nil
 }
 
 // Start is where the zoom move starts on the clip's output clock: its At, resolved.
@@ -149,17 +160,13 @@ func (s *Storyboard) validateCamera(collect collector) {
 	}
 }
 
-// tracks names the camera tracks a move with a valid form holds: a pan holds the pan track, a
-// zoom the zoom track, and a targeted zoom, which aims the camera as it zooms, both.
+// tracks names the camera tracks a move with a valid form holds: a pan holds the pan track and a
+// zoom the zoom track.
 func (m CameraMove) tracks() []string {
-	switch {
-	case m.Pan != nil:
+	if m.Pan != nil {
 		return []string{trackPan}
-	case m.Zoom.Target != nil:
-		return []string{trackZoom, trackPan}
-	default:
-		return []string{trackZoom}
 	}
+	return []string{trackZoom}
 }
 
 // beatZoomSpans returns the section of every kept beat that zooms, on clock. A beat's section is
@@ -177,8 +184,9 @@ func (s *Storyboard) beatZoomSpans(clock OutputClock) []span {
 	return spans
 }
 
-// validateForm checks that exactly one move form is set and that its fields fit it, and returns
-// the form's track and timing. isFormValid is false only when no single form is set.
+// validateForm checks that exactly one move form is set and that its fields fit it, refusing a
+// zoom's removed target, and returns the form's track and timing. isFormValid is false only when
+// no single form is set.
 func (m CameraMove) validateForm(
 	frame Frame, report reporter,
 ) (track string, timing moveTiming, isFormValid bool) {
@@ -187,6 +195,10 @@ func (m CameraMove) validateForm(
 		return "", moveTiming{}, false
 	}
 	if m.Zoom != nil {
+		if m.Zoom.RemovedTarget {
+			report("%s: target: removed; aim with a %s move over the same stretch",
+				trackZoom, trackPan)
+		}
 		m.Zoom.validate(prefixed(report, trackZoom+"."))
 		return trackZoom, moveTiming{m.Zoom.At, m.Zoom.Over, m.Zoom.Ease}, true
 	}
@@ -203,13 +215,10 @@ func (m CameraMove) place(start time.Duration) {
 	m.Pan.start = start
 }
 
-// validate checks the zoom move's factor and, when it has one, its target.
+// validate checks the zoom move's factor.
 func (z ZoomMove) validate(report reporter) {
 	if z.To < minZoomFactor || z.To > maxZoomFactor {
 		report("to: want in [%d, %d], got %g", minZoomFactor, maxZoomFactor, z.To)
-	}
-	if z.Target != nil {
-		z.Target.validate(prefixed(report, "target."))
 	}
 }
 

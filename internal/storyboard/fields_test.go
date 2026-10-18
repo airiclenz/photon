@@ -44,9 +44,8 @@ func textOwner(index int) Owner { return Owner{Kind: OwnerCaption, Index: index}
 
 // defaultRefusals are the fields of the every-form storyboard whose Default Apply refuses, each
 // with a valid sample of its kind for its owner, or nil where the owner takes none: camera[4] pans
-// along a via path of two waypoints, so it takes no camera.to and no waypoint removal, camera[5]'s
-// targeted zoom holds the pan track too, so it fits only that track's [1.8s, 2s), and no gap on
-// either camera track fits a new move's 600ms, so an insert overlaps a move or a zoom section.
+// along a via path of two waypoints, so it takes no camera.to and no waypoint removal, and no gap
+// on either camera track fits a new move's 600ms, so an insert overlaps a move or a zoom section.
 var defaultRefusals = map[fieldKey]json.RawMessage{
 	{clipOwner, FieldFrameWidth}:         typedValue(300),
 	{clipOwner, FieldFrameFPS}:           typedValue(12),
@@ -66,7 +65,6 @@ var defaultRefusals = map[fieldKey]json.RawMessage{
 	{moveOwner(1), FieldCameraAt}:        moment(1, 1200),
 	{moveOwner(3), FieldCameraAt}:        moment(1, 600),
 	{moveOwner(4), FieldCameraAt}:        moment(1, 1000),
-	{moveOwner(5), FieldCameraAt}:        moment(1, 1800),
 	{moveOwner(0), FieldCameraTo}:        typedValue(2),
 	{moveOwner(1), FieldCameraTo}:        typedValue(1.2),
 	{moveOwner(2), FieldCameraTo}:        typedValue(map[string]any{"cell": map[string]int{"x": 1, "y": 1}}),

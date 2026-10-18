@@ -268,9 +268,9 @@ func TestWithStoryboard_UndeclaredCameraAreaFailsNamingIt(t *testing.T) {
     duration: 4s
 camera:
   - pan: {to: {text: 'Saved', area: footer}, at: 4s, over: 1s}
-  - zoom: {to: 2, target: {text: 'Done', area: panel}, at: 5s, over: 1s}
+  - zoom: {to: 2, at: 5s, over: 1s}
   - pan: {via: [{text: 'Item', area: list}, {text: 'Bin', area: trash}, {cell: {x: 1, y: 1}}], at: 6s, over: 1s}
-  - zoom: {to: 1, target: {text: 'Item', area: list}, at: 7s, over: 500ms}
+  - zoom: {to: 1, at: 7s, over: 500ms}
 `
 	board, err := storyboard.Parse([]byte(withCamera), validStoryboard)
 	if err != nil {
@@ -278,7 +278,6 @@ camera:
 	}
 	want := []string{
 		`camera[0]: pan.to.area: "footer" is not declared`,
-		`camera[1]: zoom.target.area: "panel" is not declared`,
 		`camera[2]: pan.via[1].area: "trash" is not declared`,
 	}
 
@@ -298,7 +297,6 @@ camera:
 	}
 	wantOwners := []storyboard.Owner{
 		{Kind: storyboard.OwnerCamera, Index: 0},
-		{Kind: storyboard.OwnerCamera, Index: 1},
 		{Kind: storyboard.OwnerCamera, Index: 2},
 	}
 	for index, wantOwner := range wantOwners {

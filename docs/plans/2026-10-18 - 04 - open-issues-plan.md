@@ -422,7 +422,11 @@ rows of `defaultRefusals` and the zoom rows of `TestFields_DescribeEachOwnersFie
 
 **Commit:** `refactor(storyboard)!: drop zoom-target and beat-zoom edits`
 
-## 9. Refuse a zoom target on load
+## 9. Refuse a zoom target on load — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): `ZoomMove.Target` is replaced by `RemovedTarget removedKey` tagged `yaml:"target"`, where `removedKey` is a bool with its own `UnmarshalYAML` that accepts any value. `validateForm` reports it through the move's reporter. A null `target:` (empty or `~`) skips a custom unmarshaler in yaml.v3, so it loads silently, which does no harm.
+NOTES (2026-10-18): `internal/storyboard/doc.go` is left unchanged. Its one zoom-target line ("resolves the zoom and pan targets") is about the beat zoom's target, which stays until item 10.
+NOTES (2026-10-18): the storyboard_test.go every-form `wantCamera` literal drops camera[5]'s `Target`, and clip_test's camera-area test drops the zoom targets and the camera[1] row it expected.
 
 **What:**
 Closes `zoom-target-removal`. Depends on items 5, 7 and 8.

@@ -1,7 +1,7 @@
 # Every action, target form, zoom, cut, expect kind, camera move and caption form the schema has,
 # in one valid storyboard. Beats 2 and 3 zoom, holding both camera tracks over [2s, 12s), so the
-# camera moves sit in beat 1's [0s, 2s); the targeted zoom, which holds the pan track too, takes
-# that track's last free stretch [1.8s, 2s). Captions sit in output space, so they may sit anywhere.
+# camera moves sit in beat 1's [0s, 2s); the last zoom takes the zoom track's [1.8s, 2s). Captions
+# sit in output space, so they may sit anywhere.
 clip: every-form
 ship: out/every-form.gif
 frame:
@@ -77,7 +77,7 @@ camera:
         - {cell: {x: 10, y: 5}}
       at: 1s
       over: 800ms
-  - zoom: {to: 2, target: {text: 'Item 2', nth: last, area: list}, at: 1800ms, over: 200ms}
+  - zoom: {to: 2, at: 1800ms, over: 200ms}
 captions:
   - text: "Pick an item\nthen save it"
     at: {beat: 2, offset: 200ms}

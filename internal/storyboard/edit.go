@@ -164,8 +164,8 @@ const (
 // wrong JSON type or misspelled, when its owner is of another kind than the field's, when it
 // names a beat, camera move, caption or waypoint that is not there, an insert index past the
 // list's length among them, or when the result fails validation, an inserted move overlapping
-// another on its track, a targeted zoom overlapping a pan and a via path left with one waypoint
-// among them; the last wraps the *[ValidationError].
+// another on its track and a via path left with one waypoint among them; the last wraps the
+// *[ValidationError].
 func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 	board, err := Parse(src, path)
 	if err != nil {
