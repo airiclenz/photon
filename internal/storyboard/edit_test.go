@@ -566,8 +566,8 @@ func TestApply_CameraEditOnWhatIsNotThere_IsRefused(t *testing.T) {
 		{"a null over", cameraEditBoard, cameraEdit(1, FieldCameraOver, nil), "camera[1]: camera.over: want a value, got null"},
 		{"a null ease", cameraEditBoard, cameraEdit(1, FieldCameraEase, nil), "camera[1]: camera.ease: want a value, got null"},
 		{"a null to", cameraEditBoard, cameraEdit(1, FieldCameraTo, nil), "camera[1]: camera.to: want a value, got null"},
-		{"an unknown camera field", cameraEditBoard, cameraEdit(0, "camera.via", "x"),
-			"camera[0]: camera.via: unknown field"},
+		{"an unknown camera field", cameraEditBoard, cameraEdit(0, "camera.speed", "x"),
+			"camera[0]: camera.speed: unknown field"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

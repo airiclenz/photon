@@ -498,7 +498,13 @@ following `/api/frame` request); `TestPageJS_CaptionPosition_SeedsTheLaidOutCorn
 **Closes:** tune-caption-styling
 **Commit:** `feat(tune): edit a caption's font, colours, box, fade and position`
 
-## 14. Storyboard edits for a pan's via waypoints
+## 14. Storyboard edits for a pan's via waypoints — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the shared centre-cell helper is `centreCell(frame) Point` beside a new `pointFlow(Point)` in edit_camera.go (decodePoint now spells through pointFlow); item 8's `entryFlow` in internal/storyboard/edit_list.go, which the plan's Files did not list, now uses both, as the plan's "one shared helper" asks; its output is unchanged.
+
+NOTES (2026-10-18): Fields gives every pan a `camera.path` (KindEnum, choices to/via, defaulting to the path the pan follows, so applying it writes nothing) and a via pan `camera.via` and `camera.via.insert` (new KindWaypoint, "waypoint") and `camera.via.remove` (new KindWaypointRemoval, "waypoint_removal"), each defaulting to null; a via pan still lists `camera.to`, refused as before. fields_test.go adds them to defaultRefusals (gofmt realigned that map's keys) and to the owner/field tables, a straight pan's (camera[2]) owner row among them.
+
+NOTES (2026-10-18): setPanTo's refusal now reads "the pan follows a via path: set its waypoints with camera.via, or make it a straight pan with camera.path"; a waypoint edit on a straight pan or a zoom, and a waypoint index out of range, are refused before splicing; removing to one waypoint is refused by validation (`pan.via: want at least 2 points, got 1`).
 
 **What:** Depends on items 4, 7 and 8.
 **Regression guard.** Adds its four via fields to `pendingPageFields` (same Files and Acceptance additions).

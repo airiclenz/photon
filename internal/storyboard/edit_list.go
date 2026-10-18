@@ -189,8 +189,8 @@ func entryFlow(kind string, at Moment, frame Frame) string {
 		factor := strconv.FormatFloat(newZoomFactor, 'f', -1, 64)
 		return "{" + keyZoom + ": {" + keyTo + ": " + factor + start + over + "}}"
 	case entryPan:
-		centre := "{x: " + strconv.Itoa(frame.Cols/2) + ", y: " + strconv.Itoa(frame.Rows/2) + "}"
-		return "{" + keyPan + ": {" + keyTo + ": {cell: " + centre + "}" + start + over + "}}"
+		to := keyTo + ": " + pointFlow(centreCell(frame))
+		return "{" + keyPan + ": {" + to + start + over + "}}"
 	default:
 		text := keyText + ": " + strconv.Quote(newCaptionText)
 		return "{" + text + start + ", " + keyFor + ": " + newCaptionLength.String() + "}"

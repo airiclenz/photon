@@ -35,6 +35,14 @@ import (
 //   - camera.ease: "smooth", which removes the key, or "linear";
 //   - camera.to: a number, the factor, for a zoom move; for a pan, a target as zoom.target
 //     takes it or a cell, {"cell": {"x": 3, "y": 4}}, refused on a pan along a via path;
+//   - camera.via, camera.via.insert: a waypoint of a pan's via path, {"index": 1, "point":
+//     {"cell": {"x": 3, "y": 4}}}, its point a target or cell as a pan's camera.to takes it, set
+//     at one of the path's indexes, or added so that it is the waypoint at an index from 0
+//     through their count; each is refused on a straight pan;
+//   - camera.via.remove: {"index": 1}, which removes the waypoint at that index;
+//   - camera.path: "to" or "via", a pan's path: a straight pan made a via path passes the
+//     frame's centre cell on its way to its old to, a via pan made straight goes to its last
+//     waypoint;
 //   - caption.at: a moment as camera.at takes it, which replaces the caption's whole at;
 //   - caption.for: a whole number of milliseconds above 0, which removes the caption's until;
 //   - caption.until: a moment, which removes the caption's for; null clears the until, the
@@ -92,6 +100,7 @@ var editFields = []string{
 	FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove, FieldCaptionFontSize,
 	FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity,
 	FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionOffset, FieldCaptionPosition,
+	FieldCameraVia, FieldCameraViaInsert, FieldCameraViaRemove, FieldCameraPath,
 }
 
 // EditFields returns every field an [Edit] names for [Apply], in a new slice.
@@ -144,12 +153,15 @@ const (
 // flow line from presets — a zoom to 1.5 or a pan to the frame's centre cell, over 600ms, or a
 // caption "Caption" for 2s — and creates a camera or captions key the storyboard lacks as a flow
 // list after the keys that precede it; a remove or move splices only its list's items, and
-// removing a list's only entry deletes its key. The edit is
+// removing a list's only entry deletes its key. A waypoint set, insert or remove splices only
+// its item of the via list, a camera.path to via writes `via: [<centre cell>, <old to>]` in place
+// of the pan's to, and one to "to" writes `to: <last waypoint>` in place of its via. The edit is
 // refused with an error led by its owner and field — the beat, camera move or caption, or
 // nothing for a frame field — when its value is of the wrong JSON type or misspelled, when its
-// owner is of another kind than the field's, when it names a beat, zoom, camera move or caption
-// that is not there, an insert index past the list's length among them, or when the result fails
-// validation, an inserted move overlapping another on its track among them; the last wraps the
+// owner is of another kind than the field's, when it names a beat, zoom, camera move, caption or
+// waypoint that is not there, an insert index past the list's length among them, or when the
+// result fails validation, an inserted move overlapping another on its track and a via path left
+// with one waypoint among them; the last wraps the
 // *[ValidationError].
 func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 	board, err := Parse(src, path)

@@ -47,7 +47,8 @@ func isCameraField(field string) bool {
 }
 
 // editCamera sets field, typed as value, on the move at index in board, the storyboard s.doc
-// holds, or adds, removes or reorders a move for a list field.
+// holds, edits a pan's via path for a via field, or adds, removes or reorders a move for a list
+// field.
 func (s *splicer) editCamera(board *Storyboard, index int, field string, value json.RawMessage) error {
 	if isListField(field) {
 		return s.editList(board, cameraList(board), index, field, value)
@@ -61,6 +62,9 @@ func (s *splicer) editCamera(board *Storyboard, index int, field string, value j
 		kind, order = keyPan, panMoveKeyOrder
 	}
 	move := yamledit.Path{keyCamera, strconv.Itoa(index), kind}
+	if isViaField(field) {
+		return s.editVia(board.Frame, camera.Pan, move, field, value)
+	}
 
 	switch field {
 	case FieldCameraAt:
@@ -105,10 +109,12 @@ func (s *splicer) setZoomTo(move yamledit.Path, value json.RawMessage) error {
 }
 
 // setPanTo replaces a straight pan's destination with the target or cell value types. A pan
-// along a via path is refused: its waypoints are edited in the storyboard itself.
+// along a via path is refused: its waypoints are edited by camera.via, and camera.path turns it
+// into a straight pan.
 func (s *splicer) setPanTo(move yamledit.Path, isVia bool, value json.RawMessage) error {
 	if isVia {
-		return errors.New("the pan follows a via path, which tune does not edit; edit it in the storyboard")
+		return fmt.Errorf("the pan follows a via path: set its waypoints with %s, "+
+			"or make it a straight pan with %s", FieldCameraVia, FieldCameraPath)
 	}
 	point, err := decodePoint(value)
 	if err != nil {
@@ -131,8 +137,7 @@ type wirePoint struct {
 }
 
 // decodePoint reads a pan's target or cell, refusing any other key and both at once, and spells
-// it as the YAML flow mapping a camera.to writes: a target as [Target.YAMLFlow] does, a cell as
-// {cell: {x: 3, y: 4}}.
+// it as [pointFlow] does.
 func decodePoint(value json.RawMessage) (string, error) {
 	decoder := json.NewDecoder(bytes.NewReader(value))
 	decoder.DisallowUnknownFields()
@@ -145,9 +150,25 @@ func decodePoint(value json.RawMessage) (string, error) {
 		return "", fmt.Errorf(`want a target such as {"text": "ok", "nth": 2, "area": "list"} `+
 			`or a cell such as {"cell": {"x": 3, "y": 4}}, got %s: %w`, value, err)
 	}
+	point := Point{Target: wire.Target}
 	if wire.Cell != nil {
-		cell := "{x: " + strconv.Itoa(wire.Cell.X) + ", y: " + strconv.Itoa(wire.Cell.Y) + "}"
-		return "{cell: " + cell + "}", nil
+		point = Point{Cell: &Cell{X: wire.Cell.X, Y: wire.Cell.Y}}
 	}
-	return wire.Target.YAMLFlow(), nil
+	return pointFlow(point), nil
+}
+
+// pointFlow spells point as the YAML flow mapping a pan's to or waypoint is written as: a target
+// as [Target.YAMLFlow] does, a cell as {cell: {x: 3, y: 4}}.
+func pointFlow(point Point) string {
+	if point.Cell == nil {
+		return point.Target.YAMLFlow()
+	}
+	cell := "{x: " + strconv.Itoa(point.Cell.X) + ", y: " + strconv.Itoa(point.Cell.Y) + "}"
+	return "{cell: " + cell + "}"
+}
+
+// centreCell is frame's centre cell, {x: cols/2, y: rows/2}: where a new pan aims, and the
+// waypoint a straight pan made a via path passes first.
+func centreCell(frame Frame) Point {
+	return Point{Cell: &Cell{X: frame.Cols / 2, Y: frame.Rows / 2}}
 }

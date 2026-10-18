@@ -43,6 +43,11 @@ const (
 	// KindPixels is a pair of whole lengths in design pixels, {"x": 8, "y": -4}: X to the right
 	// and Y down.
 	KindPixels FieldKind = "pixels"
+	// KindWaypoint is a waypoint of a pan's via path, {"index": 1, "point": {"cell": {"x": 3,
+	// "y": 4}}}: its index and its point, a target or a cell.
+	KindWaypoint FieldKind = "waypoint"
+	// KindWaypointRemoval is a waypoint's index, {"index": 1}, which removes that waypoint.
+	KindWaypointRemoval FieldKind = "waypoint_removal"
 )
 
 // Field describes one field of a storyboard's owner — the clip, a beat, a camera move or a
@@ -51,7 +56,9 @@ const (
 // value, or what [Load] fills in), typed as an [Edit] types it; null is a field an absent key
 // leaves unset. A list field, which adds, removes or reorders an entry and has no key, defaults to
 // a value it takes: an insert's entry of its first choice at the clip's start, a remove's null,
-// a move's own index. An editable field's Name is the field an [Edit] names; a read-only field is one of
+// a move's own index. A waypoint field, which sets, adds or removes the waypoint its value
+// indexes, defaults to null, and a pan's camera.path, which has no key either, to the path the
+// pan follows. An editable field's Name is the field an [Edit] names; a read-only field is one of
 // the frame's keys photon tune shows but does not edit, named by that key alone.
 type Field struct {
 	Owner      Owner           `json:"owner"`
@@ -92,8 +99,9 @@ var (
 // Fields describes every field of board's owners, the editable and the read-only: the clip's
 // frame fields in the frame's key order, then each beat's, camera move's and caption's in
 // storyboard order, the camera's and the captions' insert after their entries', owned by index 0,
-// whether or not the list holds an entry. A beat lists its zoom's fields only when it zooms, and
-// a camera move's camera.to is a decimal on a zoom move and a point on a pan.
+// whether or not the list holds an entry. A beat lists its zoom's fields only when it zooms, a
+// camera move's camera.to is a decimal on a zoom move and a point on a pan, and a pan lists its
+// camera.path, a via pan its waypoint fields too.
 func Fields(board *Storyboard) []Field {
 	fields := clipFields()
 	for _, beat := range board.Beats {
@@ -175,7 +183,7 @@ func beatFields(beat Beat) []Field {
 
 // cameraFields describes the fields of move, the camera move at index: its start, length and
 // ease, its destination — a zoom move's factor, or a pan's target or cell, which a via path has
-// none of — and its remove and move.
+// none of — a pan's path and a via path's waypoints, and its remove and move.
 func cameraFields(index int, move CameraMove) []Field {
 	owner := Owner{Kind: OwnerCamera, Index: index}
 	to := Field{Owner: owner, Name: FieldCameraTo, Kind: KindDecimal, Default: raw(defaultZero)}
@@ -188,7 +196,40 @@ func cameraFields(index int, move CameraMove) []Field {
 		{Owner: owner, Name: FieldCameraEase, Kind: KindEnum, Choices: slices.Clone(easeChoices), Default: quoted(string(EaseSmooth))},
 		to,
 	}
+	if move.Pan != nil {
+		fields = append(fields, pathFields(owner, *move.Pan)...)
+	}
 	return append(fields, listEntryFields(owner, FieldCameraRemove, FieldCameraMove)...)
+}
+
+// pathFields describes the path of pan, the move owner names: its camera.path, defaulting to the
+// path it follows, and on a via path the set, insert and remove of a waypoint, each defaulting
+// to null.
+func pathFields(owner Owner, pan PanMove) []Field {
+	path := pathTo
+	if pan.Via != nil {
+		path = pathVia
+	}
+	fields := []Field{{
+		Owner:   owner,
+		Name:    FieldCameraPath,
+		Kind:    KindEnum,
+		Choices: slices.Clone(pathChoices),
+		Default: quoted(path),
+	}}
+	if pan.Via == nil {
+		return fields
+	}
+	return append(fields,
+		Field{Owner: owner, Name: FieldCameraVia, Kind: KindWaypoint, Default: raw(jsonNull)},
+		Field{Owner: owner, Name: FieldCameraViaInsert, Kind: KindWaypoint, Default: raw(jsonNull)},
+		Field{
+			Owner:   owner,
+			Name:    FieldCameraViaRemove,
+			Kind:    KindWaypointRemoval,
+			Default: raw(jsonNull),
+		},
+	)
 }
 
 // captionFields describes the fields of the caption at index: its start, its end — a for or an
