@@ -1,9 +1,11 @@
 // photon tune's timeline: lanes on the clip's output-time axis under the transport bar.
-// It builds on app.js's window.tune alone: state() and onState(fn) for what to draw, time() for
-// the playhead, selected() and select(id) for the beat the inspector shows, selectedEntry() and
+// It builds on app.js's window.tune: state() and onState(fn) for what to draw, time() for the
+// playhead, selected() and select(id) for the beat the inspector shows, selectedEntry() and
 // selectEntry(entry) for the camera move or caption it shows instead, seek(ms) for the axis, and
-// edit(edit) for a drag, which the server applies, validates and schedules. Nothing here computes
-// timing: every position comes from the state's sections, beats, camera moves and captions.
+// edit(edit) for a drag, which the server applies, validates and schedules. From the page's
+// internal window.tunePage it takes reportStatus alone, to show a refused add in the transport
+// bar. Nothing here computes timing: every position comes from the state's sections, beats,
+// camera moves and captions.
 //
 // The timeline is two lists of lanes, drawn top to bottom. Its own lanes follow the beats: such a
 // lane is {name, draw(section, state), handles(section, state)}, where draw returns the nodes it
@@ -23,6 +25,7 @@
 
 (() => {
   const tune = window.tune;
+  const page = window.tunePage;
   const SNAP_MS = 50;
   const PERCENT = 100;
   const MILLISECONDS_PER_SECOND = 1000;
@@ -217,8 +220,9 @@
     return laneElement(lane.name, track, addButton(lane.add));
   }
 
-  // addButton sends add's edit for the playhead and selects the new entry. app.js keeps a refused
-  // add as the refusal standing on the entry index it named, so the rejection is only caught here.
+  // addButton sends add's edit for the playhead and selects the new entry. A refused add stands
+  // on the entry index it named, which the inspector need not show, so its message goes to the
+  // transport bar's status as well.
   function addButton(add) {
     const properties = { type: "button", className: "lane-add", title: add.title };
     const button = element("button", properties, ADD_GLYPH);
@@ -226,7 +230,7 @@
       const change = add.edit(tune.state(), tune.time());
       tune.edit(change).then(
         () => tune.selectEntry(change.owner),
-        () => {},
+        (error) => page.reportStatus(error.message, true),
       );
     });
     return button;

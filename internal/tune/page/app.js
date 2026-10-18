@@ -21,14 +21,15 @@
 //   frame        the preview <img> element
 //
 // This file holds the session's API, the selection and the wiring. The page's own scripts that
-// load after it — transport.js (the frame clock and the transport), controls.js (the inspector's
-// field controls and error rows), panels.js (the beat and frame panels) and entries.js (the
-// camera move and caption panels) — share its state through window.tunePage, an internal
-// namespace no part of the contract: app.js puts in it the state they read and the helpers they
-// build with, and each of them adds what it does. Of the other scripts only picker.js touches
-// it, adding the standing pick's proposal that entries.js's via waypoints read. app.js calls
-// those only once every script has run, so the wiring, and with it the first /api/state
-// request, waits for DOMContentLoaded.
+// load after it — transport.js (the frame clock, the transport and its status), controls.js (the
+// inspector's field controls and error rows), panels.js (the beat and frame panels) and
+// entries.js (the camera move and caption panels) — share its state through window.tunePage, an
+// internal namespace no part of the contract: app.js puts in it the state they read and the
+// helpers they build with, and each of them adds what it does. Of the other scripts picker.js
+// adds the standing pick's proposal that entries.js's via waypoints read, and timeline.js reports
+// a refused lane add through transport.js's reportStatus. app.js calls those only once every
+// script has run, so the wiring, and with it the first /api/state request, waits for
+// DOMContentLoaded.
 "use strict";
 
 (() => {
@@ -117,20 +118,21 @@
     request(path, {}).then(
       (state) => {
         takeState(state);
-        report(done, false);
+        page.reportStatus(done, false);
       },
-      (error) => report(error.message, true),
+      (error) => page.reportStatus(error.message, true),
     );
   }
 
   // edit applies one edit. A refused edit stands on its beat, the clip, or its camera move or
-  // caption until the next accepted one; the Promise rejects with it as well, for a caller that
-  // wants to know.
+  // caption until the next accepted one, which also clears the transport bar's status; the
+  // Promise rejects with it as well, for a caller that wants to know.
   function edit(change) {
     return request(API.edit, change).then(
       (state) => {
         refusal = null;
         takeState(state);
+        page.reportStatus("", false);
         return state;
       },
       (error) => {
@@ -284,12 +286,6 @@
   // isEntry says owner is a camera move's or caption's {kind, index} rather than a beat id.
   function isEntry(owner) {
     return typeof owner === "object" && owner !== null;
-  }
-
-  // report shows how the last action went in the transport bar.
-  function report(message, isFailure) {
-    view.status.textContent = message;
-    view.status.classList.toggle("failed", isFailure);
   }
 
   // --- helpers ---

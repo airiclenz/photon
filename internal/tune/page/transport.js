@@ -1,9 +1,10 @@
 // photon tune's frame clock and transport: the playhead on the clip's output clock, the frames
-// the preview shows at it, playing, stepping and jumping between section starts, and the keys
-// that drive them.
+// the preview shows at it, playing, stepping and jumping between section starts, the keys that
+// drive them, and the bar's status, which tells how the last action went.
 //
 // It loads after app.js and adds its functions to window.tunePage, the page's internal namespace,
-// where app.js's window.tune contract (time, frameTime, seek, pause) and its wiring reach them.
+// where app.js's window.tune contract (time, frameTime, seek, pause), its wiring and its actions
+// reach them; timeline.js reports a refused lane add through reportStatus there too.
 // It reads the state through the namespace too and computes no timing of its own: the fps,
 // length and section starts all come from /api/state, and every frame is one the server composes.
 "use strict";
@@ -262,6 +263,15 @@
     }
   }
 
+  // --- the status ---
+
+  // reportStatus shows message in the transport bar's status, styled as a failure when
+  // isFailure; an empty message clears it.
+  function reportStatus(message, isFailure) {
+    view.status.textContent = message;
+    view.status.classList.toggle("failed", isFailure);
+  }
+
   Object.assign(page, {
     time: () => Math.round(playhead),
     frameTime: () => shownFrameMs,
@@ -275,5 +285,6 @@
     renderTime,
     onKey,
     onKeyUp,
+    reportStatus,
   });
 })();

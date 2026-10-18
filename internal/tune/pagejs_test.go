@@ -44,6 +44,7 @@ const (
 	elementInspector  = "inspector-body"
 	elementTimeline   = "timeline"
 	elementTime       = "time"
+	elementStatus     = "status"
 	elementDocument   = "document"
 )
 
@@ -93,6 +94,15 @@ const (
 	addMoveAtMS = 500
 	addedZoom   = 1
 	addedPan    = 2
+)
+
+// The refused add of roomyCameraStoryboard: a zoom added at overlapZoomAtMS falls inside its zoom
+// at 100ms, becoming camera move overlapZoom on the zoom track after it, and unrelatedBeat is the
+// beat the inspector shows meanwhile.
+const (
+	overlapZoomAtMS = 200
+	overlapZoom     = 1
+	unrelatedBeat   = "2"
 )
 
 // pageRequest is one request the page sent through fetch and the handler's answer.
@@ -569,6 +579,41 @@ func TestPageJS_AddAZoomAndAPanAtThePlayhead_ThenMoveUp(t *testing.T) {
 	}
 	if got := page.selectedEntry(); got != selected(addedZoom) {
 		t.Errorf("the selection after the move up: want %s, got %s", selected(addedZoom), got)
+	}
+}
+
+func TestPageJS_RefusedLaneAdd_ShowsInTheStatusUntilAnAcceptedEdit(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, roomyCameraStoryboard).session
+	page := loadPage(t, session)
+	page.selectValue(elementBeatSelect, unrelatedBeat)
+	page.eval(fmt.Sprintf("window.tune.seek(%d)", overlapZoomAtMS))
+	page.settle()
+
+	page.click(elementTimeline, "Add a zoom at the playhead")
+
+	refused := page.lastRequest("/api/edit")
+	if refused.status == http.StatusOK {
+		t.Fatalf("the overlapping zoom add: want it refused, got 200: %s", refused.answer)
+	}
+	status := page.text(elementStatus)
+	for _, move := range []string{"camera[0]", fmt.Sprintf("camera[%d]", overlapZoom)} {
+		if !strings.Contains(status, move) {
+			t.Errorf("the status after the refused add: want it naming %s, got %q", move, status)
+		}
+	}
+	if !page.eval(fmt.Sprintf(`document.getElementById(%q).classList.contains("failed")`,
+		elementStatus)).ToBoolean() {
+		t.Error("the status after the refused add is not styled as a failure")
+	}
+
+	page.click(elementTimeline, "Add a pan at the playhead")
+
+	if got := page.lastRequest("/api/edit"); got.status != http.StatusOK {
+		t.Fatalf("the pan add: want 200, got %d: %s", got.status, got.answer)
+	}
+	if got := page.text(elementStatus); got != "" {
+		t.Errorf("the status after an accepted edit: want it cleared, got %q", got)
 	}
 }
 

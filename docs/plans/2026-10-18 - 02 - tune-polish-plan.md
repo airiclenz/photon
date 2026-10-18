@@ -75,7 +75,7 @@ internal/tune/page/controls.js — decimalField, choiceField; internal/tune/sess
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/ -run 'TestPageJS_CaptionFont'`
 **Commit:** `test(tune): cover the caption font size and weight controls`
 
-## 2. Show a refused lane add on the page
+## 2. Show a refused lane add on the page — ✅ DONE (2026-10-18)
 
 **What:** Fix: a lane add's refusal is swallowed by `timeline.js` `addButton`, so it shows only
 when the named entry is in the inspector.
