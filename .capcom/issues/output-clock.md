@@ -1,11 +1,13 @@
 ---
 title: One output clock for zooms, moves and captions
-status: open
+status: done
 type: task
 priority: 2
 labels: [architecture]
 plan: 2026-10-18 - 00 - architecture-review-plan
 created: 2026-10-18T05:46:01Z
+closed: 2026-10-18T08:56:31Z
+reason: resolved by plan 2026-10-18 - 00 - architecture-review-plan (archived in 0778002)
 ---
 
 Output time is summed in four places in two orders: `Storyboard.ClipTime`/`Length` and

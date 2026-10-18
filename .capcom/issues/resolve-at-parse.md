@@ -1,11 +1,13 @@
 ---
 title: Resolve storyboard values once, at Parse
-status: open
+status: done
 type: task
 priority: 3
 labels: [architecture]
 plan: 2026-10-18 - 00 - architecture-review-plan
 created: 2026-10-18T05:46:01Z
+closed: 2026-10-18T08:56:31Z
+reason: resolved by plan 2026-10-18 - 00 - architecture-review-plan (archived in 0778002)
 ---
 
 Storyboard validation resolves moments, checks hex colours and bounds, then discards the results;

@@ -1,11 +1,13 @@
 ---
 title: Attach typed owners to problems instead of scraping messages
-status: open
+status: done
 type: task
 priority: 2
 labels: [architecture]
 plan: 2026-10-18 - 00 - architecture-review-plan
 created: 2026-10-18T05:46:01Z
+closed: 2026-10-18T08:56:31Z
+reason: resolved by plan 2026-10-18 - 00 - architecture-review-plan (archived in 0778002)
 ---
 
 `internal/tune/state.go` (`problemsOf`, `beatNamed`, `clipLevelPrefixes`) and

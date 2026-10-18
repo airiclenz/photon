@@ -1,11 +1,13 @@
 ---
 title: Deepen render into one frame pipeline
-status: open
+status: done
 type: task
 priority: 2
 labels: [architecture]
 plan: 2026-10-18 - 00 - architecture-review-plan
 created: 2026-10-18T05:46:01Z
+closed: 2026-10-18T08:56:31Z
+reason: resolved by plan 2026-10-18 - 00 - architecture-review-plan (archived in 0778002)
 ---
 
 `internal/render` exports `NewRasterizer`, `NewCompositor`, `SnapshotAt` and `BeatReport` only so
@@ -26,3 +28,7 @@ render, LRU for tune).
 - The frame-size error text exists once in the tree.
 - A test proves tune's frames equal render's frames by construction, without a copied oracle.
 - Caption fonts load once per tune session, not per edit.
+
+## Log
+
+- 2026-10-18 Airic Lenz: Deferred gap from plan 2026-10-18 - 00 - architecture-review-plan (0778002): no render test yet that a changed fonts dir, theme or caption_font forces a fresh rasterizer or caption faces.

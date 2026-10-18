@@ -1,11 +1,13 @@
 ---
 title: Split the tune page's app.js below the file-size guide
-status: open
+status: done
 type: task
 priority: 3
 labels: [tune]
 plan: 2026-10-18 - 00 - architecture-review-plan
 created: 2026-10-18T05:26:26Z
+closed: 2026-10-18T08:56:31Z
+reason: resolved by plan 2026-10-18 - 00 - architecture-review-plan (archived in 0778002)
 ---
 
 `internal/tune/page/app.js` is 908 lines, more than twice the ~400-line file guide in Note
