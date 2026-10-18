@@ -1,9 +1,20 @@
 package take
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
+)
+
+// The problems a [BeatError] names, one per way a take's beats can disagree with the storyboard's.
+const (
+	problemNeverStarted = "the take never started it"
+	problemUndeclared   = "the take started it but the storyboard has no such beat"
+	problemStartedTwice = "started twice in the take"
 )
 
 // Take is one recording of a program in a terminal: every distinct picture the terminal showed,
@@ -118,6 +129,99 @@ func (t *Take) BeatSpans() ([]BeatSpan, error) {
 		}
 	}
 	return spans, nil
+}
+
+// BeatError is one beat on which a take and its storyboard disagree: a storyboard beat the take
+// never started, a beat the take started that the storyboard lacks, or one it started twice. It
+// renders as `beat N: <problem>`.
+type BeatError struct {
+	Beat    int
+	Problem string
+}
+
+// Error renders the beat's id before its problem.
+func (e *BeatError) Error() string {
+	return fmt.Sprintf("beat %d: %s", e.Beat, e.Problem)
+}
+
+// MatchBeats checks the take's beat starts against ids, the storyboard's beat ids in storyboard
+// order with its cut beats included. Every id must have started exactly once and the take must
+// have started no other beat: each disagreement is a [*BeatError], all of them joined — the
+// never-started beats in storyboard order, then the undeclared and the twice-started ones in
+// start order. When the beats agree, a take that started them in another order than ids is an
+// error naming both orders, since every later step lays the beats out in storyboard order.
+func (t *Take) MatchBeats(ids []int) error {
+	order := t.startOrder()
+	starts := make(map[int]int, len(order))
+	for _, beat := range order {
+		starts[beat]++
+	}
+	declared := make(map[int]bool, len(ids))
+	var problems []error
+	for _, id := range ids {
+		if !declared[id] && starts[id] == 0 {
+			problems = append(problems, &BeatError{Beat: id, Problem: problemNeverStarted})
+		}
+		declared[id] = true
+	}
+	for _, beat := range uniqueBeats(order) {
+		if !declared[beat] {
+			problems = append(problems, &BeatError{Beat: beat, Problem: problemUndeclared})
+		}
+		if starts[beat] > 1 {
+			problems = append(problems, &BeatError{Beat: beat, Problem: problemStartedTwice})
+		}
+	}
+	if len(problems) > 0 {
+		return errors.Join(problems...)
+	}
+
+	if !slices.Equal(order, ids) {
+		return fmt.Errorf(
+			"the take started its beats in the order %s; the storyboard runs %s — re-record it",
+			idList(order), idList(ids),
+		)
+	}
+	return nil
+}
+
+// startOrder returns the id of every beat-start event in start order, a beat started twice
+// appearing twice. It orders the starts as [Take.BeatSpans] does.
+func (t *Take) startOrder() []int {
+	var starts []Event
+	for _, event := range t.Events {
+		if event.Kind == EventBeatStart {
+			starts = append(starts, event)
+		}
+	}
+	sort.SliceStable(starts, func(a, b int) bool { return starts[a].At < starts[b].At })
+	order := make([]int, 0, len(starts))
+	for _, event := range starts {
+		order = append(order, event.Beat)
+	}
+	return order
+}
+
+// uniqueBeats returns order without its repeats, each beat where it first appears.
+func uniqueBeats(order []int) []int {
+	seen := make(map[int]bool, len(order))
+	unique := make([]int, 0, len(order))
+	for _, beat := range order {
+		if !seen[beat] {
+			seen[beat] = true
+			unique = append(unique, beat)
+		}
+	}
+	return unique
+}
+
+// idList renders beat ids as `1, 2, 3`.
+func idList(ids []int) string {
+	words := make([]string, 0, len(ids))
+	for _, id := range ids {
+		words = append(words, strconv.Itoa(id))
+	}
+	return strings.Join(words, ", ")
 }
 
 // end is the take's last instant on its clock: its last snapshot or its last event, whichever

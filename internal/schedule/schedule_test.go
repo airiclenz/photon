@@ -264,7 +264,7 @@ func TestNew_RejectsBadSpans(t *testing.T) {
 			mutate: func(_ *storyboard.Storyboard, recorded *take.Take) {
 				recorded.Events = recorded.Events[:1]
 			},
-			wantErr: "beat 2 never started",
+			wantErr: "schedule: beat 2: the take never started it",
 		},
 		{
 			name:  "a beat started twice",
@@ -273,7 +273,7 @@ func TestNew_RejectsBadSpans(t *testing.T) {
 			mutate: func(_ *storyboard.Storyboard, recorded *take.Take) {
 				recorded.Events = append(recorded.Events, take.Event{At: 2 * sec, Kind: take.EventBeatStart, Beat: 1})
 			},
-			wantErr: "beat 1 started twice",
+			wantErr: "schedule: beat 1: started twice in the take",
 		},
 		{
 			name:  "a beat the storyboard lacks",
@@ -282,7 +282,13 @@ func TestNew_RejectsBadSpans(t *testing.T) {
 			mutate: func(board *storyboard.Storyboard, _ *take.Take) {
 				board.Beats = board.Beats[:1]
 			},
-			wantErr: "started beat 2, which the storyboard does not declare",
+			wantErr: "schedule: beat 2: the take started it but the storyboard has no such beat",
+		},
+		{
+			name:    "beats started out of storyboard order",
+			end:     3 * sec,
+			beats:   []beat{{id: 1, start: 2 * sec, duration: sec}, {id: 2, duration: sec}},
+			wantErr: "schedule: the take started its beats in the order 2, 1; the storyboard runs 1, 2 — re-record it",
 		},
 		{name: "no duration", end: 3 * sec, beats: []beat{{id: 1}}, wantErr: "duration"},
 		{name: "hold not under duration", end: 3 * sec, beats: []beat{{id: 1, duration: sec, hold: sec}}, wantErr: "hold"},
@@ -322,18 +328,66 @@ func TestNew_AgreesWithTheStoryboardClipClock(t *testing.T) {
 	}
 	clock := board.Clock()
 	for _, section := range schedule.Sections {
-		if section.Cut {
-			continue
-		}
-		clipTime, err := clock.Resolve(storyboard.Moment{Beat: section.Beat})
+		sectionStart, err := clock.SectionStart(section.Beat)
 		if err != nil {
-			t.Fatalf("Resolve(beat %d): %v", section.Beat, err)
+			t.Fatalf("SectionStart(beat %d): %v", section.Beat, err)
 		}
-		if clipTime != section.OutStart {
-			t.Errorf("beat %d: Resolve = %s, want OutStart %s", section.Beat, clipTime, section.OutStart)
+		if sectionStart != section.OutStart {
+			t.Errorf("beat %d: SectionStart = %s, want OutStart %s", section.Beat, sectionStart, section.OutStart)
 		}
 	}
 	if length := clock.Length(); length != schedule.Length {
 		t.Errorf("Length() = %s, want Schedule.Length %s", length, schedule.Length)
+	}
+}
+
+func TestNew_RefusesATakeOutOfStoryboardOrder(t *testing.T) {
+	t.Parallel()
+	board, recorded := recording(t, 20*sec,
+		beat{id: 1, start: 3 * sec, duration: 2 * sec},
+		beat{id: 2, start: 0, duration: 4 * sec},
+	)
+
+	schedule, err := New(board, recorded)
+
+	if err == nil || !strings.Contains(err.Error(), "re-record it") {
+		t.Fatalf("New = %+v, %v; want the out-of-order refusal", schedule, err)
+	}
+}
+
+func TestNew_JoinsOneLeafPerMismatchedBeat(t *testing.T) {
+	t.Parallel()
+	board, recorded := recording(t, 3*sec, beat{id: 1, duration: sec}, beat{id: 2, start: sec, duration: sec})
+	recorded.Events = []take.Event{{At: 0, Kind: take.EventBeatStart, Beat: 9}}
+
+	_, err := New(board, recorded)
+
+	joined, isJoined := err.(interface{ Unwrap() []error })
+	if !isJoined {
+		t.Fatalf("New error = %#v, want a joined error", err)
+	}
+	want := []string{
+		"schedule: beat 1: the take never started it",
+		"schedule: beat 2: the take never started it",
+		"schedule: beat 9: the take started it but the storyboard has no such beat",
+	}
+	leaves := joined.Unwrap()
+	if len(leaves) != len(want) {
+		t.Fatalf("New error leaves = %q, want %q", leaves, want)
+	}
+	for index, leaf := range leaves {
+		if leaf.Error() != want[index] {
+			t.Errorf("leaf %d = %q, want %q", index, leaf.Error(), want[index])
+		}
+	}
+	wantOwners := []storyboard.Owner{
+		{Kind: storyboard.OwnerBeat, Index: 1},
+		{Kind: storyboard.OwnerBeat, Index: 2},
+		{Kind: storyboard.OwnerClip},
+	}
+	for index, leaf := range leaves {
+		if owner := storyboard.OwnerOf(leaf); owner != wantOwners[index] {
+			t.Errorf("leaf %d owner = %+v, want %+v", index, owner, wantOwners[index])
+		}
 	}
 }

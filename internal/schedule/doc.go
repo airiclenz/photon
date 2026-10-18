@@ -2,7 +2,8 @@
 // [Section] of its `duration`: a beat that fits plays at 1× and then freezes its last frame for
 // the rest of its duration; a longer one plays 1× over its `hold` and the rest sped up to fit. A
 // `cut` beat is dropped from the clip. A section faster than 6× earns a warning, and a schedule
-// whose every beat is cut is an error.
+// whose every beat is cut is an error, as is a take whose beats disagree with the storyboard's or
+// ran in another order.
 //
 // A [Schedule] maps between the clip's output clock and the take's source clock in both
 // directions ([Schedule.Source], [Schedule.Output]) and samples the output clock at a frame rate

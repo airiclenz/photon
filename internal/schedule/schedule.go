@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/airiclenz/photon/internal/storyboard"
@@ -29,8 +30,9 @@ type Section struct {
 }
 
 // Schedule maps the take's source clock onto the clip's output clock, section by section, in
-// the order the take started the beats. Length is the clip's total length — the sum of the kept
-// beats' durations — and Warnings names every beat that plays faster than 6×.
+// storyboard order, which is the order the take started the beats. Length is the clip's total
+// length — the sum of the kept beats' durations — and Warnings names every beat that plays
+// faster than 6×.
 type Schedule struct {
 	Sections []Section
 	Length   time.Duration
@@ -45,10 +47,18 @@ type Frame struct {
 }
 
 // New lays the take's beats onto the storyboard's section timings, end to end on the output
-// clock. Every storyboard beat must have started exactly once in the take, and the take must
-// start no beat the storyboard lacks; each kept beat needs a positive duration with a hold in
-// [0, duration). A schedule whose every beat is cut is an error, since it has no clip to show.
+// clock. Every storyboard beat must have started exactly once in the take, in storyboard order,
+// and the take must start no beat the storyboard lacks: each disagreement is its own
+// `schedule: `-prefixed error, all of them joined, and one about a storyboard beat is filed under
+// that beat ([storyboard.AtBeat]). Each kept beat needs a positive duration with a hold in
+// [0, duration). Every section starts where [storyboard.OutputClock.SectionStart] places its
+// beat and the schedule's Length is the clock's, so the schedule agrees with the storyboard's
+// clock by construction. A schedule whose every beat is cut is an error, since it has no clip to
+// show.
 func New(board *storyboard.Storyboard, recorded *take.Take) (*Schedule, error) {
+	if err := recorded.MatchBeats(board.BeatIDs()); err != nil {
+		return nil, mismatchOf(board, err)
+	}
 	spans, err := recorded.BeatSpans()
 	if err != nil {
 		return nil, fmt.Errorf("schedule: %w", err)
@@ -58,10 +68,15 @@ func New(board *storyboard.Storyboard, recorded *take.Take) (*Schedule, error) {
 		return nil, err
 	}
 
-	schedule := &Schedule{Sections: sections}
+	clock := board.Clock()
+	schedule := &Schedule{Sections: sections, Length: clock.Length()}
 	for index := range schedule.Sections {
 		section := &schedule.Sections[index]
-		section.OutStart, section.Speed = schedule.Length, 1
+		section.Speed = 1
+		section.OutStart, err = clock.SectionStart(section.Beat)
+		if err != nil {
+			return nil, fmt.Errorf("schedule: %w", err)
+		}
 		if section.Cut {
 			continue
 		}
@@ -73,7 +88,6 @@ func New(board *storyboard.Storyboard, recorded *take.Take) (*Schedule, error) {
 				"beat %d plays at %.1f× (%s of take in %s), above %d×",
 				section.Beat, section.Speed, section.length(), section.Duration, maxSectionSpeed))
 		}
-		schedule.Length += section.Duration
 	}
 	if schedule.Length == 0 {
 		return nil, errors.New("schedule: every beat is cut")
@@ -81,28 +95,42 @@ func New(board *storyboard.Storyboard, recorded *take.Take) (*Schedule, error) {
 	return schedule, nil
 }
 
-// sectionsOf pairs each span with its storyboard beat's timing, in span order, after checking
-// that the take started exactly the storyboard's beats and that every kept beat's timing can be
-// scheduled.
-func sectionsOf(board *storyboard.Storyboard, spans []take.BeatSpan) ([]Section, error) {
-	started := make(map[int]bool, len(spans))
-	for _, span := range spans {
-		started[span.Beat] = true
+// mismatchOf turns [take.Take.MatchBeats]' error into the schedule's: each of its problems
+// prefixed `schedule: ` on its own, a [take.BeatError] about a beat the storyboard declares filed
+// under that beat with the same text, and the prefixed problems joined again.
+func mismatchOf(board *storyboard.Storyboard, err error) error {
+	problems := []error{err}
+	if joined, isJoined := err.(interface{ Unwrap() []error }); isJoined {
+		problems = joined.Unwrap()
 	}
+	wrapped := make([]error, 0, len(problems))
+	for _, problem := range problems {
+		var mismatch *take.BeatError
+		if errors.As(problem, &mismatch) && declares(board, mismatch.Beat) {
+			problem = storyboard.AtBeat(mismatch.Beat, errors.New(mismatch.Problem))
+		}
+		wrapped = append(wrapped, fmt.Errorf("schedule: %w", problem))
+	}
+	return errors.Join(wrapped...)
+}
+
+// declares reports whether the storyboard has a beat with id.
+func declares(board *storyboard.Storyboard, id int) bool {
+	return slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool { return beat.ID == id })
+}
+
+// sectionsOf pairs each span with its storyboard beat's timing, in span order, after checking
+// that every kept beat's timing can be scheduled. [take.Take.MatchBeats] has already matched the
+// spans to the storyboard's beats.
+func sectionsOf(board *storyboard.Storyboard, spans []take.BeatSpan) ([]Section, error) {
 	beats := make(map[int]storyboard.Beat, len(board.Beats))
 	for _, beat := range board.Beats {
-		if !started[beat.ID] {
-			return nil, fmt.Errorf("schedule: beat %d never started in the take", beat.ID)
-		}
 		beats[beat.ID] = beat
 	}
 
 	sections := make([]Section, 0, len(spans))
 	for _, span := range spans {
-		beat, ok := beats[span.Beat]
-		if !ok {
-			return nil, fmt.Errorf("schedule: the take started beat %d, which the storyboard does not declare", span.Beat)
-		}
+		beat := beats[span.Beat]
 		if err := checkTiming(beat); err != nil {
 			return nil, err
 		}

@@ -89,6 +89,15 @@ func Parse(data []byte, path string) (*Storyboard, error) {
 	return &board, nil
 }
 
+// BeatIDs returns the ids of the storyboard's beats in storyboard order, its cut beats included.
+func (s *Storyboard) BeatIDs() []int {
+	ids := make([]int, 0, len(s.Beats))
+	for _, beat := range s.Beats {
+		ids = append(ids, beat.ID)
+	}
+	return ids
+}
+
 // applyDefaults fills what a valid storyboard may leave out: a zoom ramp left at zero runs
 // [DefaultZoomRamp], a camera move without an ease eases [EaseSmooth], and a caption takes the
 // defaults [Caption] lists.

@@ -1,6 +1,7 @@
 package take
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -150,5 +151,98 @@ func TestTake_ScreensDuringAndThrough(t *testing.T) {
 				t.Errorf("ScreensThrough(%s, %s): want %v, got %v", tt.start, tt.end, tt.wantThrough, got)
 			}
 		})
+	}
+}
+
+func TestTake_MatchBeats(t *testing.T) {
+	t.Parallel()
+	ms := time.Millisecond
+	startsOf := func(beats ...int) Take {
+		var take Take
+		for index, beat := range beats {
+			take.Events = append(take.Events, Event{At: time.Duration(index) * 100 * ms, Kind: EventBeatStart, Beat: beat})
+		}
+		return take
+	}
+	cases := []struct {
+		name      string
+		take      Take
+		ids       []int
+		wantError string
+	}{
+		{name: "the beats agree", take: startsOf(1, 2, 3), ids: []int{1, 2, 3}},
+		{name: "no beats on either side", take: startsOf(), ids: nil},
+		{
+			name:      "a storyboard beat never started",
+			take:      startsOf(1, 3),
+			ids:       []int{1, 2, 3},
+			wantError: "beat 2: the take never started it",
+		},
+		{
+			name:      "a take beat the storyboard lacks",
+			take:      startsOf(1, 2, 9),
+			ids:       []int{1, 2},
+			wantError: "beat 9: the take started it but the storyboard has no such beat",
+		},
+		{
+			name:      "a beat started twice",
+			take:      startsOf(1, 2, 1),
+			ids:       []int{1, 2},
+			wantError: "beat 1: started twice in the take",
+		},
+		{
+			name: "every mismatch is joined",
+			take: startsOf(1, 1, 9),
+			ids:  []int{1, 2},
+			wantError: "beat 2: the take never started it\n" +
+				"beat 1: started twice in the take\n" +
+				"beat 9: the take started it but the storyboard has no such beat",
+		},
+		{
+			name:      "the beats started in another order",
+			take:      startsOf(2, 1, 3),
+			ids:       []int{1, 2, 3},
+			wantError: "the take started its beats in the order 2, 1, 3; the storyboard runs 1, 2, 3 — re-record it",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := c.take.MatchBeats(c.ids)
+
+			if c.wantError == "" {
+				if err != nil {
+					t.Fatalf("MatchBeats: %v", err)
+				}
+				return
+			}
+			if err == nil || err.Error() != c.wantError {
+				t.Fatalf("MatchBeats error = %v, want %q", err, c.wantError)
+			}
+		})
+	}
+}
+
+func TestTake_MatchBeats_EachMismatchIsABeatError(t *testing.T) {
+	t.Parallel()
+	recorded := Take{Events: []Event{{Kind: EventBeatStart, Beat: 9}}}
+
+	err := recorded.MatchBeats([]int{1})
+
+	joined, isJoined := err.(interface{ Unwrap() []error })
+	if !isJoined {
+		t.Fatalf("MatchBeats error = %#v, want a joined error", err)
+	}
+	var beats []int
+	for _, leaf := range joined.Unwrap() {
+		var beatError *BeatError
+		if !errors.As(leaf, &beatError) {
+			t.Fatalf("leaf %v is not a *BeatError", leaf)
+		}
+		beats = append(beats, beatError.Beat)
+	}
+	if !reflect.DeepEqual(beats, []int{1, 9}) {
+		t.Errorf("leaf beats = %v, want [1 9]", beats)
 	}
 }

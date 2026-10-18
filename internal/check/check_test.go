@@ -303,6 +303,7 @@ func TestJudge_BeatsMustAgree(t *testing.T) {
 	tests := []struct {
 		name    string
 		beats   []storyboard.Beat
+		mutate  func(*take.Take)
 		wantErr string
 	}{
 		{
@@ -315,14 +316,31 @@ func TestJudge_BeatsMustAgree(t *testing.T) {
 			beats:   []storyboard.Beat{{ID: 1}, {ID: 2}},
 			wantErr: "beat 3: the take started it but the storyboard has no such beat",
 		},
+		{
+			name:  "a beat the take started twice",
+			beats: []storyboard.Beat{{ID: 1}, {ID: 2}, {ID: 3}},
+			mutate: func(recorded *take.Take) {
+				recorded.Events = append(recorded.Events, take.Event{At: 5 * time.Second, Kind: take.EventBeatStart, Beat: 2})
+			},
+			wantErr: "beat 2: started twice in the take",
+		},
+		{
+			name:    "beats the take started out of storyboard order",
+			beats:   []storyboard.Beat{{ID: 2}, {ID: 1}, {ID: 3}},
+			wantErr: "the take started its beats in the order 1, 2, 3; the storyboard runs 2, 1, 3 — re-record it",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			board := fixtureBoard()
 			board.Beats = tt.beats
+			recorded := fixtureTake()
+			if tt.mutate != nil {
+				tt.mutate(recorded)
+			}
 
-			_, err := Judge(context.Background(), board, fixtureTake(), fixtureResolver(t), t.TempDir(), fixtureTakePath, Options{})
+			_, err := Judge(context.Background(), board, recorded, fixtureResolver(t), t.TempDir(), fixtureTakePath, Options{})
 
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("Judge error = %v, want one containing %q", err, tt.wantErr)

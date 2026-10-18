@@ -232,7 +232,13 @@ NOTES (2026-10-18): the open issue caption-cut-beat-test still names Storyboard.
 - `! grep -n 'func (s \*Storyboard) Length' internal/storyboard/*.go`
 **Commit:** `refactor(storyboard): one output clock`
 
-## 9. Take matches beats once; a reordered take is refused
+## 9. Take matches beats once; a reordered take is refused — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): deviation — internal/storyboard/storyboard.go (not in **Files:**) gains `(*Storyboard).BeatIDs`, the storyboard's beat ids in order with cut beats, because schedule and check both hand it to `MatchBeats`; one owner instead of a duplicated `beatIDs` helper in each package.
+NOTES (2026-10-18): consequential edit — internal/take/doc.go: made necessary by take.go gaining `Take.MatchBeats` and `BeatError` (file-map line).
+NOTES (2026-10-18): consequential edit — internal/schedule/doc.go: made necessary by schedule.New now refusing a mismatched or reordered take (package comment).
+NOTES (2026-10-18): schedule's `sectionsOf` drops its own never-started / undeclared checks (now `MatchBeats`' job) and keeps `checkTiming`; `New` also takes `Length` from `board.Clock().Length()`, not only each `OutStart` from `SectionStart`.
+NOTES (2026-10-18): `TestNew_AgreesWithTheStoryboardClipClock` now compares every section (cut ones included) against `SectionStart`; the out-of-order rejection is its own test, `TestNew_RefusesATakeOutOfStoryboardOrder`, plus a case in `TestNew_RejectsBadSpans`.
 
 Depends on items 6 and 8.
 

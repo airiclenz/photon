@@ -55,8 +55,9 @@ type Options struct {
 // PHOTON_BEAT in its env; exit 0 passes, and its trimmed output is the detail.
 //
 // It is an error, before any expect is judged, when the take's beats and the storyboard's do not
-// agree — a storyboard beat the take never started, or a take beat the storyboard lacks, each
-// named — and when a `seen` expect names an area resolver does not know. A failing expect is a
+// agree — a storyboard beat the take never started, a take beat the storyboard lacks, or one the
+// take started twice, each named — or when the take started them in another order than the
+// storyboard's, and when a `seen` expect names an area resolver does not know. A failing expect is a
 // FAIL row, never an error.
 func Judge(
 	ctx context.Context,
@@ -197,16 +198,16 @@ func (j judgement) seen(expect storyboard.Expect, screens []take.Snapshot, subje
 }
 
 // beatScreens groups the take's snapshots by the beat they were on screen during, after checking
-// that the take started exactly the storyboard's beats. A snapshot belongs to every beat whose
+// that the take started exactly the storyboard's beats, in storyboard order. A snapshot belongs to every beat whose
 // span its display interval — from its own time to the next snapshot's — overlaps, so the screen
 // showing when a beat starts counts for that beat. Spans are half-open except the last, which
 // keeps the take's final instant.
 func beatScreens(board *storyboard.Storyboard, recorded *take.Take) (map[int][]take.Snapshot, error) {
-	spans, err := recorded.BeatSpans()
-	if err != nil {
+	if err := recorded.MatchBeats(board.BeatIDs()); err != nil {
 		return nil, err
 	}
-	if err := matchBeats(board, spans); err != nil {
+	spans, err := recorded.BeatSpans()
+	if err != nil {
 		return nil, err
 	}
 
@@ -221,27 +222,4 @@ func beatScreens(board *storyboard.Storyboard, recorded *take.Take) (map[int][]t
 		}
 	}
 	return screens, nil
-}
-
-// matchBeats reports every storyboard beat with no span in the take and every span whose beat
-// the storyboard lacks, each by id.
-func matchBeats(board *storyboard.Storyboard, spans []take.BeatSpan) error {
-	started := make(map[int]bool, len(spans))
-	for _, span := range spans {
-		started[span.Beat] = true
-	}
-	declared := make(map[int]bool, len(board.Beats))
-	var problems []error
-	for _, beat := range board.Beats {
-		declared[beat.ID] = true
-		if !started[beat.ID] {
-			problems = append(problems, fmt.Errorf("beat %d: the take never started it", beat.ID))
-		}
-	}
-	for _, span := range spans {
-		if !declared[span.Beat] {
-			problems = append(problems, fmt.Errorf("beat %d: the take started it but the storyboard has no such beat", span.Beat))
-		}
-	}
-	return errors.Join(problems...)
 }
