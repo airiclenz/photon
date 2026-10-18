@@ -2,7 +2,6 @@ package compose
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -117,23 +116,18 @@ func trackAt[V any, M interface{ timing() move[V] }](
 }
 
 // planMoves plans every camera move of the storyboard onto the camera's tracks, each starting at
-// its `at` on the output clock and lasting its `over`. A pan's points resolve as
+// the start Parse resolved on the output clock and lasting its `over`. A pan's points resolve as
 // [zoomPlanner.panPoint] does, on the screens clipSchedule shows across the move. It fails,
-// under camera[i] as a [storyboard.LocatedError], on a move whose start is not on the clip's
-// clock and on a pan target that no screen of its move shows, wrapping [target.ErrNotOnScreen].
+// under camera[i] as a [storyboard.LocatedError], on a pan target that no screen of its move
+// shows, wrapping [target.ErrNotOnScreen].
 func (p zoomPlanner) planMoves(clipSchedule *schedule.Schedule) (zooms []move[float64], pans []move[pointF], err error) {
-	clock := p.board.Clock()
 	for index, cameraMove := range p.board.Camera {
 		switch {
 		case cameraMove.Zoom != nil:
 			zoom := cameraMove.Zoom
-			start, err := clock.Resolve(zoom.At)
-			if err != nil {
-				return nil, nil, fmt.Errorf("compose: %w", storyboard.AtCamera(index, fmt.Errorf("zoom: at: %w", err)))
-			}
-			zooms = append(zooms, move[float64]{Start: start, Over: zoom.Over, To: zoom.To, Ease: zoom.Ease})
+			zooms = append(zooms, move[float64]{Start: zoom.Start(), Over: zoom.Over, To: zoom.To, Ease: zoom.Ease})
 		case cameraMove.Pan != nil:
-			pan, err := p.planPan(clock, *cameraMove.Pan, clipSchedule)
+			pan, err := p.planPan(*cameraMove.Pan, clipSchedule)
 			if err != nil {
 				return nil, nil, fmt.Errorf("compose: %w", storyboard.AtCamera(index, fmt.Errorf("pan: %w", err)))
 			}
@@ -145,20 +139,14 @@ func (p zoomPlanner) planMoves(clipSchedule *schedule.Schedule) (zooms []move[fl
 
 // planPan is the pan move on the output clock with its points resolved to source pixels: its To,
 // or the last of its Via as the destination and the rest as the waypoints between. Where the
-// path starts is the camera's business: the centre its pan track holds at the move's start. Its
-// start resolves on clock, the board's output clock.
-func (p zoomPlanner) planPan(clock storyboard.OutputClock, pan storyboard.PanMove, clipSchedule *schedule.Schedule) (move[pointF], error) {
-	start, err := clock.Resolve(pan.At)
-	if err != nil {
-		return move[pointF]{}, fmt.Errorf("at: %w", err)
-	}
+// path starts is the camera's business: the centre its pan track holds at the move's start. The
+// pan comes from a parsed storyboard, so it has a To or a Via of at least two points.
+func (p zoomPlanner) planPan(pan storyboard.PanMove, clipSchedule *schedule.Schedule) (move[pointF], error) {
+	start := pan.Start()
 	since, until := shownAt(clipSchedule, start), shownAt(clipSchedule, start+pan.Over)
 	points := pan.Via
 	if pan.To != nil {
 		points = []storyboard.Point{*pan.To}
-	}
-	if len(points) == 0 {
-		return move[pointF]{}, errors.New("want a to or a via")
 	}
 	centres := make([]pointF, 0, len(points))
 	for index, point := range points {

@@ -7,7 +7,6 @@ import (
 	"image/color"
 	"image/draw"
 	"math"
-	"strconv"
 	"time"
 
 	"github.com/airiclenz/photon/internal/fonts"
@@ -40,16 +39,17 @@ type placed struct {
 }
 
 // New lays out board's captions on a shipped frame out pixels in size, where one design pixel
-// spans unit shipped pixels (the compositor's unit). It resolves each caption's start and end on
-// the output clock, draws its text from faces at an em of its font size × the design scale × unit
-// pixels — the shipped em of the terminal's text at that font size — sizes its box around the
-// text, places the box by place, align and offset or by position, clamps it inside the frame and
-// rasterizes the text, so [Layer.Draw] only composites.
+// spans unit shipped pixels (the compositor's unit). It draws each caption's text from faces at
+// an em of its font size × the design scale × unit pixels — the shipped em of the terminal's text
+// at that font size — sizes its box around the text, places the box by place, align and offset or
+// by position, clamps it inside the frame and rasterizes the text, so [Layer.Draw] only
+// composites, showing each caption over the start and stop it carries in the colours it carries.
 //
-// board must be one [storyboard.Parse] returned, so the captions carry their defaults. New fails
-// when out or unit is not positive, a face is missing, a moment does not resolve, a colour is not
-// #rrggbb, or a caption's box is wider or taller than the frame; the error names the caption and
-// is filed under it as a [storyboard.LocatedError].
+// board must be one [storyboard.Parse] returned, so the captions carry their defaults and their
+// resolved start, stop and colours; a caption built as a struct literal never shows. New fails
+// when out or unit is not positive, a face is missing, or a caption's text cannot be laid out or
+// its box is wider or taller than the frame; a caption's error names the caption and is filed
+// under it as a [storyboard.LocatedError].
 func New(board *storyboard.Storyboard, faces fonts.CaptionSet, out image.Point, unit float64) (*Layer, error) {
 	if out.X <= 0 || out.Y <= 0 {
 		return nil, fmt.Errorf("caption: want a frame of positive size, got %dx%d", out.X, out.Y)
@@ -63,7 +63,7 @@ func New(board *storyboard.Storyboard, faces fonts.CaptionSet, out image.Point, 
 
 	layer := &Layer{captions: make([]placed, 0, len(board.Captions))}
 	for index, caption := range board.Captions {
-		laid, err := place(board, caption, faces, out, unit)
+		laid, err := place(caption, faces, out, unit)
 		if err != nil {
 			return nil, fmt.Errorf("caption: %w", storyboard.AtCaption(index, err))
 		}
@@ -72,26 +72,8 @@ func New(board *storyboard.Storyboard, faces fonts.CaptionSet, out image.Point, 
 	return layer, nil
 }
 
-// place resolves, lays out and rasterizes one caption.
-func place(
-	board *storyboard.Storyboard,
-	caption storyboard.Caption,
-	faces fonts.CaptionSet,
-	out image.Point,
-	unit float64,
-) (placed, error) {
-	start, stop, err := span(board, caption)
-	if err != nil {
-		return placed{}, err
-	}
-	textColor, err := parseColor(caption.Color)
-	if err != nil {
-		return placed{}, fmt.Errorf("color: %w", err)
-	}
-	boxColor, err := parseColor(caption.Box.Color)
-	if err != nil {
-		return placed{}, fmt.Errorf("box.color: %w", err)
-	}
+// place lays out and rasterizes one caption, keeping the start, stop and colours Parse resolved.
+func place(caption storyboard.Caption, faces fonts.CaptionSet, out image.Point, unit float64) (placed, error) {
 	face := faces.Regular
 	if caption.Font.Weight == storyboard.WeightBold {
 		face = faces.Bold
@@ -110,46 +92,20 @@ func place(
 		boxOpacity = *caption.Box.Opacity
 	}
 	return placed{
-		start:      start,
-		stop:       stop,
+		start:      caption.Start(),
+		stop:       caption.Stop(),
 		fade:       caption.Fade,
 		box:        box,
-		boxColor:   boxColor,
+		boxColor:   opaque(caption.BoxColor()),
 		boxOpacity: boxOpacity,
 		text:       block.mask(box, caption.Align, unit),
-		textColor:  textColor,
+		textColor:  opaque(caption.TextColor()),
 	}, nil
 }
 
-// span resolves the caption's start and its end on board's output clock: its at, and its at
-// plus for or its until.
-func span(board *storyboard.Storyboard, caption storyboard.Caption) (start, stop time.Duration, err error) {
-	clock := board.Clock()
-	start, err = clock.Resolve(caption.At)
-	if err != nil {
-		return 0, 0, fmt.Errorf("at: %w", err)
-	}
-	if caption.Until == nil {
-		return start, start + caption.For, nil
-	}
-	stop, err = clock.Resolve(*caption.Until)
-	if err != nil {
-		return 0, 0, fmt.Errorf("until: %w", err)
-	}
-	return start, stop, nil
-}
-
-// parseColor reads a #rrggbb colour as an opaque RGBA.
-func parseColor(spelled string) (color.RGBA, error) {
-	const hexDigits = 6
-	if len(spelled) != hexDigits+1 || spelled[0] != '#' {
-		return color.RGBA{}, fmt.Errorf("want #rrggbb, got %q", spelled)
-	}
-	value, err := strconv.ParseUint(spelled[1:], 16, 32)
-	if err != nil {
-		return color.RGBA{}, fmt.Errorf("want #rrggbb, got %q", spelled)
-	}
-	return color.RGBA{R: uint8(value >> 16), G: uint8(value >> 8), B: uint8(value), A: maxAlpha}, nil
+// opaque is the storyboard colour c as an opaque RGBA.
+func opaque(c storyboard.RGB) color.RGBA {
+	return color.RGBA{R: c.R, G: c.G, B: c.B, A: maxAlpha}
 }
 
 // Draw paints every caption showing at output time t onto dst: first its box, at the box's

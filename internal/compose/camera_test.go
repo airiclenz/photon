@@ -2,6 +2,7 @@ package compose
 
 import (
 	"errors"
+	"fmt"
 	"image/color"
 	"math"
 	"strings"
@@ -157,45 +158,36 @@ func TestCameraPanFollowsItsPath(t *testing.T) {
 	}
 }
 
-// cameraTake is a take of the given snapshots over beats of the given lengths, started end to
-// end from source time 0, so each beat fits its duration and source and output clocks agree.
-func cameraTake(snapshots []take.Snapshot, durations ...time.Duration) (*storyboard.Storyboard, *take.Take) {
-	board := &storyboard.Storyboard{}
+// cameraTake is a storyboard of beats of the given lengths whose camera list is camera, and a
+// take of the given snapshots over them, started end to end from source time 0, so each beat
+// fits its duration and source and output clocks agree.
+func cameraTake(
+	t *testing.T,
+	snapshots []take.Snapshot,
+	camera string,
+	durations ...time.Duration,
+) (*storyboard.Storyboard, *take.Take) {
+	t.Helper()
+	var beats strings.Builder
 	recorded := &take.Take{Snapshots: snapshots}
 	var start time.Duration
 	for index, duration := range durations {
-		board.Beats = append(board.Beats, storyboard.Beat{ID: index + 1, Duration: duration})
+		fmt.Fprintf(&beats, "  - {id: %d, title: beat %d, duration: %s}\n", index+1, index+1, duration)
 		recorded.Events = append(recorded.Events, beatStart(start, index+1))
 		start += duration
 	}
-	return board, recorded
-}
-
-// textPoint is a pan point on the target text.
-func textPoint(text string) storyboard.Point {
-	return storyboard.Point{Target: storyboard.Target{Text: text}}
-}
-
-// cellPoint is a pan point on the cell at column x, row y.
-func cellPoint(x, y int) storyboard.Point {
-	return storyboard.Point{Cell: &storyboard.Cell{X: x, Y: y}}
-}
-
-// at is the moment offset after beat's section start.
-func at(beat int, offset time.Duration) storyboard.Moment {
-	return storyboard.Moment{Beat: beat, Offset: offset}
+	return parseBoard(t, "beats:\n"+beats.String()+"camera:\n"+camera), recorded
 }
 
 func TestComposePlansOverlappingCameraMovesAcrossBeats(t *testing.T) {
 	t.Parallel()
 	lines := map[int]string{2: "     alpha", 11: "                              omega"}
-	board, recorded := cameraTake([]take.Snapshot{screen(0, lines), screen(12*sec, lines)}, 4*sec, 4*sec, 4*sec)
-	board.Camera = []storyboard.CameraMove{
-		{Zoom: &storyboard.ZoomMove{To: 2, At: at(1, sec), Over: 2 * sec}},
-		{Pan: &storyboard.PanMove{To: ptr(textPoint("alpha")), At: at(1, 2*sec), Over: 2 * sec}},
-		{Pan: &storyboard.PanMove{Via: []storyboard.Point{cellPoint(10, 3), textPoint("omega")}, At: at(2, sec), Over: 3 * sec}},
-		{Zoom: &storyboard.ZoomMove{To: 1, At: at(2, 2*sec), Over: 4 * sec}},
-	}
+	const camera = `  - zoom: {to: 2, at: {beat: 1, offset: 1s}, over: 2s}
+  - pan: {to: {text: alpha}, at: {beat: 1, offset: 2s}, over: 2s}
+  - pan: {via: [{cell: {x: 10, y: 3}}, {text: omega}], at: {beat: 2, offset: 1s}, over: 3s}
+  - zoom: {to: 1, at: {beat: 2, offset: 2s}, over: 4s}
+`
+	board, recorded := cameraTake(t, []take.Snapshot{screen(0, lines), screen(12*sec, lines)}, camera, 4*sec, 4*sec, 4*sec)
 
 	compositor, _ := newTestCompositor(t, board, recorded)
 
@@ -256,10 +248,8 @@ func TestComposePanResolvesOnTheScreenAtItsEnd(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			board, recorded := cameraTake(tc.snapshots, 8*sec)
-			board.Camera = []storyboard.CameraMove{
-				{Pan: &storyboard.PanMove{To: ptr(textPoint("alpha")), At: at(1, 1500*time.Millisecond), Over: 1500 * time.Millisecond}},
-			}
+			const camera = "  - pan: {to: {text: alpha}, at: {beat: 1, offset: 1500ms}, over: 1500ms}\n"
+			board, recorded := cameraTake(t, tc.snapshots, camera, 8*sec)
 
 			compositor, _ := newTestCompositor(t, board, recorded)
 
@@ -274,14 +264,11 @@ func TestNewRefusesAPanTargetItsMoveNeverShows(t *testing.T) {
 	t.Parallel()
 	shown := map[int]string{3: "     ghost"}
 	// Shown before the move and from the second beat on: never across the move's [1s, 2s].
-	board, recorded := cameraTake(
+	board, recorded := cameraTake(t,
 		[]take.Snapshot{screen(0, shown), screen(500*time.Millisecond, nil), screen(4*sec, shown)},
+		"  - pan: {to: {text: ghost}, at: {beat: 1, offset: 1s}, over: 1s}\n",
 		4*sec, 4*sec,
 	)
-	board.Frame.Width = testWidth
-	board.Camera = []storyboard.CameraMove{
-		{Pan: &storyboard.PanMove{To: ptr(textPoint("ghost")), At: at(1, sec), Over: sec}},
-	}
 	clipSchedule, err := schedule.New(board, recorded)
 	if err != nil {
 		t.Fatalf("schedule.New: %v", err)
@@ -299,12 +286,11 @@ func TestNewRefusesAPanTargetItsMoveNeverShows(t *testing.T) {
 
 func TestComposeCursorMapsThroughAPannedCrop(t *testing.T) {
 	t.Parallel()
-	board, recorded := cameraTake([]take.Snapshot{{At: 0}, {At: 4 * sec}}, 4*sec)
+	const camera = `  - zoom: {to: 2, at: {beat: 1}, over: 1s}
+  - pan: {to: {cell: {x: 30, y: 8}}, at: {beat: 1}, over: 1s}
+`
+	board, recorded := cameraTake(t, []take.Snapshot{{At: 0}, {At: 4 * sec}}, camera, 4*sec)
 	recorded.Events = append(recorded.Events, clickAt(3*sec, 1, take.Box{X: 33, Y: 9, W: 1, H: 1})...)
-	board.Camera = []storyboard.CameraMove{
-		{Zoom: &storyboard.ZoomMove{To: 2, At: at(1, 0), Over: sec}},
-		{Pan: &storyboard.PanMove{To: ptr(cellPoint(30, 8)), At: at(1, 0), Over: sec}},
-	}
 	compositor, _ := newTestCompositor(t, board, recorded)
 
 	frame := compositor.Compose(3*sec, solidFrame(testBackground))
@@ -321,6 +307,3 @@ func TestComposeCursorMapsThroughAPannedCrop(t *testing.T) {
 		t.Errorf("cursor at the press: want %+v through the panned crop, got %+v", want, cursor)
 	}
 }
-
-// ptr is a pointer to a copy of value.
-func ptr[V any](value V) *V { return &value }

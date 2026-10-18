@@ -241,13 +241,8 @@ func TestComposeZoomAimsAtADragsLoggedBox(t *testing.T) {
 
 func TestComposeDrawsACaptionOverTheCursor(t *testing.T) {
 	t.Parallel()
-	position := storyboard.Pixels{X: 40, Y: 40}
-	covering := boxCaption("caption\nover the cursor", at(1, 0), 10*sec)
-	covering.Place, covering.Align, covering.Position = "", "", &position
-	board := &storyboard.Storyboard{
-		Beats:    []storyboard.Beat{{ID: 1, Duration: 10 * sec}},
-		Captions: []storyboard.Caption{covering},
-	}
+	board := parseBoard(t, "beats:\n  - {id: 1, title: drag, duration: 10s}\ncaptions:\n"+
+		boxCaption("caption\nover the cursor", "{beat: 1}", "10s", "position: {x: 40, y: 40}"))
 	events := append([]take.Event{beatStart(0, 1)}, dragAt(dragPressAt, 1, dragPress, dragMoves...)...)
 	recorded := &take.Take{Snapshots: []take.Snapshot{{At: 0}, {At: 10 * sec}}, Events: events}
 	captioned, _ := newTestCompositor(t, board, recorded)

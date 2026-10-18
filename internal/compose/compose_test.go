@@ -74,6 +74,25 @@ func newTestCompositor(t *testing.T, board *storyboard.Storyboard, recorded *tak
 	return compositor, clipSchedule
 }
 
+// boardHeader is a storyboard of the test frame up to its beats.
+const boardHeader = `clip: compose
+ship: compose.gif
+frame: {cols: 49, rows: 14, padding: 10, font_size: 10, line_height: 2, scale: 2, width: 500, fps: 24, max_colors: 128}
+expect:
+  - seen: 'done'
+`
+
+// parseBoard parses boardHeader followed by body, the storyboard's beats and any camera and
+// captions, so the board's camera moves and captions carry their resolved starts and colours.
+func parseBoard(t *testing.T, body string) *storyboard.Storyboard {
+	t.Helper()
+	board, err := storyboard.Parse([]byte(boardHeader+body), "board.yaml")
+	if err != nil {
+		t.Fatalf("parse storyboard: %v", err)
+	}
+	return board
+}
+
 // zoomClickTake is a two-beat take: beat 1 idles for 2 s, beat 2 clicks box at 3 s and runs to
 // 6 s, zoomed 2× onto the clicked target. Every beat fits its duration, so source and output
 // clocks agree.
@@ -574,19 +593,16 @@ func TestCompositorRect(t *testing.T) {
 // testCaptionBox is the colour of a test caption's box, which no other test pixel takes.
 var testCaptionBox = color.RGBA{0x20, 0x40, 0x60, 0xff}
 
-// boxCaption is a caption in an opaque box of testCaptionBox, starting at start and showing for
-// length, placed at the bottom middle with no fade.
-func boxCaption(text string, start storyboard.Moment, length time.Duration) storyboard.Caption {
-	return storyboard.Caption{
-		Text:  text,
-		At:    start,
-		For:   length,
-		Font:  storyboard.CaptionFont{Size: 14, Weight: storyboard.WeightRegular},
-		Place: storyboard.PlaceBottom,
-		Align: storyboard.AlignMiddle,
-		Color: "#ffffff",
-		Box:   storyboard.CaptionBox{Color: "#204060", Opacity: ptr(1.0)},
-	}
+// bottomMiddle is the flow-mapping fields that place a caption at the bottom middle.
+const bottomMiddle = "place: bottom, align: middle"
+
+// boxCaption is a captions-list entry: text in an opaque box of testCaptionBox, from the moment
+// at for length, laid out by placement's flow-mapping fields, with no fade.
+func boxCaption(text, at, length, placement string) string {
+	return fmt.Sprintf(
+		"  - {text: %q, at: %s, for: %s, font: {size: 14, weight: regular}, %s, color: '#ffffff', box: {color: '#204060', opacity: 1}}\n",
+		text, at, length, placement,
+	)
 }
 
 // stripedFrame is a source frame of vertical stripes, so a zoomed frame differs from the
@@ -641,8 +657,17 @@ func countColour(img *image.RGBA, colour color.RGBA) int {
 
 func TestComposeZoomLeavesACaptionInPlace(t *testing.T) {
 	t.Parallel()
-	board, recorded := zoomClickTake(take.Box{X: 30, Y: 3, W: 6, H: 1})
-	board.Captions = []storyboard.Caption{boxCaption("Caption", at(1, 0), 6*sec)}
+	_, recorded := zoomClickTake(take.Box{X: 30, Y: 3, W: 6, H: 1})
+	board := parseBoard(t, `beats:
+  - {id: 1, title: idle, duration: 2s}
+  - id: 2
+    title: click
+    duration: 4s
+    do:
+      - click: {target: {text: target}}
+    zoom: {target: {text: target}, factor: 2}
+captions:
+`+boxCaption("Caption", "{beat: 1}", "6s", bottomMiddle))
 	compositor, _ := newTestCompositor(t, board, recorded)
 	src := stripedFrame()
 	unzoomed, zoomed := 1*sec, 4*sec
@@ -677,10 +702,11 @@ func TestComposeBeatAnchoredCaptionFollowsTheBeatsDuration(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			board := &storyboard.Storyboard{
-				Beats:    []storyboard.Beat{{ID: 1, Duration: tc.firstBeat}, {ID: 2, Duration: 4 * sec}},
-				Captions: []storyboard.Caption{boxCaption("Beat two", at(2, 0), sec)},
-			}
+			board := parseBoard(t, fmt.Sprintf(`beats:
+  - {id: 1, title: one, duration: %s}
+  - {id: 2, title: two, duration: 4s}
+captions:
+`, tc.firstBeat)+boxCaption("Beat two", "{beat: 2}", "1s", bottomMiddle))
 			recorded := &take.Take{
 				Snapshots: []take.Snapshot{{At: 0}, {At: 6 * sec}},
 				Events:    []take.Event{beatStart(0, 1), beatStart(2*sec, 2)},

@@ -89,10 +89,11 @@ type Compositor struct {
 // snapshots a zoom or pan target resolves on (through resolver), clipSchedule the output clock,
 // layout where cells sit in a source frame, background the colour a zoomed frame is cleared to
 // before the push is drawn, and captionFaces the faces board's captions are drawn in (unread when
-// it has none, so it may then be the zero set). It fails on a layout with no size, a frame width
-// that is not positive, a zoomed beat whose target resolves on none of its snapshots, a camera
-// move whose start is not on the clip's clock, a pan target no screen of its move shows, and a
-// caption [caption.New] refuses.
+// it has none, so it may then be the zero set). board must be one [storyboard.Parse] returned, so
+// its camera moves and captions carry the starts, stops and colours Parse resolved. It fails on a
+// layout with no size, a frame width that is not positive, a zoomed beat whose target resolves on
+// none of its snapshots, a pan target no screen of its move shows, and a caption [caption.New]
+// refuses.
 func New(
 	board *storyboard.Storyboard,
 	recorded *take.Take,

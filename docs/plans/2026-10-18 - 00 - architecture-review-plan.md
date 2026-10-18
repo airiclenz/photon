@@ -321,7 +321,11 @@ Depends on item 8.
 - `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run Lint`
 **Commit:** `feat(storyboard): resolve caption and move values at parse`
 
-## 13. Caption and compose read resolved values
+## 13. Caption and compose read resolved values — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): consequential edit — internal/compose/compose.go: made necessary by dropping planMoves' timing error; `New`'s doc no longer lists "a camera move whose start is not on the clip's clock" and states the board must come from `storyboard.Parse`.
+NOTES (2026-10-18): internal/caption/caption_test.go needed no change: its boards were already built through `storyboard.Parse`, and no caption or compose test exercised the deleted timing, colour or `want a to or a via` error paths, so none was removed.
+NOTES (2026-10-18): the compose tests build their captioned and camera-moved boards from YAML through a new `parseBoard` helper (`boardHeader` of the 49 × 14 test frame); `boxCaption` and `cameraTake` now take YAML text, and the struct-literal helpers `at`, `ptr`, `textPoint` and `cellPoint` went with their last callers.
 
 Depends on item 12.
 
