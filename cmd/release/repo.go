@@ -236,7 +236,12 @@ func (r execRepo) ReleaseTags(ctx context.Context) ([]string, error) {
 }
 
 // CommitFile writes the file, then runs `git add <path>` and `git commit --quiet -m <subject>`.
-func (r execRepo) CommitFile(ctx context.Context, path string, content []byte, subject string) error {
+func (r execRepo) CommitFile(
+	ctx context.Context,
+	path string,
+	content []byte,
+	subject string,
+) error {
 	target := filepath.Join(r.dir, path)
 	mode := os.FileMode(documentMode)
 	if info, err := os.Stat(target); err == nil {
@@ -266,7 +271,8 @@ func (r execRepo) CountCommits(ctx context.Context, revisionRange string) (int, 
 // LatestRelease asks `gh release view` with no tag, which answers with the latest published
 // release, or fails with "release not found" while none is.
 func (r execRepo) LatestRelease(ctx context.Context) (githubRelease, bool, error) {
-	output, err := r.remote(ctx, "gh", "release", "view", "--repo", photonRepo, "--json", "tagName,publishedAt")
+	output, err := r.remote(ctx,
+		"gh", "release", "view", "--repo", photonRepo, "--json", "tagName,publishedAt")
 	if isReleaseNotFound(err) {
 		return githubRelease{}, false, nil
 	}
@@ -297,7 +303,8 @@ func (r execRepo) RemoteHasTag(ctx context.Context, tag string) (bool, error) {
 
 // RemoteTagType reads the tag ref's object type from the GitHub API.
 func (r execRepo) RemoteTagType(ctx context.Context, tag string) (string, error) {
-	kind, err := r.remote(ctx, "gh", "api", "repos/"+photonRepo+"/git/ref/tags/"+tag, "--jq", ".object.type")
+	kind, err := r.remote(ctx,
+		"gh", "api", "repos/"+photonRepo+"/git/ref/tags/"+tag, "--jq", ".object.type")
 	if err != nil {
 		return "", err
 	}
@@ -306,8 +313,12 @@ func (r execRepo) RemoteTagType(ctx context.Context, tag string) (string, error)
 
 // ReleaseAssets reads the release's assets, their states and whether it is a draft with
 // `gh release view <tag>`.
-func (r execRepo) ReleaseAssets(ctx context.Context, tag string) (githubReleaseAssets, bool, error) {
-	output, err := r.remote(ctx, "gh", "release", "view", tag, "--repo", photonRepo, "--json", "assets,isDraft")
+func (r execRepo) ReleaseAssets(
+	ctx context.Context,
+	tag string,
+) (githubReleaseAssets, bool, error) {
+	output, err := r.remote(ctx,
+		"gh", "release", "view", tag, "--repo", photonRepo, "--json", "assets,isDraft")
 	if isReleaseNotFound(err) {
 		return githubReleaseAssets{}, false, nil
 	}
@@ -386,7 +397,9 @@ func (r execRepo) CloneAt(ctx context.Context, tag, dir string) error {
 	if err != nil {
 		return fmt.Errorf("find the checkout's top level: %w", err)
 	}
-	if _, err := r.commands.run(ctx, filepath.Dir(dir), nil, "git", "clone", "--quiet", strings.TrimSpace(toplevel), dir); err != nil {
+	if _, err := r.commands.run(
+		ctx, filepath.Dir(dir), nil, "git", "clone", "--quiet", strings.TrimSpace(toplevel), dir,
+	); err != nil {
 		return fmt.Errorf("clone the checkout to build %s: %w", tag, err)
 	}
 	if _, err := r.commands.run(ctx, dir, nil, "git", "checkout", "--quiet", tag); err != nil {
@@ -414,20 +427,23 @@ func (r execRepo) UploadAssets(ctx context.Context, tag string, assets []string)
 // UndraftRelease runs `gh release edit --draft=false --latest`, which publishes the draft and
 // marks it latest, as CreateRelease's --latest does for a release it creates.
 func (r execRepo) UndraftRelease(ctx context.Context, tag string) error {
-	_, err := r.remote(ctx, "gh", "release", "edit", tag, "--repo", photonRepo, "--draft=false", "--latest")
+	_, err := r.remote(ctx,
+		"gh", "release", "edit", tag, "--repo", photonRepo, "--draft=false", "--latest")
 	return err
 }
 
 // ReadAsset runs `gh release download --output -`, which prints the asset to stdout, so nothing
 // is written into the checkout, whose clean tree the next status or publish gate checks.
 func (r execRepo) ReadAsset(ctx context.Context, tag, name string) (string, error) {
-	return r.remote(ctx, "gh", "release", "download", tag, "--repo", photonRepo, "--pattern", name, "--output", "-")
+	return r.remote(ctx,
+		"gh", "release", "download", tag, "--repo", photonRepo, "--pattern", name, "--output", "-")
 }
 
 // DownloadAsset runs `gh release download --dir`, which writes the asset into dir under its own
 // name.
 func (r execRepo) DownloadAsset(ctx context.Context, tag, name, dir string) error {
-	_, err := r.remote(ctx, "gh", "release", "download", tag, "--repo", photonRepo, "--pattern", name, "--dir", dir)
+	_, err := r.remote(ctx,
+		"gh", "release", "download", tag, "--repo", photonRepo, "--pattern", name, "--dir", dir)
 	return err
 }
 

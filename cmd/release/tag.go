@@ -16,7 +16,11 @@ func probeTag(ctx context.Context, env probeEnv, version releaseVersion) stepRep
 		return unknownStep(stepTag, "could not list %s's tags: %v", remoteName, err)
 	}
 	if !hasTag {
-		return stepReport{Name: stepTag, State: statePending, Detail: fmt.Sprintf("%s has no tag %s", remoteName, tag)}
+		return stepReport{
+			Name:   stepTag,
+			State:  statePending,
+			Detail: fmt.Sprintf("%s has no tag %s", remoteName, tag),
+		}
 	}
 
 	kind, err := env.repo.RemoteTagType(ctx, tag)
@@ -25,9 +29,14 @@ func probeTag(ctx context.Context, env probeEnv, version releaseVersion) stepRep
 	}
 	switch kind {
 	case "tag":
-		return stepReport{Name: stepTag, State: stateDone, Detail: fmt.Sprintf("annotated tag %s on %s", tag, remoteName)}
+		return stepReport{
+			Name:   stepTag,
+			State:  stateDone,
+			Detail: fmt.Sprintf("annotated tag %s on %s", tag, remoteName),
+		}
 	case "commit":
-		return unknownStep(stepTag, "%s on %s is a lightweight tag; a release tag must be annotated", tag, remoteName)
+		return unknownStep(stepTag,
+			"%s on %s is a lightweight tag; a release tag must be annotated", tag, remoteName)
 	default:
 		return unknownStep(stepTag, "tag %s points at a %q object, not an annotated tag", tag, kind)
 	}
@@ -35,7 +44,8 @@ func probeTag(ctx context.Context, env probeEnv, version releaseVersion) stepRep
 
 // describeTag says what the tag step does.
 func describeTag(run *publishRun) string {
-	return fmt.Sprintf("push HEAD to %s when it is behind, then wait up to %s for the CI-made annotated tag %s at the %s bump",
+	return fmt.Sprintf("push HEAD to %s when it is behind, then wait up to %s for the CI-made "+
+		"annotated tag %s at the %s bump",
 		remoteMain, run.options.tagTimeout, run.version, versionFile)
 }
 
@@ -81,7 +91,8 @@ func waitForTag(ctx context.Context, run *publishRun) error {
 			return nil
 		}
 		if waited >= run.options.tagTimeout {
-			return fmt.Errorf("%s had no tag %s after %s: check the tag-on-version-bump workflow's run for the push, then run publish again",
+			return fmt.Errorf("%s had no tag %s after %s: check the tag-on-version-bump "+
+				"workflow's run for the push, then run publish again",
 				remoteName, run.version, run.options.tagTimeout)
 		}
 		if err := run.options.sleep(ctx, run.options.pollInterval); err != nil {
@@ -104,7 +115,8 @@ func verifyTag(ctx context.Context, run *publishRun) error {
 		return fmt.Errorf("read the type of tag %s: %w", tag, err)
 	}
 	if !isAnnotated {
-		return fmt.Errorf("%s on %s is a lightweight tag; a release tag must be annotated", tag, remoteName)
+		return fmt.Errorf("%s on %s is a lightweight tag; a release tag must be annotated",
+			tag, remoteName)
 	}
 
 	tagged, err := run.repo.Resolve(ctx, tag)
@@ -116,7 +128,8 @@ func verifyTag(ctx context.Context, run *publishRun) error {
 		return fmt.Errorf("find the %s bump commit: %w", versionFile, err)
 	}
 	if tagged != bump {
-		return fmt.Errorf("tag %s is on %s, not on the %s bump %s", tag, short(tagged), versionFile, short(bump))
+		return fmt.Errorf("tag %s is on %s, not on the %s bump %s",
+			tag, short(tagged), versionFile, short(bump))
 	}
 	return nil
 }

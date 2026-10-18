@@ -44,16 +44,16 @@ func newPrepareCommand(commands runner, openRepo repoOpener) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "prepare vX.Y.Z",
 		Short: "Make the CHANGELOG rollup and VERSION bump commits for a release",
-		Long: "prepare makes exactly two local commits and pushes nothing: \"chore(release): cut vX.Y.Z\",\n" +
-			"which gives every bullet under ## [Unreleased] in CHANGELOG.md its own\n" +
+		Long: "prepare makes exactly two local commits and pushes nothing: \"chore(release): cut " +
+			"vX.Y.Z\",\nwhich gives every bullet under ## [Unreleased] in CHANGELOG.md its own\n" +
 			"## [X.Y.Z] - YYYY-MM-DD heading (today's local date), then\n" +
 			"\"chore(version): bump version to vX.Y.Z\", which writes the bare X.Y.Z to\n" +
-			"VERSION. It refuses, writing nothing, when the version is malformed or not above the\n" +
-			"highest vX.Y.Z tag (with no such tag, any version is above it), VERSION already reads\n" +
-			"it, the working tree is not clean, ## [Unreleased] is missing or holds no bullet, or\n" +
-			"CHANGELOG.md already has a heading for the version. It fetches origin's main and its\n" +
-			"tags first, so the version is judged against the published tags, and refuses when that\n" +
-			"fetch fails. A bare X.Y.Z reads as vX.Y.Z.",
+			"VERSION. It refuses, writing nothing, when the version is malformed or not above " +
+			"the\nhighest vX.Y.Z tag (with no such tag, any version is above it), VERSION " +
+			"already reads\nit, the working tree is not clean, ## [Unreleased] is missing or " +
+			"holds no bullet, or\nCHANGELOG.md already has a heading for the version. It fetches " +
+			"origin's main and its\ntags first, so the version is judged against the published " +
+			"tags, and refuses when that\nfetch fails. A bare X.Y.Z reads as vX.Y.Z.",
 		Args: cobra.ExactArgs(1),
 		RunE: runE(func(cmd *cobra.Command, args []string) error {
 			options.version = args[0]
@@ -65,7 +65,12 @@ func newPrepareCommand(commands runner, openRepo repoOpener) *cobra.Command {
 
 // runPrepare checks every precondition before it writes anything, then makes the rollup commit
 // and the bump commit, in that order, each staging its one path by name.
-func runPrepare(ctx context.Context, commands runner, output io.Writer, options prepareOptions) error {
+func runPrepare(
+	ctx context.Context,
+	commands runner,
+	output io.Writer,
+	options prepareOptions,
+) error {
 	version, err := parseReleaseVersion(options.version)
 	if err != nil {
 		return err
@@ -87,7 +92,8 @@ func runPrepare(ctx context.Context, commands runner, output io.Writer, options 
 		return fmt.Errorf("%w (the rollup commit %q was made)", err, rollupSubject)
 	}
 
-	_, _ = fmt.Fprintf(output, "committed %q\ncommitted %q\nnothing was pushed\n", rollupSubject, bumpSubject)
+	_, _ = fmt.Fprintf(output, "committed %q\ncommitted %q\nnothing was pushed\n",
+		rollupSubject, bumpSubject)
 	return nil
 }
 
@@ -96,11 +102,18 @@ func runPrepare(ctx context.Context, commands runner, output io.Writer, options 
 // It fetches origin's main and its tags first, so the version is judged against the published
 // tags rather than stale local ones, then asks checkout for the tree's state and the tags, and
 // reads CHANGELOG.md and VERSION from dir.
-func checkPrepare(ctx context.Context, checkout repo, dir string, version releaseVersion, today time.Time) ([]byte, error) {
+func checkPrepare(
+	ctx context.Context,
+	checkout repo,
+	dir string,
+	version releaseVersion,
+	today time.Time,
+) ([]byte, error) {
 	var refusals []error
 
 	if err := checkout.FetchMain(ctx); err != nil {
-		refusals = append(refusals, fmt.Errorf("fetch %s's %s and its tags: %w", remoteName, mainBranch, err))
+		refusals = append(refusals,
+			fmt.Errorf("fetch %s's %s and its tags: %w", remoteName, mainBranch, err))
 	}
 
 	isClean, err := checkout.IsClean(ctx)
@@ -133,7 +146,8 @@ func checkPrepare(ctx context.Context, checkout repo, dir string, version releas
 	}
 
 	if len(refusals) > 0 {
-		return nil, fmt.Errorf("refusing to prepare %s, nothing was written:\n%w", version, errors.Join(refusals...))
+		return nil, fmt.Errorf("refusing to prepare %s, nothing was written:\n%w",
+			version, errors.Join(refusals...))
 	}
 	return rollup, nil
 }
@@ -164,7 +178,8 @@ func checkVersionFile(dir string, version releaseVersion) error {
 		return nil
 	}
 	next := releaseVersion{major: version.major, minor: version.minor, patch: version.patch + 1}
-	return fmt.Errorf("%s already reads %s, an unpushed version bump: cut the next patch, %s, instead",
+	return fmt.Errorf(
+		"%s already reads %s, an unpushed version bump: cut the next patch, %s, instead",
 		versionFile, strings.TrimPrefix(version.String(), "v"), next)
 }
 
@@ -188,7 +203,8 @@ func rollUpChangelog(changelog []byte, version releaseVersion, today time.Time) 
 	for index, line := range lines {
 		content := strings.TrimRight(line, "\r\n")
 		if strings.HasPrefix(content, versionHeading) {
-			return nil, fmt.Errorf("%s:%d: already has a %s heading", changelogFile, index+1, versionHeading)
+			return nil, fmt.Errorf("%s:%d: already has a %s heading",
+				changelogFile, index+1, versionHeading)
 		}
 		if unreleased < 0 && content == unreleasedHeading {
 			unreleased = index
@@ -215,10 +231,12 @@ func rollUpChangelog(changelog []byte, version releaseVersion, today time.Time) 
 		}
 	}
 	if !hasBullet {
-		return nil, fmt.Errorf("%s:%d: no bullet under %s to release", changelogFile, unreleased+1, unreleasedHeading)
+		return nil, fmt.Errorf("%s:%d: no bullet under %s to release",
+			changelogFile, unreleased+1, unreleasedHeading)
 	}
 
-	heading := fmt.Sprintf(releaseHeadingFormat, releaseHeadingLead, bare, today.Format(releaseDateLayout))
+	heading := fmt.Sprintf(releaseHeadingFormat,
+		releaseHeadingLead, bare, today.Format(releaseDateLayout))
 	var rollup strings.Builder
 	for _, line := range lines[:unreleased] {
 		rollup.WriteString(line)

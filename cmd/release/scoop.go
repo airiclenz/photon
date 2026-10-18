@@ -52,7 +52,11 @@ func probeScoop(ctx context.Context, env probeEnv, version releaseVersion) stepR
 		return unknownStep(stepScoop, "could not read the %s repository: %v", bucketRepo, err)
 	}
 	if !hasBucket {
-		return stepReport{Name: stepScoop, State: stateSetupPending, Detail: fmt.Sprintf("no %s repository yet", bucketRepo)}
+		return stepReport{
+			Name:   stepScoop,
+			State:  stateSetupPending,
+			Detail: fmt.Sprintf("no %s repository yet", bucketRepo),
+		}
 	}
 
 	raw, hasManifest, err := env.channels.ReadFile(ctx, bucketRepo, bucketPath)
@@ -60,11 +64,19 @@ func probeScoop(ctx context.Context, env probeEnv, version releaseVersion) stepR
 		return unknownStep(stepScoop, "could not read %s from %s: %v", bucketPath, bucketRepo, err)
 	}
 	if !hasManifest {
-		return stepReport{Name: stepScoop, State: statePending, Detail: fmt.Sprintf("%s has no %s", bucketRepo, bucketPath)}
+		return stepReport{
+			Name:   stepScoop,
+			State:  statePending,
+			Detail: fmt.Sprintf("%s has no %s", bucketRepo, bucketPath),
+		}
 	}
 	manifest, err := parseScoopManifest(raw)
 	if err != nil {
-		return stepReport{Name: stepScoop, State: statePending, Detail: fmt.Sprintf("%s is not a readable manifest: %v", bucketPath, err)}
+		return stepReport{
+			Name:   stepScoop,
+			State:  statePending,
+			Detail: fmt.Sprintf("%s is not a readable manifest: %v", bucketPath, err),
+		}
 	}
 	return pinnedVersionStep(stepScoop, "manifest", manifest.Version, version)
 }
@@ -110,7 +122,8 @@ func (r *smokeRun) checkScoop(ctx context.Context) {
 	r.step("the Scoop bucket's manifest names %s and its %s hashes", r.version, checksumsFile)
 	sums, err := r.publishedSums(ctx)
 	if err != nil {
-		r.skip("the release's %s did not download — nothing to check the bucket's hashes against", checksumsFile)
+		r.skip("the release's %s did not download — nothing to check the bucket's hashes against",
+			checksumsFile)
 		return
 	}
 	raw, hasManifest, err := r.channels.ReadFile(ctx, bucketRepo, bucketPath)
@@ -119,7 +132,8 @@ func (r *smokeRun) checkScoop(ctx context.Context) {
 		return
 	}
 	if !hasManifest {
-		r.skip("the bucket's manifest %s in %s is unreadable: there is no such file", bucketPath, bucketRepo)
+		r.skip("the bucket's manifest %s in %s is unreadable: there is no such file",
+			bucketPath, bucketRepo)
 		return
 	}
 	manifest, err := parseScoopManifest(raw)
@@ -140,9 +154,11 @@ func (r *smokeRun) checkScoop(ctx context.Context) {
 			r.fail("the release's %s lists no hash for %s: %v", checksumsFile, name, err)
 			continue
 		}
-		listed := strings.TrimPrefix(strings.ToLower(manifest.Architecture[architecture.key].Hash), "sha256:")
+		listedHash := manifest.Architecture[architecture.key].Hash
+		listed := strings.TrimPrefix(strings.ToLower(listedHash), "sha256:")
 		if listed != published {
-			r.fail("the bucket's %s hash is %q, not %s's %s", architecture.key, listed, name, published)
+			r.fail("the bucket's %s hash is %q, not %s's %s",
+				architecture.key, listed, name, published)
 			continue
 		}
 		matched++
@@ -159,12 +175,16 @@ func (r *smokeRun) checkStaleBucket(ctx context.Context, bucketVersion string) {
 	latest, isPublished, err := r.repo.LatestRelease(ctx)
 	switch {
 	case err != nil:
-		r.skip("the bucket is at %q, not %s, and the latest release could not be read: %v", bucketVersion, bareRelease(r.version), err)
+		r.skip("the bucket is at %q, not %s, and the latest release could not be read: %v",
+			bucketVersion, bareRelease(r.version), err)
 	case !isPublished:
-		r.skip("the bucket is at %q, not %s, and %s has no published release", bucketVersion, bareRelease(r.version), photonRepo)
+		r.skip("the bucket is at %q, not %s, and %s has no published release",
+			bucketVersion, bareRelease(r.version), photonRepo)
 	case latest.Tag == r.version.String():
-		r.fail("the bucket is at %q, not the latest release %s — run publish %s", bucketVersion, bareRelease(r.version), r.version)
+		r.fail("the bucket is at %q, not the latest release %s — run publish %s",
+			bucketVersion, bareRelease(r.version), r.version)
 	default:
-		r.skip("the bucket is at %q; %s is not the latest release (%s)", bucketVersion, r.version, latest.Tag)
+		r.skip("the bucket is at %q; %s is not the latest release (%s)",
+			bucketVersion, r.version, latest.Tag)
 	}
 }

@@ -9,14 +9,16 @@ import (
 // describePackageFile says what a step that publishes one generated file to a channel repository
 // does.
 func describePackageFile(run *publishRun, repo, path string) string {
-	return fmt.Sprintf("render %s from release %s's %s, then commit %q to %s and push it when the file changes",
+	return fmt.Sprintf(
+		"render %s from release %s's %s, then commit %q to %s and push it when the file changes",
 		path, run.version, checksumsFile, packageCommitSubject(run.version), repo)
 }
 
 // publishPackageFile publishes content to path in repo through the run's channels, committed as
 // `photon X.Y.Z`, and says so when the repository already holds it.
 func publishPackageFile(ctx context.Context, run *publishRun, repo, path, content string) error {
-	isPushed, err := run.channels.PublishFile(ctx, repo, path, content, packageCommitSubject(run.version))
+	isPushed, err := run.channels.PublishFile(
+		ctx, repo, path, content, packageCommitSubject(run.version))
 	if err != nil {
 		return err
 	}
@@ -37,12 +39,25 @@ func packageCommitSubject(version releaseVersion) string {
 func pinnedVersionStep(name, file, pinned string, version releaseVersion) stepReport {
 	bare := bareRelease(version)
 	if pinned == bare {
-		return stepReport{Name: name, State: stateDone, Detail: fmt.Sprintf("%s pins %s", file, bare)}
+		return stepReport{
+			Name:   name,
+			State:  stateDone,
+			Detail: fmt.Sprintf("%s pins %s", file, bare),
+		}
 	}
-	if pinnedVersion, err := parseReleaseVersion(pinned); err == nil && pinnedVersion.compare(version) > 0 {
-		return stepReport{Name: name, State: stateDone, Detail: fmt.Sprintf("%s pins newer %s", file, pinned)}
+	pinnedVersion, err := parseReleaseVersion(pinned)
+	if err == nil && pinnedVersion.compare(version) > 0 {
+		return stepReport{
+			Name:   name,
+			State:  stateDone,
+			Detail: fmt.Sprintf("%s pins newer %s", file, pinned),
+		}
 	}
-	return stepReport{Name: name, State: statePending, Detail: fmt.Sprintf("%s pins %q, not %s", file, pinned, bare)}
+	return stepReport{
+		Name:   name,
+		State:  statePending,
+		Detail: fmt.Sprintf("%s pins %q, not %s", file, pinned, bare),
+	}
 }
 
 // isNotFound reports whether a gh api failure is GitHub answering 404 — the path or repository

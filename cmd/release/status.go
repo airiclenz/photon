@@ -63,16 +63,16 @@ func newStatusCommand(commands runner, openRepo repoOpener, channels channelRepo
 	cmd := &cobra.Command{
 		Use:   "status [vX.Y.Z]",
 		Short: "Report the release gate, the release baseline and each publish step",
-		Long: "status is read-only apart from fetching origin. It reports the release gate — a clean\n" +
-			"tree, the gate commit (HEAD past its CHANGELOG.md/VERSION-only commits) on origin/main,\n" +
-			"origin/main contained in HEAD, and a successful ci.yml run — naming each condition that\n" +
-			"blocks it; the baseline (the latest published release and the commits since, or the\n" +
-			"whole history while no release is published); and the highest release tag. It probes\n" +
-			"each publish step (tag, release, homebrew, scoop, smoke) for the version: done,\n" +
-			"pending, setup-pending or unknown. The version defaults to VERSION, whose steps are\n" +
-			"probed only when it is above the baseline or no release is published yet; a bare X.Y.Z\n" +
-			"reads as vX.Y.Z. It exits 0 when the gate clears and 1 when it is blocked or a check or\n" +
-			"probe could not run.",
+		Long: "status is read-only apart from fetching origin. It reports the release gate — a " +
+			"clean\ntree, the gate commit (HEAD past its CHANGELOG.md/VERSION-only commits) on " +
+			"origin/main,\norigin/main contained in HEAD, and a successful ci.yml run — naming " +
+			"each condition that\nblocks it; the baseline (the latest published release and the " +
+			"commits since, or the\nwhole history while no release is published); and the " +
+			"highest release tag. It probes\neach publish step (tag, release, homebrew, scoop, " +
+			"smoke) for the version: done,\npending, setup-pending or unknown. The version " +
+			"defaults to VERSION, whose steps are\nprobed only when it is above the baseline or " +
+			"no release is published yet; a bare X.Y.Z\nreads as vX.Y.Z. It exits 0 when the " +
+			"gate clears and 1 when it is blocked or a check or\nprobe could not run.",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 1 {
 				return fmt.Errorf("status takes at most one version, got %d arguments", len(args))
@@ -97,7 +97,12 @@ func newStatusCommand(commands runner, openRepo repoOpener, channels channelRepo
 // runStatus gathers the report, prints it, and then fails when the gate is blocked or a check
 // could not run. The report is printed either way, so a blocked or broken run still shows what
 // it found.
-func runStatus(ctx context.Context, commands runner, output io.Writer, options statusOptions) error {
+func runStatus(
+	ctx context.Context,
+	commands runner,
+	output io.Writer,
+	options statusOptions,
+) error {
 	var problems []error
 	report := statusReport{Version: options.version, Steps: []stepReport{}}
 
@@ -128,11 +133,15 @@ func runStatus(ctx context.Context, commands runner, output io.Writer, options s
 	report.Baseline = baseline
 
 	if version, isProbed := stepsVersion(report, isFromCheckout); isProbed {
-		env := probeEnv{repo: checkout, channels: channelReposOrExec(options.channels, commands, options.dir)}
+		env := probeEnv{
+			repo:     checkout,
+			channels: channelReposOrExec(options.channels, commands, options.dir),
+		}
 		report.Steps = probeSteps(ctx, env, version)
 		for _, step := range report.Steps {
 			if step.State == stateUnknown {
-				problems = append(problems, fmt.Errorf("could not probe the %s step: %s", step.Name, step.Detail))
+				problems = append(problems,
+					fmt.Errorf("could not probe the %s step: %s", step.Name, step.Detail))
 			}
 		}
 	}
@@ -207,7 +216,11 @@ func readBaseline(ctx context.Context, checkout repo) (baselineReport, error) {
 }
 
 // countBaseline fills in the number of commits in the baseline's range.
-func countBaseline(ctx context.Context, checkout repo, baseline baselineReport) (baselineReport, error) {
+func countBaseline(
+	ctx context.Context,
+	checkout repo,
+	baseline baselineReport,
+) (baselineReport, error) {
 	count, err := checkout.CountCommits(ctx, baseline.Range)
 	if err != nil {
 		return baseline, fmt.Errorf("count the commits in %s: %w", baseline.Range, err)
@@ -238,9 +251,11 @@ func printStatus(output io.Writer, report statusReport, isJSON bool) error {
 	switch {
 	case report.Baseline.Tag != "":
 		baseline = fmt.Sprintf("%s (published %s), %s: %d commits",
-			report.Baseline.Tag, report.Baseline.Published, report.Baseline.Range, report.Baseline.Commits)
+			report.Baseline.Tag, report.Baseline.Published, report.Baseline.Range,
+			report.Baseline.Commits)
 	case report.Baseline.Range != "":
-		baseline = fmt.Sprintf("no published release, %s: %d commits", report.Baseline.Range, report.Baseline.Commits)
+		baseline = fmt.Sprintf("no published release, %s: %d commits",
+			report.Baseline.Range, report.Baseline.Commits)
 	}
 
 	table := tabwriter.NewWriter(output, 0, 0, 2, ' ', 0)
@@ -254,7 +269,8 @@ func printStatus(output io.Writer, report statusReport, isJSON bool) error {
 	if len(report.Steps) == 0 {
 		notProbed := "not probed"
 		if report.Version != "" && report.Baseline.Tag != "" {
-			notProbed = fmt.Sprintf("not probed: %s is not above the baseline %s", report.Version, report.Baseline.Tag)
+			notProbed = fmt.Sprintf("not probed: %s is not above the baseline %s",
+				report.Version, report.Baseline.Tag)
 		}
 		_, _ = fmt.Fprintf(table, "steps\t%s\n", notProbed)
 	}

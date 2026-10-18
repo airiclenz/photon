@@ -26,7 +26,11 @@ func probeHomebrew(ctx context.Context, env probeEnv, version releaseVersion) st
 		return unknownStep(stepHomebrew, "could not read the %s repository: %v", tapRepo, err)
 	}
 	if !hasTap {
-		return stepReport{Name: stepHomebrew, State: stateSetupPending, Detail: fmt.Sprintf("no %s repository yet", tapRepo)}
+		return stepReport{
+			Name:   stepHomebrew,
+			State:  stateSetupPending,
+			Detail: fmt.Sprintf("no %s repository yet", tapRepo),
+		}
 	}
 
 	formula, hasFormula, err := env.channels.ReadFile(ctx, tapRepo, formulaPath)
@@ -34,12 +38,20 @@ func probeHomebrew(ctx context.Context, env probeEnv, version releaseVersion) st
 		return unknownStep(stepHomebrew, "could not read %s from %s: %v", formulaPath, tapRepo, err)
 	}
 	if !hasFormula {
-		return stepReport{Name: stepHomebrew, State: statePending, Detail: fmt.Sprintf("%s has no %s", tapRepo, formulaPath)}
+		return stepReport{
+			Name:   stepHomebrew,
+			State:  statePending,
+			Detail: fmt.Sprintf("%s has no %s", tapRepo, formulaPath),
+		}
 	}
 
 	fields := formulaVersionPattern.FindStringSubmatch(formula)
 	if fields == nil {
-		return stepReport{Name: stepHomebrew, State: statePending, Detail: fmt.Sprintf("%s pins no version", formulaPath)}
+		return stepReport{
+			Name:   stepHomebrew,
+			State:  statePending,
+			Detail: fmt.Sprintf("%s pins no version", formulaPath),
+		}
 	}
 	return pinnedVersionStep(stepHomebrew, "formula", fields[1], version)
 }
@@ -75,7 +87,9 @@ func renderFormula(version, sums string) (string, error) {
 // published there is no telling which version that is.
 func (r *smokeRun) checkHomebrew(ctx context.Context) {
 	r.step("brew upgrade moves this machine onto %s", r.version)
-	if _, err := r.commands.run(ctx, r.options.dir, nil, "brew", "list", "--formula", binaryName); err != nil {
+	if _, err := r.commands.run(
+		ctx, r.options.dir, nil, "brew", "list", "--formula", binaryName,
+	); err != nil {
 		if isMissingTool(err) {
 			r.skip("Homebrew is not installed on this host")
 			return
@@ -86,13 +100,16 @@ func (r *smokeRun) checkHomebrew(ctx context.Context) {
 	latest, isPublished, err := r.repo.LatestRelease(ctx)
 	switch {
 	case err != nil:
-		r.skip("the latest release could not be read, so brew upgrade may not move this machine onto %s: %v", r.version, err)
+		r.skip("the latest release could not be read, so brew upgrade may not move this machine "+
+			"onto %s: %v", r.version, err)
 		return
 	case !isPublished:
-		r.skip("%s has no published release, so brew upgrade may not move this machine onto %s", photonRepo, r.version)
+		r.skip("%s has no published release, so brew upgrade may not move this machine onto %s",
+			photonRepo, r.version)
 		return
 	case latest.Tag != r.version.String():
-		r.skip("%s is not the latest release (%s); brew upgrade would move this machine onto that one", r.version, latest.Tag)
+		r.skip("%s is not the latest release (%s); brew upgrade would move this machine onto "+
+			"that one", r.version, latest.Tag)
 		return
 	}
 	for _, args := range [][]string{{"update"}, {"upgrade", binaryName}} {
@@ -106,5 +123,6 @@ func (r *smokeRun) checkHomebrew(ctx context.Context) {
 		r.fail("brew --prefix: %v", err)
 		return
 	}
-	r.checkReportsVersion(ctx, filepath.Join(strings.TrimSpace(prefix), "bin", binaryName), "brew's photon")
+	binaryPath := filepath.Join(strings.TrimSpace(prefix), "bin", binaryName)
+	r.checkReportsVersion(ctx, binaryPath, "brew's photon")
 }

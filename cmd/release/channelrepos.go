@@ -98,7 +98,10 @@ func (r execChannelRepos) ReadFile(ctx context.Context, repo, path string) (stri
 // PublishFile clones the repository into a temporary directory, writes content to path there and,
 // when `git diff --cached` shows the file changed, commits it and pushes HEAD. A repository with
 // no commits yet has no branch to push to, so its first commit is pushed to main.
-func (r execChannelRepos) PublishFile(ctx context.Context, repo, path, content, subject string) (bool, error) {
+func (r execChannelRepos) PublishFile(
+	ctx context.Context,
+	repo, path, content, subject string,
+) (bool, error) {
 	workDir, err := os.MkdirTemp("", "photon-channel-")
 	if err != nil {
 		return false, fmt.Errorf("create the %s clone directory: %w", repo, err)
@@ -106,7 +109,9 @@ func (r execChannelRepos) PublishFile(ctx context.Context, repo, path, content, 
 	defer func() { _ = os.RemoveAll(workDir) }()
 
 	cloneDir := filepath.Join(workDir, "repo")
-	if _, err := r.commands.run(ctx, workDir, nonInteractiveEnv, "gh", "repo", "clone", repo, cloneDir, "--", "--quiet"); err != nil {
+	if _, err := r.commands.run(
+		ctx, workDir, nonInteractiveEnv, "gh", "repo", "clone", repo, cloneDir, "--", "--quiet",
+	); err != nil {
 		return false, fmt.Errorf("clone %s: %w", repo, err)
 	}
 	history, err := r.commands.run(ctx, cloneDir, nil, "git", "rev-list", "--all", "--max-count=1")
@@ -132,14 +137,18 @@ func (r execChannelRepos) PublishFile(ctx context.Context, repo, path, content, 
 		return false, nil
 	}
 
-	if _, err := r.commands.run(ctx, cloneDir, nil, "git", "commit", "--quiet", "-m", subject); err != nil {
+	if _, err := r.commands.run(
+		ctx, cloneDir, nil, "git", "commit", "--quiet", "-m", subject,
+	); err != nil {
 		return false, fmt.Errorf("commit %s to %s: %w", path, repo, err)
 	}
 	pushRef := "HEAD"
 	if strings.TrimSpace(history) == "" {
 		pushRef = "HEAD:" + mainBranch
 	}
-	if _, err := r.commands.run(ctx, cloneDir, nonInteractiveEnv, "git", "push", "--quiet", remoteName, pushRef); err != nil {
+	if _, err := r.commands.run(
+		ctx, cloneDir, nonInteractiveEnv, "git", "push", "--quiet", remoteName, pushRef,
+	); err != nil {
 		return false, fmt.Errorf("push %s to %s: %w", path, repo, err)
 	}
 	return true, nil

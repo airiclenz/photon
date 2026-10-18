@@ -19,7 +19,11 @@ func probeRelease(ctx context.Context, env probeEnv, version releaseVersion) ste
 		return unknownStep(stepRelease, "could not read GitHub release %s: %v", tag, err)
 	}
 	if !isFound {
-		return stepReport{Name: stepRelease, State: statePending, Detail: fmt.Sprintf("no GitHub release %s", tag)}
+		return stepReport{
+			Name:   stepRelease,
+			State:  statePending,
+			Detail: fmt.Sprintf("no GitHub release %s", tag),
+		}
 	}
 
 	want := releaseAssetNames(version)
@@ -27,20 +31,27 @@ func probeRelease(ctx context.Context, env probeEnv, version releaseVersion) ste
 	switch {
 	case release.isDraft && len(missing) > 0:
 		return stepReport{Name: stepRelease, State: statePending, Detail: fmt.Sprintf(
-			"release %s is a draft and lacks %d of its %d assets: %s", tag, len(missing), len(want), strings.Join(missing, ", "))}
+			"release %s is a draft and lacks %d of its %d assets: %s",
+			tag, len(missing), len(want), strings.Join(missing, ", "))}
 	case release.isDraft:
 		return stepReport{Name: stepRelease, State: statePending, Detail: fmt.Sprintf(
 			"release %s is a draft with all %d assets", tag, len(want))}
 	case len(missing) > 0:
 		return stepReport{Name: stepRelease, State: statePending, Detail: fmt.Sprintf(
-			"release %s lacks %d of its %d assets: %s", tag, len(missing), len(want), strings.Join(missing, ", "))}
+			"release %s lacks %d of its %d assets: %s",
+			tag, len(missing), len(want), strings.Join(missing, ", "))}
 	}
-	return stepReport{Name: stepRelease, State: stateDone, Detail: fmt.Sprintf("release %s with all %d assets", tag, len(want))}
+	return stepReport{
+		Name:   stepRelease,
+		State:  stateDone,
+		Detail: fmt.Sprintf("release %s with all %d assets", tag, len(want)),
+	}
 }
 
 // describeRelease says what the release step does.
 func describeRelease(run *publishRun) string {
-	return fmt.Sprintf("build the %d assets in a fresh clone at %s, then create GitHub release %s or upload the assets it lacks and publish it if it is a draft",
+	return fmt.Sprintf("build the %d assets in a fresh clone at %s, then create GitHub release %s "+
+		"or upload the assets it lacks and publish it if it is a draft",
 		len(releaseAssetNames(run.version)), run.version, run.version)
 }
 
@@ -92,7 +103,8 @@ func convergeRelease(ctx context.Context, run *publishRun) error {
 	// upload state: an uploaded one is never in missing.
 	if len(missing) > 0 {
 		if err := run.repo.UploadAssets(ctx, tag, assetPaths(outDir, missing)); err != nil {
-			return fmt.Errorf("upload %s to GitHub release %s: %w", strings.Join(missing, ", "), tag, err)
+			return fmt.Errorf("upload %s to GitHub release %s: %w",
+				strings.Join(missing, ", "), tag, err)
 		}
 	}
 	// A draft — one an interrupted `gh release create` left — is published only once it carries
@@ -119,11 +131,13 @@ func buildReleaseAssets(ctx context.Context, run *publishRun, workDir string) (s
 		return "", err
 	}
 	if bare != bareRelease(run.version) {
-		return "", fmt.Errorf("%s at tag %s reads %s, not %s", versionFile, tag, bare, bareRelease(run.version))
+		return "", fmt.Errorf("%s at tag %s reads %s, not %s",
+			versionFile, tag, bare, bareRelease(run.version))
 	}
 
 	outDir := filepath.Join(workDir, defaultOutDir)
-	if err := runDist(ctx, run.commands, run.output, distOptions{sourceDir: sourceDir, outDir: outDir}); err != nil {
+	dist := distOptions{sourceDir: sourceDir, outDir: outDir}
+	if err := runDist(ctx, run.commands, run.output, dist); err != nil {
 		return "", fmt.Errorf("build the %s assets: %w", tag, err)
 	}
 	return outDir, nil
@@ -132,7 +146,12 @@ func buildReleaseAssets(ctx context.Context, run *publishRun, workDir string) (s
 // checkPublishedSums downloads the release's SHA256SUMS and requires the published hash of every
 // archive, uploaded or about to be, to equal the rebuilt one, naming the way out when one does
 // not: removing SHA256SUMS and the uploaded archives it vouches for wrongly.
-func checkPublishedSums(ctx context.Context, run *publishRun, outDir string, uploaded []string) error {
+func checkPublishedSums(
+	ctx context.Context,
+	run *publishRun,
+	outDir string,
+	uploaded []string,
+) error {
 	tag := run.version.String()
 	published, err := downloadReleaseSums(ctx, run)
 	if err != nil {
@@ -161,8 +180,8 @@ func checkPublishedSums(ctx context.Context, run *publishRun, outDir string, upl
 		}
 	}
 	if len(mismatched) > 0 {
-		return fmt.Errorf("the rebuilt %s does not match release %s's %s; remove the stale assets with "+
-			"`gh release delete-asset %s <name>` (%s), then run publish again",
+		return fmt.Errorf("the rebuilt %s does not match release %s's %s; remove the stale "+
+			"assets with `gh release delete-asset %s <name>` (%s), then run publish again",
 			strings.Join(mismatched, ", "), tag, checksumsFile, tag, strings.Join(stale, ", "))
 	}
 	return nil
@@ -172,7 +191,12 @@ func checkPublishedSums(ctx context.Context, run *publishRun, outDir string, upl
 // directory and requires each to hash to the rebuilt one, naming the archives to remove when one
 // does not. It is the check for a release without SHA256SUMS, whose rebuilt sums are about to be
 // uploaded beside those archives.
-func checkUploadedArchives(ctx context.Context, run *publishRun, outDir string, uploaded []string) error {
+func checkUploadedArchives(
+	ctx context.Context,
+	run *publishRun,
+	outDir string,
+	uploaded []string,
+) error {
 	tag := run.version.String()
 	var archives []string
 	for _, name := range releaseAssetNames(run.version) {
@@ -210,8 +234,8 @@ func checkUploadedArchives(ctx context.Context, run *publishRun, outDir string, 
 		}
 	}
 	if len(mismatched) > 0 {
-		return fmt.Errorf("release %s's uploaded %s does not match the rebuilt one; remove it with "+
-			"`gh release delete-asset %s <name>` (%s), then run publish again",
+		return fmt.Errorf("release %s's uploaded %s does not match the rebuilt one; remove it "+
+			"with `gh release delete-asset %s <name>` (%s), then run publish again",
 			tag, strings.Join(mismatched, ", "), tag, strings.Join(mismatched, ", "))
 	}
 	return nil

@@ -183,7 +183,8 @@ func checkGreenRun(ctx context.Context, checkout repo, gate string, peeled []str
 	for _, commit := range peeled {
 		isPushed, err := checkout.IsAncestor(ctx, commit, remoteMain)
 		if err != nil {
-			return fmt.Errorf("could not check whether %s is on %s: %w", short(commit), remoteMain, err)
+			return fmt.Errorf("could not check whether %s is on %s: %w",
+				short(commit), remoteMain, err)
 		}
 		if isPushed {
 			candidates = append(candidates, commit)
@@ -193,7 +194,8 @@ func checkGreenRun(ctx context.Context, checkout repo, gate string, peeled []str
 	for _, commit := range candidates {
 		isGreen, err := checkout.HasGreenRun(ctx, commit)
 		if err != nil {
-			return fmt.Errorf("could not read the %s runs for %s: %w", ciWorkflow, short(commit), err)
+			return fmt.Errorf("could not read the %s runs for %s: %w",
+				ciWorkflow, short(commit), err)
 		}
 		if isGreen {
 			return nil
@@ -204,7 +206,8 @@ func checkGreenRun(ctx context.Context, checkout repo, gate string, peeled []str
 	for _, commit := range candidates {
 		shortCandidates = append(shortCandidates, short(commit))
 	}
-	return fmt.Errorf("%s has no successful run for %s", ciWorkflow, strings.Join(shortCandidates, " or "))
+	return fmt.Errorf("%s has no successful run for %s",
+		ciWorkflow, strings.Join(shortCandidates, " or "))
 }
 
 // short abbreviates a commit id for a message; the full id stays in the report's commit field.

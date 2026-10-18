@@ -30,7 +30,13 @@ type runner interface {
 type execRunner struct{}
 
 // run executes the command, capturing stdout as the result and stderr for the error.
-func (execRunner) run(ctx context.Context, dir string, env []string, name string, args ...string) (string, error) {
+func (execRunner) run(
+	ctx context.Context,
+	dir string,
+	env []string,
+	name string,
+	args ...string,
+) (string, error) {
 	command := exec.CommandContext(ctx, name, args...)
 	command.Dir = dir
 	if len(env) > 0 {
@@ -45,7 +51,8 @@ func (execRunner) run(ctx context.Context, dir string, env []string, name string
 		if detail == "" {
 			return stdout.String(), fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
 		}
-		return stdout.String(), fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, detail)
+		return stdout.String(), fmt.Errorf("%s %s: %w: %s",
+			name, strings.Join(args, " "), err, detail)
 	}
 	return stdout.String(), nil
 }

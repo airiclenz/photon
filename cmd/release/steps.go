@@ -75,7 +75,8 @@ type publishStep struct {
 var publishSteps = []publishStep{
 	{name: stepTag, probe: probeTag, describe: describeTag, converge: convergeTag},
 	{name: stepRelease, probe: probeRelease, describe: describeRelease, converge: convergeRelease},
-	{name: stepHomebrew, probe: probeHomebrew, describe: describeHomebrew, converge: convergeHomebrew,
+	{name: stepHomebrew, probe: probeHomebrew,
+		describe: describeHomebrew, converge: convergeHomebrew,
 		smoke: func(ctx context.Context, run *smokeRun) { run.checkHomebrew(ctx) }},
 	{name: stepScoop, probe: probeScoop, describe: describeScoop, converge: convergeScoop,
 		smoke: func(ctx context.Context, run *smokeRun) { run.checkScoop(ctx) }},

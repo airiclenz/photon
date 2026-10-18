@@ -119,15 +119,16 @@ func newDistCommand(commands runner) *cobra.Command {
 		Long: "dist cross-builds photon for linux, darwin and windows on amd64 and arm64, packs\n" +
 			"each binary with LICENSE, README.md and the font licences (the four\n" +
 			"internal/fonts/*-OFL.txt texts) into photon_<version>_<os>_<arch>.tar.gz\n" +
-			"(.zip on windows), and writes SHA256SUMS beside them. The archives are byte-identical\n" +
-			"across runs over the same commit. --out is emptied first.",
+			"(.zip on windows), and writes SHA256SUMS beside them. The archives are " +
+			"byte-identical\nacross runs over the same commit. --out is emptied first.",
 		Args: cobra.NoArgs,
 		RunE: runE(func(cmd *cobra.Command, _ []string) error {
 			return runDist(cmd.Context(), commands, cmd.OutOrStdout(), options)
 		}),
 	}
 	cmd.Flags().StringVar(&options.sourceDir, "src", ".", "the photon source tree to build")
-	cmd.Flags().StringVar(&options.outDir, "out", "", "where to write the archives (default <src>/dist; emptied first)")
+	cmd.Flags().StringVar(&options.outDir, "out", "",
+		"where to write the archives (default <src>/dist; emptied first)")
 	return cmd
 }
 
@@ -147,7 +148,8 @@ func runDist(ctx context.Context, commands runner, progress io.Writer, options d
 		return fmt.Errorf("resolve --out: %w", err)
 	}
 	if isWithin(sourceDir, outDir) {
-		return fmt.Errorf("--out %s holds the source tree %s and would be emptied", outDir, sourceDir)
+		return fmt.Errorf("--out %s holds the source tree %s and would be emptied",
+			outDir, sourceDir)
 	}
 
 	bareVersion, err := readBareVersion(sourceDir)
@@ -174,7 +176,9 @@ func runDist(ctx context.Context, commands runner, progress io.Writer, options d
 	archiveNames := make([]string, 0, len(distTargets))
 	for _, target := range distTargets {
 		_, _ = fmt.Fprintf(progress, "  -> %s\n", target.stem(bareVersion))
-		if err := buildArchive(ctx, commands, target, bareVersion, commitTime, sourceDir, stageDir, outDir); err != nil {
+		if err := buildArchive(
+			ctx, commands, target, bareVersion, commitTime, sourceDir, stageDir, outDir,
+		); err != nil {
 			return err
 		}
 		archiveNames = append(archiveNames, target.archiveName(bareVersion))
@@ -182,7 +186,8 @@ func runDist(ctx context.Context, commands runner, progress io.Writer, options d
 	if err := writeChecksums(outDir, archiveNames); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(progress, "dist OK -> %s (%d archives + %s)\n", outDir, len(archiveNames), checksumsFile)
+	_, _ = fmt.Fprintf(progress, "dist OK -> %s (%d archives + %s)\n",
+		outDir, len(archiveNames), checksumsFile)
 	return nil
 }
 
@@ -192,7 +197,8 @@ func isWithin(path, directory string) bool {
 	if err != nil {
 		return false
 	}
-	return relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)))
+	return relative == "." ||
+		(relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)))
 }
 
 // readBareVersion reads the source tree's VERSION — a bare `X.Y.Z` — and refuses one with a
@@ -209,7 +215,8 @@ func readBareVersion(sourceDir string) (string, error) {
 		return "", fmt.Errorf("%s:1: no version", versionPath)
 	}
 	if strings.HasPrefix(bareVersion, "v") {
-		return "", fmt.Errorf("%s:1: %q has a leading v; %s holds a bare X.Y.Z", versionPath, bareVersion, versionFile)
+		return "", fmt.Errorf("%s:1: %q has a leading v; %s holds a bare X.Y.Z",
+			versionPath, bareVersion, versionFile)
 	}
 	return bareVersion, nil
 }
@@ -223,7 +230,8 @@ func headCommitTime(ctx context.Context, commands runner, sourceDir string) (tim
 	}
 	seconds, err := strconv.ParseInt(strings.TrimSpace(output), 10, 64)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("read the HEAD commit time: %q is not a Unix time", strings.TrimSpace(output))
+		return time.Time{}, fmt.Errorf("read the HEAD commit time: %q is not a Unix time",
+			strings.TrimSpace(output))
 	}
 	return time.Unix(seconds, 0).UTC(), nil
 }
@@ -231,7 +239,14 @@ func headCommitTime(ctx context.Context, commands runner, sourceDir string) (tim
 // buildArchive cross-builds target's binary into the staging directory and packs it, with the
 // documents, into its archive in outDir. The build is a plain `CGO_ENABLED=0 go build -trimpath`:
 // no -ldflags, and the default -buildvcs stamps the commit into the binary's build info.
-func buildArchive(ctx context.Context, commands runner, target distTarget, bareVersion string, commitTime time.Time, sourceDir, stageDir, outDir string) error {
+func buildArchive(
+	ctx context.Context,
+	commands runner,
+	target distTarget,
+	bareVersion string,
+	commitTime time.Time,
+	sourceDir, stageDir, outDir string,
+) error {
 	stem := target.stem(bareVersion)
 	binaryDir := filepath.Join(stageDir, stem)
 	if err := os.MkdirAll(binaryDir, directoryMode); err != nil {
@@ -239,22 +254,36 @@ func buildArchive(ctx context.Context, commands runner, target distTarget, bareV
 	}
 	binaryPath := filepath.Join(binaryDir, target.binaryFile())
 	env := []string{"CGO_ENABLED=0", "GOOS=" + target.goos, "GOARCH=" + target.goarch}
-	if _, err := commands.run(ctx, sourceDir, env, "go", "build", "-trimpath", "-o", binaryPath, mainPackage); err != nil {
+	if _, err := commands.run(
+		ctx, sourceDir, env, "go", "build", "-trimpath", "-o", binaryPath, mainPackage,
+	); err != nil {
 		return fmt.Errorf("build %s: %w", stem, err)
 	}
 
 	entries := make([]archiveEntry, 0, len(documentFiles)+1)
-	entries = append(entries, archiveEntry{name: path.Join(stem, target.binaryFile()), source: binaryPath, mode: binaryMode})
+	entries = append(entries, archiveEntry{
+		name:   path.Join(stem, target.binaryFile()),
+		source: binaryPath,
+		mode:   binaryMode,
+	})
 	for _, document := range documentFiles {
-		entries = append(entries, archiveEntry{name: path.Join(stem, path.Base(document)), source: filepath.Join(sourceDir, filepath.FromSlash(document)), mode: documentMode})
+		entries = append(entries, archiveEntry{
+			name:   path.Join(stem, path.Base(document)),
+			source: filepath.Join(sourceDir, filepath.FromSlash(document)),
+			mode:   documentMode,
+		})
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
 
 	archivePath := filepath.Join(outDir, target.archiveName(bareVersion))
 	if target.isWindows() {
-		return writeArchive(archivePath, func(file io.Writer) error { return packZip(file, stem, entries, commitTime) })
+		return writeArchive(archivePath, func(file io.Writer) error {
+			return packZip(file, stem, entries, commitTime)
+		})
 	}
-	return writeArchive(archivePath, func(file io.Writer) error { return packTarGz(file, stem, entries, commitTime) })
+	return writeArchive(archivePath, func(file io.Writer) error {
+		return packTarGz(file, stem, entries, commitTime)
+	})
 }
 
 // writeArchive creates archivePath and fills it with pack, removing it again if anything fails.
@@ -280,14 +309,24 @@ func writeArchive(archivePath string, pack func(io.Writer) error) (err error) {
 // packTarGz writes a gzip-compressed tar of the stem directory and entries. Owner, group and
 // times are fixed and the gzip header carries no name or time, so the bytes depend only on the
 // entries' contents.
-func packTarGz(destination io.Writer, stem string, entries []archiveEntry, commitTime time.Time) error {
+func packTarGz(
+	destination io.Writer,
+	stem string,
+	entries []archiveEntry,
+	commitTime time.Time,
+) error {
 	compressed, err := gzip.NewWriterLevel(destination, gzip.BestCompression)
 	if err != nil {
 		return err
 	}
 	archive := tar.NewWriter(compressed)
 
-	directory := &tar.Header{Name: stem + "/", Typeflag: tar.TypeDir, Mode: directoryMode, ModTime: commitTime}
+	directory := &tar.Header{
+		Name:     stem + "/",
+		Typeflag: tar.TypeDir,
+		Mode:     directoryMode,
+		ModTime:  commitTime,
+	}
 	if err := archive.WriteHeader(directory); err != nil {
 		return err
 	}
@@ -331,7 +370,12 @@ func addTarEntry(archive *tar.Writer, entry archiveEntry, commitTime time.Time) 
 
 // packZip writes a deflated zip of the stem directory and entries, every entry carrying the same
 // fixed time and a Unix mode.
-func packZip(destination io.Writer, stem string, entries []archiveEntry, commitTime time.Time) error {
+func packZip(
+	destination io.Writer,
+	stem string,
+	entries []archiveEntry,
+	commitTime time.Time,
+) error {
 	archive := zip.NewWriter(destination)
 
 	directory := &zip.FileHeader{Name: stem + "/", Method: zip.Store, Modified: commitTime}
@@ -381,7 +425,8 @@ func writeChecksums(outDir string, archiveNames []string) error {
 		}
 		fmt.Fprintf(&lines, "%s  %s\n", sum, name)
 	}
-	if err := os.WriteFile(filepath.Join(outDir, checksumsFile), []byte(lines.String()), documentMode); err != nil {
+	checksumsPath := filepath.Join(outDir, checksumsFile)
+	if err := os.WriteFile(checksumsPath, []byte(lines.String()), documentMode); err != nil {
 		return fmt.Errorf("write %s: %w", checksumsFile, err)
 	}
 	return nil

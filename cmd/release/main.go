@@ -19,7 +19,8 @@ const (
 func main() {
 	commands := execRunner{}
 	channels := execChannelRepos{commands: commands, dir: "."}
-	if err := newRootCommand(commands, execRepos(commands), channels).ExecuteContext(context.Background()); err != nil {
+	root := newRootCommand(commands, execRepos(commands), channels)
+	if err := root.ExecuteContext(context.Background()); err != nil {
 		fmt.Fprintln(os.Stderr, "release:", err)
 		os.Exit(exitCodeFor(err))
 	}
@@ -39,9 +40,9 @@ func newRootCommand(commands runner, openRepo repoOpener, channels channelRepos)
 		Short: "Build and publish a photon release",
 		Long: "release does the deterministic work of a photon release: it cross-builds the\n" +
 			"release archives and their checksums, reports the release gate and where each\n" +
-			"publish step stands, makes the CHANGELOG rollup and VERSION bump commits, publishes\n" +
-			"the GitHub release, the Homebrew formula and the Scoop manifest, and smoke-tests a\n" +
-			"published release, the same way on every host.",
+			"publish step stands, makes the CHANGELOG rollup and VERSION bump commits, " +
+			"publishes\nthe GitHub release, the Homebrew formula and the Scoop manifest, and " +
+			"smoke-tests a\npublished release, the same way on every host.",
 		SilenceErrors: true,
 	}
 	cmd.AddCommand(newDistCommand(commands))

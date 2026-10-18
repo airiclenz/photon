@@ -648,7 +648,10 @@ internal/tune/session_test.go — TestSession_PanTargetNotOnScreen_IsOnTheMove; 
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ -run TestSession_PanTargetNotOnScreen`
 **Commit:** `chore(lint): enforce the 100-column wrap outside tests`
 
-## 18. Wrap cmd/release to 100 columns
+## 18. Wrap cmd/release to 100 columns — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): to keep help texts byte-identical, the Long texts (root, dist, prepare, publish, smoke, status) were re-chunked into `+`-joined literals that no longer break at each `\n`, since their ~88-column output lines cannot fit one literal per line at that indent; the stripped binary's .rodata section and every `--help` output are byte-identical before and after.
+NOTES (2026-10-18): a few over-long lines were wrapped by moving a subexpression into a local of its own (`root` in main.go, `dist` in githubrelease.go, `binaryPath` in homebrew.go, `listedHash` in scoop.go, `checksumsPath` in dist.go, `gate` in publish.go, and `pinnedVersion`/`err` moved out of an `if` header in channels.go and smoke.go); none changes behaviour.
 
 **What:** Depends on item 17. Rewrap every `lll` finding in `cmd/release` (code, strings split with
 `+`, comments): no behaviour change, error and help texts byte-identical.

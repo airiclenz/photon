@@ -86,29 +86,31 @@ func newPublishCommand(commands runner, openRepo repoOpener, channels channelRep
 	}
 
 	cmd := &cobra.Command{
-		Use:   "publish vX.Y.Z --notes-file F",
-		Short: "Publish a prepared release: push, wait for the tag, create the GitHub release, update the channels",
-		Long: "publish converges each publish step, skipping every step its probe reports done, so\n" +
-			"a half-finished release is resumed by running it again. While the tag is not on origin\n" +
-			"it refuses unless the release gate clears and VERSION at HEAD reads the version; it\n" +
-			"then pushes the commit the gate judged to main, refusing and pushing nothing if HEAD\n" +
-			"has moved since, and waits (--tag-timeout) for the CI-made annotated tag — it never\n" +
-			"creates one. Once the tag is on origin and the release is not done, it refuses unless\n" +
-			"ci.yml has a successful run for the tag's gate commit (the tag's commit with its\n" +
-			"trailing CHANGELOG/VERSION-only commits peeled off) or a peeled commit origin/main\n" +
-			"contains; the working tree, HEAD and VERSION are not consulted. Once the release is\n" +
-			"done too, the gate is not consulted. The release step builds the archives in a fresh\n" +
-			"clone at the tag and creates the GitHub release, or uploads only the assets it lacks\n" +
-			"after checking the rebuilt sums against its SHA256SUMS, then publishes a draft an\n" +
-			"interrupted run left; a draft release is never done. The homebrew and scoop steps render the formula\n" +
-			"and the manifest from the release's SHA256SUMS and commit `photon X.Y.Z` straight to\n" +
-			"the tap and the bucket, pushing only when the file changes. A channel whose one-time\n" +
-			"setup is pending — a missing tap or bucket repository — is skipped and named, and the\n" +
-			"run still succeeds. Last, the smoke step checks the published release from the outside, as\n" +
-			"the smoke verb does, comparing its SHA256SUMS with this run's build when it made one; a\n" +
-			"failed check fails the run. It never prompts or reads stdin, and exits 1 after\n" +
-			"printing the step table when anything fails. --dry-run runs the gate and the probes\n" +
-			"and prints what each pending step would do, changing nothing.",
+		Use: "publish vX.Y.Z --notes-file F",
+		Short: "Publish a prepared release: push, wait for the tag, create the GitHub release, " +
+			"update the channels",
+		Long: "publish converges each publish step, skipping every step its probe reports done, " +
+			"so\na half-finished release is resumed by running it again. While the tag is not on " +
+			"origin\nit refuses unless the release gate clears and VERSION at HEAD reads the " +
+			"version; it\nthen pushes the commit the gate judged to main, refusing and pushing " +
+			"nothing if HEAD\nhas moved since, and waits (--tag-timeout) for the CI-made " +
+			"annotated tag — it never\ncreates one. Once the tag is on origin and the release is " +
+			"not done, it refuses unless\nci.yml has a successful run for the tag's gate commit " +
+			"(the tag's commit with its\ntrailing CHANGELOG/VERSION-only commits peeled off) or " +
+			"a peeled commit origin/main\ncontains; the working tree, HEAD and VERSION are not " +
+			"consulted. Once the release is\ndone too, the gate is not consulted. The release " +
+			"step builds the archives in a fresh\nclone at the tag and creates the GitHub " +
+			"release, or uploads only the assets it lacks\nafter checking the rebuilt sums " +
+			"against its SHA256SUMS, then publishes a draft an\ninterrupted run left; a draft " +
+			"release is never done. The homebrew and scoop steps render the formula\nand the " +
+			"manifest from the release's SHA256SUMS and commit `photon X.Y.Z` straight to\nthe " +
+			"tap and the bucket, pushing only when the file changes. A channel whose one-time\n" +
+			"setup is pending — a missing tap or bucket repository — is skipped and named, and " +
+			"the\nrun still succeeds. Last, the smoke step checks the published release from the " +
+			"outside, as\nthe smoke verb does, comparing its SHA256SUMS with this run's build " +
+			"when it made one; a\nfailed check fails the run. It never prompts or reads stdin, " +
+			"and exits 1 after\nprinting the step table when anything fails. --dry-run runs the " +
+			"gate and the probes\nand prints what each pending step would do, changing nothing.",
 		Args: cobra.ExactArgs(1),
 		RunE: runE(func(cmd *cobra.Command, args []string) error {
 			options.version = args[0]
@@ -116,8 +118,10 @@ func newPublishCommand(commands runner, openRepo repoOpener, channels channelRep
 		}),
 	}
 	cmd.Flags().StringVar(&options.notesFile, "notes-file", "", "the release notes file (required)")
-	cmd.Flags().BoolVar(&options.isDryRun, "dry-run", false, "print what each pending step would do, changing nothing")
-	cmd.Flags().DurationVar(&options.tagTimeout, "tag-timeout", defaultTagTimeout, "how long to wait for the CI-made tag after pushing")
+	cmd.Flags().BoolVar(&options.isDryRun, "dry-run", false,
+		"print what each pending step would do, changing nothing")
+	cmd.Flags().DurationVar(&options.tagTimeout, "tag-timeout", defaultTagTimeout,
+		"how long to wait for the CI-made tag after pushing")
 	if err := cmd.MarkFlagRequired("notes-file"); err != nil {
 		panic(err) // the flag is declared just above; failing here is a defect of this program
 	}
@@ -126,7 +130,12 @@ func newPublishCommand(commands runner, openRepo repoOpener, channels channelRep
 
 // runPublish probes every step, refuses before changing anything when a precondition fails, and
 // then converges each pending step in order. The step table is printed whatever happens.
-func runPublish(ctx context.Context, commands runner, output io.Writer, options publishOptions) error {
+func runPublish(
+	ctx context.Context,
+	commands runner,
+	output io.Writer,
+	options publishOptions,
+) error {
 	version, err := parseReleaseVersion(options.version)
 	if err != nil {
 		return err
@@ -151,7 +160,8 @@ func runPublish(ctx context.Context, commands runner, output io.Writer, options 
 	gate, refusals = run.checkGateFor(ctx, steps, refusals)
 	for _, step := range steps {
 		if step.State == stateUnknown {
-			refusals = append(refusals, fmt.Errorf("could not tell where the %s step stands: %s", step.Name, step.Detail))
+			refusals = append(refusals, fmt.Errorf("could not tell where the %s step stands: %s",
+				step.Name, step.Detail))
 		}
 	}
 
@@ -165,7 +175,8 @@ func runPublish(ctx context.Context, commands runner, output io.Writer, options 
 		if err := printPublish(output, run, gate, steps, false); err != nil {
 			return err
 		}
-		return fmt.Errorf("refusing to publish %s, nothing was changed:\n%w", version, errors.Join(refusals...))
+		return fmt.Errorf("refusing to publish %s, nothing was changed:\n%w",
+			version, errors.Join(refusals...))
 	}
 	return run.converge(ctx, gate, steps)
 }
@@ -178,7 +189,8 @@ func (r *publishRun) converge(ctx context.Context, gate string, steps []stepRepo
 	defer r.removeBuildDir()
 	for index, step := range publishSteps {
 		if steps[index].State == stateSetupPending {
-			_, _ = fmt.Fprintf(r.output, "%s: skipped, its one-time setup is pending: %s\n", step.name, steps[index].Detail)
+			_, _ = fmt.Fprintf(r.output, "%s: skipped, its one-time setup is pending: %s\n",
+				step.name, steps[index].Detail)
 		}
 		if steps[index].State != statePending {
 			continue
@@ -187,8 +199,13 @@ func (r *publishRun) converge(ctx context.Context, gate string, steps []stepRepo
 		err := step.converge(ctx, r)
 		var setupPending setupPendingError
 		if errors.As(err, &setupPending) {
-			_, _ = fmt.Fprintf(r.output, "%s: its one-time setup is pending: %s\n", step.name, setupPending.detail)
-			steps[index] = stepReport{Name: step.name, State: stateSetupPending, Detail: setupPending.detail}
+			_, _ = fmt.Fprintf(r.output, "%s: its one-time setup is pending: %s\n",
+				step.name, setupPending.detail)
+			steps[index] = stepReport{
+				Name:   step.name,
+				State:  stateSetupPending,
+				Detail: setupPending.detail,
+			}
 			continue
 		}
 		if err != nil {
@@ -219,15 +236,21 @@ func (r *publishRun) probe(ctx context.Context) []stepReport {
 // built from the tag, so the checkout's tree, HEAD and VERSION no longer matter, but a tag whose
 // commit never passed CI must not be released. With the release done too, the gate is not
 // consulted: the channels and the smoke test converge from the published release.
-func (r *publishRun) checkGateFor(ctx context.Context, steps []stepReport, refusals []error) (string, []error) {
+func (r *publishRun) checkGateFor(
+	ctx context.Context,
+	steps []stepReport,
+	refusals []error,
+) (string, []error) {
 	if stepStateOf(steps, stepTag) != stateDone {
 		return r.checkPushable(ctx, refusals)
 	}
 	if stepStateOf(steps, stepRelease) != stateDone {
 		report := checkTagCI(ctx, r.repo, r.version.String())
-		return "CI only, the tag is on " + remoteName + ": " + gateRow(report), gateRefusals(report, refusals)
+		gate := "CI only, the tag is on " + remoteName + ": " + gateRow(report)
+		return gate, gateRefusals(report, refusals)
 	}
-	return fmt.Sprintf("not checked: %s is on %s and released, so the rest converges from remote state",
+	return fmt.Sprintf(
+		"not checked: %s is on %s and released, so the rest converges from remote state",
 		r.version, remoteName), refusals
 }
 
@@ -283,10 +306,13 @@ func (r *publishRun) checkPushable(ctx context.Context, refusals []error) (strin
 	bare := bareRelease(r.version)
 	current := strings.TrimSpace(raw)
 	if strings.HasPrefix(current, "v") {
-		return gate, append(refusals, fmt.Errorf("%s reads %q: %s holds a bare X.Y.Z, with no leading v", versionFile, current, versionFile))
+		return gate, append(refusals, fmt.Errorf(
+			"%s reads %q: %s holds a bare X.Y.Z, with no leading v",
+			versionFile, current, versionFile))
 	}
 	if current != bare {
-		return gate, append(refusals, fmt.Errorf("%s at HEAD reads %q, not %s: run prepare first", versionFile, current, bare))
+		return gate, append(refusals, fmt.Errorf(
+			"%s at HEAD reads %q, not %s: run prepare first", versionFile, current, bare))
 	}
 	return gate, refusals
 }
@@ -310,7 +336,13 @@ func checkNotesFile(notesFile string) (string, error) {
 
 // printPublish writes the step table: the version, the gate, and each step's state. A dry run
 // adds what each step would do.
-func printPublish(output io.Writer, run *publishRun, gate string, steps []stepReport, isDryRun bool) error {
+func printPublish(
+	output io.Writer,
+	run *publishRun,
+	gate string,
+	steps []stepReport,
+	isDryRun bool,
+) error {
 	table := tabwriter.NewWriter(output, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintf(table, "version\t%s\n", run.version)
 	_, _ = fmt.Fprintf(table, "gate\t%s\n", gate)

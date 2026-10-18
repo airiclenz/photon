@@ -31,23 +31,32 @@
 // Every non-test file of the package, with its responsibility. TestDocMap (docmap_test.go) fails
 // when a file is missing from this map.
 //
-//   - `channelrepos.go` — the channelRepos seam over the tap and bucket repositories, and execChannelRepos
-//   - `channels.go` — the helpers the package channels share: publishing a generated file to a channel repository, judging the version it pins
+//   - `channelrepos.go` — the channelRepos seam over the tap and bucket repositories, and
+//     execChannelRepos
+//   - `channels.go` — the helpers the package channels share: publishing a generated file to a
+//     channel repository, judging the version it pins
 //   - `dist.go` — release dist: builds the archives for every release platform and SHA256SUMS
 //   - `doc.go` — the package comment and this file map
 //   - `gate.go` — the release gate: a clean, pushed checkout whose commit passed CI
-//   - `githubrelease.go` — the GitHub release step: probe, describe and converge, the asset build and the checks against what the release already carries
-//   - `homebrew.go` — the homebrew channel: its probe, describe, converge, formula rendering and smoke check
+//   - `githubrelease.go` — the GitHub release step: probe, describe and converge, the asset build
+//     and the checks against what the release already carries
+//   - `homebrew.go` — the homebrew channel: its probe, describe, converge, formula rendering and
+//     smoke check
 //   - `main.go` — main, the root command and the exit code a run failure maps to
 //   - `prepare.go` — release prepare: the CHANGELOG rollup and VERSION bump commits
-//   - `publish.go` — release publish: the verb, the run and its step loop, the gate checks and the step table
+//   - `publish.go` — release publish: the verb, the run and its step loop, the gate checks and the
+//     step table
 //   - `render.go` — the package-channel templates and the SHA256SUMS reading they render from
 //   - `repo.go` — the repo seam over the photon checkout and its GitHub repository, and execRepo
 //   - `runner.go` — the runner seam every external command goes through
-//   - `scoop.go` — the scoop channel: its probe, describe, converge, manifest parsing and rendering, and smoke checks
-//   - `smoke.go` — release smoke: checks a published release from the outside, and the publish smoke step: its probe, describe and converge
+//   - `scoop.go` — the scoop channel: its probe, describe, converge, manifest parsing and
+//     rendering, and smoke checks
+//   - `smoke.go` — release smoke: checks a published release from the outside, and the publish
+//     smoke step: its probe, describe and converge
 //   - `status.go` — release status: the gate, the baseline and each publish step's probed state
 //   - `steps.go` — the publish step table status and publish both read, and the step states
-//   - `tag.go` — the tag step: probe, describe, and converge by pushing main and waiting for the CI-made annotated tag
-//   - `version.go` — the release version: parsing, ordering, its bare form and the highest release tag
+//   - `tag.go` — the tag step: probe, describe, and converge by pushing main and waiting for the
+//     CI-made annotated tag
+//   - `version.go` — the release version: parsing, ordering, its bare form and the highest release
+//     tag
 package main

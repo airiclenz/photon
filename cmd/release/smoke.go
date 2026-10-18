@@ -62,7 +62,12 @@ type smokeOptions struct {
 // defaultSmokeOptions checks the checkout at dir from this host, reading build stamps with
 // debug/buildinfo — which reads a binary of any platform.
 func defaultSmokeOptions(dir string) smokeOptions {
-	return smokeOptions{dir: dir, goos: runtime.GOOS, goarch: runtime.GOARCH, readBuildInfo: buildinfo.ReadFile}
+	return smokeOptions{
+		dir:           dir,
+		goos:          runtime.GOOS,
+		goarch:        runtime.GOARCH,
+		readBuildInfo: buildinfo.ReadFile,
+	}
 }
 
 // smokeRun is one smoke run: what every check reads — the tag, the release's assets and the
@@ -104,14 +109,15 @@ func newSmokeCommand(commands runner, openRepo repoOpener, channels channelRepos
 		Use:   "smoke [vX.Y.Z] [--dist-dir D]",
 		Short: "Check a published release from the outside",
 		Long: "smoke proves a published release is usable: the tag is on origin and annotated;\n" +
-			"with --dist-dir, that build's SHA256SUMS equals the published one; the six archives\n" +
-			"download and match SHA256SUMS; every binary's build stamp names the tagged commit; the\n" +
-			"host's archive holds a binary reporting the version; where photon is installed with\n" +
-			"Homebrew and the version is the latest release, `brew upgrade photon` moves it onto\n" +
-			"the version; and the Scoop bucket's manifest names the version and both Windows\n" +
-			"archives' hashes. A check whose tool or input is missing prints SKIP and never counts\n" +
-			"as a pass. The version defaults to VERSION; a bare X.Y.Z reads as vX.Y.Z. It exits 1\n" +
-			"when any check fails. publish runs it as its last step.",
+			"with --dist-dir, that build's SHA256SUMS equals the published one; the six " +
+			"archives\ndownload and match SHA256SUMS; every binary's build stamp names the " +
+			"tagged commit; the\nhost's archive holds a binary reporting the version; where " +
+			"photon is installed with\nHomebrew and the version is the latest release, `brew " +
+			"upgrade photon` moves it onto\nthe version; and the Scoop bucket's manifest names " +
+			"the version and both Windows\narchives' hashes. A check whose tool or input is " +
+			"missing prints SKIP and never counts\nas a pass. The version defaults to VERSION; a " +
+			"bare X.Y.Z reads as vX.Y.Z. It exits 1\nwhen any check fails. publish runs it as " +
+			"its last step.",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 1 {
 				return fmt.Errorf("smoke takes at most one version, got %d arguments", len(args))
@@ -129,7 +135,8 @@ func newSmokeCommand(commands runner, openRepo repoOpener, channels channelRepos
 			return runSmoke(cmd.Context(), commands, cmd.OutOrStdout(), options)
 		}),
 	}
-	cmd.Flags().StringVar(&options.distDir, "dist-dir", "", "a local build of the release whose SHA256SUMS must equal the published one")
+	cmd.Flags().StringVar(&options.distDir, "dist-dir", "",
+		"a local build of the release whose SHA256SUMS must equal the published one")
 	return cmd
 }
 
@@ -167,7 +174,8 @@ func runSmoke(ctx context.Context, commands runner, output io.Writer, options sm
 		}
 	}
 
-	_, _ = fmt.Fprintf(output, "\nsmoke: %s: %d passed, %d failed, %d skipped\n", version, run.passed, run.failed, run.skipped)
+	_, _ = fmt.Fprintf(output, "\nsmoke: %s: %d passed, %d failed, %d skipped\n",
+		version, run.passed, run.failed, run.skipped)
 	if run.failed > 0 {
 		return fmt.Errorf("%d smoke check(s) failed for %s", run.failed, version)
 	}
@@ -275,7 +283,8 @@ func (r *smokeRun) checkDistSums(ctx context.Context) {
 		}
 	}
 	if len(differing) > 0 {
-		r.fail("%s in %s differs from the published one for %s", checksumsFile, r.options.distDir, strings.Join(differing, ", "))
+		r.fail("%s in %s differs from the published one for %s",
+			checksumsFile, r.options.distDir, strings.Join(differing, ", "))
 		return
 	}
 	r.pass("%s in %s equals the published one", checksumsFile, r.options.distDir)
@@ -315,7 +324,8 @@ func (r *smokeRun) checkAssets(ctx context.Context) {
 			continue
 		}
 		if got != want {
-			r.fail("asset %s hashes to %s, not the %s the release's %s lists", name, got, want, checksumsFile)
+			r.fail("asset %s hashes to %s, not the %s the release's %s lists",
+				name, got, want, checksumsFile)
 			r.reject(name, "does not match the release's "+checksumsFile)
 			isComplete = false
 			continue
@@ -343,7 +353,8 @@ func (r *smokeRun) reject(name, why string) {
 		r.rejected = make(map[string]string)
 	}
 	r.rejected[name] = why
-	if err := os.Remove(filepath.Join(r.workDir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	err := os.Remove(filepath.Join(r.workDir, name))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		r.warn("asset %s could not be deleted: %v", name, err)
 	}
 }
@@ -377,7 +388,8 @@ func (r *smokeRun) checkBuildStamps(ctx context.Context) {
 		}
 		revision := buildSetting(info, vcsRevisionSetting)
 		if revision == "" {
-			r.fail("asset %s carries no %s — was it built with -buildvcs=false?", name, vcsRevisionSetting)
+			r.fail("asset %s carries no %s — was it built with -buildvcs=false?",
+				name, vcsRevisionSetting)
 			continue
 		}
 		if revision != want {
@@ -565,12 +577,17 @@ const smokePassedDetail = "passed by this run: no check failed"
 // probeSmoke reports the smoke test pending always: it is an action publish takes last, not a
 // state any remote holds.
 func probeSmoke(context.Context, probeEnv, releaseVersion) stepReport {
-	return stepReport{Name: stepSmoke, State: statePending, Detail: "an action, not a remote state: publish runs it last"}
+	return stepReport{
+		Name:   stepSmoke,
+		State:  statePending,
+		Detail: "an action, not a remote state: publish runs it last",
+	}
 }
 
 // describeSmoke says what the smoke step does.
 func describeSmoke(run *publishRun) string {
-	return fmt.Sprintf("smoke-test %s as published, comparing its %s with this run's build when it made one",
+	return fmt.Sprintf(
+		"smoke-test %s as published, comparing its %s with this run's build when it made one",
 		run.version, checksumsFile)
 }
 
