@@ -89,7 +89,10 @@ a later play/pause cycle is not held on draft frames. Existing scrub tests stay 
 
 **Commit:** `fix(tune): end a scrub on any pointer release`
 
-## 2. Benchmark a draft frame request
+## 2. Benchmark a draft frame request — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): benchmark is self-contained per the regression guard (own photon.yaml, 135×44 board, 64-snapshot take in b.TempDir, clip.Load + NewSession + newHandler, ServeHTTP directly); the shared *testing.T helpers are untouched.
+NOTES (2026-10-18): measured ~148 ms/op on the Pi 5 (147.7 ms at -benchtime 20x, 149.1 ms at 64x, 24 MB/op) — over the ticket's 100 ms criterion; logged as measured on tune-preview-playback-speed, no tuning, ticket stays open.
 
 **What:**
 `tune-preview-playback-speed` is left open only on its on-host acceptance; this item measures

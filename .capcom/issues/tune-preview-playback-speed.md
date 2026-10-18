@@ -36,3 +36,4 @@ The preview is the tool's whole point: timing a beat by eye needs the clip to pl
 ## Log
 
 - 2026-10-18 Airic Lenz: Plan 2026-10-18 - 03 - tune-playback-plan landed (741d7aa): draft frames at scale 1 with ApproxBiLinear, GET /api/frame?t=<ms>&draft=1, exact-frame settle on pause/step/scrub release, 4-in-flight prefetch with a 48-entry client cache. Left open: the on-host acceptance (fps playback without stalls, draft request well under 100 ms on the 135x44 clip on the Pi 5) was not measured by the run.
+- 2026-10-18 Airic Lenz: draft frame benchmark (135x44, font_size 30, scale 2, width 1250, Pi 5): BenchmarkHandler_DraftFrame ~148 ms/op on the cold path (each request a snapshot not in the draft raster cache; 147.7 ms at -benchtime 20x, 149.1 ms at 64x, 24 MB/op): over the 100 ms criterion, logged as measured, no tuning

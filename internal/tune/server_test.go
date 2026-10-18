@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -13,6 +14,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -21,6 +24,7 @@ import (
 
 	"github.com/airiclenz/photon/internal/clip"
 	"github.com/airiclenz/photon/internal/storyboard"
+	"github.com/airiclenz/photon/internal/take"
 )
 
 // testAddr is the listen address the handler tests build the handler for.
@@ -637,4 +641,105 @@ func pickBody(t *testing.T, ms int64, from, to image.Point) string {
 		t.Fatalf("encode the pick: %v", err)
 	}
 	return string(encoded)
+}
+
+// The draft frame benchmark's take: the 135×44 terminal the preview's playback speed was measured
+// on, holding more distinct snapshots than the draft raster cache keeps (about 16 at this
+// geometry), one every draftBenchStep.
+const (
+	draftBenchCols      = 135
+	draftBenchRows      = 44
+	draftBenchSnapshots = 64
+	draftBenchStep      = 100 * time.Millisecond
+)
+
+// draftBenchStoryboard frames the benchmark take as the measured clip: font_size 30, scale 2,
+// width 1250. Its one beat outlasts the take, so it plays 1× and output time is take time.
+const draftBenchStoryboard = `clip: tuned
+ship: out/tuned.gif
+frame: {cols: 135, rows: 44, padding: 4, font_size: 30, line_height: 1.2, scale: 2, width: 1250, fps: 24, max_colors: 256}
+beats:
+  - id: 1
+    title: playing
+    duration: 6500ms
+`
+
+// BenchmarkHandler_DraftFrame measures GET /api/frame?draft=1 on the cold path a playing preview
+// pays: each request lands on a snapshot the draft raster cache no longer holds, since the
+// requests cycle through more snapshots than it keeps.
+func BenchmarkHandler_DraftFrame(b *testing.B) {
+	handler := newDraftBenchHandler(b)
+	serveDraftFrame(b, handler, 0)
+	b.ResetTimer()
+
+	for i := range b.N {
+		serveDraftFrame(b, handler, (i+1)%draftBenchSnapshots)
+	}
+}
+
+// newDraftBenchHandler writes the config, draftBenchStoryboard and a take of draftBenchSnapshots
+// distinct full screens into a fresh project dir and serves a session on them.
+func newDraftBenchHandler(b *testing.B) http.Handler {
+	b.Helper()
+	project := b.TempDir()
+	boardPath := filepath.Join(project, "tuned.yaml")
+	takePath := filepath.Join(project, "tuned.take")
+	for path, content := range map[string]string{
+		filepath.Join(project, "photon.yaml"): sessionConfig,
+		boardPath:                             draftBenchStoryboard,
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			b.Fatalf("write %s: %v", path, err)
+		}
+	}
+	if err := take.Save(takePath, draftBenchTake()); err != nil {
+		b.Fatalf("take.Save: %v", err)
+	}
+	loaded, err := clip.Load(boardPath, "", b.TempDir())
+	if err != nil {
+		b.Fatalf("clip.Load: %v", err)
+	}
+	session, err := NewSession(loaded, takePath)
+	if err != nil {
+		b.Fatalf("NewSession: %v", err)
+	}
+	return newHandler(session, testAddr)
+}
+
+// draftBenchTake is a take of draftBenchSnapshots full screens, each row of each one numbered so
+// that no two snapshots rasterize alike.
+func draftBenchTake() *take.Take {
+	filler := strings.Repeat("the quick brown fox jumps over the lazy dog ", draftBenchCols)
+	snapshots := make([]take.Snapshot, 0, draftBenchSnapshots)
+	for index := range draftBenchSnapshots {
+		lines := make([]string, 0, draftBenchRows)
+		for row := range draftBenchRows {
+			prefix := fmt.Sprintf("snapshot %02d row %02d ", index, row)
+			lines = append(lines, (prefix + filler)[:draftBenchCols])
+		}
+		snapshots = append(snapshots, lineSnapshot(time.Duration(index)*draftBenchStep, lines...))
+	}
+	return &take.Take{
+		Cols: draftBenchCols, Rows: draftBenchRows, FPS: 10,
+		Snapshots: snapshots,
+		Events:    []take.Event{{At: 0, Kind: take.EventBeatStart, Beat: 1}},
+	}
+}
+
+// serveDraftFrame requests the draft frame halfway through snapshot index and fails the benchmark
+// unless it is a PNG.
+func serveDraftFrame(b *testing.B, handler http.Handler, index int) {
+	b.Helper()
+	out := time.Duration(index)*draftBenchStep + draftBenchStep/2
+	target := fmt.Sprintf("/api/frame?t=%d&draft=1", out.Milliseconds())
+	request := httptest.NewRequest(http.MethodGet, target, nil)
+	request.Host = testAddr
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK || recorder.Header().Get(headerContentType) != mediaPNG {
+		b.Fatalf("GET %s: status %d, type %q: %s", target, recorder.Code,
+			recorder.Header().Get(headerContentType), recorder.Body.String())
+	}
 }
