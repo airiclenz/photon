@@ -675,6 +675,155 @@ func TestPageJS_DragABeatsEnd_SendsOneSnappedDurationEdit(t *testing.T) {
 	}
 }
 
+// The bar drags of cameraCaptionsStoryboard, on lanes laid out one pixel per millisecond: its
+// via pan, from 200ms at {beat: 1, offset: 200ms}, grabbed at panGrabMS and let go at
+// panReleaseMS, a shift snapped to panShiftMS; its until caption, from 1s at {beat: 2}, grabbed
+// at captionGrabMS and let go at captionReleaseMS, a shift snapped to captionShiftMS; and its
+// zoom, from 100ms, grabbed at zoomGrabMS and let go at zoomReleaseMS, inside beat 2's zoom.
+const (
+	panGrabMS        = 400
+	panReleaseMS     = 290
+	panShiftMS       = -100
+	viaPanStartMS    = 200
+	untilCaption     = 1
+	captionGrabMS    = 1500
+	captionReleaseMS = 1730
+	captionShiftMS   = 250
+	captionStartMS   = 1000
+	captionStopMS    = 2200
+	movedZoom        = 0
+	zoomGrabMS       = 200
+	zoomReleaseMS    = 1400
+)
+
+// The lanes of the timeline the bar drags run on, by name.
+const (
+	laneCameraZoom = "camera zoom"
+	lanePan        = "pan"
+	laneCaptions   = "captions"
+)
+
+// dragBar drags the bar of the entry of kind and index on the lane named lane, grabbed at output
+// time grabMS and let go at releaseMS, and settles the page; the lane's track is laid out one
+// pixel per millisecond.
+func (p *pageHarness) dragBar(lane string, kind storyboard.OwnerKind, index, grabMS, releaseMS int) {
+	p.t.Helper()
+	found := p.eval(fmt.Sprintf(`{
+		const lane = document.getElementById(%q).querySelectorAll(".lane")
+			.find((row) => row.querySelectorAll(".lane-name")[0].textContent.startsWith(%q));
+		const track = lane ? lane.querySelectorAll(".lane-track")[0] : null;
+		const bar = track ? track.children.find((node) => node.dataset.entry === %q) : null;
+		if (bar) {
+			track.layout = { left: 0, top: 0, width: window.tune.state().length_ms, height: 20 };
+			const fire = (type, ms) => bar.dispatchEvent(new Event(type, { clientX: ms }));
+			fire("pointerdown", %d);
+			fire("pointermove", %d);
+			fire("pointerup", %d);
+		}
+		Boolean(bar);
+	}`, elementTimeline, lane, entryValueOf(kind, index), grabMS, releaseMS, releaseMS)).ToBoolean()
+	if !found {
+		p.t.Fatalf("the %s lane has no bar for %s", lane, entryValueOf(kind, index))
+	}
+	p.settle()
+}
+
+// barLeft is the left of the timeline's bar for the entry of kind and index, as drawn now.
+func (p *pageHarness) barLeft(kind storyboard.OwnerKind, index int) string {
+	p.t.Helper()
+	return p.eval(fmt.Sprintf(`document.getElementById(%q).querySelectorAll(".block")
+		.find((node) => node.dataset.entry === %q).style.left`,
+		elementTimeline, entryValueOf(kind, index))).String()
+}
+
+// editCount is how many edits the page has sent.
+func (p *pageHarness) editCount() int {
+	edits := 0
+	for _, request := range p.requests {
+		if request.path == "/api/edit" {
+			edits++
+		}
+	}
+	return edits
+}
+
+func TestPageJS_DragAPanBar_SendsOneCameraAtEditKeepingItsBeat(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	page := loadPage(t, session)
+
+	page.dragBar(lanePan, storyboard.OwnerCamera, viaPan, panGrabMS, panReleaseMS)
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
+		`"value":{"beat":1,"offset_ms":%d}}`,
+		storyboard.OwnerCamera, viaPan, storyboard.FieldCameraAt, viaPanStartMS+panShiftMS))
+	if got := page.editCount(); got != 1 {
+		t.Errorf("the edits the drag sent: want 1, got %d", got)
+	}
+	if got := session.State().Camera[viaPan].StartMS; got != viaPanStartMS+panShiftMS {
+		t.Errorf("the dragged pan's start: want %dms, got %dms", viaPanStartMS+panShiftMS, got)
+	}
+	if got, want := page.selectedEntry(), fmt.Sprintf(`{"kind":%q,"index":%d}`,
+		storyboard.OwnerCamera, viaPan); got != want {
+		t.Errorf("the selection after the drag: want %s, got %s", want, got)
+	}
+}
+
+func TestPageJS_DragAnUntilCaptionBar_SendsOneCaptionShift(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	page := loadPage(t, session)
+
+	page.dragBar(laneCaptions, storyboard.OwnerCaption, untilCaption, captionGrabMS, captionReleaseMS)
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%d}`,
+		storyboard.OwnerCaption, untilCaption, storyboard.FieldCaptionShift, captionShiftMS))
+	shifted := session.State().Captions[untilCaption]
+	if shifted.StartMS != captionStartMS+captionShiftMS || shifted.StopMS != captionStopMS+captionShiftMS {
+		t.Errorf("the dragged caption: want it from %dms to %dms, got %+v",
+			captionStartMS+captionShiftMS, captionStopMS+captionShiftMS, shifted)
+	}
+}
+
+func TestPageJS_ClickABarWithoutMoving_SelectsAndSendsNoEdit(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	page := loadPage(t, session)
+
+	page.dragBar(laneCaptions, storyboard.OwnerCaption, untilCaption, captionGrabMS, captionGrabMS)
+
+	if got := page.editCount(); got != 0 {
+		t.Errorf("the edits a click sent: want 0, got %d", got)
+	}
+	if got, want := page.selectedEntry(), fmt.Sprintf(`{"kind":%q,"index":%d}`,
+		storyboard.OwnerCaption, untilCaption); got != want {
+		t.Errorf("the selection after the click: want %s, got %s", want, got)
+	}
+}
+
+func TestPageJS_RefusedBarDrag_RedrawsInPlaceAndShowsTheRefusal(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	page := loadPage(t, session)
+	before := page.barLeft(storyboard.OwnerCamera, movedZoom)
+
+	page.dragBar(laneCameraZoom, storyboard.OwnerCamera, movedZoom, zoomGrabMS, zoomReleaseMS)
+
+	refused := page.lastRequest("/api/edit")
+	if refused.status == http.StatusOK {
+		t.Fatalf("the zoom dragged into beat 2's zoom: want it refused, got 200: %s", refused.answer)
+	}
+	if got := page.barLeft(storyboard.OwnerCamera, movedZoom); got != before {
+		t.Errorf("the refused bar's left: want %s, got %s", before, got)
+	}
+	status := page.text(elementStatus)
+	for _, want := range []string{"overlaps", "section", "which holds both tracks"} {
+		if !strings.Contains(status, want) {
+			t.Errorf("the status after the refused drag: want it containing %q, got %q", want, status)
+		}
+	}
+}
+
 func TestPageJS_RemoveAndMoveACameraMove(t *testing.T) {
 	t.Parallel()
 	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session

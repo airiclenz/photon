@@ -5,14 +5,16 @@
 //
 // window.tuneDrag is {SNAP_MS, attach(drag), defersRedraw()}. attach makes drag.node draggable,
 // where drag is
-//   {node, track, value, min, max, axis, valueAt(ms), extent(value), select(), edit(value),
-//    redraw()}:
+//   {node, track, value, min, max, axis, valueAt(ms, grabbedMs), extent(value), select(),
+//    edit(value), redraw(), refused(message)}:
 // the node the pointer grabs and the lane track it moves on, the value it holds now and the
 // bounds a drag keeps it in, the axis that maps the track to the output clock, {msAt(clientX,
-// rect), percentOf(ms)}, the value the pointer at output time ms asks for, where a value is drawn
-// — {edge, from, to, label}: the node's left edge, and the stretch of the output clock the ghost
-// spans, labelled — what the drag selects when it starts, the window.tune edit it sends, and the
-// redraw from state it runs on a refusal, a cancel, an unchanged value or a redraw it deferred.
+// rect), percentOf(ms)}, the value the pointer at output time ms asks for when it grabbed the
+// node at output time grabbedMs, where a value is drawn — {edge, from, to, label}: the node's
+// left edge, and the stretch of the output clock the ghost spans, labelled — what the drag
+// selects when it starts, the window.tune edit it sends, the redraw from state it runs on a
+// refusal, a cancel, an unchanged value or a redraw it deferred, and what shows a refused edit's
+// message once that redraw has run.
 //
 // A drag captures the pointer, pauses the preview, moves its value in steps of SNAP_MS within its
 // bounds, shows the new value on the node and a .drag-ghost locally, and sends one edit when it is
@@ -57,7 +59,9 @@
     drag.node.setPointerCapture(event.pointerId);
     drag.node.classList.add("dragging");
     isRedrawPending = false;
-    active = { drag, ghost, rect: drag.track.getBoundingClientRect(), value: drag.value };
+    const rect = drag.track.getBoundingClientRect();
+    const grabbedMs = drag.axis.msAt(event.clientX, rect);
+    active = { drag, ghost, rect, grabbedMs, value: drag.value };
     showDrag();
   }
 
@@ -67,7 +71,7 @@
       return;
     }
     const drag = active.drag;
-    const raw = drag.valueAt(drag.axis.msAt(event.clientX, active.rect));
+    const raw = drag.valueAt(drag.axis.msAt(event.clientX, active.rect), active.grabbedMs);
     const snapped = Math.round(raw / SNAP_MS) * SNAP_MS;
     active.value = Math.min(Math.max(snapped, drag.min), drag.max);
     showDrag();
@@ -85,7 +89,8 @@
   }
 
   // endDrag sends the dragged value as one edit when it changed. A refused edit stands on its
-  // owner in the inspector, which app.js shows, so the drag only redraws.
+  // owner in the inspector, which app.js shows; the drag redraws, then hands the message to
+  // refused, which may show it elsewhere as well.
   function endDrag() {
     if (!active) {
       return;
@@ -96,7 +101,10 @@
       drag.redraw();
       return;
     }
-    tune.edit(drag.edit(value)).catch(() => drag.redraw());
+    tune.edit(drag.edit(value)).catch((error) => {
+      drag.redraw();
+      drag.refused(error.message);
+    });
   }
 
   function cancelDrag() {

@@ -27,8 +27,8 @@
 // internal namespace no part of the contract: app.js puts in it the state they read and the
 // helpers they build with, and each of them adds what it does. Of the other scripts picker.js
 // adds the standing pick's proposal that entries.js's via waypoints read, and timeline.js reports
-// a refused lane add through transport.js's reportStatus. app.js calls those only once every
-// script has run, so the wiring, and with it the first /api/state request, waits for
+// a refused lane add or bar drag through transport.js's reportStatus. app.js calls those only
+// once every script has run, so the wiring, and with it the first /api/state request, waits for
 // DOMContentLoaded.
 "use strict";
 

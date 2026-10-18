@@ -4,8 +4,9 @@
 // selectEntry(entry) for the camera move or caption it shows instead, seek(ms) for the axis, and
 // edit(edit) for a lane's add, which the server applies, validates and schedules; a drag sends
 // its edit through window.tuneDrag. From the page's internal window.tunePage it takes
-// reportStatus alone, to show a refused add in the transport bar. Nothing here computes timing:
-// every position comes from the state's sections, beats, camera moves and captions.
+// reportStatus alone, to show a refused add or bar drag in the transport bar. Nothing here
+// computes timing: every position comes from the state's sections, beats, camera moves and
+// captions.
 //
 // The timeline is two lists of lanes, drawn top to bottom. Its own lanes follow the beats: such a
 // lane is {name, draw(section, state), handles(section, state)}, where draw returns the nodes it
@@ -14,8 +15,10 @@
 // lane is {name, draw(state), add}, where draw returns its bars as data, {from, to, className,
 // label, title, entry}, each placed from its from to its to and selecting its entry, {kind,
 // index}, on a click, and add, {title, edit(state, ms)}, is a button beside the lane's name that
-// sends edit(state, playhead) and selects the entry the edit's owner names. Another lane is one
-// more entry in either list.
+// sends edit(state, playhead) and selects the entry the edit's owner names. Dragging such a bar
+// shifts its entry's start and keeps its length: one camera.at edit for a camera move, its at
+// keeping its beat, or one shift edit for a caption. Another lane is one more entry in
+// either list.
 //
 // A handle is {beat, field, anchor, sign, value, min, max}: the edit's beat and field, the value
 // it holds now in milliseconds, the bounds a drag keeps it in, and where its edge sits on the
@@ -37,6 +40,9 @@
   const TOO_FAST_GLYPH = "⚠";
   const AUTO_FACTOR = "auto";
   const OWNER_BEAT = "beat";
+  const OWNER_CAPTION = "caption";
+  const FIELD_CAMERA_AT = "camera.at";
+  const FIELD_CAPTION_SHIFT = "caption.shift";
   const ADD_GLYPH = "+";
 
   const root = document.getElementById("timeline");
@@ -214,7 +220,7 @@
   // and its add button.
   function clipLaneRow(lane, state) {
     const track = element("div", { className: "lane-track" });
-    track.append(...lane.draw(state).map(barNode));
+    track.append(...lane.draw(state).map((bar) => barNode(bar, track)));
     return laneElement(lane.name, track, addButton(lane.add));
   }
 
@@ -234,13 +240,50 @@
     return button;
   }
 
-  // barNode places a registered lane's bar on the axis, selecting the bar's entry on a click.
-  function barNode(bar) {
-    const node = span(bar.from, bar.to, "block " + bar.className, bar.label);
+  // barNode places a registered lane's bar on track, selecting the bar's entry on a click. It is
+  // dragged through window.tuneDrag by a delta in milliseconds that keeps the whole bar on the
+  // clip: a drag selects the entry and sends the shiftEdit of its delta; a refusal goes to the
+  // transport bar's status.
+  function barNode(bar, track) {
+    const node = span(bar.from, bar.to, "block draggable " + bar.className, bar.label);
     node.title = bar.title;
     node.dataset.entry = entryKey(bar.entry);
     node.addEventListener("click", () => tune.selectEntry(bar.entry));
+    dragging.attach({
+      node,
+      track,
+      value: 0,
+      min: -bar.from,
+      max: Math.max(clipLength - bar.to, 0),
+      axis: { msAt, percentOf },
+      valueAt: (ms, grabbedMs) => ms - grabbedMs,
+      extent: (delta) => barExtent(bar, delta),
+      select: () => tune.selectEntry(bar.entry),
+      edit: (delta) => shiftEdit(bar.entry, delta),
+      redraw: () => render(tune.state()),
+      refused: (message) => page.reportStatus(message, true),
+    });
     return node;
+  }
+
+  // barExtent draws bar shifted by delta: its left edge, and a ghost over its new stretch
+  // labelled with the shift.
+  function barExtent(bar, delta) {
+    const sign = delta > 0 ? "+" : "";
+    const from = bar.from + delta;
+    return { edge: from, from, to: bar.to + delta, label: sign + delta + "ms" };
+  }
+
+  // shiftEdit is the edit that starts entry, {kind, index}, delta milliseconds later: a caption's
+  // shift moves its at and its until together, and a camera move's at keeps its beat and takes
+  // delta on its offset.
+  function shiftEdit(entry, delta) {
+    if (entry.kind === OWNER_CAPTION) {
+      return { owner: entry, field: FIELD_CAPTION_SHIFT, value: delta };
+    }
+    const at = tune.state().camera[entry.index].at;
+    const value = { beat: at.beat, offset_ms: at.offset_ms + delta };
+    return { owner: entry, field: FIELD_CAMERA_AT, value };
   }
 
   // laneElement is a lane's row: its name, with controls after it, beside its track.
@@ -321,7 +364,8 @@
   // --- dragging a handle ---
 
   // handleNode is handle's edge on track, dragged through window.tuneDrag: a drag selects the
-  // handle's beat and sends the edit of the handle's field.
+  // handle's beat and sends the edit of the handle's field. A refusal stands on that beat, which
+  // the drag selected, so the inspector shows it and nothing else need.
   function handleNode(handle, track) {
     const node = element("div", { className: "handle", title: "Drag to set " + handle.field });
     node.style.left = percentOf(edgeOf(handle, handle.value)) + "%";
@@ -337,6 +381,7 @@
       select: () => tune.select(handle.beat),
       edit: (value) => ({ owner: { kind: OWNER_BEAT, index: handle.beat }, field: handle.field, value }),
       redraw: () => render(tune.state()),
+      refused: () => {},
     });
     return node;
   }

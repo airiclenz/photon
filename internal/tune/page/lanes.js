@@ -3,11 +3,12 @@
 //
 // The lanes register in window.tuneLanes, which timeline.js reads, so this file loads before it.
 // A lane here is {name, draw(state), add}: draw takes the whole state and returns the lane's bars
-// as plain data, {from, to, className, label, title, entry}, which the timeline places on its axis
-// and makes selectable as entry, {kind, index}, the shape window.tune's selectEntry takes. add is
-// the lane's add button, {title, edit(state, ms)}: edit is the window.tune edit that adds a new
-// entry starting at ms on the output clock, its owner the entry it becomes. Nothing here touches
-// the page or computes timing: every bar spans a start and stop the state reports.
+// as plain data, {from, to, className, label, title, entry}, which the timeline places on its axis,
+// makes selectable as entry, {kind, index}, the shape window.tune's selectEntry takes, and drags
+// to shift that entry's start. add is the lane's add button, {title, edit(state, ms)}: edit is the
+// window.tune edit that adds a new entry starting at ms on the output clock, its owner the entry
+// it becomes. Nothing here touches the page or computes timing: every bar spans a start and stop
+// the state reports.
 "use strict";
 
 (() => {

@@ -4,7 +4,7 @@
 //
 // It loads after app.js and adds its functions to window.tunePage, the page's internal namespace,
 // where app.js's window.tune contract (time, frameTime, seek, pause), its wiring and its actions
-// reach them; timeline.js reports a refused lane add through reportStatus there too.
+// reach them; timeline.js reports a refused lane add or bar drag through reportStatus there too.
 // It reads the state through the namespace too and computes no timing of its own: the fps,
 // length and section starts all come from /api/state, and every frame is one the server composes.
 "use strict";

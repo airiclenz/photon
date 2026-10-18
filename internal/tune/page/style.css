@@ -505,6 +505,15 @@ textarea {
   background: var(--lane-caption);
 }
 
+.block.draggable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.block.draggable.dragging {
+  cursor: grabbing;
+}
+
 .block.too-fast {
   border-color: var(--danger);
   color: var(--danger);

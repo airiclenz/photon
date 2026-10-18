@@ -173,7 +173,14 @@ shift; field-list parity tests, with `caption.shift` in the pinned caption field
 `GOMEMLIMIT=2GiB go test ./internal/tune/`; `LLL ./internal/storyboard/...`
 **Commit:** `feat(storyboard): shift a caption's start and end together`
 
-## 5. Drag camera moves and captions on the timeline
+## 5. Drag camera moves and captions on the timeline — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): drag.js's contract gains two parts: valueAt(ms, grabbedMs), so that a bar moves by how far the pointer travels from where it grabbed the bar (a handle ignores grabbedMs and still jumps to the pointer), and refused(message), which runs after the redraw when an edit is refused. A bar passes page.reportStatus; a handle passes a no-op, because its refusal already shows on the beat the drag selected.
+NOTES (2026-10-18): a bar drag shifts by a delta snapped to 50ms (so the camera.at offset or caption.shift value moves in 50ms steps), bounded so the whole bar stays on the clip.
+NOTES (2026-10-18): unsentPageFields in page_test.go is now empty (`var unsentPageFields []string`). The list and its check stay in place for fields added later.
+NOTES (2026-10-18): consequential edit — internal/tune/page/app.js: made necessary by timeline.js now reporting a refused bar drag through reportStatus (header comment)
+NOTES (2026-10-18): consequential edit — internal/tune/page/transport.js: made necessary by timeline.js now reporting a refused bar drag through reportStatus (header comment)
+NOTES (2026-10-18): timeline.js grows from 437 to 482 lines. It is not in splitScripts, so the 400-line page test does not cover it, but it is further past the ~400-line guide.
 
 **What:** Depends on items 2, 3 and 4.
 **Regression guard.** Item 5 removes `caption.shift` from that list (page_test.go joins Files);
