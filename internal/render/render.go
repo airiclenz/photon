@@ -192,22 +192,32 @@ func palettePath(loaded *clip.Clip) (string, error) {
 // [rasterGeometry]. It fails when a font cannot be loaded or the geometry is refused by
 // [raster.New].
 func newRasterizer(loaded *clip.Clip) (*raster.Rasterizer, error) {
-	return newRasterizerAt(loaded, rasterGeometry(loaded.Storyboard.Frame))
-}
-
-// newDraftRasterizer builds the rasterizer draft frames are drawn from over the config's fonts
-// and theme at the frame's [draftGeometry]. It fails as [newRasterizer] does.
-func newDraftRasterizer(loaded *clip.Clip) (*raster.Rasterizer, error) {
-	return newRasterizerAt(loaded, draftGeometry(loaded.Storyboard.Frame))
-}
-
-// newRasterizerAt builds a rasterizer over the config's fonts and theme at geometry.
-func newRasterizerAt(loaded *clip.Clip, geometry raster.Geometry) (*raster.Rasterizer, error) {
-	faces, err := fonts.Load(loaded.Config.Fonts)
+	faces, err := loadTerminalFaces(loaded)
 	if err != nil {
 		return nil, err
 	}
+	return newRasterizerAt(loaded, faces, rasterGeometry(loaded.Storyboard.Frame))
+}
+
+// newRasterizerAt builds a rasterizer over faces and the config's theme at geometry. It fails
+// when the geometry is refused by [raster.New].
+func newRasterizerAt(
+	loaded *clip.Clip,
+	faces fonts.Set,
+	geometry raster.Geometry,
+) (*raster.Rasterizer, error) {
 	return raster.New(faces, loaded.Config.Theme, geometry)
+}
+
+// terminalLoads counts the terminal-font loads [loadTerminalFaces] made in this process, so a
+// test can tell how many loads a build made.
+var terminalLoads atomic.Int64
+
+// loadTerminalFaces parses the terminal faces from the config's `fonts` directory, or the
+// embedded ones. It fails when a face cannot be loaded.
+func loadTerminalFaces(loaded *clip.Clip) (fonts.Set, error) {
+	terminalLoads.Add(1)
+	return fonts.Load(loaded.Config.Fonts)
 }
 
 // rasterGeometry is the geometry a rasterizer draws frame at: its cells, padding and font size

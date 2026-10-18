@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
@@ -121,13 +122,14 @@ func Build(
 
 // buildFrames builds the draft rasterizer, the rasterizer, the caption faces, the target
 // resolver and the compositor over the pipeline's clip, taking from previous what it can reuse,
-// and keeps every stage or none.
+// and keeps every stage or none. The two rasterizers share one load of the terminal fonts.
 func (p *Pipeline) buildFrames(previous *Pipeline) error {
-	draftRasterizer, draftCache, err := p.draftRastersFrom(previous)
+	faces := sync.OnceValues(func() (fonts.Set, error) { return loadTerminalFaces(p.loaded) })
+	draftRasterizer, draftCache, err := p.draftRastersFrom(previous, faces)
 	if err != nil {
 		return err
 	}
-	rasterizer, cache, err := p.rastersFrom(previous, draftRasterizer, draftCache)
+	rasterizer, cache, err := p.rastersFrom(previous, faces, draftRasterizer, draftCache)
 	if err != nil {
 		return err
 	}
@@ -151,16 +153,23 @@ func (p *Pipeline) buildFrames(previous *Pipeline) error {
 }
 
 // draftRastersFrom returns the draft rasterizer and the cache its rasters are kept in: none
-// without a draft cache, previous's while they hold for p, and a rasterizer of its own over p's
-// draft cache otherwise.
-func (p *Pipeline) draftRastersFrom(previous *Pipeline) (*raster.Rasterizer, RasterCache, error) {
+// without a draft cache, previous's while they hold for p, and otherwise a rasterizer of its own
+// over the faces faces loads, with p's draft cache.
+func (p *Pipeline) draftRastersFrom(
+	previous *Pipeline,
+	faces func() (fonts.Set, error),
+) (*raster.Rasterizer, RasterCache, error) {
 	if p.draftCache == nil {
 		return nil, nil, nil
 	}
 	if p.canReuseDraftRasters(previous) {
 		return previous.draftRasterizer, previous.draftCache, nil
 	}
-	rasterizer, err := newDraftRasterizer(p.loaded)
+	set, err := faces()
+	if err != nil {
+		return nil, nil, err
+	}
+	rasterizer, err := newRasterizerAt(p.loaded, set, draftGeometry(p.loaded.Storyboard.Frame))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -169,10 +178,11 @@ func (p *Pipeline) draftRastersFrom(previous *Pipeline) (*raster.Rasterizer, Ras
 
 // rastersFrom returns the exact rasterizer and the cache its rasters are kept in: previous's
 // while they hold for p; at frame.scale 1 the draft rasterizer and draft cache when p has them,
-// since a draft is then drawn at the exact geometry; and a rasterizer of its own over p's cache
-// otherwise.
+// since a draft is then drawn at the exact geometry; and otherwise a rasterizer of its own over
+// the faces faces loads, with p's cache.
 func (p *Pipeline) rastersFrom(
 	previous *Pipeline,
+	faces func() (fonts.Set, error),
 	draftRasterizer *raster.Rasterizer,
 	draftCache RasterCache,
 ) (*raster.Rasterizer, RasterCache, error) {
@@ -182,7 +192,11 @@ func (p *Pipeline) rastersFrom(
 	if draftRasterizer != nil && p.loaded.Storyboard.Frame.Scale == draftScale {
 		return draftRasterizer, draftCache, nil
 	}
-	rasterizer, err := newRasterizer(p.loaded)
+	set, err := faces()
+	if err != nil {
+		return nil, nil, err
+	}
+	rasterizer, err := newRasterizerAt(p.loaded, set, rasterGeometry(p.loaded.Storyboard.Frame))
 	if err != nil {
 		return nil, nil, err
 	}
