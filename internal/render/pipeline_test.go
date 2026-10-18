@@ -26,7 +26,8 @@ const zoomedCaptionedStoryboard = captionedStoryboard + `camera:
 `
 
 // lostZoomStoryboard is renderStoryboard with beat 1 squeezed into 300ms — its 2s of take play
-// above 6×, which the schedule warns about — and beat 2 zooming to a text no screen shows.
+// above 6×, which the schedule warns about — and a camera pan through beat 2 to a text no
+// screen shows.
 const lostZoomStoryboard = `clip: rendered
 ship: out/rendered.gif
 frame: {cols: 20, rows: 4, padding: 4, font_size: 10, line_height: 1.2, scale: 2, width: 160, fps: 10, max_colors: 16}
@@ -37,9 +38,8 @@ beats:
   - id: 2
     title: hold
     duration: 1500ms
-    zoom:
-      target: {text: 'nowhere'}
-      factor: 1.5
+camera:
+  - pan: {to: {text: 'nowhere'}, at: {beat: 2}, over: 500ms}
 `
 
 // loadRenderTake writes the render tests' take of cols columns and loads it back, returning its
@@ -179,7 +179,7 @@ func TestBuild_AZoomTargetNotOnScreen_LeavesAPartialPipeline(t *testing.T) {
 	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster()})
 
 	if !errors.Is(err, target.ErrNotOnScreen) {
-		t.Fatalf("want the zoom target not on screen, got %v", err)
+		t.Fatalf("want the pan target not on screen, got %v", err)
 	}
 	if built == nil || built.Schedule() == nil {
 		t.Fatal("want a partial pipeline holding its schedule")
@@ -362,7 +362,7 @@ func TestRun_ScheduleWarnings_PrintBeforeAComposeError(t *testing.T) {
 	err := Run(context.Background(), loaded, options, &bytes.Buffer{}, &stderr)
 
 	if !errors.Is(err, target.ErrNotOnScreen) {
-		t.Fatalf("want the zoom target not on screen, got %v", err)
+		t.Fatalf("want the pan target not on screen, got %v", err)
 	}
 	if !strings.HasPrefix(stderr.String(), "warning: beat 1 plays at ") {
 		t.Errorf("want beat 1's speed warning on stderr, got %q", stderr.String())

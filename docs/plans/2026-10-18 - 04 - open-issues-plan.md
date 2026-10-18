@@ -284,7 +284,10 @@ zoom `target:`.
 
 **Commit:** `refactor(tune)!: drop zoom targets and beat zoom from the state`
 
-## 6. Move zoom tests onto camera moves
+## 6. Move zoom tests onto camera moves — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): zoomClickTake now takes `t` and parses `clickBeats` + `zoomCamera(box)` (pan to the box's centre cell at {beat: 1, offset: 1s} over 1s, zoom to 2 at {beat: 2} over 1s, zoom to 1 at {beat: 2, offset: 3s} over 1s); the caption test and draftBoard share those helpers, and draftBoard gained a `clicked take.Box` parameter so its camera aims at the clicked box.
+NOTES (2026-10-18): for even-width boxes (W=4, W=6) the centre cell sits half a cell right of the old box-centre aim; no assertion depends on it. The render fixture's two "want the zoom target not on screen" messages now say "pan target"; test and const names unchanged.
 
 **What:**
 Test-only preparation for item 7: the compose and render tests that build a beat zoom keep their

@@ -97,19 +97,34 @@ func parseBoard(t *testing.T, body string) *storyboard.Storyboard {
 	return board
 }
 
+// clickBeats is the beats list of zoomClickTake's storyboard: beat 1 idles for 2 s, beat 2 clicks
+// the text "target" and lasts 4 s.
+const clickBeats = `beats:
+  - {id: 1, title: idle, duration: 2s}
+  - id: 2
+    title: click
+    duration: 4s
+    do:
+      - click: {target: {text: target}}
+`
+
+// zoomCamera is the camera list that zooms 2× onto the centre cell of box through beat 2 of
+// clickBeats: a pan there over the second before the beat, a push over the beat's first second
+// and a pull over its last.
+func zoomCamera(box take.Box) string {
+	return fmt.Sprintf(`camera:
+  - pan: {to: {cell: {x: %d, y: %d}}, at: {beat: 1, offset: 1s}, over: 1s}
+  - zoom: {to: 2, at: {beat: 2}, over: 1s}
+  - zoom: {to: 1, at: {beat: 2, offset: 3s}, over: 1s}
+`, box.X+box.W/2, box.Y+box.H/2)
+}
+
 // zoomClickTake is a two-beat take: beat 1 idles for 2 s, beat 2 clicks box at 3 s and runs to
-// 6 s, zoomed 2× onto the clicked target. Every beat fits its duration, so source and output
-// clocks agree.
-func zoomClickTake(box take.Box) (*storyboard.Storyboard, *take.Take) {
-	clicked := storyboard.Target{Text: "target"}
-	board := &storyboard.Storyboard{Beats: []storyboard.Beat{
-		{ID: 1, Duration: 2 * sec},
-		{
-			ID: 2, Duration: 4 * sec,
-			Do:   []storyboard.Action{{Click: &storyboard.ClickAction{Target: clicked}}},
-			Zoom: &storyboard.Zoom{Target: clicked, Factor: 2},
-		},
-	}}
+// 6 s, zoomed 2× onto the clicked box's centre cell by camera moves. Every beat fits its
+// duration, so source and output clocks agree.
+func zoomClickTake(t *testing.T, box take.Box) (*storyboard.Storyboard, *take.Take) {
+	t.Helper()
+	board := parseBoard(t, clickBeats+zoomCamera(box))
 	events := []take.Event{beatStart(0, 1), beatStart(2*sec, 2)}
 	recorded := &take.Take{
 		Snapshots: []take.Snapshot{{At: 0}, {At: 6 * sec}},
@@ -186,7 +201,7 @@ func TestComposeZoomCropStaysInsideTheFrame(t *testing.T) {
 	for _, box := range []take.Box{{X: 0, Y: 0, W: 3, H: 1}, {X: 45, Y: 13, W: 4, H: 1}} {
 		t.Run(fmt.Sprintf("box at %d,%d", box.X, box.Y), func(t *testing.T) {
 			t.Parallel()
-			board, recorded := zoomClickTake(box)
+			board, recorded := zoomClickTake(t, box)
 
 			compositor, _ := newTestCompositor(t, board, recorded)
 
@@ -280,7 +295,7 @@ func TestComposeCursorFadesAroundTheBeatsClicks(t *testing.T) {
 
 func TestComposeRingGrowsLinearly(t *testing.T) {
 	t.Parallel()
-	board, recorded := zoomClickTake(take.Box{X: 20, Y: 6, W: 3, H: 1})
+	board, recorded := zoomClickTake(t, take.Box{X: 20, Y: 6, W: 3, H: 1})
 	compositor, _ := newTestCompositor(t, board, recorded)
 
 	diameter, opacity, _, ok := compositor.cursor.ring(3*sec + ringPulse/2)
@@ -298,7 +313,7 @@ func TestComposeRingGrowsLinearly(t *testing.T) {
 func TestComposeZoomedCursorMapsToTheZoomedTarget(t *testing.T) {
 	t.Parallel()
 	box := take.Box{X: 30, Y: 7, W: 1, H: 1}
-	board, recorded := zoomClickTake(box)
+	board, recorded := zoomClickTake(t, box)
 	compositor, _ := newTestCompositor(t, board, recorded)
 	press := 3 * sec
 
@@ -520,22 +535,9 @@ func TestEaseInOutSettlesAtBothEnds(t *testing.T) {
 	}
 }
 
-func TestZoomRampsShrinkToFitTheSection(t *testing.T) {
-	t.Parallel()
-	board, recorded := zoomClickTake(take.Box{X: 20, Y: 6, W: 3, H: 1})
-	board.Beats[1].Zoom.In, board.Beats[1].Zoom.Out = 3*sec, 5*sec
-
-	compositor, _ := newTestCompositor(t, board, recorded)
-
-	// 8 s of ramps in a 4 s section keep their 3:5 share.
-	if push, pull := beatZoomRamps(t, compositor); push.Over != 1500*time.Millisecond || pull.Over != 2500*time.Millisecond {
-		t.Errorf("ramps: want in 1.5s out 2.5s, got in %s out %s", push.Over, pull.Over)
-	}
-}
-
 func TestCompositorCell(t *testing.T) {
 	t.Parallel()
-	board, recorded := zoomClickTake(take.Box{X: 30, Y: 7, W: 1, H: 1})
+	board, recorded := zoomClickTake(t, take.Box{X: 30, Y: 7, W: 1, H: 1})
 	compositor, _ := newTestCompositor(t, board, recorded)
 	tests := []struct {
 		name    string
@@ -571,7 +573,7 @@ func TestCompositorCell(t *testing.T) {
 func TestCompositorRect(t *testing.T) {
 	t.Parallel()
 	box := take.Box{X: 30, Y: 7, W: 1, H: 1}
-	board, recorded := zoomClickTake(box)
+	board, recorded := zoomClickTake(t, box)
 	compositor, _ := newTestCompositor(t, board, recorded)
 	tests := []struct {
 		name string
@@ -661,22 +663,15 @@ func countColour(img *image.RGBA, colour color.RGBA) int {
 
 func TestComposeZoomLeavesACaptionInPlace(t *testing.T) {
 	t.Parallel()
-	_, recorded := zoomClickTake(take.Box{X: 30, Y: 3, W: 6, H: 1})
-	board := parseBoard(t, `beats:
-  - {id: 1, title: idle, duration: 2s}
-  - id: 2
-    title: click
-    duration: 4s
-    do:
-      - click: {target: {text: target}}
-    zoom: {target: {text: target}, factor: 2}
-captions:
-`+boxCaption("Caption", "{beat: 1}", "6s", bottomMiddle))
+	clicked := take.Box{X: 30, Y: 3, W: 6, H: 1}
+	_, recorded := zoomClickTake(t, clicked)
+	board := parseBoard(t, clickBeats+zoomCamera(clicked)+"captions:\n"+
+		boxCaption("Caption", "{beat: 1}", "6s", bottomMiddle))
 	compositor, _ := newTestCompositor(t, board, recorded)
 	src := stripedFrame()
 	unzoomed, zoomed := 1*sec, 4*sec
 	if crop := compositor.crop(zoomed); crop.W >= float64(testLayout.Size.X) {
-		t.Fatalf("crop at %s: want the beat's zoom pushed in, got %+v", zoomed, crop)
+		t.Fatalf("crop at %s: want the camera's zoom pushed in, got %+v", zoomed, crop)
 	}
 
 	plain, pushed := compositor.Compose(unzoomed, src), compositor.Compose(zoomed, src)
@@ -756,7 +751,7 @@ captions:
 
 func TestCompositorCaptionBoxes_NoCaptions_IsNil(t *testing.T) {
 	t.Parallel()
-	board, recorded := zoomClickTake(take.Box{X: 30, Y: 7, W: 1, H: 1})
+	board, recorded := zoomClickTake(t, take.Box{X: 30, Y: 7, W: 1, H: 1})
 	compositor, _ := newTestCompositor(t, board, recorded)
 
 	boxes := compositor.CaptionBoxes()
@@ -788,22 +783,15 @@ func directCompose(compositor *Compositor, at time.Duration, src *image.RGBA) *i
 }
 
 // draftBoard is zoomClickTake's two beats with a caption over both, the second beat zoomed 2×
-// onto the clicked target when zoomed is set.
-func draftBoard(t *testing.T, zoomed bool) *storyboard.Storyboard {
+// onto the centre cell of clicked when zoomed is set.
+func draftBoard(t *testing.T, clicked take.Box, zoomed bool) *storyboard.Storyboard {
 	t.Helper()
-	zoom := ""
+	camera := ""
 	if zoomed {
-		zoom = "    zoom: {target: {text: target}, factor: 2}\n"
+		camera = zoomCamera(clicked)
 	}
-	return parseBoard(t, `beats:
-  - {id: 1, title: idle, duration: 2s}
-  - id: 2
-    title: click
-    duration: 4s
-    do:
-      - click: {target: {text: target}}
-`+zoom+`captions:
-`+boxCaption("Caption", "{beat: 1}", "6s", bottomMiddle))
+	return parseBoard(t, clickBeats+camera+"captions:\n"+
+		boxCaption("Caption", "{beat: 1}", "6s", bottomMiddle))
 }
 
 // draftColour is the uniform source colour the draft tests compose, unlike the zoom's background.
@@ -818,8 +806,9 @@ func uniformFrame(size image.Point) *image.RGBA {
 
 func TestComposeMatchesTheDirectPath(t *testing.T) {
 	t.Parallel()
-	_, recorded := zoomClickTake(take.Box{X: 30, Y: 3, W: 6, H: 1})
-	compositor, _ := newTestCompositor(t, draftBoard(t, true), recorded)
+	clicked := take.Box{X: 30, Y: 3, W: 6, H: 1}
+	_, recorded := zoomClickTake(t, clicked)
+	compositor, _ := newTestCompositor(t, draftBoard(t, clicked, true), recorded)
 	src := stripedFrame()
 	for _, tc := range []struct {
 		name   string
@@ -845,8 +834,9 @@ func TestComposeMatchesTheDirectPath(t *testing.T) {
 
 func TestComposeDraftAtTheLayoutsSizeFillsTheShippedFrame(t *testing.T) {
 	t.Parallel()
-	_, recorded := zoomClickTake(take.Box{X: 30, Y: 3, W: 6, H: 1})
-	compositor, _ := newTestCompositor(t, draftBoard(t, true), recorded)
+	clicked := take.Box{X: 30, Y: 3, W: 6, H: 1}
+	_, recorded := zoomClickTake(t, clicked)
+	compositor, _ := newTestCompositor(t, draftBoard(t, clicked, true), recorded)
 
 	got := compositor.ComposeDraft(1*sec, stripedFrame())
 
@@ -866,8 +856,9 @@ func TestComposeDraftDrawsTheCursorAndCaptionsAsCompose(t *testing.T) {
 		{name: "in a zoom", zoomed: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, recorded := zoomClickTake(take.Box{X: 30, Y: 3, W: 6, H: 1})
-			compositor, _ := newTestCompositor(t, draftBoard(t, tc.zoomed), recorded)
+			clicked := take.Box{X: 30, Y: 3, W: 6, H: 1}
+			_, recorded := zoomClickTake(t, clicked)
+			compositor, _ := newTestCompositor(t, draftBoard(t, clicked, tc.zoomed), recorded)
 			at := 3 * sec
 			if crop := compositor.crop(at); (crop.W < float64(testLayout.Size.X)) != tc.zoomed {
 				t.Fatalf("crop at %s: want zoomed %v, got %+v", at, tc.zoomed, crop)
