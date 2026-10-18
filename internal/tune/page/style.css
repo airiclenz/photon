@@ -21,7 +21,7 @@
   --lane-caption: #f6e4c8;
   --lane-hatch: #9a9a94;
   --pick-box: #f2b705;
-  --lane-name-width: 84px;
+  --lane-name-width: 104px;
   --lane-height: 26px;
   --cut-marker-width: 10px;
   --gap: 12px;
@@ -270,6 +270,12 @@ textarea {
   resize: vertical;
 }
 
+.entry-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
 .field .inline {
   display: flex;
   gap: 8px;
@@ -356,8 +362,18 @@ textarea {
 }
 
 .lane-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding-right: 6px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.lane-add {
+  padding: 0 6px;
+  line-height: 18px;
 }
 
 .lane-track {

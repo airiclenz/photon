@@ -40,12 +40,52 @@ const (
 	elementPickPan    = "pick-pan"
 	elementPickStatus = "pick-status"
 	elementBeatSelect = "beat-select"
+	elementInspector  = "inspector-body"
+	elementTimeline   = "timeline"
 	elementTime       = "time"
 	elementDocument   = "document"
 )
 
 // panToTarget is the index of cameraCaptionsStoryboard's pan to a target.
 const panToTarget = 2
+
+// The entries of cameraCaptionsStoryboard the list tests move and add around: its via pan, the
+// camera move after it, and the caption index a caption added at addCaptionAtMS becomes, after
+// the caption at 100ms and before the one at 1s.
+const (
+	viaPan         = 1
+	afterViaPan    = 2
+	addCaptionAtMS = 500
+	addedCaption   = 1
+)
+
+// roomyCameraStoryboard is sessionStoryboard without beat 2's zoom, its camera a zoom early in
+// beat 1 and a pan late in beat 2: a 600ms zoom or pan added at addMoveAtMS overlaps neither.
+const roomyCameraStoryboard = `clip: tuned
+ship: out/tuned.gif
+frame: {cols: 20, rows: 4, padding: 4, font_size: 10, line_height: 1.2, scale: 2, width: 160, fps: 10, max_colors: 16}
+beats:
+  - id: 1
+    title: typing
+    duration: 1s
+  - id: 2
+    title: result
+    do:
+      - pause: {for: 400ms}
+    duration: 1500ms
+camera:
+  - zoom: {to: 2, at: 100ms, over: 300ms}
+  - pan: {to: {cell: {x: 3, y: 2}}, at: 2000ms, over: 100ms}
+`
+
+// The camera moves of roomyCameraStoryboard the add test adds and moves: the playhead it adds
+// both at, the index the zoom added there becomes, after the zoom at 100ms, and the index of the
+// pan added after it, before the pan at 2s.
+const (
+	addMoveAtMS = 500
+	addedZoom   = 1
+	addedPan    = 2
+)
 
 // pageRequest is one request the page sent through fetch and the handler's answer.
 type pageRequest struct {
@@ -273,6 +313,49 @@ func (p *pageHarness) isHidden(id string) bool {
 	return p.eval(fmt.Sprintf(`document.getElementById(%q).hidden`, id)).ToBoolean()
 }
 
+// click clicks the one enabled button under the element of within whose title, or else text, is
+// name, and settles the page.
+func (p *pageHarness) click(within, name string) {
+	p.t.Helper()
+	found := p.eval(fmt.Sprintf(`{
+		const named = document.getElementById(%q).querySelectorAll("button")
+			.filter((button) => (button.title || button.textContent) === %q);
+		if (named.length === 1 && !named[0].disabled) {
+			named[0].dispatchEvent(new Event("click"));
+		}
+		named.length === 1 && !named[0].disabled;
+	}`, within, name)).ToBoolean()
+	if !found {
+		p.t.Fatalf("no one enabled %q button under #%s", name, within)
+	}
+	p.settle()
+}
+
+// isDisabled says the one button under the element of within whose text is name is disabled.
+func (p *pageHarness) isDisabled(within, name string) bool {
+	p.t.Helper()
+	return p.eval(fmt.Sprintf(`document.getElementById(%q).querySelectorAll("button")
+		.find((button) => button.textContent === %q).disabled`, within, name)).ToBoolean()
+}
+
+// selectedEntry is window.tune.selectedEntry() as JSON, "null" when no entry is selected.
+func (p *pageHarness) selectedEntry() string {
+	p.t.Helper()
+	return p.eval("JSON.stringify(window.tune.selectedEntry())").String()
+}
+
+// assertEdit fails the test unless the page's last edit sent want, as JSON, and was applied.
+func (p *pageHarness) assertEdit(want string) {
+	p.t.Helper()
+	edit := p.lastRequest("/api/edit")
+	if got := decodeJSON(p.t, edit.body); !reflect.DeepEqual(got, decodeJSON(p.t, want)) {
+		p.t.Errorf("the edit sent: want %s, got %s", want, edit.body)
+	}
+	if edit.status != http.StatusOK {
+		p.t.Errorf("the edit: want 200, got %d: %s", edit.status, edit.answer)
+	}
+}
+
 // lastRequest is the last request the page sent for path, failing the test when there is none.
 func (p *pageHarness) lastRequest(path string) pageRequest {
 	p.t.Helper()
@@ -370,4 +453,121 @@ func TestPageJS_SetAsPanTarget_SendsTheProposal(t *testing.T) {
 // entryValueOf spells a camera move's or caption's entry as the beat select's value for it.
 func entryValueOf(kind storyboard.OwnerKind, index int) string {
 	return fmt.Sprintf("%s:%d", kind, index)
+}
+
+func TestPageJS_AddCaptionAtThePlayhead(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	page := loadPage(t, session)
+	page.eval(fmt.Sprintf("window.tune.seek(%d)", addCaptionAtMS))
+	page.settle()
+
+	page.click(elementTimeline, "Add a caption at the playhead")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
+		`"value":{"kind":"caption","at":{"beat":0,"offset_ms":%d}}}`,
+		storyboard.OwnerCaption, addedCaption, storyboard.FieldCaptionInsert, addCaptionAtMS))
+	added := session.State().Captions[addedCaption]
+	if added.StartMS != addCaptionAtMS {
+		t.Errorf("the added caption: want it from %dms, got %+v", addCaptionAtMS, added)
+	}
+	want := fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerCaption, addedCaption)
+	if got := page.selectedEntry(); got != want {
+		t.Errorf("the selection after the add: want %s, got %s", want, got)
+	}
+}
+
+func TestPageJS_AddAZoomAndAPanAtThePlayhead_ThenMoveUp(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, roomyCameraStoryboard).session
+	page := loadPage(t, session)
+	page.eval(fmt.Sprintf("window.tune.seek(%d)", addMoveAtMS))
+	page.settle()
+	selected := func(index int) string {
+		return fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerCamera, index)
+	}
+
+	page.click(elementTimeline, "Add a zoom at the playhead")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
+		`"value":{"kind":"zoom","at":{"beat":0,"offset_ms":%d}}}`,
+		storyboard.OwnerCamera, addedZoom, storyboard.FieldCameraInsert, addMoveAtMS))
+	if got := page.selectedEntry(); got != selected(addedZoom) {
+		t.Errorf("the selection after the zoom add: want %s, got %s", selected(addedZoom), got)
+	}
+
+	page.click(elementTimeline, "Add a pan at the playhead")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
+		`"value":{"kind":"pan","at":{"beat":0,"offset_ms":%d}}}`,
+		storyboard.OwnerCamera, addedPan, storyboard.FieldCameraInsert, addMoveAtMS))
+	if got := page.selectedEntry(); got != selected(addedPan) {
+		t.Fatalf("the selection after the pan add: want %s, got %s", selected(addedPan), got)
+	}
+
+	page.click(elementInspector, "Move up")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%d}`,
+		storyboard.OwnerCamera, addedPan, storyboard.FieldCameraMove, addedZoom))
+	moved := session.State().Camera[addedZoom]
+	if moved.Kind != "pan" || moved.StartMS != addMoveAtMS {
+		t.Errorf("the camera move after the move up: want the pan from %dms, got %+v",
+			addMoveAtMS, moved)
+	}
+	if got := page.selectedEntry(); got != selected(addedZoom) {
+		t.Errorf("the selection after the move up: want %s, got %s", selected(addedZoom), got)
+	}
+}
+
+func TestPageJS_RemoveAndMoveACameraMove(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	page := loadPage(t, session)
+	moves := len(session.State().Camera)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, viaPan))
+
+	page.click(elementInspector, "Move down")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%d}`,
+		storyboard.OwnerCamera, viaPan, storyboard.FieldCameraMove, afterViaPan))
+	moved := fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerCamera, afterViaPan)
+	if got := page.selectedEntry(); got != moved {
+		t.Fatalf("the selection after the move: want %s, got %s", moved, got)
+	}
+
+	page.click(elementInspector, "Remove")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":null}`,
+		storyboard.OwnerCamera, afterViaPan, storyboard.FieldCameraRemove))
+	if got := len(session.State().Camera); got != moves-1 {
+		t.Errorf("the camera after the remove: want %d moves, got %d", moves-1, got)
+	}
+	if got := page.selectedEntry(); got != "null" {
+		t.Errorf("the selection after the remove: want none, got %s", got)
+	}
+}
+
+func TestPageJS_MoveButtons_DisabledAtTheListEnds(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	state := session.State()
+	page := loadPage(t, session)
+	cases := []struct {
+		kind   storyboard.OwnerKind
+		index  int
+		button string
+	}{
+		{storyboard.OwnerCamera, 0, "Move up"},
+		{storyboard.OwnerCamera, len(state.Camera) - 1, "Move down"},
+		{storyboard.OwnerCaption, 0, "Move up"},
+		{storyboard.OwnerCaption, len(state.Captions) - 1, "Move down"},
+	}
+
+	for _, tc := range cases {
+		page.selectValue(elementBeatSelect, entryValueOf(tc.kind, tc.index))
+
+		if !page.isDisabled(elementInspector, tc.button) {
+			t.Errorf("%s %d: %s is enabled", tc.kind, tc.index, tc.button)
+		}
+	}
 }

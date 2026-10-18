@@ -168,6 +168,8 @@ frame for frame as `photon render` composes it. Its timeline edits each beat's `
 storyboard's `camera` moves and `captions` show as bars on lanes of their own under the beats,
 and a click on a bar shows that entry in the inspector, which edits a camera move's `at`,
 `over`, `ease` and `to`, and a caption's `text`, `at`, `for` or `until`, `place` and `align`.
+A lane's `+` adds a zoom, a pan or a caption at the playhead, and the inspector moves the entry
+it shows up or down its list, or removes it.
 A pan's `via` and a caption's font, colours, box, fade, offset and position change in the YAML.
 A pick on the paused preview proposes a target for the picked cells, ready to use as a zoom
 target or the selected pan's `to`, or to copy as a `click`, `seen` or `drag` end. `pause` and the `do` actions show read-only:

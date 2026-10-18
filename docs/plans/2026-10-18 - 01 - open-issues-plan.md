@@ -317,7 +317,17 @@ remove the only entry deletes the key; overlap refused naming both; index out of
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ -run TestPage_EntryFields_AreEditFields`
 **Commit:** `feat(storyboard): add, remove and reorder camera moves and captions`
 
-## 9. Page: add, remove and reorder camera moves and captions
+## 9. Page: add, remove and reorder camera moves and captions — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): consequential edit — README.md: made necessary by the page now adding, removing and reordering camera moves and captions (the tuning paragraph lists what the page edits).
+
+NOTES (2026-10-18): each registered lane in lanes.js carries `add: {title, edit(state, ms)}`; timeline.js's `laneElement` takes trailing controls and `clipLaneRow` puts the lane's `+` button in the lane-name cell; `--lane-name-width` grew from 84px to 104px so "camera zoom" and its button fit.
+
+NOTES (2026-10-18): added a third test, `TestPageJS_MoveButtons_DisabledAtTheListEnds` (Move up disabled on a list's first entry, Move down on its last), beside the two the plan names.
+
+NOTES (2026-10-18): timeline.js grows from 461 to 482 lines; it is not one of `splitScripts` and was already past the ~400-line guide before this item.
+
+NOTES (2026-10-18): added `TestPageJS_AddAZoomAndAPanAtThePlayhead_ThenMoveUp` on a new fixture, `roomyCameraStoryboard` (no beat-level zoom, room for a 600ms move at 500ms), because cameraCaptionsStoryboard refuses every zoom or pan add; it clicks "Add a zoom at the playhead", "Add a pan at the playhead" and "Move up" and asserts each /api/edit body, its 200 and the selection.
 
 **What:** Depends on items 6 and 8.
 **Regression guard.** Removes item 8's fields from `pendingPageFields`. Add sends

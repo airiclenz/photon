@@ -1,6 +1,7 @@
 // photon tune's camera move and caption panels: what the inspector shows for a selected entry —
 // its timing, where a camera move goes, a caption's text and placement, when it is on the output
-// clock and the errors standing on it.
+// clock and the errors standing on it — and the buttons that move it up or down its list or
+// remove it.
 //
 // It loads after controls.js and adds entryPanel to window.tunePage, the page's internal
 // namespace, where app.js's inspector draws it; every field is a control from controls.js.
@@ -27,6 +28,9 @@
   } = page;
   const KIND_ZOOM = "zoom";
   const CAPTION_TEXT_ROWS = 3;
+  // The list fields that move an entry within its list, or remove it, by list.
+  const CAMERA_LIST = Object.freeze({ move: "camera.move", remove: "camera.remove" });
+  const CAPTION_LIST = Object.freeze({ move: "caption.move", remove: "caption.remove" });
 
   // entryPanel is a camera move's or caption's fields; what the page does not edit shows
   // read-only, and the YAML edits it.
@@ -34,8 +38,8 @@
     return kind === ENTRY_CAMERA ? cameraPanel(entry) : captionPanel(entry);
   }
 
-  // cameraPanel edits a camera move's timing and where it goes, and shows when it plays on the
-  // output clock and the errors standing on it.
+  // cameraPanel edits a camera move's timing and where it goes, shows when it plays on the
+  // output clock and the errors standing on it, and ends with its list buttons.
   function cameraPanel(move) {
     const owner = { kind: ENTRY_CAMERA, index: move.index };
     return [
@@ -46,6 +50,7 @@
       ...aimRows(owner, move),
       readOnlyRow("plays", formatTime(move.start_ms) + " – " + formatTime(move.end_ms)),
       ...errorRows(owner),
+      listRow(owner, CAMERA_LIST, page.state().camera.length),
     ];
   }
 
@@ -87,7 +92,8 @@
   // captionPanel edits a caption's text, timing and placement, and shows when it is on the
   // output clock and the errors standing on it. It ends after for or at until: either field
   // sets its end and drops the other, and an until of none ends it after a for of the stretch it
-  // shows. A caption set by position has no place or align to edit.
+  // shows. A caption set by position has no place or align to edit. The panel ends with its list
+  // buttons.
   function captionPanel(caption) {
     const owner = { kind: ENTRY_CAPTION, index: caption.index };
     const placement = caption.place
@@ -105,7 +111,43 @@
       ...placement,
       readOnlyRow("shows", formatTime(caption.start_ms) + " – " + formatTime(caption.stop_ms)),
       ...errorRows(owner),
+      listRow(owner, CAPTION_LIST, page.state().captions.length),
     ];
+  }
+
+  // listRow is the buttons that move owner's entry up or down its list of length entries, the
+  // selection following it, or remove it, leaving nothing selected; fields are the list's move
+  // and remove fields. app.js keeps a refused edit as the refusal standing on the entry, which
+  // this panel shows, so a rejection is only caught here.
+  function listRow(owner, fields, length) {
+    const remove = element("button", { type: "button" }, "Remove");
+    remove.addEventListener("click", () =>
+      window.tune.edit({ owner, field: fields.remove, value: null }).then(
+        () => window.tune.select(null),
+        () => {},
+      ),
+    );
+    return element(
+      "div",
+      { className: "entry-actions" },
+      moveButton("Move up", owner, fields.move, owner.index - 1, length),
+      moveButton("Move down", owner, fields.move, owner.index + 1, length),
+      remove,
+    );
+  }
+
+  // moveButton moves owner's entry to destination in its list of length entries and selects it
+  // there; it is disabled when destination is outside the list.
+  function moveButton(label, owner, field, destination, length) {
+    const isOutside = destination < 0 || destination >= length;
+    const button = element("button", { type: "button", disabled: isOutside }, label);
+    button.addEventListener("click", () =>
+      window.tune.edit({ owner, field, value: destination }).then(
+        () => window.tune.selectEntry({ kind: owner.kind, index: destination }),
+        () => {},
+      ),
+    );
+    return button;
   }
 
   // captionForField edits how long a caption shows; it is empty while the caption ends at until.
