@@ -65,7 +65,9 @@ func (s *Session) Pick(out time.Duration, from, to image.Point) (Proposal, error
 	}
 	startCol, row, ok := shown.frames.Cell(out, from)
 	if !ok {
-		return Proposal{}, fmt.Errorf("%w: the pick starts off the screen at %v", ErrNoProposal, from)
+		return Proposal{}, fmt.Errorf(
+			"%w: the pick starts off the screen at %v", ErrNoProposal, from,
+		)
 	}
 	endCol, _, _ := shown.frames.Cell(out, to)
 	picked, text, err := pickedCells(screen, row, min(startCol, endCol), max(startCol, endCol))
@@ -77,7 +79,9 @@ func (s *Session) Pick(out time.Duration, from, to image.Point) (Proposal, error
 	if err != nil {
 		return Proposal{}, err
 	}
-	proposer := proposer{resolver: resolver, screen: screen, picked: picked, text: regexp.QuoteMeta(text)}
+	proposer := proposer{
+		resolver: resolver, screen: screen, picked: picked, text: regexp.QuoteMeta(text),
+	}
 	proposed, resolved, err := proposer.propose(shown.loaded.Config.Areas)
 	if err != nil {
 		return Proposal{}, err
@@ -110,7 +114,9 @@ func pickedCells(screen take.Snapshot, row, first, last int) (take.Box, string, 
 		last--
 	}
 	if first > last {
-		return take.Box{}, "", fmt.Errorf("%w: the picked cells of row %d are blank", ErrNoProposal, row)
+		return take.Box{}, "", fmt.Errorf(
+			"%w: the picked cells of row %d are blank", ErrNoProposal, row,
+		)
 	}
 	end := last + 1
 	for end < len(cells) && cells[end].Width == 0 {
@@ -147,10 +153,10 @@ type candidate struct {
 	height int
 }
 
-// propose returns the target and the box it resolves to: the first area holding the picked row, smallest first, where the
-// text matches only once, else the smallest such area, or the whole screen, with the nth of the
-// picked match. The target is checked by resolving it again; it fails with [ErrNoProposal] when
-// no match of the text covers the picked cells.
+// propose returns the target and the box it resolves to: the first area holding the picked row,
+// smallest first, where the text matches only once, else the smallest such area, or the whole
+// screen, with the nth of the picked match. The target is checked by resolving it again; it fails
+// with [ErrNoProposal] when no match of the text covers the picked cells.
 func (p proposer) propose(areas map[string]config.Area) (storyboard.Target, take.Box, error) {
 	candidates, err := p.areasHolding(areas)
 	if err != nil {
@@ -176,8 +182,9 @@ func (p proposer) propose(areas map[string]config.Area) (storyboard.Target, take
 	}
 	at := slices.IndexFunc(matches, func(match take.Box) bool { return covers(match, p.picked) })
 	if at < 0 {
-		return storyboard.Target{}, take.Box{}, fmt.Errorf("%w: no match of /%s/ covers the picked cells %+v",
-			ErrNoProposal, p.text, p.picked)
+		return storyboard.Target{}, take.Box{}, fmt.Errorf(
+			"%w: no match of /%s/ covers the picked cells %+v", ErrNoProposal, p.text, p.picked,
+		)
 	}
 	proposed := storyboard.Target{Text: p.text, Area: smallest}
 	if at > 0 {
@@ -213,7 +220,8 @@ func (p proposer) areasHolding(areas map[string]config.Area) ([]candidate, error
 func (p proposer) matches(area string) ([]take.Box, error) {
 	var found []take.Box
 	for nth := storyboard.NthFirst; ; nth++ {
-		box, err := p.resolver.Target(p.screen, storyboard.Target{Text: p.text, Nth: nth, Area: area})
+		wanted := storyboard.Target{Text: p.text, Nth: nth, Area: area}
+		box, err := p.resolver.Target(p.screen, wanted)
 		if errors.Is(err, target.ErrNotOnScreen) {
 			return found, nil
 		}
@@ -232,8 +240,10 @@ func (p proposer) checked(proposed storyboard.Target) (storyboard.Target, take.B
 		return storyboard.Target{}, take.Box{}, fmt.Errorf("%w: %w", ErrNoProposal, err)
 	}
 	if !covers(box, p.picked) {
-		return storyboard.Target{}, take.Box{}, fmt.Errorf("%w: /%s/ resolves to %+v, not the picked cells %+v",
-			ErrNoProposal, proposed.Text, box, p.picked)
+		return storyboard.Target{}, take.Box{}, fmt.Errorf(
+			"%w: /%s/ resolves to %+v, not the picked cells %+v",
+			ErrNoProposal, proposed.Text, box, p.picked,
+		)
 	}
 	return proposed, box, nil
 }

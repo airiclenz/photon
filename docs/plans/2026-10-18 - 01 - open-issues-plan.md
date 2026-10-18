@@ -751,7 +751,10 @@ internal/target/anchor.go — anchor.row; internal/take/file.go — readHeader; 
 - `GOMEMLIMIT=2GiB go test` on each of those packages, one at a time
 **Commit:** `style: wrap the take-to-yamledit packages at 100 columns`
 
-## 23. Wrap internal/tune and confirm the module is clean
+## 23. Wrap internal/tune and confirm the module is clean — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): one over-long line was wrapped by moving a subexpression into a local (`wanted` in proposer.matches); the rest split call arguments, the movedState signature, the TargetState literal and the hasOwner closure across lines, and every error and response text is byte-identical. The doc.go package comment is reflowed from the over-long line to its paragraph's end, Apply's and propose's doc comments likewise, and the page/lanes.js doc-map item wraps onto a 5-space continuation line, the shape the doc-map test parses; gofmt realigned session.go's `history` field after the buildPipeline field type went multi-line.
+NOTES (2026-10-18): the module is clean: `LLL ./...` (and the full config) reports 0 issues for linux, windows and darwin; as in item 20, `GOOS=windows`/`GOOS=darwin LLL` was run as a host-built v2.13.2 golangci-lint invoked with that GOOS, since `go run` under a foreign GOOS builds a binary that cannot exec here.
 
 **What:** Depends on items 12, 15, 16 and 17–22. As item 19, for `internal/tune`; then the whole
 module passes `lll`.

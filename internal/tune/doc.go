@@ -4,14 +4,14 @@
 // An [Edit] is one typed change — a beat's duration, hold, cut or zoom, the clip's frame.width
 // or frame.fps, a camera move's start, length, ease or destination, or a caption's start, end,
 // text, place or align — spelled as the page sends it, and [storyboard.Apply] applies it: it
-// splices only the edited scalar, or the one node a moment, a pan destination or a caption's text replaces,
-// into the storyboard's source through yamledit, so comments, quoting, key order and flow or block style
-// stay as the person wrote them: a duration keeps its unit, a new key goes in the storyboard's
-// field order, a default is never written out, switching cut off, the zoom factor to auto, a
-// camera move's ease to smooth or a caption's place or align to its default removes the key, and
-// a caption's for and until replace each other. The result is parsed again with the storyboard's
-// own strict loader, so an edit that leaves the storyboard invalid is refused with the problems
-// it causes.
+// splices only the edited scalar, or the one node a moment, a pan destination or a caption's
+// text replaces, into the storyboard's source through yamledit, so comments, quoting, key order
+// and flow or block style stay as the person wrote them: a duration keeps its unit, a new key
+// goes in the storyboard's field order, a default is never written out, switching cut off, the
+// zoom factor to auto, a camera move's ease to smooth or a caption's place or align to its
+// default removes the key, and a caption's for and until replace each other. The result is
+// parsed again with the storyboard's own strict loader, so an edit that leaves the storyboard
+// invalid is refused with the problems it causes.
 //
 // A [Session] holds one clip and take being tuned. Every applied edit, undo, redo or revert
 // rebuilds the render pipeline on the new bytes, as `photon render` builds it, handing render the
@@ -55,6 +55,7 @@
 //   - page/controls.js: the inspector's field controls and its error and refusal rows.
 //   - page/panels.js: the inspector's beat and frame panels.
 //   - page/entries.js: the inspector's camera move and caption panels.
-//   - page/lanes.js, page/timeline.js, page/picker.js: the timeline, its lanes and the target picker.
+//   - page/lanes.js, page/timeline.js, page/picker.js: the timeline, its lanes and the target
+//     picker.
 //   - page/path.js: the via path overlay on the preview.
 package tune

@@ -178,7 +178,9 @@ func pageFS() fs.FS {
 func (s *server) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.hosts[r.Host] {
-			writeError(w, http.StatusForbidden, "this server answers only at the address it printed")
+			writeError(
+				w, http.StatusForbidden, "this server answers only at the address it printed",
+			)
 			return
 		}
 		if r.Method == http.MethodPost && !isJSON(r) {

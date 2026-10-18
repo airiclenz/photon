@@ -246,7 +246,9 @@ func beatStates(board *storyboard.Storyboard) []BeatState {
 		}
 		if zoom := beat.Zoom; zoom != nil {
 			state.Zoom = &ZoomState{
-				Target: TargetState{Text: zoom.Target.Text, Nth: int(zoom.Target.Nth), Area: zoom.Target.Area},
+				Target: TargetState{
+					Text: zoom.Target.Text, Nth: int(zoom.Target.Nth), Area: zoom.Target.Area,
+				},
 				Factor: zoom.Factor,
 				InMS:   zoom.In.Milliseconds(),
 				OutMS:  zoom.Out.Milliseconds(),
@@ -296,7 +298,10 @@ func pointState(point storyboard.Point) PointState {
 // movedState is the part of a camera move's state every form shares: its kind, its timing as
 // the storyboard spells it, and where it starts and ends on the output clock, from start, its
 // resolved At.
-func movedState(kind string, start time.Duration, at storyboard.Moment, over time.Duration, ease storyboard.Ease) CameraState {
+func movedState(
+	kind string, start time.Duration, at storyboard.Moment, over time.Duration,
+	ease storyboard.Ease,
+) CameraState {
 	return CameraState{
 		Kind:    kind,
 		StartMS: start.Milliseconds(),
@@ -433,7 +438,9 @@ func ownerOn(owner storyboard.Owner, board *storyboard.Storyboard) storyboard.Ow
 func hasOwner(board *storyboard.Storyboard, owner storyboard.Owner) bool {
 	switch owner.Kind {
 	case storyboard.OwnerBeat:
-		return slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool { return beat.ID == owner.Index })
+		return slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool {
+			return beat.ID == owner.Index
+		})
 	case storyboard.OwnerCamera:
 		return owner.Index >= 0 && owner.Index < len(board.Camera)
 	case storyboard.OwnerCaption:

@@ -58,8 +58,10 @@ type Session struct {
 	// recorded is the take every build schedules and composes.
 	recorded *take.Take
 	// buildPipeline is [render.Build]; a test wraps it to see what each build is given.
-	buildPipeline func(*clip.Clip, string, *take.Take, render.BuildOptions) (*render.Pipeline, error)
-	history       history
+	buildPipeline func(
+		*clip.Clip, string, *take.Take, render.BuildOptions,
+	) (*render.Pipeline, error)
+	history history
 	// current is what the current bytes built, up to the stage that failed; good is the last
 	// pipeline that built in full.
 	current pipeline
@@ -134,9 +136,9 @@ func NewSession(loaded *clip.Clip, takePath string) (*Session, error) {
 
 // Apply splices edit into the current storyboard and rebuilds the pipeline on the result. An
 // edit [storyboard.Apply] refuses — misspelled, aimed at a missing beat, camera move or caption,
-// or leaving the storyboard invalid — changes nothing and is returned. An accepted edit is kept in the history even when the
-// rebuild fails: the error then stands on its beat or the clip until an edit, undo or revert
-// clears it, and the preview keeps the last good pipeline.
+// or leaving the storyboard invalid — changes nothing and is returned. An accepted edit is kept
+// in the history even when the rebuild fails: the error then stands on its beat or the clip until
+// an edit, undo or revert clears it, and the preview keeps the last good pipeline.
 func (s *Session) Apply(edit Edit) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
