@@ -1,11 +1,13 @@
 ---
 title: Settle the 100-column wrap
-status: open
+status: done
 type: task
 priority: 4
 labels: [style]
 plan: 2026-10-18 - 01 - open-issues-plan
 created: 2026-10-18T09:15:40Z
+closed: 2026-10-18T12:34:25Z
+reason: Resolved by plan 2026-10-18 - 01 - open-issues-plan (archived in 70f28a8)
 ---
 
 The coding conventions (Note `coding-conventions`) ask for a ~100-column wrap, but nothing enforces

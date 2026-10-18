@@ -1,11 +1,13 @@
 ---
 title: Test a caption anchored to a cut beat
-status: open
+status: done
 type: task
 priority: 3
 labels: [storyboard]
 plan: 2026-10-18 - 01 - open-issues-plan
 created: 2026-10-17T22:00:33Z
+closed: 2026-10-18T12:34:25Z
+reason: Resolved by plan 2026-10-18 - 01 - open-issues-plan (archived in 70f28a8)
 ---
 
 A caption whose `at` or `until` is a beat moment naming a cut beat is refused through

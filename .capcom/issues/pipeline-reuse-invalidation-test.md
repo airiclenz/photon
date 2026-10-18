@@ -1,11 +1,13 @@
 ---
 title: Test that a changed fonts dir, theme or caption font is not reused
-status: open
+status: done
 type: task
 priority: 3
 labels: [render]
 plan: 2026-10-18 - 01 - open-issues-plan
 created: 2026-10-18T08:54:57Z
+closed: 2026-10-18T12:34:25Z
+reason: Resolved by plan 2026-10-18 - 01 - open-issues-plan (archived in 70f28a8)
 ---
 
 [Build] reuses the previous pipeline's rasterizer and rasterized snapshots only while

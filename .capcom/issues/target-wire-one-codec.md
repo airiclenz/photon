@@ -1,11 +1,13 @@
 ---
 title: One wire codec for a target's nth
-status: open
+status: done
 type: task
 priority: 3
 labels: [tune, storyboard]
 plan: 2026-10-18 - 01 - open-issues-plan
 created: 2026-10-18T09:15:40Z
+closed: 2026-10-18T12:34:25Z
+reason: Resolved by plan 2026-10-18 - 01 - open-issues-plan (archived in 70f28a8)
 ---
 
 A target's nth travels as JSON in two directions, and each side spells it with its own copy. In

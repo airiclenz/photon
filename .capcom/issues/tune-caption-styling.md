@@ -1,12 +1,14 @@
 ---
 title: Edit a caption's font, colours, box, fade and position in photon tune
-status: open
+status: done
 type: feature
 priority: 3
 labels: [tune]
 deps: [clip-captions, typed-storyboard-edits]
 plan: 2026-10-18 - 01 - open-issues-plan
 created: 2026-10-17T20:17:38Z
+closed: 2026-10-18T12:34:25Z
+reason: Resolved by plan 2026-10-18 - 01 - open-issues-plan (archived in 70f28a8)
 ---
 
 `photon tune` edits a caption's timing, text, `place` and `align` (plan

@@ -1,12 +1,14 @@
 ---
 title: Edit a pan's via waypoints in photon tune
-status: open
+status: done
 type: feature
 priority: 3
 labels: [tune]
 deps: [camera-moves, typed-storyboard-edits]
 plan: 2026-10-18 - 01 - open-issues-plan
 created: 2026-10-17T20:17:38Z
+closed: 2026-10-18T12:34:25Z
+reason: Resolved by plan 2026-10-18 - 01 - open-issues-plan (archived in 70f28a8)
 ---
 
 `photon tune` edits a pan's single `to` point, set from a pick, but refuses a pan that moves

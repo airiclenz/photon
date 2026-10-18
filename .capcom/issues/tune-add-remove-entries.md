@@ -26,3 +26,7 @@ result fails validation (for example an overlap on a track).
   undoes cleanly, covered by edit tests on block and flow lists.
 - The page offers add (at the playhead), remove and reorder for both lists.
 - An insert that makes two moves on one track overlap is refused naming both.
+
+## Log
+
+- 2026-10-18 Airic Lenz: Plan 2026-10-18 - 01 - open-issues-plan (70f28a8), items 8-9: storyboard insert/remove/move edits for camera and captions (overlap refused naming both) and page add/remove/reorder landed; left open: a refused add (e.g. an overlap) shows only as app.js's refusal on the entry index it named, so it is invisible unless that entry is in the inspector.
