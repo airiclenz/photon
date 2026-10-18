@@ -1,7 +1,7 @@
 // photon tune's camera move and caption panels: what the inspector shows for a selected entry —
-// its timing, where a camera move goes, what a zoom aims at and the waypoints of a via pan's
-// path, a caption's text, placement and style, when it is on the output clock and the errors
-// standing on it — and the buttons that move it up or down its list or remove it.
+// its timing, where a camera move goes and the waypoints of a via pan's path, a caption's text,
+// placement and style, when it is on the output clock and the errors standing on it — and the
+// buttons that move it up or down its list or remove it.
 //
 // It loads after controls.js and adds entryPanel to window.tunePage, the page's internal
 // namespace, where app.js's inspector draws it; every field is a control from controls.js. A
@@ -70,14 +70,13 @@
   }
 
   // aimRows edit where a camera move goes, each sending a typed camera.to: a zoom's factor, or
-  // a pan's target or cell, which a pick replaces with a target. A zoom's target rows follow its
-  // factor. A pan's path select moves it straight to its to or along a via path, and a via pan
-  // lists the waypoints of its path.
+  // a pan's target or cell, which a pick replaces with a target. A pan's path select moves it
+  // straight to its to or along a via path, and a via pan lists the waypoints of its path.
   function aimRows(owner, move) {
     if (move.kind === KIND_ZOOM) {
       const input = element("input", { type: "number", step: "0.1", value: String(move.factor) });
       input.addEventListener("change", () => applyEdit(owner, "camera.to", numberOf(input.value)));
-      return [fieldRow("to (×)", input), ...zoomTargetRows(owner, move.target)];
+      return [fieldRow("to (×)", input)];
     }
     // The pan's camera.path field defaults to the path it follows.
     const path = choiceField("path", owner, "camera.path", null);
@@ -92,26 +91,6 @@
       return [path, cellRow(owner, move.cell)];
     }
     return [path, ...(move.via || []).flatMap((point, index) => waypointRows(owner, point, index))];
-  }
-
-  // zoomTargetRows edit what a zoom aims at, each sending a typed camera.target: the inputs of
-  // its target, then a button that adds the target the inputs hold to an untargeted zoom, or
-  // removes the target of a targeted one.
-  function zoomTargetRows(owner, target) {
-    const inputs = targetInputs(target);
-    const rows = targetRows("target", inputs);
-    const send = (value) => applyEdit(owner, "camera.target", value);
-    if (!target) {
-      const add = element("button", { type: "button" }, "Add target");
-      add.addEventListener("click", () => send(targetOf(inputs)));
-      return [...rows, add];
-    }
-    for (const input of Object.values(inputs)) {
-      input.addEventListener("change", () => send(targetOf(inputs)));
-    }
-    const remove = element("button", { type: "button" }, "Remove target");
-    remove.addEventListener("click", () => send(null));
-    return [...rows, remove];
   }
 
   // cellRow edits the cell a pan goes to, its column x and row y from 0.

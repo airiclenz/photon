@@ -485,23 +485,6 @@ textarea {
   color: var(--muted);
 }
 
-.block.zoomed {
-  background: var(--lane-zoom);
-  border-radius: 0;
-}
-
-.block.ramp-in {
-  background: linear-gradient(to right, transparent, var(--lane-zoom));
-  border-right: 0;
-  border-radius: 3px 0 0 3px;
-}
-
-.block.ramp-out {
-  background: linear-gradient(to left, transparent, var(--lane-zoom));
-  border-left: 0;
-  border-radius: 0 3px 3px 0;
-}
-
 .block.camera-zoom {
   background: var(--lane-zoom);
 }

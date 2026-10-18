@@ -40,7 +40,6 @@
   const TICK_STEPS_MS = [100, 250, 500, 1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000];
   const AXIS_NAME = "time";
   const TOO_FAST_GLYPH = "⚠";
-  const AUTO_FACTOR = "auto";
   const OWNER_BEAT = "beat";
   const OWNER_CAPTION = "caption";
   const FIELD_CAMERA_AT = "camera.at";
@@ -53,7 +52,6 @@
   const lanes = [
     { name: "beats", draw: drawBeat, handles: beatHandles },
     { name: "hold", draw: drawHold, handles: holdHandles },
-    { name: "zoom", draw: drawZoom, handles: zoomHandles },
   ];
   // registeredLanes are lanes.js's, drawn under the timeline's own.
   const registeredLanes = window.tuneLanes || [];
@@ -129,50 +127,6 @@
       min: 0,
       max: section.duration_ms - SNAP_MS,
     }];
-  }
-
-  // drawZoom is the beat's zoom over its section: the push in, the full factor, the ease out.
-  function drawZoom(section, state) {
-    const ramps = zoomRamps(section, state);
-    if (!ramps) {
-      return [];
-    }
-    const start = section.start_ms;
-    const end = endOf(section);
-    const factor = ramps.zoom.factor === 0 ? AUTO_FACTOR : ramps.zoom.factor + "×";
-    const nodes = [
-      span(start, start + ramps.in, "block ramp-in", ""),
-      span(start + ramps.in, end - ramps.out, "block zoomed", factor),
-      span(end - ramps.out, end, "block ramp-out", ""),
-    ];
-    return nodes.map((node) => selectable(node, section.beat));
-  }
-
-  // zoomHandles are the ramps' inner edges: dragging one sets zoom.in or zoom.out. A ramp of 0
-  // would mean the default, so a drag keeps it at SNAP_MS or more.
-  function zoomHandles(section, state) {
-    const ramps = zoomRamps(section, state);
-    if (!ramps) {
-      return [];
-    }
-    const ramp = { beat: section.beat, min: SNAP_MS, max: section.duration_ms };
-    return [
-      { ...ramp, field: "zoom.in", anchor: section.start_ms, sign: 1, value: ramps.in },
-      { ...ramp, field: "zoom.out", anchor: endOf(section), sign: -1, value: ramps.out },
-    ];
-  }
-
-  // zoomRamps is the section's zoom and its ramps as the preview runs them: ramps that together
-  // outrun the section shrink in proportion. It is null for a cut section or a beat with no zoom.
-  function zoomRamps(section, state) {
-    const beat = beatOf(state, section.beat);
-    if (section.cut || !beat || !beat.zoom) {
-      return null;
-    }
-    const zoom = beat.zoom;
-    const total = zoom.in_ms + zoom.out_ms;
-    const share = total > section.duration_ms ? section.duration_ms / total : 1;
-    return { zoom, in: Math.round(zoom.in_ms * share), out: Math.round(zoom.out_ms * share) };
   }
 
   // cutMarker marks a cut beat where it would have played; cuts at one time sit side by side.

@@ -1,14 +1,13 @@
 // photon tune's target picker: ⌖ arms pick mode on the paused preview, and a drag across the
 // cells of one row asks the server for the target that names them.
 // It builds on app.js's window.tune: frame for the preview <img>, pause() to hold the frame
-// still, frameTime() for the output time of the frame the <img> shows, selected() and state()
-// for the beat a zoom target goes on, selectedEntry() for the camera zoom a zoom target or the
-// pan move a pan target goes on, onState(fn) to offer the pan target only while a pan exists,
-// and edit(edit) to set any of them. It adds pickProposal() and reportPick(message, isFailure)
-// to window.tunePage, the page's internal namespace, where entries.js's via waypoints read the
-// standing proposal's target. Nothing here maps pixels to cells or resolves a target: the drag's
-// two corners go to /api/pick in output-frame pixels, and the server answers the
-// resolver-checked proposal: its target as a zoom, camera.target or camera.to edit takes it, its
+// still, frameTime() for the output time of the frame the <img> shows, selectedEntry() and
+// state() for the pan move a pan target goes on, onState(fn) to offer the pan target only while
+// a pan exists, and edit(edit) to set it. It adds pickProposal() and
+// reportPick(message, isFailure) to window.tunePage, the page's internal namespace, where
+// entries.js's via waypoints read the standing proposal's target. Nothing here maps pixels to
+// cells or resolves a target: the drag's two corners go to /api/pick in output-frame pixels, and
+// the server answers the resolver-checked proposal: its target as a camera.to edit takes it, its
 // box in output-frame pixels and the YAML snippets that write it.
 "use strict";
 
@@ -16,14 +15,9 @@
   const tune = window.tune;
   const PICK_URL = "/api/pick";
   const SNIPPET_ZOOM = "zoom";
-  const FIELD_ZOOM = "zoom";
-  const FIELD_ZOOM_TARGET = "zoom.target";
   const FIELD_CAMERA_TO = "camera.to";
-  const FIELD_CAMERA_TARGET = "camera.target";
   const ENTRY_CAMERA = "camera";
-  const OWNER_BEAT = "beat";
   const KIND_PAN = "pan";
-  const KIND_ZOOM = "zoom";
   const ESCAPE_KEY = "Escape";
   const ARMED_HINT = "Drag across the cells of one row on the preview; Esc cancels.";
 
@@ -36,7 +30,6 @@
     box: document.getElementById("pick-box"),
     result: document.getElementById("pick-result"),
     target: document.getElementById("pick-target"),
-    setZoom: document.getElementById("pick-zoom"),
     setPan: document.getElementById("pick-pan"),
     copies: document.querySelectorAll("#pick-result [data-snippet]"),
   };
@@ -198,41 +191,6 @@
     place(view.box, rect.x / ratio, rect.y / ratio, rect.w / ratio, rect.h / ratio);
   }
 
-  // setAsZoomTarget sets the proposal as what the selected camera zoom aims at, or as the
-  // selected beat's zoom target, adding the zoom when the beat has none.
-  function setAsZoomTarget() {
-    const zoom = selectedMove(KIND_ZOOM);
-    const beatID = tune.selected();
-    const state = tune.state();
-    const beat = state && beatID !== null ? state.beats.find((each) => each.id === beatID) : null;
-    if (!proposal || (!zoom && !beat)) {
-      report("Select a beat or a camera zoom first.", true);
-      return;
-    }
-    if (zoom) {
-      setCameraZoomTarget(zoom);
-      return;
-    }
-    const field = beat.zoom ? FIELD_ZOOM_TARGET : FIELD_ZOOM;
-    tune.edit({ owner: { kind: OWNER_BEAT, index: beat.id }, field, value: proposal.target }).then(
-      () => report("Zoom target set on beat " + beat.id, false),
-      (error) => report(error.message, true),
-    );
-  }
-
-  // setCameraZoomTarget sets the proposal as what the camera zoom move aims at.
-  function setCameraZoomTarget(move) {
-    const change = {
-      owner: { kind: ENTRY_CAMERA, index: move.index },
-      field: FIELD_CAMERA_TARGET,
-      value: proposal.target,
-    };
-    tune.edit(change).then(
-      () => report("Zoom target set on camera " + move.index, false),
-      (error) => report(error.message, true),
-    );
-  }
-
   // setAsPanTarget sets the proposal as where the selected pan move goes, in place of its target
   // or cell; the server refuses it on a pan along a via path.
   function setAsPanTarget() {
@@ -254,18 +212,12 @@
 
   // selectedPan is the pan move the inspector shows, or undefined when it shows anything else.
   function selectedPan() {
-    return selectedMove(KIND_PAN);
-  }
-
-  // selectedMove is the camera move of kind the inspector shows, or undefined when it shows
-  // anything else.
-  function selectedMove(kind) {
     const entry = tune.selectedEntry();
     const state = tune.state();
     if (!entry || !state || entry.kind !== ENTRY_CAMERA) {
       return undefined;
     }
-    return state.camera.find((move) => move.index === entry.index && move.kind === kind);
+    return state.camera.find((move) => move.index === entry.index && move.kind === KIND_PAN);
   }
 
   // offerPan shows the pan target button only while the storyboard has a pan move to aim.
@@ -319,7 +271,6 @@
     // fit.js resizes the <img> on more than a window resize.
     new ResizeObserver(drawBox).observe(frameImage);
     document.addEventListener("keydown", onKey);
-    view.setZoom.addEventListener("click", setAsZoomTarget);
     view.setPan.addEventListener("click", setAsPanTarget);
     tune.onState(offerPan);
     for (const button of view.copies) {

@@ -182,7 +182,13 @@ alpha-at-2× rows the guard names are rewritten.
 
 **Commit:** `fix(compose): start a pan from the centre the crop shows`
 
-## 4. Drop zoom aiming from the tune page
+## 4. Drop zoom aiming from the tune page — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): style.css also drops `.block.ramp-in` and `.block.ramp-out`, used only by the removed zoom lane; `--lane-zoom` stays for the camera zoom lane.
+NOTES (2026-10-18): picker.js folds `selectedMove(kind)` into `selectedPan`, its only caller left once `setAsZoomTarget` went.
+NOTES (2026-10-18): the `camera.target` exemption in `TestPage_EntryFields_AreEditFields` is marked `TODO(zoom-target-removal)` rather than naming item 8, so the committed comment points at the tracked issue.
+NOTES (2026-10-18): pagejs_test.go gains a `fieldCount` helper (and `hasField` now uses it) so the new test can assert zero target rows; the DOM stub makes elements on demand, so the no-`#pick-zoom` check reads index.html's element ids instead.
+NOTES (2026-10-18): README.md (lines 172-179) still describes a zoom's `target` and "the selected beat's zoom target" in the tune section; left for item 11, which lists README.md.
 
 **What:**
 First step of `zoom-target-removal` and `beat-zoom-removal` (ratified header calls): the page
