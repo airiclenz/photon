@@ -198,10 +198,10 @@ func (j judgement) seen(expect storyboard.Expect, screens []take.Snapshot, subje
 }
 
 // beatScreens groups the take's snapshots by the beat they were on screen during, after checking
-// that the take started exactly the storyboard's beats, in storyboard order. A snapshot belongs to every beat whose
-// span its display interval — from its own time to the next snapshot's — overlaps, so the screen
-// showing when a beat starts counts for that beat. Spans are half-open except the last, which
-// keeps the take's final instant.
+// that the take started exactly the storyboard's beats, in storyboard order. A snapshot belongs to
+// every beat whose span its display interval — from its own time to the next snapshot's — overlaps,
+// so the screen showing when a beat starts counts for that beat. Spans are half-open except the
+// last, which keeps the take's final instant.
 func beatScreens(board *storyboard.Storyboard, recorded *take.Take) (map[int][]take.Snapshot, error) {
 	if err := recorded.MatchBeats(board.BeatIDs()); err != nil {
 		return nil, err

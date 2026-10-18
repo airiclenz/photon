@@ -46,15 +46,16 @@ type Proposal struct {
 	Snippets map[string]string
 }
 
-// Pick proposes a target for the cells a rectangle from from to to picks, in output-frame pixels
-// on the frame shown at output time out, mapped to cells through the last good pipeline's camera: the row is the one under from, the columns span from from to to, clamped to that row,
-// and blank cells at either edge are dropped. The target is the picked text, regex-escaped. It is
-// searched in the declared areas holding the row, fewest rows first and equal heights in name
-// order, and the first where it is the only match names its area; else the smallest such area —
-// or the whole screen when none holds the row — names it with nth counting to the picked match.
-// The proposal is returned only when the resolver resolves that target to a box covering the
-// picked cells. It fails with [render.ErrOutsideClip] when out is not in [0, length) and with
-// [ErrNoProposal] when the pick starts off the screen, picks only blanks or does not resolve.
+// Pick proposes a target for the cells a rectangle from from to to picks, in output-frame pixels on
+// the frame shown at output time out, mapped to cells through the last good pipeline's camera: the
+// row is the one under from, the columns span from from to to, clamped to that row, and blank cells
+// at either edge are dropped. The target is the picked text, regex-escaped. It is searched in the
+// declared areas holding the row, fewest rows first and equal heights in name order, and the first
+// where it is the only match names its area; else the smallest such area — or the whole screen when
+// none holds the row — names it with nth counting to the picked match. The proposal is returned
+// only when the resolver resolves that target to a box covering the picked cells. It fails with
+// [render.ErrOutsideClip] when out is not in [0, length) and with [ErrNoProposal] when the pick
+// starts off the screen, picks only blanks or does not resolve.
 func (s *Session) Pick(out time.Duration, from, to image.Point) (Proposal, error) {
 	shown := s.goodPipeline()
 

@@ -74,10 +74,11 @@ func encodeArgs(size image.Point, frame storyboard.Frame, palette, out string) [
 	)
 }
 
-// encode streams every scheduled frame, composed, into the encoder commandLine starts, as raw
-// RGBA on its stdin. Each pass calls it once, so the frames are composed afresh for each and none
-// is kept between them; only the pipeline's last rasterized snapshot carries over. The encoder's own failure is reported first, with its stderr, since a
-// broken pipe while streaming is only its symptom.
+// encode streams every scheduled frame, composed, into the encoder commandLine starts, as raw RGBA
+// on its stdin. Each pass calls it once, so the frames are composed afresh for each and none is
+// kept between them; only the pipeline's last rasterized snapshot carries over. The encoder's own
+// failure is reported first, with its stderr, since a broken pipe while streaming is only its
+// symptom.
 func (p *plan) encode(ctx context.Context, commandLine []string) error {
 	//nolint:gosec // the program is fixed and every argument is built here
 	cmd := exec.CommandContext(ctx, commandLine[0], commandLine[1:]...)

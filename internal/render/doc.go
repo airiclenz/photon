@@ -5,10 +5,10 @@
 // the frames as raw RGBA through ffmpeg twice for a per-clip palette encode: `max_colors` entries,
 // no dithering, `fps` frames a second. Pass 1 builds the clip's palette into
 // `<work>/<clip>.palette.png`, pass 2 maps the frames onto it into the GIF, and the palette file is
-// removed after, whether the render succeeded or not. The frames are composed afresh for each pass and
-// none is kept, only the last rasterized snapshot, so memory stays flat however long the clip. Two concurrent
-// renders of one clip share that palette file, so they must not overlap. When gifsicle is on PATH,
-// a lossless `-O3` pass then shrinks the GIF in place.
+// removed after, whether the render succeeded or not. The frames are composed afresh for each pass
+// and none is kept, only the last rasterized snapshot, so memory stays flat however long the clip.
+// Two concurrent renders of one clip share that palette file, so they must not overlap. When
+// gifsicle is on PATH, a lossless `-O3` pass then shrinks the GIF in place.
 //
 // The GIF goes to the storyboard's ship path unless [Options] names another, its directory created
 // when missing. Run then prints `<path>  <size>  <length>s` and one `beat N  <speed>×  <take> of
