@@ -1,0 +1,11 @@
+# A storyboard whose one caption lints clean on its own but, laid out with the real fonts, has a
+# box wider than the 600-pixel frame.
+clip: caption-box
+ship: out/caption-box.gif
+frame: {cols: 80, rows: 24, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+beats:
+  - id: 1
+    title: tour the list
+    duration: 4s
+captions:
+  - {text: 'A caption far too long for the frame', at: 0s, for: 1s, font: {size: 72}}

@@ -75,8 +75,10 @@ func (l Layout) home() pointF {
 // needs is fixed at construction, so composing is a pure function of the output time and the
 // source frame, and a Compositor is safe for concurrent use.
 type Compositor struct {
-	layout     Layout
-	out        image.Point
+	layout Layout
+	out    image.Point
+	// unit is how many shipped pixels one design pixel spans, from [Output].
+	unit       float64
 	background color.RGBA
 	camera     camera
 	cursor     cursorTrack
@@ -103,14 +105,10 @@ func New(
 	background color.RGBA,
 	captionFaces fonts.CaptionSet,
 ) (*Compositor, error) {
-	if layout.Size.X <= 0 || layout.Size.Y <= 0 || layout.CellWidth <= 0 || layout.LineHeight <= 0 {
-		return nil, fmt.Errorf("compose: invalid cell layout %+v", layout)
+	out, unit, err := Output(layout, board.Frame.Width)
+	if err != nil {
+		return nil, err
 	}
-	width := board.Frame.Width
-	if width <= 0 {
-		return nil, fmt.Errorf("compose: frame.width: want >0, got %d", width)
-	}
-	height := max(1, int(math.Round(float64(layout.Size.Y)*float64(width)/float64(layout.Size.X))))
 
 	planner := zoomPlanner{board: board, recorded: recorded, resolver: resolver, layout: layout}
 	clipCamera, err := planner.plan(clipSchedule)
@@ -119,17 +117,40 @@ func New(
 	}
 	compositor := &Compositor{
 		layout:     layout,
-		out:        image.Pt(width, height),
+		out:        out,
+		unit:       unit,
 		background: background,
 		camera:     clipCamera,
 		cursor:     trackCursor(recorded, clipSchedule, layout),
 	}
 	if len(board.Captions) > 0 {
-		if compositor.captions, err = caption.New(board, captionFaces, compositor.out, compositor.unit()); err != nil {
+		if compositor.captions, err = caption.New(board, captionFaces, out, unit); err != nil {
 			return nil, err
 		}
 	}
 	return compositor, nil
+}
+
+// Output is the shipped frame a source frame laid out as layout scales to at width: its pixel
+// size, width wide and as tall as keeps the source's aspect, and its unit — how many shipped
+// pixels one design pixel spans: the source frame's scale against the design scale, times the
+// downscale to width. The zoom never enters the unit, so the cursor and the captions keep their
+// size however far the frame pushes in. It fails on a layout with no size and a width that is
+// not positive.
+func Output(layout Layout, width int) (size image.Point, unit float64, err error) {
+	if layout.Size.X <= 0 || layout.Size.Y <= 0 || layout.CellWidth <= 0 || layout.LineHeight <= 0 {
+		return image.Point{}, 0, fmt.Errorf("compose: invalid cell layout %+v", layout)
+	}
+	if width <= 0 {
+		return image.Point{}, 0, fmt.Errorf("compose: frame.width: want >0, got %d", width)
+	}
+	height := max(1, int(math.Round(float64(layout.Size.Y)*float64(width)/float64(layout.Size.X))))
+	scale := layout.Scale
+	if scale <= 0 {
+		scale = designScale
+	}
+	unit = float64(scale) / designScale * float64(width) / float64(layout.Size.X)
+	return image.Pt(width, height), unit, nil
 }
 
 // Size is the shipped frame's pixel size.
@@ -229,21 +250,10 @@ func (c *Compositor) Rect(t time.Duration, b take.Box) image.Rectangle {
 	return rect.Intersect(image.Rectangle{Max: c.out})
 }
 
-// unit is how many shipped pixels one design pixel spans: the source frame's scale against
-// designScale, times the downscale to the shipped width. The zoom never enters it — the cursor
-// keeps its size however far the frame pushes in.
-func (c *Compositor) unit() float64 {
-	scale := c.layout.Scale
-	if scale <= 0 {
-		scale = designScale
-	}
-	return float64(scale) / designScale * float64(c.out.X) / float64(c.layout.Size.X)
-}
-
 // drawCursor draws the ring of a click, press or release and then the dot at output time t, each
 // positioned through the crop and sized in design pixels.
 func (c *Compositor) drawCursor(dst *image.RGBA, t time.Duration, crop rectF) {
-	unit := c.unit()
+	unit := c.unit
 	if diameter, opacity, centre, ok := c.cursor.ring(t); ok {
 		outer := diameter / 2 * unit
 		paintAnnulus(dst, c.toOutput(centre, crop), outer-ringStroke*unit, outer, cursorColor, opacity)

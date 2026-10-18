@@ -21,6 +21,7 @@ var (
 	badCameraStoryboard  = filepath.Join("testdata", "invalid", "camera.yaml")
 	cameraAreaStoryboard = filepath.Join("testdata", "invalid", "camera-area.yaml")
 	badCaptionStoryboard = filepath.Join("testdata", "invalid", "captions.yaml")
+	captionBoxStoryboard = filepath.Join("testdata", "invalid", "caption-box.yaml")
 )
 
 // okMarker is what lint prints for a clip with no problem.
@@ -98,6 +99,12 @@ func TestLint(t *testing.T) {
 				"captions[3]: font.size: want in [6, 72], got 100",
 				"captions[4]: fade: want in + out within the caption's length 1s, got 1.2s",
 			},
+		},
+		{
+			name:       "a caption box larger than the frame is listed under its caption",
+			args:       []string{"lint", captionBoxStoryboard, "--config", validConfig},
+			wantCode:   exitRunFailed,
+			wantStderr: []string{"captions[0]: ", "larger than the"},
 		},
 		{
 			name:       "no storyboard is a bad command line",

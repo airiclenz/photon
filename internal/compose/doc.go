@@ -36,15 +36,17 @@
 //
 // The captions are a [caption.Layer] that [New] builds from the storyboard and the caption
 // faces it is given, only when the storyboard has captions; [Compositor.Compose] draws it last,
-// on the shipped frame, so no zoom or pan moves or scales a caption.
+// on the shipped frame, so no zoom or pan moves or scales a caption. [Output] is the shipped
+// frame's size and design-pixel unit that [New] lays the captions out at, so a caption check
+// without a take lays them out alike.
 //
 // It imports schedule, target, take, storyboard, caption and fonts. golang.org/x/image/draw
 // does the Catmull-Rom scale and the zoom's affine transform.
 //
 // The file map:
 //   - doc.go: this package comment and file map.
-//   - compose.go: [New], the [Compositor], its [Layout], cropping, drawing the cursor and mapping
-//     between shipped pixels and cells ([Compositor.Cell], [Compositor.Rect]).
+//   - compose.go: [New], [Output], the [Compositor], its [Layout], cropping, drawing the cursor
+//     and mapping between shipped pixels and cells ([Compositor.Cell], [Compositor.Rect]).
 //   - camera.go: the camera's zoom and pan tracks of moves, their factor and centre at a time,
 //     and planning the storyboard's camera moves onto them.
 //   - path.go: a pan's smooth path through its points, walked by arc length.

@@ -235,16 +235,21 @@ func newCompositor(
 	resolver target.Resolver,
 	captionFaces fonts.CaptionSet,
 ) (*compose.Compositor, error) {
-	frame := loaded.Storyboard.Frame
-	layout := compose.Layout{
+	layout := cellLayout(loaded.Storyboard.Frame, rasterizer)
+	background := loaded.Config.Theme.BG.RGBA()
+	return compose.New(loaded.Storyboard, recorded, clipSchedule, resolver, layout, background, captionFaces)
+}
+
+// cellLayout is where the cells of frame sit in the frames rasterizer draws, which must be one
+// built at frame's [rasterGeometry].
+func cellLayout(frame storyboard.Frame, rasterizer *raster.Rasterizer) compose.Layout {
+	return compose.Layout{
 		Size:       rasterizer.Size(),
 		Padding:    frame.Padding * frame.Scale,
 		CellWidth:  rasterizer.CellWidth(),
 		LineHeight: rasterizer.LineHeight(),
 		Scale:      frame.Scale,
 	}
-	background := loaded.Config.Theme.BG.RGBA()
-	return compose.New(loaded.Storyboard, recorded, clipSchedule, resolver, layout, background, captionFaces)
 }
 
 // writeSummary prints what was rendered: path, size and the clip's length — the schedule's

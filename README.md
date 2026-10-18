@@ -137,7 +137,7 @@ storyboard's folder. Each command's `--help` says the same as this section.
 
 | Command | What it does |
 | --- | --- |
-| `photon lint <storyboard>` | Loads the storyboard and its config and prints every problem in both. Prints `ok` with the clip name, beat count and config path if there are none. Records nothing. |
+| `photon lint <storyboard>` | Loads the storyboard and its config and prints every problem in both, then lays the captions out with the config's fonts and reports a caption box larger than the frame. Prints `ok` with the clip name, beat count and config path if there are none. Records nothing. |
 | `photon setup <storyboard>` | Creates the work dir and runs the config's `setup` once. |
 | `photon record <storyboard>` | Records one take to `<work>/<clip>.take`, checks it and prints the check table. |
 | `photon check <storyboard> [<take>]` | Checks a take (default `<work>/<clip>.take`) against the storyboard's expects and prints the check table. |
@@ -511,8 +511,9 @@ it. Captions may overlap one another; one listed later draws over one listed ear
 
 A placed caption sits a margin in from the frame's edge it is placed against, or centred, and is
 then moved by its `offset`. The box pads the text on every side. Whatever its placement, the box
-is kept inside the frame: one that would cross an edge stops at that edge. `photon render` fails
-if a caption's box is larger than the frame.
+is kept inside the frame: one that would cross an edge stops at that edge. A caption's box larger
+than the frame is a problem: `photon lint` reports it, laying the captions out with the config's
+fonts, and `photon render` fails on it.
 
 A design pixel is a pixel of the frame drawn at scale 2, before the downscale to `frame.width`.
 photon scales every caption length with the frame, so a caption keeps its size and place against
@@ -551,7 +552,9 @@ that starts outside the clip, ends before it starts or ends after the clip, a `f
 6..72 (its own, or the `frame.font_size` it falls back to), a `font.weight` other than `regular`
 or `bold`, a `place` or `align` that is not one of its words, a `position` set with `place`,
 `align` or `offset`, a colour not spelled `#rrggbb`, a `box.opacity` outside 0..1, a negative
-fade, and fades that together outlast the caption.
+fade, and fades that together outlast the caption. Once the storyboard and its config are clean,
+it lays the captions out with the config's fonts and reports a caption whose box is larger than
+the frame.
 
 ## Targets and areas
 

@@ -363,7 +363,14 @@ Depends on items 9 and 12.
 - `! grep -rn 'checkTiming\|clipMS' internal/`
 **Commit:** `refactor(schedule): trust the parsed storyboard's timing`
 
-## 15. photon lint runs the font-bound tier
+## 15. photon lint runs the font-bound tier — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the size/unit maths is `compose.Output(layout, width) (size, unit, err)`, called by `compose.New`; the Compositor keeps the unit as a field and `Compositor.unit()` is gone (compose_test reads the field). render's cell layout moved into a `cellLayout` helper that `newCompositor` and `CheckCaptions` share.
+NOTES (2026-10-18): `CheckCaptions` returns nil without loading any font when the storyboard has no captions, and files caption.New's located problem as a one-problem `storyboard.ValidationError` under the storyboard path, so lint prints it as `<path>: 1 problem(s)` / `  captions[N]: ...` like Parse's problems; caption.New stops at the first caption that does not fit, so only that one is reported.
+NOTES (2026-10-18): consequential edit — internal/compose/compose_test.go: made necessary by removing `Compositor.unit()` in favour of the `unit` field
+NOTES (2026-10-18): consequential edit — internal/compose/doc.go: made necessary by the new exported `compose.Output` (file map and caption paragraph)
+NOTES (2026-10-18): consequential edit — internal/render/render.go: made necessary by `CheckCaptions` sharing newCompositor's cell layout (`cellLayout`)
+NOTES (2026-10-18): README also updated in the `photon lint` row of the commands table; `photon lint --help` long text names the caption-box check.
 
 Depends on items 5 and 13.
 

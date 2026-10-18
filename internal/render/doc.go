@@ -26,8 +26,14 @@
 // caption faces while the caption font files do, so a rebuild after an edit loads no caption
 // font again.
 //
-// It imports clip, schedule, raster, compose, fonts, target, storyboard and take, and runs ffmpeg
-// and gifsicle as programs.
+// A storyboard is checked in three tiers. The static tier is [storyboard.Parse]: every rule the
+// file alone decides. The font-bound tier is [CheckCaptions]: the captions laid out with the
+// clip's real fonts on the shipped frame, which finds a caption box larger than the frame before
+// any take exists; `photon lint` runs it. The take-bound tier is [compose.New] in [Build]: the
+// zoom and pan targets resolved on the take's screens.
+//
+// It imports clip, schedule, raster, compose, caption, fonts, target, storyboard and take, and
+// runs ffmpeg and gifsicle as programs.
 //
 // The file map:
 //   - doc.go: this package comment and file map.
@@ -37,6 +43,7 @@
 //   - pipeline.go: [Pipeline], [Build] and its [BuildOptions] with the reuse rules, the
 //     frame-size check, [ErrOutsideClip], the [RasterCache] seam and the render's reuse-last
 //     cache.
+//   - check.go: [CheckCaptions], the font-bound caption check that needs no take.
 //   - encode.go: the palette pass's and the GIF pass's ffmpeg command lines, streaming the frames
 //     into each, and the gifsicle pass.
 package render

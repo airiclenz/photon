@@ -5,6 +5,11 @@
 // every rule the file breaks at once, in a [ValidationError]. A problem that belongs to one beat,
 // camera move or caption is a [LocatedError], which [OwnerOf] reads its owner from.
 //
+// Parse is the static tier of the three a storyboard is checked in: every rule the file decides
+// on its own. The font-bound tier lays the captions out with the clip's real fonts (package
+// render's CheckCaptions, which `photon lint` runs), and the take-bound tier resolves the zoom and
+// pan targets on a take's screens (package compose's New).
+//
 // It imports only keys, to check that a `key` action names a key photon can send. Whether an
 // area a target or expect names is declared in the config is checked where the storyboard and
 // the config are loaded together, not here.

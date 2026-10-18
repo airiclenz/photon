@@ -323,7 +323,7 @@ func TestComposeZoomedCursorMapsToTheZoomedTarget(t *testing.T) {
 	}
 
 	// Constant size: the dot's footprint does not grow with the zoom.
-	wantRadius := cursorDiameter / 2 * compositor.unit()
+	wantRadius := cursorDiameter / 2 * compositor.unit
 	if limit := math.Pi * wantRadius * wantRadius * 1.3; float64(count) > limit {
 		t.Errorf("cursor footprint: want at most %.0f pixels at constant size, got %d", limit, count)
 	}
