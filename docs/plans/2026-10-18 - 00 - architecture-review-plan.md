@@ -189,7 +189,10 @@ NOTES (2026-10-18): TestLoadRejects_Camera/_Captions now stop (Fatalf, was Error
 - `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run Lint`
 **Commit:** `feat(storyboard): give problems a typed owner`
 
-## 7. Clip, compose and caption errors carry their owner
+## 7. Clip, compose and caption errors carry their owner — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): clip's crossCheck builds a *storyboard.LocatedError directly from the namedArea's Owner (storyboard has no exported At(owner, err)); a clip-owned problem (top-level expect[i]) stays unwrapped, which OwnerOf already reports as the clip
+NOTES (2026-10-18): the compose and caption tests now check the message start with HasPrefix (was Contains) so the stage prefix is asserted outermost
 
 Depends on item 6.
 

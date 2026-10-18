@@ -56,7 +56,7 @@ func (p zoomPlanner) plan(clipSchedule *schedule.Schedule) (camera, error) {
 		}
 		box, err := p.zoomBox(beat, section)
 		if err != nil {
-			return camera{}, fmt.Errorf("compose: beat %d: zoom: %w", beat.ID, err)
+			return camera{}, fmt.Errorf("compose: %w", storyboard.AtBeat(beat.ID, fmt.Errorf("zoom: %w", err)))
 		}
 		push, pull, aim := p.planSection(beat.Zoom, section, box)
 		zooms = append(zooms, push, pull)

@@ -424,8 +424,11 @@ func TestNewRefusesAZoomTargetTheBeatNeverShows(t *testing.T) {
 
 	_, err = New(board, recorded, clipSchedule, target.Resolver{}, testLayout, testBackground, fonts.CaptionSet{})
 
-	if !errors.Is(err, target.ErrNotOnScreen) || !strings.Contains(err.Error(), "beat 1: zoom") {
+	if !errors.Is(err, target.ErrNotOnScreen) || !strings.HasPrefix(err.Error(), "compose: beat 1: zoom: ") {
 		t.Errorf("New: want beat 1's zoom target not on screen, got %v", err)
+	}
+	if got, want := storyboard.OwnerOf(err), (storyboard.Owner{Kind: storyboard.OwnerBeat, Index: 1}); got != want {
+		t.Errorf("OwnerOf(New error) = %+v, want %+v", got, want)
 	}
 }
 

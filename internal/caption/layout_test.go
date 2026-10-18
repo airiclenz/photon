@@ -5,6 +5,8 @@ import (
 	"math"
 	"strings"
 	"testing"
+
+	"github.com/airiclenz/photon/internal/storyboard"
 )
 
 // boxedCaption is a one-second caption of short text in an opaque box, with extra placement
@@ -111,8 +113,11 @@ func TestNew_BoxLargerThanTheFrame_IsRefused(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := New(parseBoard(t, test.caption), loadFaces(t), test.out, testUnit)
 
-			if err == nil || !strings.Contains(err.Error(), "captions[0]") {
+			if err == nil || !strings.HasPrefix(err.Error(), "caption: captions[0]: ") {
 				t.Errorf("New error = %v, want one naming captions[0]", err)
+			}
+			if got, want := storyboard.OwnerOf(err), (storyboard.Owner{Kind: storyboard.OwnerCaption}); got != want {
+				t.Errorf("OwnerOf(New error) = %+v, want %+v", got, want)
 			}
 		})
 	}

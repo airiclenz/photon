@@ -121,15 +121,18 @@ func workDir(workFlag string, project *config.Config) (string, error) {
 	return absolute, nil
 }
 
-// namedArea is one area a storyboard names, with the path of the field that names it.
+// namedArea is one area a storyboard names, with the part of the storyboard that names it and
+// the path of the field within that part.
 type namedArea struct {
+	owner storyboard.Owner
 	field string
 	area  string
 }
 
 // crossCheck returns a problem for every area the storyboard names that the config does not
 // declare, in storyboard order. An empty area and [storyboard.AreaAny] are the whole screen and
-// need no declaration.
+// need no declaration. A problem whose area a beat or a camera move names is a
+// *[storyboard.LocatedError] filed under it.
 func crossCheck(board *storyboard.Storyboard, project *config.Config) []error {
 	var problems []error
 	for _, named := range namedAreas(board) {
@@ -137,42 +140,47 @@ func crossCheck(board *storyboard.Storyboard, project *config.Config) []error {
 			continue
 		}
 		if _, isDeclared := project.Areas[named.area]; !isDeclared {
-			problems = append(problems, fmt.Errorf(
+			problem := fmt.Errorf(
 				"%s: %q is not declared in the areas of %s", named.field, named.area, project.Path,
-			))
+			)
+			if named.owner.Kind != storyboard.OwnerClip {
+				problem = &storyboard.LocatedError{Owner: named.owner, Err: problem}
+			}
+			problems = append(problems, problem)
 		}
 	}
 	return problems
 }
 
-// namedAreas lists every area field of the storyboard, set or not, under the same field paths
-// the storyboard's own validation reports.
+// namedAreas lists every area field of the storyboard, set or not, under the same owners and
+// field paths the storyboard's own validation reports.
 func namedAreas(board *storyboard.Storyboard) []namedArea {
 	var named []namedArea
+	wholeClip := storyboard.Owner{Kind: storyboard.OwnerClip}
 	for index, expect := range board.Expect {
-		named = append(named, namedArea{fmt.Sprintf("expect[%d]: area", index), expect.Area})
+		named = append(named, namedArea{wholeClip, fmt.Sprintf("expect[%d]: area", index), expect.Area})
 	}
 	for _, beat := range board.Beats {
-		prefix := fmt.Sprintf("beat %d: ", beat.ID)
+		owner := storyboard.Owner{Kind: storyboard.OwnerBeat, Index: beat.ID}
 		if beat.Zoom != nil {
-			named = append(named, namedArea{prefix + "zoom.target.area", beat.Zoom.Target.Area})
+			named = append(named, namedArea{owner, "zoom.target.area", beat.Zoom.Target.Area})
 		}
 		for index, action := range beat.Do {
 			if action.Click != nil {
-				field := fmt.Sprintf("%sdo[%d]: click.target.area", prefix, index)
-				named = append(named, namedArea{field, action.Click.Target.Area})
+				field := fmt.Sprintf("do[%d]: click.target.area", index)
+				named = append(named, namedArea{owner, field, action.Click.Target.Area})
 			}
 			if action.Drag != nil {
-				field := fmt.Sprintf("%sdo[%d]: drag.", prefix, index)
+				field := fmt.Sprintf("do[%d]: drag.", index)
 				named = append(named,
-					namedArea{field + "from.area", action.Drag.From.Area},
-					namedArea{field + "to.area", action.Drag.To.Area},
+					namedArea{owner, field + "from.area", action.Drag.From.Area},
+					namedArea{owner, field + "to.area", action.Drag.To.Area},
 				)
 			}
 		}
 		for index, expect := range beat.Expect {
-			field := fmt.Sprintf("%sexpect[%d]: area", prefix, index)
-			named = append(named, namedArea{field, expect.Area})
+			field := fmt.Sprintf("expect[%d]: area", index)
+			named = append(named, namedArea{owner, field, expect.Area})
 		}
 	}
 	return append(named, cameraAreas(board)...)
@@ -186,12 +194,12 @@ func cameraAreas(board *storyboard.Storyboard) []namedArea {
 		if move.Pan == nil {
 			continue
 		}
-		prefix := fmt.Sprintf("camera[%d]: pan.", index)
+		owner := storyboard.Owner{Kind: storyboard.OwnerCamera, Index: index}
 		if move.Pan.To != nil {
-			named = append(named, namedArea{prefix + "to.area", move.Pan.To.Area})
+			named = append(named, namedArea{owner, "pan.to.area", move.Pan.To.Area})
 		}
 		for point, via := range move.Pan.Via {
-			named = append(named, namedArea{fmt.Sprintf("%svia[%d].area", prefix, point), via.Area})
+			named = append(named, namedArea{owner, fmt.Sprintf("pan.via[%d].area", point), via.Area})
 		}
 	}
 	return named

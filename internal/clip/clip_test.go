@@ -226,6 +226,30 @@ func TestWithStoryboard_UndeclaredAreaFailsNamingIt(t *testing.T) {
 			t.Errorf("error %q does not mention %q", err, fragment)
 		}
 	}
+	wantOwners := map[string]storyboard.Owner{
+		`expect[0]: area: "footer"`:                   {Kind: storyboard.OwnerClip},
+		`beat 1: do[0]: click.target.area: "sidebar"`: {Kind: storyboard.OwnerBeat, Index: 1},
+	}
+	for prefix, wantOwner := range wantOwners {
+		problem := problemStarting(crossCheckErr.Problems, prefix)
+		if problem == nil {
+			t.Errorf("problems = %q, want one starting %q", crossCheckErr.Problems, prefix)
+			continue
+		}
+		if got := storyboard.OwnerOf(problem); got != wantOwner {
+			t.Errorf("owner of %q = %+v, want %+v", problem, got, wantOwner)
+		}
+	}
+}
+
+// problemStarting returns the first of problems whose message starts with prefix, or nil.
+func problemStarting(problems []error, prefix string) error {
+	for _, problem := range problems {
+		if strings.HasPrefix(problem.Error(), prefix) {
+			return problem
+		}
+	}
+	return nil
 }
 
 func TestWithStoryboard_UndeclaredCameraAreaFailsNamingIt(t *testing.T) {
@@ -268,6 +292,15 @@ camera:
 	for index, prefix := range want {
 		if got := crossCheckErr.Problems[index].Error(); !strings.HasPrefix(got, prefix) {
 			t.Errorf("problem %d = %q, want it to start %q", index, got, prefix)
+		}
+	}
+	wantOwners := []storyboard.Owner{
+		{Kind: storyboard.OwnerCamera, Index: 0},
+		{Kind: storyboard.OwnerCamera, Index: 2},
+	}
+	for index, wantOwner := range wantOwners {
+		if got := storyboard.OwnerOf(crossCheckErr.Problems[index]); got != wantOwner {
+			t.Errorf("problem %d owner = %+v, want %+v", index, got, wantOwner)
 		}
 	}
 }

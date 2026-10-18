@@ -289,8 +289,11 @@ func TestNewRefusesAPanTargetItsMoveNeverShows(t *testing.T) {
 
 	_, err = New(board, recorded, clipSchedule, target.Resolver{}, testLayout, testBackground, fonts.CaptionSet{})
 
-	if !errors.Is(err, target.ErrNotOnScreen) || !strings.Contains(err.Error(), "compose: camera[0]: pan: to") {
+	if !errors.Is(err, target.ErrNotOnScreen) || !strings.HasPrefix(err.Error(), "compose: camera[0]: pan: to") {
 		t.Errorf("New: want camera[0]'s pan target not on screen, got %v", err)
+	}
+	if got, want := storyboard.OwnerOf(err), (storyboard.Owner{Kind: storyboard.OwnerCamera, Index: 0}); got != want {
+		t.Errorf("OwnerOf(New error) = %+v, want %+v", got, want)
 	}
 }
 

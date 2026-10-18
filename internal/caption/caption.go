@@ -48,7 +48,8 @@ type placed struct {
 //
 // board must be one [storyboard.Parse] returned, so the captions carry their defaults. New fails
 // when out or unit is not positive, a face is missing, a moment does not resolve, a colour is not
-// #rrggbb, or a caption's box is wider or taller than the frame; the error names the caption.
+// #rrggbb, or a caption's box is wider or taller than the frame; the error names the caption and
+// is filed under it as a [storyboard.LocatedError].
 func New(board *storyboard.Storyboard, faces fonts.CaptionSet, out image.Point, unit float64) (*Layer, error) {
 	if out.X <= 0 || out.Y <= 0 {
 		return nil, fmt.Errorf("caption: want a frame of positive size, got %dx%d", out.X, out.Y)
@@ -64,7 +65,7 @@ func New(board *storyboard.Storyboard, faces fonts.CaptionSet, out image.Point, 
 	for index, caption := range board.Captions {
 		laid, err := place(board, caption, faces, out, unit)
 		if err != nil {
-			return nil, fmt.Errorf("caption: captions[%d]: %w", index, err)
+			return nil, fmt.Errorf("caption: %w", storyboard.AtCaption(index, err))
 		}
 		layer.captions = append(layer.captions, laid)
 	}
