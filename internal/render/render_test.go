@@ -64,6 +64,27 @@ func writeFile(t *testing.T, dir, name, content string) string {
 	return path
 }
 
+// terminalFontFiles are the six terminal faces a config's `fonts` dir must hold.
+var terminalFontFiles = []string{
+	"SourceCodePro-Regular.ttf", "SourceCodePro-Bold.ttf", "SourceCodePro-It.ttf",
+	"NotoSansSymbols2-Regular.ttf", "NotoSansMath-Regular.ttf", "NotoSansSymbols-Regular.ttf",
+}
+
+// copyFontFiles copies the named font files from the fonts package into a fresh temp dir and
+// returns that dir.
+func copyFontFiles(t *testing.T, names ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, name := range names {
+		data, err := os.ReadFile(filepath.Join("..", "fonts", name))
+		if err != nil {
+			t.Fatalf("read font %s: %v", name, err)
+		}
+		writeFile(t, dir, name, string(data))
+	}
+	return dir
+}
+
 // textSnapshot is a snapshot at at showing one line of text per row.
 func textSnapshot(at time.Duration, lines ...string) take.Snapshot {
 	rows := make([][]take.Cell, 0, len(lines))

@@ -116,7 +116,7 @@ and one as `bold`, each one problem naming the field and the path.
 **Closes:** caption-font-directory
 **Commit:** `fix(config): refuse a directory named as a caption font`
 
-## 3. Test that a changed fonts dir, theme or caption font is not reused
+## 3. Test that a changed fonts dir, theme or caption font is not reused — ✅ DONE (2026-10-18)
 
 **What:** Test-only. In `internal/render/pipeline_test.go`, extend
 `TestBuild_Reuse_SharesTheRastersOnlyWhileTheyHold` (or add a sibling table) with cases that build

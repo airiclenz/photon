@@ -5,11 +5,13 @@ import (
 	"context"
 	"errors"
 	"image"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
+	"github.com/airiclenz/photon/internal/config"
 	"github.com/airiclenz/photon/internal/fonts"
 	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/take"
@@ -228,12 +230,34 @@ func TestBuild_Reuse_SharesTheRastersOnlyWhileTheyHold(t *testing.T) {
 		name         string
 		storyboard   string
 		isOtherTake  bool
+		reconfigure  func(t *testing.T, project *config.Config)
 		wantsRasters bool
 	}{
 		{name: "the same clip", storyboard: renderStoryboard, wantsRasters: true},
 		{name: "another width", storyboard: rewidthedStoryboard, wantsRasters: true},
 		{name: "another raster geometry", storyboard: resizedStoryboard},
 		{name: "another take", storyboard: renderStoryboard, isOtherTake: true},
+		{
+			name:       "another fonts dir",
+			storyboard: renderStoryboard,
+			reconfigure: func(t *testing.T, project *config.Config) {
+				project.Fonts = copyFontFiles(t, terminalFontFiles...)
+			},
+		},
+		{
+			name:       "another foreground colour",
+			storyboard: renderStoryboard,
+			reconfigure: func(_ *testing.T, project *config.Config) {
+				project.Theme.FG = "#123456"
+			},
+		},
+		{
+			name:       "another ANSI colour",
+			storyboard: renderStoryboard,
+			reconfigure: func(_ *testing.T, project *config.Config) {
+				project.Theme.ANSI[1] = "#123456"
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -248,6 +272,9 @@ func TestBuild_Reuse_SharesTheRastersOnlyWhileTheyHold(t *testing.T) {
 			}
 			cache := newLastRaster()
 			loaded := loadRenderClipOf(t, tc.storyboard)
+			if tc.reconfigure != nil {
+				tc.reconfigure(t, loaded.Config)
+			}
 
 			built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: cache, Reuse: previous})
 
@@ -287,6 +314,35 @@ func TestBuild_TenReusedBuilds_LoadCaptionFontsOnce(t *testing.T) {
 
 	if loads := captionLoads.Load() - before; loads != 1 {
 		t.Errorf("%d builds loaded the caption fonts %d times, want once", builds, loads)
+	}
+}
+
+// TestBuild_AnotherCaptionFont_LoadsTheCaptionFacesAfresh counts the process-wide caption loads,
+// so it runs before the parallel tests are let go.
+func TestBuild_AnotherCaptionFont_LoadsTheCaptionFacesAfresh(t *testing.T) {
+	takePath, recorded := loadRenderTake(t, 20)
+	previous, err := Build(loadRenderClipOf(t, captionedStoryboard), takePath, recorded, BuildOptions{Cache: newLastRaster()})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	loaded := loadRenderClipOf(t, captionedStoryboard)
+	captionDir := copyFontFiles(t, "SourceSans3-Regular.ttf", "SourceSans3-Bold.ttf")
+	loaded.Config.CaptionFont = config.CaptionFont{
+		Regular: filepath.Join(captionDir, "SourceSans3-Regular.ttf"),
+		Bold:    filepath.Join(captionDir, "SourceSans3-Bold.ttf"),
+	}
+	before := captionLoads.Load()
+
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster(), Reuse: previous})
+
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if loads := captionLoads.Load() - before; loads != 1 {
+		t.Errorf("the build loaded the caption fonts %d times, want once", loads)
+	}
+	if built.captionFaces.Regular.Font == previous.captionFaces.Regular.Font {
+		t.Error("want caption faces of its own, not the previous pipeline's")
 	}
 }
 
