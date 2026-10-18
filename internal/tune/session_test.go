@@ -361,7 +361,7 @@ func TestSession_RefusedEdit_ChangesNothing(t *testing.T) {
 func TestSession_ZoomTargetNotOnScreen_KeepsTheLastGoodPipelineAndBlocksSave(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixture(t)
-	good := f.session.good.compositor
+	good := f.session.good.frames
 
 	f.apply(t, Edit{Beat: 2, Field: fieldZoomTarget, Value: "{text: 'nowhere'}"})
 
@@ -369,8 +369,8 @@ func TestSession_ZoomTargetNotOnScreen_KeepsTheLastGoodPipelineAndBlocksSave(t *
 	if len(state.Errors) != 1 || state.Errors[0].Beat != 2 || !strings.Contains(state.Errors[0].Message, "nowhere") {
 		t.Errorf("errors %+v, want one on beat 2 naming the target", state.Errors)
 	}
-	if f.session.good.compositor != good {
-		t.Error("the last good compositor was replaced")
+	if f.session.good.frames != good {
+		t.Error("the last good pipeline was replaced")
 	}
 	if err := f.session.Save(); !errors.Is(err, ErrInvalid) {
 		t.Errorf("Save: got %v, want ErrInvalid", err)

@@ -11,10 +11,7 @@ import (
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
-	"github.com/airiclenz/photon/internal/compose"
-	"github.com/airiclenz/photon/internal/raster"
 	"github.com/airiclenz/photon/internal/render"
-	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 )
@@ -69,17 +66,18 @@ type Session struct {
 	version int
 }
 
-// pipeline is everything a frame of the preview is built from. A pipeline that failed to build
-// holds the stages before the failure and nil for the rest. rasters is the rasterizer's own
-// cache: the two are made, and reused, together.
+// pipeline is one version of the storyboard as the preview builds on it: the board parsed, the
+// clip cross-checked, and the render pipeline every frame, screen, cell and rect of the preview
+// comes from. A pipeline that failed to build holds the stages before the failure and nil for the
+// rest; frames is nil when the take was recorded at another frame size or does not schedule, and
+// partial when a later stage failed. recorded is the take frames was built on, and rasters the
+// cache it keeps its rasterized snapshots in.
 type pipeline struct {
-	board      *storyboard.Storyboard
-	loaded     *clip.Clip
-	recorded   *take.Take
-	schedule   *schedule.Schedule
-	rasterizer *raster.Rasterizer
-	rasters    *rasterCache
-	compositor *compose.Compositor
+	board    *storyboard.Storyboard
+	loaded   *clip.Clip
+	recorded *take.Take
+	rasters  *rasterCache
+	frames   *render.Pipeline
 }
 
 // fileStamp is what tells a rewritten take apart without reading it.
@@ -332,10 +330,9 @@ func (s *Session) rebuild() {
 	s.version++
 }
 
-// build parses src and builds the schedule, the rasterizer and the compositor on it against
-// the take. On an error the pipeline returned holds the stages built before it. The rasterizer
-// and its raster cache are the good pipeline's own while the take and the frame's raster
-// geometry are unchanged.
+// build parses src and builds the render pipeline on it against the take. On an error the
+// pipeline returned holds the stages built before it. The raster cache is the good pipeline's own
+// while the take and the frame's raster geometry are unchanged.
 func (s *Session) build(src []byte) (pipeline, error) {
 	built := pipeline{recorded: s.recorded}
 	board, err := storyboard.Parse(src, s.path)
@@ -346,35 +343,23 @@ func (s *Session) build(src []byte) (pipeline, error) {
 	if built.loaded, err = s.base.WithStoryboard(board); err != nil {
 		return built, err
 	}
-	if err := checkFrame(s.takePath, s.recorded, board.Frame); err != nil {
-		return built, err
-	}
-	if built.schedule, err = schedule.New(board, s.recorded); err != nil {
-		return built, err
-	}
-	if built.rasterizer, built.rasters, err = s.rasterizerFor(built.loaded); err != nil {
-		return built, err
-	}
-	built.compositor, err = render.NewCompositor(built.loaded, s.recorded, built.schedule, built.rasterizer)
+	built.rasters = s.rasterCacheFor(board.Frame)
+	built.frames, err = render.Build(built.loaded, s.takePath, s.recorded, built.rasters)
 	return built, err
 }
 
-// rasterizerFor returns the good pipeline's rasterizer and raster cache when it drew the same
-// take at the same raster geometry as loaded's frame, else a new rasterizer with a new, empty
-// cache. The old cache is left as it is, never emptied, so a frame still drawn against the old
-// pipeline cannot put its rasters into the new one.
-func (s *Session) rasterizerFor(loaded *clip.Clip) (*raster.Rasterizer, *rasterCache, error) {
+// rasterCacheFor returns the good pipeline's raster cache when it drew the same take at the same
+// raster geometry as frame, else a new, empty cache. The old cache is left as it is, never
+// emptied, so a frame still drawn against the old pipeline cannot put its rasters into the new
+// one.
+func (s *Session) rasterCacheFor(frame storyboard.Frame) *rasterCache {
 	good := s.good
-	isReusable := good.rasterizer != nil && good.recorded == s.recorded &&
-		rasterGeometry(good.board.Frame) == rasterGeometry(loaded.Storyboard.Frame)
+	isReusable := good.rasters != nil && good.recorded == s.recorded &&
+		rasterGeometry(good.board.Frame) == rasterGeometry(frame)
 	if isReusable {
-		return good.rasterizer, good.rasters, nil
+		return good.rasters
 	}
-	rasterizer, err := render.NewRasterizer(loaded)
-	if err != nil {
-		return nil, nil, err
-	}
-	return rasterizer, newRasterCache(rasterCacheBytes), nil
+	return newRasterCache(rasterCacheBytes)
 }
 
 // rasterGeometry is frame without the fields the compositor and encoder apply after
@@ -382,17 +367,6 @@ func (s *Session) rasterizerFor(loaded *clip.Clip) (*raster.Rasterizer, *rasterC
 func rasterGeometry(frame storyboard.Frame) storyboard.Frame {
 	frame.Width, frame.FPS, frame.MaxColors = 0, 0, 0
 	return frame
-}
-
-// checkFrame refuses a take recorded at a size other than the frame, as `photon render` does.
-func checkFrame(takePath string, recorded *take.Take, frame storyboard.Frame) error {
-	if recorded.Cols == frame.Cols && recorded.Rows == frame.Rows {
-		return nil
-	}
-	return fmt.Errorf(
-		"%s was recorded at %d×%d cells; the storyboard's frame is %d×%d — re-record it",
-		takePath, recorded.Cols, recorded.Rows, frame.Cols, frame.Rows,
-	)
 }
 
 // stampOf reads the size and modification time of the file at path.

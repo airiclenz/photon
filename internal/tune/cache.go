@@ -10,10 +10,11 @@ import (
 // kept, the least recently shown dropped first.
 const rasterCacheBytes = 1 << 30
 
-// rasterCache keeps rasterized snapshots by their index in the take, least recently used
-// evicted first once their pixels pass capacity bytes. A cache belongs to one rasterizer and
-// take: a pipeline that builds a new rasterizer gets a new cache, so a frame still being drawn
-// against the old take can only refill the old one. It is safe for concurrent use.
+// rasterCache is the [render.RasterCache] of a session's pipelines: it keeps rasterized snapshots
+// by their index in the take, least recently used evicted first once their pixels pass capacity
+// bytes. A cache belongs to one take and one raster geometry: a pipeline built on another gets a
+// new cache, so a frame still being drawn against the old take can only refill the old one. It
+// is safe for concurrent use.
 type rasterCache struct {
 	mu sync.Mutex
 	// capacity is the most pixel bytes kept; used is what the kept rasters hold.
@@ -36,8 +37,8 @@ func newRasterCache(capacity int) *rasterCache {
 	return &rasterCache{capacity: capacity, order: list.New(), entries: map[int]*list.Element{}}
 }
 
-// get returns the raster kept for the snapshot at index, marking it the most recently used.
-func (c *rasterCache) get(index int) (*image.RGBA, bool) {
+// Get returns the raster kept for the snapshot at index, marking it the most recently used.
+func (c *rasterCache) Get(index int) (*image.RGBA, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -49,10 +50,10 @@ func (c *rasterCache) get(index int) (*image.RGBA, bool) {
 	return element.Value.(*rasterEntry).raster, true
 }
 
-// put keeps raster as the snapshot at index's, evicting the least recently used rasters until
+// Put keeps raster as the snapshot at index's, evicting the least recently used rasters until
 // the cache is back within capacity. A raster larger than the whole capacity is not kept, and an
 // index already kept keeps its first raster: concurrent misses draw the same pixels.
-func (c *rasterCache) put(index int, raster *image.RGBA) {
+func (c *rasterCache) Put(index int, raster *image.RGBA) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

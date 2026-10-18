@@ -48,32 +48,26 @@ type Proposal struct {
 }
 
 // Pick proposes a target for the cells a rectangle from from to to picks, in output-frame pixels
-// on the frame shown at output time out, mapped to cells through the compositor of the last good
-// pipeline: the row is the one under from, the columns span from from to to, clamped to that row,
+// on the frame shown at output time out, mapped to cells through the last good pipeline's camera: the row is the one under from, the columns span from from to to, clamped to that row,
 // and blank cells at either edge are dropped. The target is the picked text, regex-escaped. It is
 // searched in the declared areas holding the row, fewest rows first and equal heights in name
 // order, and the first where it is the only match names its area; else the smallest such area —
 // or the whole screen when none holds the row — names it with nth counting to the picked match.
 // The proposal is returned only when the resolver resolves that target to a box covering the
-// picked cells. It fails with [ErrOutsideClip] when out is not in [0, length) and with
+// picked cells. It fails with [render.ErrOutsideClip] when out is not in [0, length) and with
 // [ErrNoProposal] when the pick starts off the screen, picks only blanks or does not resolve.
 func (s *Session) Pick(out time.Duration, from, to image.Point) (Proposal, error) {
 	shown := s.goodPipeline()
 
-	source, _, ok := shown.schedule.Source(out)
-	if !ok {
-		return Proposal{}, fmt.Errorf("%w: %s is not in [0, %s)", ErrOutsideClip, out, shown.schedule.Length)
+	screen, err := shown.frames.ScreenAt(out)
+	if err != nil {
+		return Proposal{}, err
 	}
-	index := shown.recorded.ScreenAt(source)
-	if index < 0 {
-		return Proposal{}, fmt.Errorf("the take holds no snapshot to show at %s", source)
-	}
-	screen := shown.recorded.Snapshots[index]
-	startCol, row, ok := shown.compositor.Cell(out, from)
+	startCol, row, ok := shown.frames.Cell(out, from)
 	if !ok {
 		return Proposal{}, fmt.Errorf("%w: the pick starts off the screen at %v", ErrNoProposal, from)
 	}
-	endCol, _, _ := shown.compositor.Cell(out, to)
+	endCol, _, _ := shown.frames.Cell(out, to)
 	picked, text, err := pickedCells(screen, row, min(startCol, endCol), max(startCol, endCol))
 	if err != nil {
 		return Proposal{}, err
@@ -91,7 +85,7 @@ func (s *Session) Pick(out time.Duration, from, to image.Point) (Proposal, error
 	return Proposal{
 		Target:   proposed,
 		Box:      resolved,
-		Rect:     shown.compositor.Rect(out, resolved),
+		Rect:     shown.frames.Rect(out, resolved),
 		Snippets: snippetsOf(proposed),
 	}, nil
 }

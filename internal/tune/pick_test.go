@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/airiclenz/photon/internal/clip"
+	"github.com/airiclenz/photon/internal/render"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 )
@@ -94,7 +95,7 @@ func newPickSession(t *testing.T) *Session {
 // cellPixel is the output-frame pixel at the centre of the cell at col, row, at output time 0.
 func cellPixel(t *testing.T, session *Session, col, row int) image.Point {
 	t.Helper()
-	rect := session.goodPipeline().compositor.Rect(0, take.Box{X: col, Y: row, W: 1, H: 1})
+	rect := session.goodPipeline().frames.Rect(0, take.Box{X: col, Y: row, W: 1, H: 1})
 	if rect.Empty() {
 		t.Fatalf("cell %d,%d is not on the frame", col, row)
 	}
@@ -245,7 +246,7 @@ func TestSession_Pick_NoTarget_IsRefused(t *testing.T) {
 		{name: "a time outside the clip", out: 2 * time.Second,
 			from: func() image.Point { return cellPixel(t, session, 0, 5) },
 			to:   func() image.Point { return cellPixel(t, session, 5, 5) },
-			want: ErrOutsideClip},
+			want: render.ErrOutsideClip},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

@@ -318,7 +318,7 @@ func TestHandler_Pick_ReturnsTheProposal(t *testing.T) {
 	if proposal.Box.X != 0 || proposal.Box.Y != 5 || proposal.Box.W < 6 || proposal.Box.H != 1 {
 		t.Errorf("box: want columns 0–5 of row 5 covered, got %+v", proposal.Box)
 	}
-	frameSize := session.goodPipeline().compositor.Size()
+	frameSize := session.goodPipeline().frames.Size()
 	rect := image.Rect(proposal.Rect.X, proposal.Rect.Y, proposal.Rect.X+proposal.Rect.W, proposal.Rect.Y+proposal.Rect.H)
 	if rect.Empty() || !rect.In(image.Rectangle{Max: frameSize}) {
 		t.Errorf("rect: want a non-empty rectangle inside the %v frame, got %v", frameSize, rect)

@@ -162,9 +162,11 @@ func (s *Session) State() State {
 	if board == nil {
 		board = s.good.board
 	}
-	clipSchedule := s.current.schedule
-	if clipSchedule == nil {
-		clipSchedule = s.good.schedule
+	// A take rewritten at another frame size, or one that no longer schedules, builds no
+	// pipeline: the schedule shown is then the good one's.
+	clipSchedule := s.good.frames.Schedule()
+	if s.current.frames != nil {
+		clipSchedule = s.current.frames.Schedule()
 	}
 	return State{
 		Version:    s.version,

@@ -13,7 +13,6 @@ import (
 
 	"github.com/airiclenz/photon/internal/clip"
 	"github.com/airiclenz/photon/internal/render"
-	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/take"
 )
 
@@ -33,7 +32,8 @@ func (f sessionFixture) frameAt(t *testing.T, out time.Duration) *image.RGBA {
 	return frame
 }
 
-// renderedFrame builds the frame at out from the files on disk alone, as `photon render` does.
+// renderedFrame builds the frame at out from the files on disk alone, through the pipeline
+// `photon render` encodes from.
 func (f sessionFixture) renderedFrame(t *testing.T, out time.Duration) *image.RGBA {
 	t.Helper()
 	loaded, err := clip.Load(f.boardPath, "", t.TempDir())
@@ -44,24 +44,15 @@ func (f sessionFixture) renderedFrame(t *testing.T, out time.Duration) *image.RG
 	if err != nil {
 		t.Fatalf("take.Load: %v", err)
 	}
-	clipSchedule, err := schedule.New(loaded.Storyboard, recorded)
+	built, err := render.Build(loaded, f.takePath, recorded, newRasterCache(rasterCacheBytes))
 	if err != nil {
-		t.Fatalf("schedule.New: %v", err)
+		t.Fatalf("render.Build: %v", err)
 	}
-	rasterizer, err := render.NewRasterizer(loaded)
+	frame, err := built.FrameAt(out)
 	if err != nil {
-		t.Fatalf("NewRasterizer: %v", err)
+		t.Fatalf("FrameAt(%s): %v", out, err)
 	}
-	compositor, err := render.NewCompositor(loaded, recorded, clipSchedule, rasterizer)
-	if err != nil {
-		t.Fatalf("NewCompositor: %v", err)
-	}
-	source, _, ok := clipSchedule.Source(out)
-	if !ok {
-		t.Fatalf("Source(%s): outside the clip", out)
-	}
-	index := recorded.ScreenAt(source)
-	return compositor.Compose(out, rasterizer.Frame(recorded.Snapshots[index]))
+	return frame
 }
 
 // assertSameFrame fails the test unless got and want hold the same pixels.
@@ -116,7 +107,7 @@ func TestSession_Frame_OutsideTheClip_IsRefused(t *testing.T) {
 	for _, out := range []time.Duration{-time.Millisecond, length} {
 		_, err := fixture.session.Frame(out)
 
-		if !errors.Is(err, ErrOutsideClip) {
+		if !errors.Is(err, render.ErrOutsideClip) {
 			t.Errorf("Frame(%s) error = %v, want ErrOutsideClip", out, err)
 		}
 	}
@@ -184,15 +175,15 @@ func TestRasterCache_PastCapacity_EvictsTheLeastRecentlyUsed(t *testing.T) {
 	// Each raster is 2×2 pixels, 16 bytes: the cache keeps two.
 	raster := func() *image.RGBA { return image.NewRGBA(image.Rect(0, 0, 2, 2)) }
 	cache := newRasterCache(32)
-	cache.put(0, raster())
-	cache.put(1, raster())
-	cache.get(0)
+	cache.Put(0, raster())
+	cache.Put(1, raster())
+	cache.Get(0)
 
-	cache.put(2, raster())
+	cache.Put(2, raster())
 
 	for index, want := range map[int]bool{0: true, 1: false, 2: true} {
-		if _, ok := cache.get(index); ok != want {
-			t.Errorf("get(%d) kept = %v, want %v", index, ok, want)
+		if _, ok := cache.Get(index); ok != want {
+			t.Errorf("Get(%d) kept = %v, want %v", index, ok, want)
 		}
 	}
 }
@@ -201,9 +192,9 @@ func TestRasterCache_RasterLargerThanCapacity_IsNotKept(t *testing.T) {
 	t.Parallel()
 	cache := newRasterCache(8)
 
-	cache.put(0, image.NewRGBA(image.Rect(0, 0, 2, 2)))
+	cache.Put(0, image.NewRGBA(image.Rect(0, 0, 2, 2)))
 
-	if _, ok := cache.get(0); ok {
+	if _, ok := cache.Get(0); ok {
 		t.Error("a raster larger than the capacity was kept")
 	}
 }

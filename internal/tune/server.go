@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/airiclenz/photon/internal/render"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 )
@@ -301,7 +302,7 @@ func statusOf(err error) int {
 	case errors.Is(err, ErrStale):
 		return http.StatusConflict
 	case errors.Is(err, ErrInvalid), errors.Is(err, ErrNoUndo), errors.Is(err, ErrNoRedo),
-		errors.Is(err, ErrOutsideClip), errors.Is(err, ErrNoProposal):
+		errors.Is(err, render.ErrOutsideClip), errors.Is(err, ErrNoProposal):
 		return http.StatusUnprocessableEntity
 	default:
 		return http.StatusInternalServerError

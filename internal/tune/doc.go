@@ -22,7 +22,7 @@
 // and [Session.Save] writes in place, refused while stale ([ErrStale]) or while an error stands
 // ([ErrInvalid]). [Session.State] reports everything the page shows, and [Session.Frame] the
 // PNG of the frame `photon render` composes at an output time, from the last good pipeline, its
-// rasterized snapshots kept in a cache bounded at 1 GiB that a new rasterizer starts afresh.
+// rasterized snapshots kept in a cache bounded at 1 GiB that a new take or raster geometry starts afresh.
 // [Session.Pick] turns cells picked on that frame into a [Proposal]: the picked text, escaped, as
 // a target the resolver resolves back onto them, with its area and nth, and its YAML for a zoom,
 // a click, a seen expect and either end of a drag.
@@ -34,7 +34,7 @@
 // refused, as is a POST whose body is not JSON, so another site's page reaches neither.
 //
 // The file map:
-//   - cache.go: the bounded, least-recently-used cache of a rasterizer's snapshots.
+//   - cache.go: the bounded, least-recently-used cache of a take's rasterized snapshots.
 //   - doc.go: this package comment and file map.
 //   - edit.go: the [Edit] and applying one to storyboard source, key by key.
 //   - edit_camera.go: an Edit of a camera move's at, over, ease or to.

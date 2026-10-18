@@ -123,7 +123,10 @@ Depends on item 1.
 - `go build ./... && go vet ./internal/tune/`
 **Commit:** `refactor(render): build frames through one pipeline`
 
-## 4. Tune asks the render pipeline for frames
+## 4. Tune asks the render pipeline for frames — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): tune's `pipeline` keeps `recorded` (the take its render pipeline was built on) and `rasters` (its cache) beside `board`, `loaded` and `frames *render.Pipeline`, so the cache-reuse rule reads the good pipeline's own take and cache without render exposing its take; `rasterizerFor` became `rasterCacheFor`, which hands `render.Build` the good pipeline's cache while the take and raster geometry stay, else a new one.
+NOTES (2026-10-18): `rasterCache.get`/`put` became `Get`/`Put` so the LRU implements `render.RasterCache`; `doc.go` keeps the item-5-bound "reusing the rasterizer" sentence as the plan says, but its "a new rasterizer starts afresh" and the cache.go file-map line now say a new take or raster geometry starts the cache afresh.
 
 Depends on item 3.
 
