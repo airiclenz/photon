@@ -397,7 +397,7 @@ func TestRunMatchesTheOnePassEncode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newPlan: %v", err)
 	}
-	commandLine := onePassArgs(reference.compositor.Size(), reference.frame, onePass)
+	commandLine := onePassArgs(reference.pipeline.Size(), reference.frame, onePass)
 	if err := reference.encode(context.Background(), commandLine); err != nil {
 		t.Fatalf("one-pass encode: %v", err)
 	}

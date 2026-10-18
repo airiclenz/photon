@@ -75,8 +75,8 @@ func encodeArgs(size image.Point, frame storyboard.Frame, palette, out string) [
 }
 
 // encode streams every scheduled frame, composed, into the encoder commandLine starts, as raw
-// RGBA on its stdin. Each pass calls it once, so the frames are rasterized and composed afresh
-// for each and none is kept between them. The encoder's own failure is reported first, with its stderr, since a
+// RGBA on its stdin. Each pass calls it once, so the frames are composed afresh for each and none
+// is kept between them; only the pipeline's last rasterized snapshot carries over. The encoder's own failure is reported first, with its stderr, since a
 // broken pipe while streaming is only its symptom.
 func (p *plan) encode(ctx context.Context, commandLine []string) error {
 	//nolint:gosec // the program is fixed and every argument is built here
@@ -101,20 +101,14 @@ func (p *plan) encode(ctx context.Context, commandLine []string) error {
 	return closeErr
 }
 
-// writeFrames writes each output frame's pixels, in order. A snapshot shown by consecutive
-// frames is rasterized once.
+// writeFrames writes each output frame's pixels, in order, as the pipeline builds them.
 func (p *plan) writeFrames(w io.Writer) error {
-	shown := -1
-	var source *image.RGBA
-	for _, frame := range p.schedule.Frames(p.frame.FPS) {
-		index := p.recorded.ScreenAt(frame.Source)
-		if index < 0 {
-			return fmt.Errorf("the take holds no snapshot to show at %s", frame.Source)
+	for _, frame := range p.pipeline.Schedule().Frames(p.frame.FPS) {
+		composed, err := p.pipeline.FrameAt(frame.Out)
+		if err != nil {
+			return err
 		}
-		if index != shown {
-			source, shown = p.rasterizer.Frame(p.recorded.Snapshots[index]), index
-		}
-		if _, err := w.Write(p.compositor.Compose(frame.Out, source).Pix); err != nil {
+		if _, err := w.Write(composed.Pix); err != nil {
 			return err
 		}
 	}

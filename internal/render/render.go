@@ -39,17 +39,13 @@ type Options struct {
 	DryRun bool
 }
 
-// plan is everything a render needs once the clip and its take are read: the frame, the output
-// clock, the rasterizer, the compositor, where the palette pass writes the palette and where the
-// GIF goes.
+// plan is everything a render needs once the clip and its take are read: the frame, the pipeline
+// that builds the frames, where the palette pass writes the palette and where the GIF goes.
 type plan struct {
-	frame      storyboard.Frame
-	recorded   *take.Take
-	schedule   *schedule.Schedule
-	rasterizer *raster.Rasterizer
-	compositor *compose.Compositor
-	palette    string
-	out        string
+	frame    storyboard.Frame
+	pipeline *Pipeline
+	palette  string
+	out      string
 }
 
 // Run renders loaded's take to its GIF and prints the summary to stdout: the GIF's path, size and
@@ -75,7 +71,7 @@ func Run(
 	if err != nil {
 		return err
 	}
-	size := rendering.compositor.Size()
+	size := rendering.pipeline.Size()
 	passes := [][]string{
 		paletteArgs(size, rendering.frame, rendering.palette),
 		encodeArgs(size, rendering.frame, rendering.palette, rendering.out),
@@ -95,7 +91,7 @@ func Run(
 	if err := optimizeGIF(ctx, rendering.out); err != nil {
 		return err
 	}
-	return writeSummary(stdout, rendering.out, rendering.schedule)
+	return writeSummary(stdout, rendering.out, rendering.pipeline.Schedule())
 }
 
 // printCommandLines prints each command line on its own line, for a human to read or paste.
@@ -128,36 +124,19 @@ func removePalette(path string) error {
 	return nil
 }
 
-// newPlan loads the take and builds the schedule, the rasterizer and the compositor. Frames are
-// rasterized at frame.scale — padding and font size multiplied through — so a zoom has pixels to
-// draw on; the compositor scales them to frame.width.
+// newPlan loads the take and builds the frame pipeline over it, printing the schedule's warnings
+// to stderr as soon as the schedule stands, before any later stage's error is returned.
 func newPlan(loaded *clip.Clip, options Options, stderr io.Writer) (*plan, error) {
 	takePath, recorded, err := loadTake(loaded, options.Take)
 	if err != nil {
 		return nil, err
 	}
-	board := loaded.Storyboard
-	frame := board.Frame
-	if recorded.Cols != frame.Cols || recorded.Rows != frame.Rows {
-		return nil, fmt.Errorf(
-			"%s was recorded at %d×%d cells; the storyboard's frame is %d×%d — re-record it",
-			takePath, recorded.Cols, recorded.Rows, frame.Cols, frame.Rows,
-		)
-	}
-	clipSchedule, err := schedule.New(board, recorded)
-	if err != nil {
-		return nil, err
-	}
-	for _, warning := range clipSchedule.Warnings {
-		if _, err := fmt.Fprintln(stderr, "warning:", warning); err != nil {
-			return nil, err
+	frames, err := Build(loaded, takePath, recorded, newLastRaster())
+	if frames != nil {
+		if warnErr := writeWarnings(stderr, frames.Schedule()); warnErr != nil {
+			return nil, warnErr
 		}
 	}
-	rasterizer, err := NewRasterizer(loaded)
-	if err != nil {
-		return nil, err
-	}
-	compositor, err := NewCompositor(loaded, recorded, clipSchedule, rasterizer)
 	if err != nil {
 		return nil, err
 	}
@@ -167,17 +146,19 @@ func newPlan(loaded *clip.Clip, options Options, stderr io.Writer) (*plan, error
 	}
 	out := options.Out
 	if out == "" {
-		out = board.Ship
+		out = loaded.Storyboard.Ship
 	}
-	return &plan{
-		frame:      frame,
-		recorded:   recorded,
-		schedule:   clipSchedule,
-		rasterizer: rasterizer,
-		compositor: compositor,
-		palette:    palette,
-		out:        out,
-	}, nil
+	return &plan{frame: loaded.Storyboard.Frame, pipeline: frames, palette: palette, out: out}, nil
+}
+
+// writeWarnings prints each of the schedule's warnings on its own `warning:` line.
+func writeWarnings(w io.Writer, clipSchedule *schedule.Schedule) error {
+	for _, warning := range clipSchedule.Warnings {
+		if _, err := fmt.Fprintln(w, "warning:", warning); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // loadTake loads the take at takePath, or at the clip's take path when takePath is empty, and
@@ -240,6 +221,17 @@ func NewCompositor(
 	if err != nil {
 		return nil, err
 	}
+	return newCompositor(loaded, recorded, clipSchedule, rasterizer, resolver)
+}
+
+// newCompositor is [NewCompositor] over a target resolver already built from the config's areas.
+func newCompositor(
+	loaded *clip.Clip,
+	recorded *take.Take,
+	clipSchedule *schedule.Schedule,
+	rasterizer *raster.Rasterizer,
+	resolver target.Resolver,
+) (*compose.Compositor, error) {
 	frame := loaded.Storyboard.Frame
 	layout := compose.Layout{
 		Size:       rasterizer.Size(),

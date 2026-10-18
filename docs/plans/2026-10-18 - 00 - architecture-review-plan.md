@@ -103,7 +103,11 @@ NOTES (2026-10-18): the shared private helper is `Take.screensSince(start, stop)
 - `! grep -nE 'until ?\+ ?time\.Nanosecond' internal/compose/camera.go internal/compose/zoom.go`
 **Commit:** `refactor(take): own the screens-during-a-stretch lookup`
 
-## 3. Render builds frames through one pipeline
+## 3. Render builds frames through one pipeline — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the Pipeline keeps no target-resolver field: Build builds the resolver from the config's areas and hands it to a new unexported `newCompositor` (which `NewCompositor` now wraps), so no field sits unread until item 4 needs one.
+NOTES (2026-10-18): `ScreenAt(out)` returns `(take.Snapshot, error)` and, like `FrameAt`, returns the build's error on a partial pipeline; `Cell` reports ok=false, `Rect` the empty rectangle and `Size` the zero point there.
+NOTES (2026-10-18): GIF bytes checked unchanged against the base commit: a zoomed, captioned clip rendered at HEAD and with this change gave the same sha256 (a603dff3…); the reuse-last raster now carries over from pass 1 into pass 2, and the doc.go and encode comments say so.
 
 Depends on item 1.
 
