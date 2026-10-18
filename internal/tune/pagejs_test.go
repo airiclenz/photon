@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1153,4 +1154,154 @@ func TestPageJS_ViaPath_IsDrawnForTheSelectedPan(t *testing.T) {
 	if page.isViaPathDrawn() {
 		t.Error("the via path is drawn with a pan to selected")
 	}
+}
+
+// The elements the preview fit measures and the window it hears a resize on.
+const (
+	elementPreview       = "preview"
+	elementTransport     = "transport"
+	elementTimelinePanel = "timeline-panel"
+	elementPickBox       = "pick-box"
+	elementWindow        = "window"
+)
+
+// The page the fit test lays out: a preview column fitWidthPX wide showing a frame of fitWidthPX
+// by fitHeightPX at its natural size, fitAbovePX under the page's top, fitBelowPX of the column
+// under it, then the transport bar and the timeline, fitGapPX before, between and after them.
+const (
+	fitWidthPX     = 800
+	fitHeightPX    = 450
+	fitAbovePX     = 12
+	fitBelowPX     = 40
+	fitGapPX       = 12
+	fitTransportPX = 36
+	fitTimelinePX  = 200
+	fitFloorPX     = 120
+)
+
+// layOut lays the element of id out at top, width wide and height tall, at the left edge.
+func (p *pageHarness) layOut(id string, top, width, height int) {
+	p.t.Helper()
+	p.eval(fmt.Sprintf(`document.getElementById(%q).layout = { left: 0, top: %d, width: %d, height: %d };`,
+		id, top, width, height))
+}
+
+// resizeWindow makes the window height tall, fires its resize and settles the page.
+func (p *pageHarness) resizeWindow(height int) {
+	p.t.Helper()
+	p.eval(fmt.Sprintf("window.innerHeight = %d;", height))
+	p.dispatch(elementWindow, "resize", nil)
+	p.settle()
+}
+
+// styleOf is the style property of the element of id, "" while unset.
+func (p *pageHarness) styleOf(id, property string) string {
+	p.t.Helper()
+	return p.eval(fmt.Sprintf(`document.getElementById(%q).style[%q] || ""`, id, property)).String()
+}
+
+func TestPageJS_FitPreview_ShrinksTheFrameToAShortWindow(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixtureOf(t, cameraCaptionsStoryboard).session)
+	page.eval(fmt.Sprintf(`{
+		const frame = document.getElementById(%q);
+		frame.naturalWidth = %d;
+		frame.naturalHeight = %d;
+	}`, elementFrame, fitWidthPX, fitHeightPX))
+	transportTop := fitAbovePX + fitHeightPX + fitBelowPX + fitGapPX
+	timelineTop := transportTop + fitTransportPX + fitGapPX
+	page.layOut(elementFrame, fitAbovePX, fitWidthPX, fitHeightPX)
+	page.layOut(elementPreview, fitAbovePX, fitWidthPX, fitHeightPX+fitBelowPX)
+	page.layOut(elementTransport, transportTop, fitWidthPX, fitTransportPX)
+	page.layOut(elementTimelinePanel, timelineTop, fitWidthPX, fitTimelinePX)
+	// rest is the height everything but the frame takes.
+	rest := fitAbovePX + fitBelowPX + 3*fitGapPX + fitTransportPX + fitTimelinePX
+
+	// The cases run in order on one page, so each one re-fits after the one before.
+	cases := []struct {
+		name   string
+		window int
+		want   string
+	}{
+		{"a short window shrinks it to the room left", rest + 300, "300px"},
+		{"a shorter window stops at the floor", rest + fitFloorPX/2, fmt.Sprintf("%dpx", fitFloorPX)},
+		{"a tall window shows it width-fitted", rest + fitHeightPX, ""},
+		{"a short window again shrinks it again", rest + 200, "200px"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			page.resizeWindow(tc.window)
+
+			if got := page.styleOf(elementFrame, "maxHeight"); got != tc.want {
+				t.Errorf("the frame's max height in a %dpx window: want %q, got %q", tc.window, tc.want, got)
+			}
+		})
+	}
+}
+
+func TestPageJS_FitPreview_KeepsThePickBoxAndViaPathOnTheShrunkFrame(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	page := loadPage(t, session)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, viaPan))
+	page.settle()
+	page.pickAcross(session, 0, 2, 4)
+	var proposal struct {
+		Rect pixelRect `json:"rect"`
+	}
+	if err := json.Unmarshal([]byte(page.lastRequest("/api/pick").answer), &proposal); err != nil {
+		t.Fatalf("decode the pick's answer: %v", err)
+	}
+	naturalWidth := page.eval(fmt.Sprintf(`document.getElementById(%q).naturalWidth`, elementFrame)).ToInteger()
+	naturalHeight := page.eval(fmt.Sprintf(`document.getElementById(%q).naturalHeight`, elementFrame)).ToInteger()
+
+	// Each step shrinks the frame to 1/divisor of its natural size, as fit.js would: once on a
+	// window resize, once on the frame's own resize with no window resize.
+	steps := []struct {
+		name    string
+		divisor int64
+		shrink  func(page *pageHarness)
+	}{
+		{"on a short window's resize", 2, func(page *pageHarness) { page.resizeWindow(fitFloorPX) }},
+		{"on the frame's own resize", 4, func(page *pageHarness) {
+			page.call("resized", elementFrame)
+			page.settle()
+		}},
+	}
+	for _, step := range steps {
+		t.Run(step.name, func(t *testing.T) {
+			width, height := float64(naturalWidth)/float64(step.divisor), float64(naturalHeight)/float64(step.divisor)
+			page.layOut(elementFrame, 0, int(width), int(height))
+			// The layout above is whole pixels; the ratio the page draws by is the one it sees.
+			width, height = float64(int(width)), float64(int(height))
+
+			step.shrink(page)
+
+			ratio := float64(naturalWidth) / width
+			rect := proposal.Rect
+			wantBox := map[string]float64{
+				"left": float64(rect.X) / ratio, "top": float64(rect.Y) / ratio,
+				"width": float64(rect.W) / ratio, "height": float64(rect.H) / ratio,
+			}
+			wantPath := map[string]float64{"left": 0, "top": 0, "width": width, "height": height}
+			for property, want := range wantBox {
+				if got := page.styleOf(elementPickBox, property); got != pixels(want) {
+					t.Errorf("the pick box's %s: want %s, got %s", property, pixels(want), got)
+				}
+			}
+			for property, want := range wantPath {
+				if got := page.styleOf(elementViaPath, property); got != pixels(want) {
+					t.Errorf("the via path's %s: want %s, got %s", property, pixels(want), got)
+				}
+			}
+			if page.isHidden(elementPickBox) || !page.isViaPathDrawn() {
+				t.Error("the pick box or the via path is not shown on the shrunk frame")
+			}
+		})
+	}
+}
+
+// pixels spells value as a CSS pixel length, as JavaScript writes the number.
+func pixels(value float64) string {
+	return strconv.FormatFloat(value, 'f', -1, 64) + "px"
 }

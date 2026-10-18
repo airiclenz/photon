@@ -290,6 +290,8 @@
     // app.js takes the new frame's time in its own load handler, which may run after this one.
     frameImage.addEventListener("load", () => requestAnimationFrame(drawBox));
     window.addEventListener("resize", drawBox);
+    // fit.js resizes the <img> on more than a window resize.
+    new ResizeObserver(drawBox).observe(frameImage);
     document.addEventListener("keydown", onKey);
     view.setZoom.addEventListener("click", setAsZoomTarget);
     view.setPan.addEventListener("click", setAsPanTarget);

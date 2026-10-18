@@ -1,7 +1,8 @@
 // A minimal DOM for driving photon tune's page scripts under goja in the Go tests: elements made
 // on demand by id, events a test dispatches by hand, and timers, animation frames and image loads
 // queued until the test runs them. Nothing here lays anything out: an element's box is the
-// layout the test sets on it. fetch answers through testHost.serve, which the Go harness binds to
+// layout the test sets on it, the window's height is the innerHeight it sets, and a resize
+// observer hears of an element's resize only when the test says it resized. fetch answers through testHost.serve, which the Go harness binds to
 // the tune handler, and testDOM is what the harness drives the page with.
 "use strict";
 
@@ -12,6 +13,7 @@
   const ELEMENT_NODE = 1;
   const HTTP_OK_FIRST = 200;
   const HTTP_OK_LAST = 299;
+  const WINDOW_HEIGHT = 768;
 
   // tasks run one at a time by testDOM.runTask: timeouts and image loads, in queue order.
   const tasks = [];
@@ -20,6 +22,8 @@
   // intervals run only when testDOM.runIntervals asks, so a poll never runs on its own.
   const intervals = new Map();
   const blobs = new Map();
+  // observers are the live resize observers, each with the elements it observes.
+  const observers = new Set();
   const byId = new Map();
   const listenersOf = new WeakMap();
   let nextHandle = 1;
@@ -456,12 +460,26 @@
     }
   }
 
+  // ResizeObserver calls back when testDOM.resized names an element it observes.
   class ResizeObserver {
-    observe() {}
+    constructor(callback) {
+      this.callback = callback;
+      this.observed = new Set();
+      observers.add(this);
+    }
 
-    unobserve() {}
+    observe(node) {
+      this.observed.add(node);
+    }
 
-    disconnect() {}
+    unobserve(node) {
+      this.observed.delete(node);
+    }
+
+    disconnect() {
+      this.observed.clear();
+      observers.delete(this);
+    }
   }
 
   // --- fetch, blobs and the clipboard ---
@@ -532,18 +550,30 @@
     cancelAnimationFrame,
     navigator: { clipboard },
     performance: { now: () => clock },
+    innerHeight: WINDOW_HEIGHT,
     addEventListener: (type, listener) => windowEvents.addEventListener(type, listener),
     removeEventListener: (type, listener) => windowEvents.removeEventListener(type, listener),
     dispatchEvent: (event) => windowEvents.dispatchEvent(event),
   });
 
   // testDOM is how the harness drives the page: it declares the page's elements, dispatches
-  // events on them by id ("document" for the document), and runs the queues.
+  // events on them by id ("document" for the document, "window" for the window), tells the resize
+  // observers of an element's resize, and runs the queues.
   globalThis.testDOM = Object.freeze({
     declare,
     dispatch(id, type, init) {
-      const target = id === "document" ? document : document.getElementById(id);
+      const targets = { document, window: globalThis };
+      const target = targets[id] || document.getElementById(id);
       return target.dispatchEvent(new Event(type, init || {}));
+    },
+    // resized calls back every resize observer that observes the element of id.
+    resized(id) {
+      const node = document.getElementById(id);
+      for (const observer of [...observers]) {
+        if (observer.observed.has(node)) {
+          observer.callback([{ target: node }], observer);
+        }
+      }
     },
     // runTask runs the first queued task and says whether there was one.
     runTask() {

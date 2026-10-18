@@ -51,6 +51,7 @@
 //   - state.go: the [State] a session reports and the errors attributed to their owners.
 //   - page/index.html, page/style.css: the page and its styles.
 //   - page/app.js: the window.tune contract, the session's API, the selection and the wiring.
+//   - page/fit.js: the preview shrunk to fit a short window.
 //   - page/transport.js: the frame clock, the transport and its keys.
 //   - page/controls.js: the inspector's field controls and its error and refusal rows.
 //   - page/panels.js: the inspector's beat and frame panels.

@@ -6,6 +6,7 @@
 <title>photon tune</title>
 <link rel="stylesheet" href="/assets/style.css">
 <script src="/assets/app.js" defer></script>
+<script src="/assets/fit.js" defer></script>
 <script src="/assets/transport.js" defer></script>
 <script src="/assets/controls.js" defer></script>
 <script src="/assets/panels.js" defer></script>
@@ -22,7 +23,7 @@
   <button id="reload" type="button" hidden>Reload</button>
 </div>
 <main class="workspace">
-  <section class="preview" aria-label="Preview">
+  <section id="preview" class="preview" aria-label="Preview">
     <div id="stage" class="stage">
       <img id="frame" alt="The composed frame at the playhead" draggable="false">
       <div id="pick-drag" class="pick-drag" hidden></div>
@@ -53,7 +54,7 @@
     </label>
     <div id="inspector-body"></div>
   </aside>
-  <nav class="transport" aria-label="Transport">
+  <nav id="transport" class="transport" aria-label="Transport">
     <button id="previous" type="button" title="Previous section start">&#x23EE;</button>
     <button id="play" type="button" title="Play or pause (Space)">&#x25B6;</button>
     <button id="next" type="button" title="Next section start">&#x23ED;</button>
@@ -65,7 +66,7 @@
     <button id="revert" type="button" title="Drop every unsaved edit">Revert</button>
     <button id="save" type="button" class="primary">Save</button>
   </nav>
-  <section class="timeline" aria-label="Timeline">
+  <section id="timeline-panel" class="timeline" aria-label="Timeline">
     <div id="timeline" class="timeline-rows"></div>
   </section>
 </main>

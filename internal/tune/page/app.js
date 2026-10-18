@@ -2,8 +2,8 @@
 // It holds no timing logic of its own: every value it shows comes from /api/state, every change
 // is an edit the server applies and validates, and every frame is one the server composes.
 //
-// window.tune is the contract the timeline lanes, the target picker and the via path overlay
-// build on:
+// window.tune is the contract the timeline lanes, the target picker, the via path overlay and
+// the preview fit build on:
 //   state()      the last /api/state JSON, or null before the first arrives
 //   selected()   the id of the beat the inspector shows, or null for the clip's frame or an entry
 //   select(id)   show beat id in the inspector, or the clip's frame for null
@@ -27,9 +27,9 @@
 // internal namespace no part of the contract: app.js puts in it the state they read and the
 // helpers they build with, and each of them adds what it does. Of the other scripts picker.js
 // adds the standing pick's proposal that entries.js's via waypoints read, and timeline.js reports
-// a refused lane add or bar drag through transport.js's reportStatus. app.js calls those only
-// once every script has run, so the wiring, and with it the first /api/state request, waits for
-// DOMContentLoaded.
+// a refused lane add or bar drag through transport.js's reportStatus; fit.js, the preview fit,
+// reads window.tune alone. app.js calls those only once every script has run, so the wiring, and
+// with it the first /api/state request, waits for DOMContentLoaded.
 "use strict";
 
 (() => {

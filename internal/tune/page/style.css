@@ -131,9 +131,12 @@ textarea {
   }
 }
 
+/* The preview column is as tall as its content, never stretched to a taller inspector's row:
+   fit.js measures what lies under the <img> in it. */
 .preview {
   grid-area: preview;
   min-width: 0;
+  align-self: start;
 }
 
 .stage {

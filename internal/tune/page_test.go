@@ -25,10 +25,10 @@ const pageScriptPattern = "*.js"
 // pageAssetNames are the files index.html loads besides its scripts.
 var pageAssetNames = []string{"style.css"}
 
-// splitScripts are app.js, the scripts split from it, the via path overlay's and the timeline's
-// pointer drag, each kept under maxScriptLines.
+// splitScripts are app.js, the scripts split from it, the via path overlay's, the timeline's
+// pointer drag and the preview fit, each kept under maxScriptLines.
 var splitScripts = []string{
-	"app.js", "transport.js", "controls.js", "panels.js", "entries.js", "path.js", "drag.js",
+	"app.js", "transport.js", "controls.js", "panels.js", "entries.js", "path.js", "drag.js", "fit.js",
 }
 
 // maxScriptLines is the file-size guide of Note coding-conventions a split script stays below.

@@ -116,6 +116,8 @@
   function wire() {
     frameImage.addEventListener("load", queueRender);
     window.addEventListener("resize", queueRender);
+    // fit.js resizes the <img> on more than a window resize.
+    new ResizeObserver(queueRender).observe(frameImage);
     document.body.addEventListener("click", queueRender);
     document.body.addEventListener("change", queueRender);
     tune.onState(queueRender);

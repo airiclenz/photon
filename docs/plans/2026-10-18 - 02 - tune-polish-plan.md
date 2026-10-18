@@ -211,7 +211,11 @@ page-fields list.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/`
 **Commit:** `feat(tune): drag camera moves and captions on the timeline`
 
-## 6. Fit the preview to a short window
+## 6. Fit the preview to a short window — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): fit.js re-fits on frame load and window resize, plus a ResizeObserver on the preview column, transport bar and timeline (queued to the next animation frame) in place of a page `load` listener, so a timeline redrawn by a new state or a pick result shown under the frame also re-fits; it measures the page's top from `document.body.getBoundingClientRect()` so a scrolled page does not skew the image's top.
+NOTES (2026-10-18): index.html also gives `section.preview` an id (`preview`), and style.css sets `.preview { align-self: start }`, so the preview column's height is its own content and never the taller inspector's row; fit.js reads the column's width and what lies under the frame from it. The timeline section's id is `timeline-panel` (`timeline` is taken by its rows).
+NOTES (2026-10-18): the DOM stub's ResizeObserver now records its observed elements and `testDOM.resized(id)` calls them back; `testDOM.dispatch("window", ...)` fires on the window; `window.innerHeight` defaults to 768.
 
 **What:** Page-only; no Go change outside tests.
 **Regression guard.** `nav.transport` and `section.timeline` get ids in index.html, and fit.js
