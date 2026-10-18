@@ -8,13 +8,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/airiclenz/photon/internal/storyboard"
-	"github.com/airiclenz/photon/internal/take"
 )
 
 // ditherMode is the palette encode's dither: none. A palette entry is the mean of the colours it
@@ -110,7 +107,7 @@ func (p *plan) writeFrames(w io.Writer) error {
 	shown := -1
 	var source *image.RGBA
 	for _, frame := range p.schedule.Frames(p.frame.FPS) {
-		index := SnapshotAt(p.recorded.Snapshots, frame.Source)
+		index := p.recorded.ScreenAt(frame.Source)
 		if index < 0 {
 			return fmt.Errorf("the take holds no snapshot to show at %s", frame.Source)
 		}
@@ -122,16 +119,6 @@ func (p *plan) writeFrames(w io.Writer) error {
 		}
 	}
 	return nil
-}
-
-// SnapshotAt is the index of the snapshot on screen at source time t — the last one taken at or
-// before it, or the first when t precedes them all — and -1 for a take without snapshots.
-func SnapshotAt(snapshots []take.Snapshot, t time.Duration) int {
-	if len(snapshots) == 0 {
-		return -1
-	}
-	after := sort.Search(len(snapshots), func(i int) bool { return snapshots[i].At > t })
-	return max(after-1, 0)
 }
 
 // shellLine joins a command line for a human to read or paste: an argument the shell would break

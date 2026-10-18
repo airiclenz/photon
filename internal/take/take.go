@@ -40,6 +40,17 @@ type Cursor struct {
 	Visible bool `json:"visible"`
 }
 
+// ScreenAt returns the index of the snapshot on screen at the instant at on the take's clock: the
+// last one taken at or before it, the first one when it precedes them all, and -1 when the take
+// holds no snapshot.
+func (t *Take) ScreenAt(at time.Duration) int {
+	if len(t.Snapshots) == 0 {
+		return -1
+	}
+	after := sort.Search(len(t.Snapshots), func(i int) bool { return t.Snapshots[i].At > at })
+	return max(after-1, 0)
+}
+
 // BeatSpan is one beat's stretch of the take's clock: from its beat-start event to the next
 // beat's start, or, for the last beat, to the take's end.
 type BeatSpan struct {

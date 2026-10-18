@@ -89,3 +89,31 @@ func TestTake_BeatSpans(t *testing.T) {
 		})
 	}
 }
+
+func TestTake_ScreenAt(t *testing.T) {
+	t.Parallel()
+	recorded := Take{Snapshots: []Snapshot{{At: time.Second}, {At: 2 * time.Second}, {At: 4 * time.Second}}}
+	cases := []struct {
+		name string
+		take Take
+		at   time.Duration
+		want int
+	}{
+		{name: "before the first", take: recorded, at: 0, want: 0},
+		{name: "exactly at the first", take: recorded, at: time.Second, want: 0},
+		{name: "just before the second", take: recorded, at: 1999 * time.Millisecond, want: 0},
+		{name: "exactly at the second", take: recorded, at: 2 * time.Second, want: 1},
+		{name: "between the second and the last", take: recorded, at: 3 * time.Second, want: 1},
+		{name: "exactly at the last", take: recorded, at: 4 * time.Second, want: 2},
+		{name: "after the last", take: recorded, at: 9 * time.Second, want: 2},
+		{name: "empty take", take: Take{}, at: 0, want: -1},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.take.ScreenAt(tt.at); got != tt.want {
+				t.Errorf("ScreenAt(%s): want %d, got %d", tt.at, tt.want, got)
+			}
+		})
+	}
+}

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/airiclenz/photon/internal/config"
-	"github.com/airiclenz/photon/internal/render"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 	"github.com/airiclenz/photon/internal/target"
@@ -65,7 +64,7 @@ func (s *Session) Pick(out time.Duration, from, to image.Point) (Proposal, error
 	if !ok {
 		return Proposal{}, fmt.Errorf("%w: %s is not in [0, %s)", ErrOutsideClip, out, shown.schedule.Length)
 	}
-	index := render.SnapshotAt(shown.recorded.Snapshots, source)
+	index := shown.recorded.ScreenAt(source)
 	if index < 0 {
 		return Proposal{}, fmt.Errorf("the take holds no snapshot to show at %s", source)
 	}

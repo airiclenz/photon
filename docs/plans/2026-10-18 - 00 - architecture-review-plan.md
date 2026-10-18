@@ -68,7 +68,9 @@ values resolved once at Parse, yamledit query/upsert, and storyboard-owned typed
 - The open tune features `tune-caption-styling`, `tune-add-remove-entries`, `tune-edit-pan-via` (they now wait on `typed-storyboard-edits`).
 - yamledit sequence-item insert/delete/move; `engine.BeatError`; schedule warning text scraping in the page.
 
-## 1. Take answers "which screen shows at t"
+## 1. Take answers "which screen shows at t" — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the method's parameter is named `at`, not `t` as the Goal's signature writes it, because `t` is already the receiver name of every `*Take` method in take.go; the signature is otherwise as written.
 
 **What:**
 **Goal:** `(*take.Take).ScreenAt(t time.Duration) int` returns the index of the last snapshot at or before t, the first snapshot when t precedes them all, and -1 for a take with no snapshots; `render.SnapshotAt` no longer exists.

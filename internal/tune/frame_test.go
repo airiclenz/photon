@@ -60,7 +60,7 @@ func (f sessionFixture) renderedFrame(t *testing.T, out time.Duration) *image.RG
 	if !ok {
 		t.Fatalf("Source(%s): outside the clip", out)
 	}
-	index := render.SnapshotAt(recorded.Snapshots, source)
+	index := recorded.ScreenAt(source)
 	return compositor.Compose(out, rasterizer.Frame(recorded.Snapshots[index]))
 }
 

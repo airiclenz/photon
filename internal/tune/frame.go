@@ -7,8 +7,6 @@ import (
 	"image"
 	"image/png"
 	"time"
-
-	"github.com/airiclenz/photon/internal/render"
 )
 
 // ErrOutsideClip is a frame asked for at an output time outside [0, length) of the clip.
@@ -52,7 +50,7 @@ func (s *Session) goodPipeline() pipeline {
 // rasterAt returns the rasterized snapshot on screen at source time t, from the pipeline's raster
 // cache or drawn and kept there.
 func (p pipeline) rasterAt(t time.Duration) (*image.RGBA, error) {
-	index := render.SnapshotAt(p.recorded.Snapshots, t)
+	index := p.recorded.ScreenAt(t)
 	if index < 0 {
 		return nil, fmt.Errorf("the take holds no snapshot to show at %s", t)
 	}

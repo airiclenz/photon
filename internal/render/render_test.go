@@ -448,20 +448,6 @@ func decodeGIF(t *testing.T, path string) *gif.GIF {
 	return decoded
 }
 
-func TestSnapshotAt(t *testing.T) {
-	t.Parallel()
-	snapshots := []take.Snapshot{{At: sec}, {At: 2 * sec}, {At: 4 * sec}}
-	cases := map[time.Duration]int{0: 0, sec: 0, 1999 * time.Millisecond: 0, 2 * sec: 1, 3 * sec: 1, 9 * sec: 2}
-	for at, want := range cases {
-		if got := SnapshotAt(snapshots, at); got != want {
-			t.Errorf("SnapshotAt(%s): want %d, got %d", at, want, got)
-		}
-	}
-	if got := SnapshotAt(nil, 0); got != -1 {
-		t.Errorf("SnapshotAt on no snapshots: want -1, got %d", got)
-	}
-}
-
 func TestBeatReport(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
