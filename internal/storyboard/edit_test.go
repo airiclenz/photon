@@ -827,8 +827,8 @@ func TestApply_CaptionEditOnWhatIsNotThere_IsRefused(t *testing.T) {
 			"captions[-1]: caption.for: the storyboard has no caption at index -1"},
 		{"a storyboard without captions", editBaseBoard, captionEdit(0, FieldCaptionPlace, "top"),
 			"captions[0]: caption.place: the storyboard has no caption at index 0"},
-		{"an unknown caption field", captionEditBoard, captionEdit(0, "caption.color", "#000000"),
-			"captions[0]: caption.color: unknown field"},
+		{"an unknown caption field", captionEditBoard, captionEdit(0, "caption.colour", "#000000"),
+			"captions[0]: caption.colour: unknown field"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

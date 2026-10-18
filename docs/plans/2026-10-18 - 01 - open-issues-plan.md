@@ -359,7 +359,15 @@ internal/storyboard/edit.go — decodeMoment
 **Closes:** tune-add-remove-entries
 **Commit:** `feat(tune): add, remove and reorder camera moves and captions`
 
-## 10. Storyboard edits for a caption's font, colours, box and fade
+## 10. Storyboard edits for a caption's font, colours, box and fade — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the new kinds are `KindColor` ("color") and `KindFraction` ("fraction"); font.size is a `KindDecimal` and font.weight a `KindEnum` (regular, bold) whose choices `weightChoices` the edit also checks against.
+
+NOTES (2026-10-18): caption.font.size 0 or below is refused at decode ("want a size above 0"), since a written `size: 0` would mean frame.font_size; sizes and opacities outside their bounds are left to validation, which refuses them.
+
+NOTES (2026-10-18): an empty `font:` (a null) counts as an absent mapping: a non-default value deletes and reinserts it as a one-key flow mapping (yamledit's Replace cannot splice over a value with no text), and a default deletes it.
+
+NOTES (2026-10-18): setPlacement's spelling check is extracted as decodeSpelling in edit_caption.go so the weight edit reuses it; editCaption's last case is now an explicit caption.align, with a default that errors on an unknown caption field.
 
 **What:**
 **Regression guard.** Adds its new caption style fields to `pendingPageFields` (internal/tune/page_test.go in Files; the same tune test command in Acceptance).

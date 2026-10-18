@@ -53,7 +53,8 @@ func isCaptionField(field string) bool {
 }
 
 // editCaption sets field, typed as value, on the caption at index in board, the storyboard s.doc
-// holds, or adds, removes or reorders a caption for a list field.
+// holds — its timing, text and placement here, its font, colours, box and fade by
+// [splicer.setCaptionStyle] — or adds, removes or reorders a caption for a list field.
 func (s *splicer) editCaption(board *Storyboard, index int, field string, value json.RawMessage) error {
 	if isListField(field) {
 		return s.editList(board, captionList(board), index, field, value)
@@ -74,8 +75,13 @@ func (s *splicer) editCaption(board *Storyboard, index int, field string, value 
 		return s.setCaptionText(caption, value)
 	case FieldCaptionPlace:
 		return s.setPlacement(caption, keyPlace, value, placeSpellings, string(PlaceBottom))
-	default:
+	case FieldCaptionAlign:
 		return s.setPlacement(caption, keyAlign, value, alignSpellings, string(AlignMiddle))
+	case FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor,
+		FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut:
+		return s.setCaptionStyle(caption, board.Frame.FontSize, field, value)
+	default:
+		return fmt.Errorf("unknown caption field %s", field)
 	}
 }
 
@@ -141,15 +147,25 @@ func (s *splicer) setPlacement(
 	spellings []string,
 	absent string,
 ) error {
-	var spelling string
-	if err := json.Unmarshal(value, &spelling); err != nil || !slices.Contains(spellings, spelling) {
-		last := len(spellings) - 1
-		return fmt.Errorf("want %s or %s, got %s", strings.Join(spellings[:last], ", "), spellings[last], value)
+	spelling, err := decodeSpelling(value, spellings)
+	if err != nil {
+		return err
 	}
 	if spelling == absent {
 		return s.doc.DeleteIfPresent(under(caption, key))
 	}
 	return s.doc.Upsert(caption, key, spelling, captionKeyOrder)
+}
+
+// decodeSpelling reads a JSON string holding one of spellings.
+func decodeSpelling(value json.RawMessage, spellings []string) (string, error) {
+	var spelling string
+	if err := json.Unmarshal(value, &spelling); err != nil || !slices.Contains(spellings, spelling) {
+		last := len(spellings) - 1
+		leading := strings.Join(spellings[:last], ", ")
+		return "", fmt.Errorf("want %s or %s, got %s", leading, spellings[last], value)
+	}
+	return spelling, nil
 }
 
 // decodeText reads a caption's text, typed as a JSON string.

@@ -156,8 +156,8 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		{beatOwner(2), []string{FieldDuration, FieldHold, FieldCut, FieldZoom, FieldZoomTarget, FieldZoomFactor, FieldZoomIn, FieldZoomOut}},
 		{moveOwner(0), []string{FieldCameraAt, FieldCameraOver, FieldCameraEase, FieldCameraTo, FieldCameraRemove, FieldCameraMove, FieldCameraInsert}},
 		{moveOwner(4), []string{FieldCameraAt, FieldCameraOver, FieldCameraEase, FieldCameraTo, FieldCameraRemove, FieldCameraMove}},
-		{textOwner(0), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionRemove, FieldCaptionMove, FieldCaptionInsert}},
-		{textOwner(2), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionRemove, FieldCaptionMove}},
+		{textOwner(0), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionRemove, FieldCaptionMove, FieldCaptionInsert}},
+		{textOwner(2), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionRemove, FieldCaptionMove}},
 	}
 	for _, test := range owners {
 		if got := byOwner[test.owner]; !slices.Equal(got, test.want) {
@@ -187,6 +187,13 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		{fieldKey{textOwner(0), FieldCaptionText}, KindText, nil, `""`, false},
 		{fieldKey{textOwner(0), FieldCaptionPlace}, KindEnum, []string{"top", "middle", "bottom"}, `"bottom"`, false},
 		{fieldKey{textOwner(0), FieldCaptionAlign}, KindEnum, []string{"left", "middle", "right"}, `"middle"`, false},
+		{fieldKey{textOwner(1), FieldCaptionFontSize}, KindDecimal, nil, "14", false},
+		{fieldKey{textOwner(1), FieldCaptionFontWeight}, KindEnum, []string{"regular", "bold"}, `"regular"`, false},
+		{fieldKey{textOwner(1), FieldCaptionColor}, KindColor, nil, `"#ffffff"`, false},
+		{fieldKey{textOwner(1), FieldCaptionBoxColor}, KindColor, nil, `"#000000"`, false},
+		{fieldKey{textOwner(1), FieldCaptionBoxOpacity}, KindFraction, nil, "0.6", false},
+		{fieldKey{textOwner(1), FieldCaptionFadeIn}, KindDuration, nil, "0", false},
+		{fieldKey{textOwner(1), FieldCaptionFadeOut}, KindDuration, nil, "0", false},
 		{fieldKey{moveOwner(0), FieldCameraInsert}, KindEntry, []string{"zoom", "pan"}, `{"kind":"zoom","at":{"beat":0,"offset_ms":0}}`, false},
 		{fieldKey{moveOwner(3), FieldCameraRemove}, KindRemoval, nil, "null", false},
 		{fieldKey{moveOwner(3), FieldCameraMove}, KindCount, nil, "3", false},

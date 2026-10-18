@@ -72,7 +72,15 @@ var entryReaders = []struct {
 // pendingPageFields are the storyboard's editable entry fields the page does not send yet; each
 // is exempt from the check that the page sends every entry field, never from the check that every
 // field the page sends is one the storyboard describes.
-var pendingPageFields = map[string]bool{}
+var pendingPageFields = map[string]bool{
+	storyboard.FieldCaptionFontSize:   true,
+	storyboard.FieldCaptionFontWeight: true,
+	storyboard.FieldCaptionColor:      true,
+	storyboard.FieldCaptionBoxColor:   true,
+	storyboard.FieldCaptionBoxOpacity: true,
+	storyboard.FieldCaptionFadeIn:     true,
+	storyboard.FieldCaptionFadeOut:    true,
+}
 
 // entryFieldName finds a camera move's or caption's edit field written as a string literal.
 var entryFieldName = regexp.MustCompile(`"((?:camera|caption)\.[a-z_]+)"`)

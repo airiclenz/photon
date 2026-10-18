@@ -12,8 +12,8 @@
 //
 // [Apply] changes one field by a typed [Edit] — a beat's duration, hold, cut or zoom, the clip's
 // frame.width or frame.fps, a camera move's start, length, ease or destination, or a caption's
-// start, end, text, place or align, or adds, removes or reorders a camera move or caption —
-// splicing the new value into the source so only the edited
+// start, end, text, place, align, font, colours, box or fade, or adds, removes or reorders a
+// camera move or caption — splicing the new value into the source so only the edited
 // key's text changes, a new key placed by the order of the storyboard's yaml struct tags, and
 // refuses an edit whose result fails Parse. [Fields] describes every field of a storyboard's
 // owners as photon tune's page shows them: each editable field an Edit names and the frame's
@@ -36,6 +36,7 @@
 //   - edit_beat.go: the beat and frame edits — duration, hold, cut, zoom and its fields, frame.width and frame.fps — and [Target.YAMLFlow].
 //   - edit_camera.go: the camera move edits — camera.at, camera.over, camera.ease and camera.to.
 //   - edit_caption.go: the caption edits — caption.at, caption.for, caption.until, caption.text, caption.place and caption.align.
+//   - edit_caption_style.go: the caption style edits — caption.font.size and .weight, caption.color, caption.box.color and .opacity, caption.fade.in and .out.
 //   - edit_list.go: the list edits that add, remove and reorder camera moves and captions — camera.insert|remove|move and caption.insert|remove|move.
 //   - fields.go: [Fields], each owner's editable and read-only [Field] with its [FieldKind], choices and default.
 //   - clock.go: the clip's [OutputClock], from [Storyboard.Clock]: section starts, moments and length.

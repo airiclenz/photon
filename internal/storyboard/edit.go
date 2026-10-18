@@ -42,6 +42,12 @@ import (
 //   - caption.text: a string, its lines separated by \n;
 //   - caption.place: "top", "middle" or "bottom", which removes the key;
 //   - caption.align: "left", "middle", which removes the key, or "right";
+//   - caption.font.size: a number above 0, frame.font_size removing the key;
+//   - caption.font.weight: "regular", which removes the key, or "bold";
+//   - caption.color, caption.box.color: a colour, "#ffcc00", its default — "#ffffff" for the
+//     text and "#000000" for the box, in either case — removing the key;
+//   - caption.box.opacity: a number from 0 to 1, 0.6 removing the key;
+//   - caption.fade.in, caption.fade.out: a whole number of milliseconds, 0 removing the key;
 //   - camera.insert, caption.insert: a new entry, {"kind": "zoom", "at": {"beat": 0,
 //     "offset_ms": 1200}}, its kind zoom or pan for the camera and caption for the captions and
 //     its at a moment, added so that it is the entry at the owner's index, 0 through the list's
@@ -78,7 +84,9 @@ var editFields = []string{
 	FieldZoomOut, FieldFrameWidth, FieldFrameFPS, FieldCameraAt, FieldCameraOver, FieldCameraEase,
 	FieldCameraTo, FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionText,
 	FieldCaptionPlace, FieldCaptionAlign, FieldCameraInsert, FieldCameraRemove, FieldCameraMove,
-	FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove,
+	FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove, FieldCaptionFontSize,
+	FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity,
+	FieldCaptionFadeIn, FieldCaptionFadeOut,
 }
 
 // EditFields returns every field an [Edit] names for [Apply], in a new slice.
@@ -113,8 +121,11 @@ const (
 // ms, one in plain seconds in seconds with the fewest decimals, any other or new value as
 // time.Duration.String(). A new key goes after the keys that precede it in the storyboard's
 // field order, its yaml struct tags; a value equal to the default of a key that is absent writes
-// nothing; cut false, zoom.factor 0 (auto), camera.ease smooth, caption.place bottom and
-// caption.align middle delete their key. A target is written as the flow mapping
+// nothing; cut false, zoom.factor 0 (auto), camera.ease smooth, caption.place bottom,
+// caption.align middle and a caption's font, colour, box or fade at the default [Load] fills in
+// delete their key, and a caption's font, box or fade mapping left holding no key goes with it,
+// while a style value a caption lacks the mapping for creates it as a one-key flow mapping. A
+// colour is written quoted, '#ffcc00', and compared to its default case-insensitively. A target is written as the flow mapping
 // [Target.YAMLFlow] spells, and a zoom.target on a zoom holding nothing but its target rewrites
 // that zoom as a flow mapping. A camera.at, caption.at or caption.until is written as a clip time
 // in ms or a {beat: 3, offset: 200ms} flow mapping, and a pan's cell as {cell: {x: 3, y: 4}}; a

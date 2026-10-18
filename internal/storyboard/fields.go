@@ -36,6 +36,10 @@ const (
 	KindEntry FieldKind = "entry"
 	// KindRemoval is null, which removes the owner.
 	KindRemoval FieldKind = "removal"
+	// KindColor is a colour spelled #rrggbb, "#ffcc00".
+	KindColor FieldKind = "color"
+	// KindFraction is a number from 0 to 1.
+	KindFraction FieldKind = "fraction"
 )
 
 // Field describes one field of a storyboard's owner — the clip, a beat, a camera move or a
@@ -75,9 +79,10 @@ func newEntryDefault(kind string) json.RawMessage {
 
 // The choices of the enum fields, in the order the page offers them.
 var (
-	easeChoices  = []string{string(EaseSmooth), string(EaseLinear)}
-	placeChoices = []string{string(PlaceTop), string(PlaceMiddle), string(PlaceBottom)}
-	alignChoices = []string{string(AlignLeft), string(AlignMiddle), string(AlignRight)}
+	easeChoices   = []string{string(EaseSmooth), string(EaseLinear)}
+	placeChoices  = []string{string(PlaceTop), string(PlaceMiddle), string(PlaceBottom)}
+	alignChoices  = []string{string(AlignLeft), string(AlignMiddle), string(AlignRight)}
+	weightChoices = []string{string(WeightRegular), string(WeightBold)}
 )
 
 // Fields describes every field of board's owners, the editable and the read-only: the clip's
@@ -95,7 +100,7 @@ func Fields(board *Storyboard) []Field {
 	}
 	fields = append(fields, insertField(OwnerCamera, FieldCameraInsert, cameraEntryKinds))
 	for index := range board.Captions {
-		fields = append(fields, captionFields(index)...)
+		fields = append(fields, captionFields(index, board.Frame.FontSize)...)
 	}
 	return append(fields, insertField(OwnerCaption, FieldCaptionInsert, captionEntryKinds))
 }
@@ -183,8 +188,9 @@ func cameraFields(index int, move CameraMove) []Field {
 }
 
 // captionFields describes the fields of the caption at index: its start, its end — a for or an
-// until — its text, where it sits, and its remove and move.
-func captionFields(index int) []Field {
+// until — its text, where it sits, its font, its size defaulting to frameFontSize, its colours,
+// its box and its fade, and its remove and move.
+func captionFields(index int, frameFontSize float64) []Field {
 	owner := Owner{Kind: OwnerCaption, Index: index}
 	fields := []Field{
 		{Owner: owner, Name: FieldCaptionAt, Kind: KindMoment, Default: raw(defaultClipStart)},
@@ -193,6 +199,13 @@ func captionFields(index int) []Field {
 		{Owner: owner, Name: FieldCaptionText, Kind: KindText, Default: raw(defaultText)},
 		{Owner: owner, Name: FieldCaptionPlace, Kind: KindEnum, Choices: slices.Clone(placeChoices), Default: quoted(string(PlaceBottom))},
 		{Owner: owner, Name: FieldCaptionAlign, Kind: KindEnum, Choices: slices.Clone(alignChoices), Default: quoted(string(AlignMiddle))},
+		{Owner: owner, Name: FieldCaptionFontSize, Kind: KindDecimal, Default: raw(formatDecimal(frameFontSize))},
+		{Owner: owner, Name: FieldCaptionFontWeight, Kind: KindEnum, Choices: slices.Clone(weightChoices), Default: quoted(string(WeightRegular))},
+		{Owner: owner, Name: FieldCaptionColor, Kind: KindColor, Default: quoted(defaultCaptionColor)},
+		{Owner: owner, Name: FieldCaptionBoxColor, Kind: KindColor, Default: quoted(defaultBoxColor)},
+		{Owner: owner, Name: FieldCaptionBoxOpacity, Kind: KindFraction, Default: raw(formatDecimal(defaultBoxOpacity))},
+		{Owner: owner, Name: FieldCaptionFadeIn, Kind: KindDuration, Default: raw(defaultZero)},
+		{Owner: owner, Name: FieldCaptionFadeOut, Kind: KindDuration, Default: raw(defaultZero)},
 	}
 	return append(fields, listEntryFields(owner, FieldCaptionRemove, FieldCaptionMove)...)
 }
