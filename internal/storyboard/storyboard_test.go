@@ -147,24 +147,31 @@ func TestLoadEveryForm(t *testing.T) {
 		t.Errorf("beat 4: want a cut beat without a duration, got %+v", quit)
 	}
 
+	// Beats 1, 2 and 3 start at 0s, 2s and 6s on the output clock; beat 4 is cut.
 	wantCamera := []CameraMove{
-		{Zoom: &ZoomMove{To: 1.5, At: Moment{Offset: 200 * time.Millisecond}, Over: 600 * time.Millisecond, Ease: EaseLinear}},
-		{Zoom: &ZoomMove{To: 1, At: Moment{Beat: 1, Offset: time.Second}, Over: 500 * time.Millisecond, Ease: EaseSmooth}},
+		{Zoom: &ZoomMove{
+			To: 1.5, At: Moment{Offset: 200 * time.Millisecond}, Over: 600 * time.Millisecond, Ease: EaseLinear,
+			start: 200 * time.Millisecond,
+		}},
+		{Zoom: &ZoomMove{
+			To: 1, At: Moment{Beat: 1, Offset: time.Second}, Over: 500 * time.Millisecond, Ease: EaseSmooth,
+			start: time.Second,
+		}},
 		{Pan: &PanMove{
 			To: &Point{Cell: &Cell{X: 40, Y: 12}}, At: Moment{Beat: 1, Offset: 100 * time.Millisecond},
-			Over: 500 * time.Millisecond, Ease: EaseSmooth,
+			Over: 500 * time.Millisecond, Ease: EaseSmooth, start: 100 * time.Millisecond,
 		}},
 		{Pan: &PanMove{
 			To: &Point{Target: Target{Text: "Item 1", Nth: NthLast, Area: "list"}}, At: Moment{Offset: 600 * time.Millisecond},
-			Over: 400 * time.Millisecond, Ease: EaseSmooth,
+			Over: 400 * time.Millisecond, Ease: EaseSmooth, start: 600 * time.Millisecond,
 		}},
 		{Pan: &PanMove{
 			Via: []Point{{Target: Target{Text: "Items", Nth: NthFirst, Area: AreaAny}}, {Cell: &Cell{X: 10, Y: 5}}},
-			At:  Moment{Offset: time.Second}, Over: 800 * time.Millisecond, Ease: EaseSmooth,
+			At:  Moment{Offset: time.Second}, Over: 800 * time.Millisecond, Ease: EaseSmooth, start: time.Second,
 		}},
 	}
 	if !reflect.DeepEqual(board.Camera, wantCamera) {
-		t.Errorf("camera: want %+v with smooth by default, got %+v", wantCamera, board.Camera)
+		t.Errorf("camera: want %+v with smooth by default and resolved starts, got %+v", wantCamera, board.Camera)
 	}
 
 	wantCaptions := []Caption{
@@ -172,21 +179,25 @@ func TestLoadEveryForm(t *testing.T) {
 			Text: "Pick an item\nthen save it", At: Moment{Beat: 2, Offset: 200 * time.Millisecond}, Until: &Moment{Beat: 3},
 			Font: CaptionFont{Size: 18, Weight: WeightBold}, Place: PlaceTop, Align: AlignLeft, Offset: Pixels{X: 8, Y: -4},
 			Color: "#FFCC00", Box: CaptionBox{Color: "#202020", Opacity: new(0.0)},
-			Fade: Fade{In: 300 * time.Millisecond, Out: 200 * time.Millisecond},
+			Fade:  Fade{In: 300 * time.Millisecond, Out: 200 * time.Millisecond},
+			start: 2200 * time.Millisecond, stop: 6 * time.Second,
+			textColor: RGB{R: 0xff, G: 0xcc}, boxColor: RGB{R: 0x20, G: 0x20, B: 0x20},
 		},
 		{
 			Text: "Saved", At: Moment{Offset: 9 * time.Second}, For: 2 * time.Second,
 			Font: CaptionFont{Size: 14, Weight: WeightRegular}, Position: &Pixels{X: 40, Y: 300},
 			Color: "#ffffff", Box: CaptionBox{Color: "#000000", Opacity: new(0.6)},
+			start: 9 * time.Second, stop: 11 * time.Second, textColor: RGB{R: 0xff, G: 0xff, B: 0xff},
 		},
 		{
 			Text: "Goodbye", At: Moment{Beat: 3, Offset: -time.Second}, For: time.Second,
 			Font: CaptionFont{Size: 14, Weight: WeightRegular}, Place: PlaceBottom, Align: AlignMiddle,
 			Color: "#ffffff", Box: CaptionBox{Color: "#000000", Opacity: new(0.6)},
+			start: 5 * time.Second, stop: 6 * time.Second, textColor: RGB{R: 0xff, G: 0xff, B: 0xff},
 		},
 	}
 	if !reflect.DeepEqual(board.Captions, wantCaptions) {
-		t.Errorf("captions: want %+v with their defaults, got %+v", wantCaptions, board.Captions)
+		t.Errorf("captions: want %+v with their defaults and resolved values, got %+v", wantCaptions, board.Captions)
 	}
 }
 
@@ -379,6 +390,106 @@ func TestLoadRejects_Captions(t *testing.T) {
 				t.Errorf("owner: want the one %q names, got %+v", tc.want, owner)
 			}
 		})
+	}
+}
+
+func TestParse_ResolvesCaptionValues(t *testing.T) {
+	t.Parallel()
+	// Beat 1 runs [0s, 3s); beat 2 is cut; beat 3 runs [3s, 5s).
+	const board = `clip: resolve
+ship: resolve.gif
+frame: {cols: 80, rows: 24, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+beats:
+  - {id: 1, title: open, duration: 3s}
+  - {id: 2, title: skipped, cut: true}
+  - {id: 3, title: close, duration: 2s}
+captions:
+`
+	white, black := RGB{R: 0xff, G: 0xff, B: 0xff}, RGB{}
+	cases := []struct {
+		name                string
+		caption             string
+		wantStart, wantStop time.Duration
+		wantText, wantBox   RGB
+	}{
+		{"clip time and for", "{text: a, at: 1s, for: 500ms}", time.Second, 1500 * time.Millisecond, white, black},
+		{"beat moment and until", "{text: a, at: {beat: 3, offset: 200ms}, until: {beat: 3, offset: 1s}}",
+			3200 * time.Millisecond, 4 * time.Second, white, black},
+		{"beat moment and for", "{text: a, at: {beat: 1}, for: 2s}", 0, 2 * time.Second, white, black},
+		{"until a clip time", "{text: a, at: 2s, until: 4500ms}", 2 * time.Second, 4500 * time.Millisecond, white, black},
+		{"explicit colours", "{text: a, at: 1s, for: 1s, color: '#0a1B2c', box: {color: '#FF8000'}}",
+			time.Second, 2 * time.Second, RGB{R: 0x0a, G: 0x1b, B: 0x2c}, RGB{R: 0xff, G: 0x80}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			parsed, err := Parse([]byte(board+"  - "+tc.caption+"\n"), "resolve.yaml")
+
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			caption := parsed.Captions[0]
+			if caption.Start() != tc.wantStart || caption.Stop() != tc.wantStop {
+				t.Errorf("start, stop: want %s, %s, got %s, %s", tc.wantStart, tc.wantStop, caption.Start(), caption.Stop())
+			}
+			if caption.TextColor() != tc.wantText || caption.BoxColor() != tc.wantBox {
+				t.Errorf("colours: want text %+v and box %+v, got %+v and %+v",
+					tc.wantText, tc.wantBox, caption.TextColor(), caption.BoxColor())
+			}
+		})
+	}
+}
+
+func TestParse_ResolvesMoveStarts(t *testing.T) {
+	t.Parallel()
+	// Beat 1 runs [0s, 3s); beat 2 is cut; beat 3 runs [3s, 5s).
+	body := `clip: resolve
+ship: resolve.gif
+frame: {cols: 80, rows: 24, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+beats:
+  - {id: 1, title: open, duration: 3s}
+  - {id: 2, title: skipped, cut: true}
+  - {id: 3, title: close, duration: 2s}
+camera:
+  - zoom: {to: 2, over: 1s}
+  - zoom: {to: 1, at: {beat: 3, offset: 500ms}, over: 1s}
+  - pan: {to: {cell: {x: 1, y: 1}}, at: 1500ms, over: 1s}
+`
+
+	parsed, err := Parse([]byte(body), "resolve.yaml")
+
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	got := []time.Duration{parsed.Camera[0].Zoom.Start(), parsed.Camera[1].Zoom.Start(), parsed.Camera[2].Pan.Start()}
+	want := []time.Duration{0, 3500 * time.Millisecond, 1500 * time.Millisecond}
+	if !slices.Equal(got, want) {
+		t.Errorf("starts: want %v, got %v", want, got)
+	}
+}
+
+func TestParse_RefusesEveryBeatCut(t *testing.T) {
+	t.Parallel()
+	body := `clip: cut
+ship: cut.gif
+frame: {cols: 80, rows: 24, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}
+beats:
+  - {id: 1, title: open, cut: true}
+  - {id: 2, title: close, cut: true}
+`
+
+	_, err := Parse([]byte(body), "cut.yaml")
+
+	var invalid *ValidationError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("want a *ValidationError, got %v", err)
+	}
+	if len(invalid.Problems) != 1 || invalid.Problems[0].Error() != "beats: every beat is cut" {
+		t.Fatalf("problems: want only %q, got:\n%v", "beats: every beat is cut", err)
+	}
+	if got := OwnerOf(invalid.Problems[0]); got != (Owner{Kind: OwnerClip}) {
+		t.Errorf("owner: want the clip, got %+v", got)
 	}
 }
 

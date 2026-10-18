@@ -1,7 +1,9 @@
 package storyboard
 
 import (
+	"cmp"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -15,6 +17,11 @@ import (
 // top-left corner — instead of all three. [Load] fills what a valid caption leaves out: Font's
 // size is frame.font_size and its weight regular, Place is bottom and Align middle (unless
 // Position is set, when both stay empty), Color is white and Box is black at 0.6 opacity.
+//
+// The authored fields stay as written, defaults filled; [Load] also resolves the caption onto the
+// clip's output clock and its colours, which [Caption.Start], [Caption.Stop],
+// [Caption.TextColor] and [Caption.BoxColor] report. A Caption built as a struct literal rather
+// than loaded reports zero for all four.
 type Caption struct {
 	Text     string        `yaml:"text"`
 	At       Moment        `yaml:"at"`
@@ -28,6 +35,27 @@ type Caption struct {
 	Color    string        `yaml:"color"`
 	Box      CaptionBox    `yaml:"box"`
 	Fade     Fade          `yaml:"fade"`
+
+	start, stop         time.Duration
+	textColor, boxColor RGB
+}
+
+// Start is where the caption starts on the clip's output clock: its At, resolved.
+func (c Caption) Start() time.Duration { return c.start }
+
+// Stop is where the caption ends on the clip's output clock: its start plus For, or its Until
+// resolved.
+func (c Caption) Stop() time.Duration { return c.stop }
+
+// TextColor is the colour of the caption's text: its Color, parsed.
+func (c Caption) TextColor() RGB { return c.textColor }
+
+// BoxColor is the colour of the box behind the caption's text: its Box.Color, parsed.
+func (c Caption) BoxColor() RGB { return c.boxColor }
+
+// RGB is an opaque colour, one byte per channel.
+type RGB struct {
+	R, G, B uint8
 }
 
 // CaptionFont is a caption's face: its Size, in the unit of frame.font_size, and its Weight.
@@ -109,26 +137,30 @@ const (
 // hexColor is the spelling of a caption colour: #rrggbb.
 var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
-// validateCaptions checks every caption's text, font, placement, colours, timing and fades.
-// Problems are filed under captions[i].
+// validateCaptions checks every caption's text, font, placement, colours, timing and fades, and
+// keeps what it resolves. Problems are filed under captions[i].
 func (s *Storyboard) validateCaptions(collect collector) {
 	clock := s.Clock()
-	for index, caption := range s.Captions {
-		caption.validate(s, clock, collect.at(Owner{Kind: OwnerCaption, Index: index}))
+	for index := range s.Captions {
+		s.Captions[index].validate(s, clock, collect.at(Owner{Kind: OwnerCaption, Index: index}))
 	}
 }
 
-// validate applies the caption's rules, resolving its times on clock, board's output clock.
-func (c Caption) validate(board *Storyboard, clock OutputClock, report reporter) {
+// validate applies the caption's rules, resolving its times on clock, board's output clock, and
+// its colours, a colour left out resolving to its default. What fails to resolve stays zero.
+func (c *Caption) validate(board *Storyboard, clock OutputClock, report reporter) {
 	if strings.TrimSuffix(c.Text, "\n") == "" {
 		report("text: missing")
 	}
 	c.Font.validate(board.Frame.FontSize, report)
 	c.validatePlacement(report)
-	validateColor("color", c.Color, report)
-	c.Box.validate(report)
-	length, isTimed := c.validateTiming(clock, report)
-	c.Fade.validate(length, isTimed, report)
+	c.textColor = validateColor("color", cmp.Or(c.Color, defaultCaptionColor), report)
+	c.boxColor = c.Box.validate(report)
+	start, stop, isTimed := c.validateTiming(clock, report)
+	if isTimed {
+		c.start, c.stop = start, stop
+	}
+	c.Fade.validate(stop-start, isTimed, report)
 }
 
 // validate checks the font's weight and that its size — its own, or frame.font_size when it has
@@ -168,18 +200,20 @@ func (c Caption) validatePlacement(report reporter) {
 	}
 }
 
-// validate checks the box's colour and that its opacity lies in [0, 1].
-func (b CaptionBox) validate(report reporter) {
-	validateColor("box.color", b.Color, report)
+// validate checks the box's colour and that its opacity lies in [0, 1], and returns the colour
+// resolved, the default when the box leaves it out.
+func (b CaptionBox) validate(report reporter) RGB {
+	resolved := validateColor("box.color", cmp.Or(b.Color, defaultBoxColor), report)
 	if b.Opacity != nil && (*b.Opacity < minBoxOpacity || *b.Opacity > maxBoxOpacity) {
 		report("box.opacity: want in [%d, %d], got %g", minBoxOpacity, maxBoxOpacity, *b.Opacity)
 	}
+	return resolved
 }
 
 // validateTiming checks that the caption sets exactly one end, that it starts inside the clip
-// and that it ends after its start and by the clip's end, and returns how long it shows.
-// isTimed is false when any of that fails, so there is no length to fit the fades in.
-func (c Caption) validateTiming(clock OutputClock, report reporter) (length time.Duration, isTimed bool) {
+// and that it ends after its start and by the clip's end, and returns where it starts and stops
+// on clock. isTimed is false when any of that fails, so there is no stretch to fit the fades in.
+func (c Caption) validateTiming(clock OutputClock, report reporter) (start, stop time.Duration, isTimed bool) {
 	hasEnd := true
 	if (c.For == 0) == (c.Until == nil) {
 		report("want exactly one of for or until")
@@ -192,33 +226,33 @@ func (c Caption) validateTiming(clock OutputClock, report reporter) (length time
 	start, err := clock.Resolve(c.At)
 	if err != nil {
 		report("at: %v", err)
-		return 0, false
+		return 0, 0, false
 	}
 	clipLength := clock.Length()
 	if start < 0 || start >= clipLength {
 		report("at: want a start in [0s, %s), got %s", clipLength, start)
-		return 0, false
+		return 0, 0, false
 	}
 	if !hasEnd {
-		return 0, false
+		return 0, 0, false
 	}
 	stop, field := start+c.For, "for"
 	if c.Until != nil {
 		field = "until"
 		if stop, err = clock.Resolve(*c.Until); err != nil {
 			report("until: %v", err)
-			return 0, false
+			return 0, 0, false
 		}
 		if stop <= start {
 			report("until: want a stop after the start %s, got %s", start, stop)
-			return 0, false
+			return 0, 0, false
 		}
 	}
 	if stop > clipLength {
 		report("%s: want the caption to end by the clip's end %s, got an end at %s", field, clipLength, stop)
-		return 0, false
+		return 0, 0, false
 	}
-	return stop - start, true
+	return start, stop, true
 }
 
 // validate checks that neither fade is negative and, when the caption's length is known, that
@@ -235,12 +269,15 @@ func (f Fade) validate(length time.Duration, isTimed bool, report reporter) {
 	}
 }
 
-// validateColor reports a colour that is neither empty nor spelled #rrggbb, under the field's
-// name.
-func validateColor(field, color string, report reporter) {
-	if color != "" && !hexColor.MatchString(color) {
+// validateColor reports a colour not spelled #rrggbb, under the field's name, and returns it
+// parsed; a colour it reports is zero.
+func validateColor(field, color string, report reporter) RGB {
+	value, err := strconv.ParseUint(strings.TrimPrefix(color, "#"), 16, 32)
+	if !hexColor.MatchString(color) || err != nil {
 		report("%s: want #rrggbb, got %q", field, color)
+		return RGB{}
 	}
+	return RGB{R: uint8(value >> 16), G: uint8(value >> 8), B: uint8(value)}
 }
 
 // applyDefaults fills what a valid caption leaves out; frameFontSize is the frame's font size,

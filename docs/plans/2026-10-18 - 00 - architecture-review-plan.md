@@ -302,7 +302,10 @@ Depends on items 7, 9 and 10.
 **Closes:** located-problems
 **Commit:** `fix(tune): show compose and caption problems on their own entry`
 
-## 12. Parse resolves caption and move values
+## 12. Parse resolves caption and move values — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): a left-out caption colour resolves to its default inside validation (`cmp.Or` with the default spelling before `validateColor` parses it) rather than in `applyDefaults`, which is unchanged; the result is the same — `TextColor()`/`BoxColor()` carry the default — and `validateColor` keeps reporting only a set, misspelled colour.
+NOTES (2026-10-18): the all-cut refusal is reported and validation carries on, so a board that also has captions or camera moves additionally reports their times as outside the 0s clip (the report-everything-at-once rule).
 
 Depends on item 8.
 

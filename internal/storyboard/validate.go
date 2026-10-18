@@ -3,6 +3,7 @@ package storyboard
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/airiclenz/photon/internal/keys"
@@ -52,7 +53,9 @@ const (
 // where the storyboard and the config meet, not here.
 var areaName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
 
-// validate applies every schema rule and returns the ones the storyboard breaks.
+// validate applies every schema rule and returns the ones the storyboard breaks. On the way it
+// keeps what the caption and camera rules resolve: their places on the output clock and the
+// captions' colours.
 func (s *Storyboard) validate() []error {
 	var problems []error
 	collect := collector(func(problem error) { problems = append(problems, problem) })
@@ -65,6 +68,9 @@ func (s *Storyboard) validate() []error {
 	if len(s.Beats) == 0 {
 		report("beats: none declared")
 		return problems
+	}
+	if !slices.ContainsFunc(s.Beats, func(beat Beat) bool { return !beat.Cut }) {
+		report("beats: every beat is cut")
 	}
 	s.validateIDs(collect)
 	for _, beat := range s.Beats {

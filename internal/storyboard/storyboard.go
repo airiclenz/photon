@@ -20,8 +20,9 @@ import (
 // clock.
 //
 // [Load] and [Parse] are the only ways to get one: a Storyboard in hand has passed validation,
-// its Ship is resolved against the file's directory, and its zoom ramps, camera eases and
-// captions carry their defaults.
+// its Ship is resolved against the file's directory, its zoom ramps, camera eases and captions
+// carry their defaults, and its camera moves and captions carry their resolved places on the
+// output clock and, for a caption, its colours.
 type Storyboard struct {
 	// Path is the storyboard file Load read or Parse was handed, as the caller named it.
 	Path string `yaml:"-"`

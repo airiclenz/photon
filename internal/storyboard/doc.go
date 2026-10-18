@@ -19,7 +19,7 @@
 //   - beat.go: a [Beat], its [Zoom], [Action] forms, [Target] and [Nth], and [Expect].
 //   - camera.go: a [CameraMove] — a [ZoomMove] or [PanMove] — its [Point], [Cell] and [Ease], and their rules.
 //   - clock.go: the clip's [OutputClock], from [Storyboard.Clock]: section starts, moments and length.
-//   - caption.go: a [Caption], its [CaptionFont] and [Weight], [Place], [Align], [Pixels], [CaptionBox] and [Fade], and their rules.
+//   - caption.go: a [Caption], its [CaptionFont] and [Weight], [Place], [Align], [Pixels], [CaptionBox], [Fade] and [RGB], and their rules.
 //   - located.go: a problem's [Owner] and [OwnerKind], the [LocatedError] that carries one, [AtBeat], [AtCamera], [AtCaption] and [OwnerOf].
 //   - moment.go: a [Moment] on the clip's output clock and how it decodes.
 //   - validate.go: every other validation rule, each reporting its problem under the field's path.

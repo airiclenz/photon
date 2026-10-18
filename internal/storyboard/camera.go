@@ -10,6 +10,10 @@ import (
 // and a pan move on the pan track, so a zoom and a pan may overlap, while two moves on one track
 // may not. A kept beat's [Zoom] holds both tracks for the whole of its section. A move whose `at`
 // is absent starts at the clip's first frame.
+//
+// A move's authored At stays as written; [Load] also resolves it onto the output clock, which
+// [ZoomMove.Start] and [PanMove.Start] report. A move built as a struct literal rather than loaded
+// reports a zero start.
 type CameraMove struct {
 	Zoom *ZoomMove `yaml:"zoom"`
 	Pan  *PanMove  `yaml:"pan"`
@@ -21,7 +25,12 @@ type ZoomMove struct {
 	At   Moment        `yaml:"at"`
 	Over time.Duration `yaml:"over"`
 	Ease Ease          `yaml:"ease"`
+
+	start time.Duration
 }
+
+// Start is where the zoom move starts on the clip's output clock: its At, resolved.
+func (z ZoomMove) Start() time.Duration { return z.start }
 
 // PanMove moves the camera's centre to a point, starting At and lasting Over. Exactly one of To
 // and Via is set: To is the destination of a straight move, and Via is a path of at least two
@@ -33,7 +42,12 @@ type PanMove struct {
 	At   Moment        `yaml:"at"`
 	Over time.Duration `yaml:"over"`
 	Ease Ease          `yaml:"ease"`
+
+	start time.Duration
 }
+
+// Start is where the pan move starts on the clip's output clock: its At, resolved.
+func (p PanMove) Start() time.Duration { return p.start }
 
 // Point is where a pan aims: either an on-screen target (its fields sit inline, so `to: {text:
 // …}` reads as a target) or a Cell of the terminal grid. Exactly one of Text and Cell is set.
@@ -92,9 +106,9 @@ type moveTiming struct {
 	ease Ease
 }
 
-// validateCamera checks every camera move's form and its place on the clip's clock, then that no
-// two moves on one track overlap and that no move overlaps a kept beat's zoom section. Problems
-// are filed under camera[i], an overlap under the later move.
+// validateCamera checks every camera move's form and its place on the clip's clock, keeping the
+// start it resolves, then that no two moves on one track overlap and that no move overlaps a kept
+// beat's zoom section. Problems are filed under camera[i], an overlap under the later move.
 func (s *Storyboard) validateCamera(collect collector) {
 	held := map[string][]span{trackZoom: nil, trackPan: nil}
 	clock := s.Clock()
@@ -110,6 +124,7 @@ func (s *Storyboard) validateCamera(collect collector) {
 		if !isPlaced {
 			continue
 		}
+		move.place(placed.start)
 		placed.holder = holder
 		for _, other := range held[track] {
 			if placed.overlaps(other) {
@@ -152,6 +167,15 @@ func (m CameraMove) validateForm(frame Frame, report reporter) (track string, ti
 	}
 	m.Pan.validate(frame, report)
 	return trackPan, moveTiming{m.Pan.At, m.Pan.Over, m.Pan.Ease}, true
+}
+
+// place keeps start, the move's At resolved on the output clock, on whichever form is set.
+func (m CameraMove) place(start time.Duration) {
+	if m.Zoom != nil {
+		m.Zoom.start = start
+		return
+	}
+	m.Pan.start = start
 }
 
 // validate checks the zoom move's factor.
