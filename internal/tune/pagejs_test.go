@@ -617,6 +617,64 @@ func TestPageJS_RefusedLaneAdd_ShowsInTheStatusUntilAnAcceptedEdit(t *testing.T)
 	}
 }
 
+// The duration drag of sessionStoryboard: beat 1's end is dragged through dragPassMS and let go
+// at dragReleaseMS, on a beats lane laid out one pixel per millisecond, so the one edit sends
+// draggedDurationMS, dragReleaseMS snapped to 50ms.
+const (
+	dragPassMS        = 600
+	dragReleaseMS     = 1234
+	draggedDurationMS = 1250
+)
+
+// dragBeatsHandle drags the first handle on the beats lane through each of the output times at,
+// in turn, and lets go at the last; the lane's track is laid out one pixel per millisecond.
+func (p *pageHarness) dragBeatsHandle(at ...int) {
+	p.t.Helper()
+	moves, err := json.Marshal(at)
+	if err != nil {
+		p.t.Fatalf("encode the drag's moves: %v", err)
+	}
+	found := p.eval(fmt.Sprintf(`{
+		const lane = document.getElementById(%q).querySelectorAll(".lane")
+			.find((row) => row.querySelectorAll(".lane-name")[0].textContent === "beats");
+		const track = lane ? lane.querySelectorAll(".lane-track")[0] : null;
+		const handle = track ? track.querySelectorAll(".handle")[0] : null;
+		if (handle) {
+			track.layout = { left: 0, top: 0, width: window.tune.state().length_ms, height: 20 };
+			const moves = %s;
+			const fire = (type, ms) => handle.dispatchEvent(new Event(type, { clientX: ms }));
+			fire("pointerdown", 0);
+			moves.forEach((ms) => fire("pointermove", ms));
+			fire("pointerup", moves[moves.length - 1]);
+		}
+		Boolean(handle);
+	}`, elementTimeline, moves)).ToBoolean()
+	if !found {
+		p.t.Fatal("the beats lane has no handle")
+	}
+	p.settle()
+}
+
+func TestPageJS_DragABeatsEnd_SendsOneSnappedDurationEdit(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, sessionStoryboard).session
+	page := loadPage(t, session)
+
+	page.dragBeatsHandle(dragPassMS, dragReleaseMS)
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":1},"field":%q,"value":%d}`,
+		storyboard.OwnerBeat, storyboard.FieldDuration, draggedDurationMS))
+	edits := 0
+	for _, request := range page.requests {
+		if request.path == "/api/edit" {
+			edits++
+		}
+	}
+	if edits != 1 {
+		t.Errorf("the edits the drag sent: want 1, got %d", edits)
+	}
+}
+
 func TestPageJS_RemoveAndMoveACameraMove(t *testing.T) {
 	t.Parallel()
 	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session

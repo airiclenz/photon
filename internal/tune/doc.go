@@ -57,5 +57,6 @@
 //   - page/entries.js: the inspector's camera move and caption panels.
 //   - page/lanes.js, page/timeline.js, page/picker.js: the timeline, its lanes and the target
 //     picker.
+//   - page/drag.js: the timeline's pointer drag, snapped, sending one edit when let go.
 //   - page/path.js: the via path overlay on the preview.
 package tune

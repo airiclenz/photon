@@ -2,10 +2,10 @@
 // It builds on app.js's window.tune: state() and onState(fn) for what to draw, time() for the
 // playhead, selected() and select(id) for the beat the inspector shows, selectedEntry() and
 // selectEntry(entry) for the camera move or caption it shows instead, seek(ms) for the axis, and
-// edit(edit) for a drag, which the server applies, validates and schedules. From the page's
-// internal window.tunePage it takes reportStatus alone, to show a refused add in the transport
-// bar. Nothing here computes timing: every position comes from the state's sections, beats,
-// camera moves and captions.
+// edit(edit) for a lane's add, which the server applies, validates and schedules; a drag sends
+// its edit through window.tuneDrag. From the page's internal window.tunePage it takes
+// reportStatus alone, to show a refused add in the transport bar. Nothing here computes timing:
+// every position comes from the state's sections, beats, camera moves and captions.
 //
 // The timeline is two lists of lanes, drawn top to bottom. Its own lanes follow the beats: such a
 // lane is {name, draw(section, state), handles(section, state)}, where draw returns the nodes it
@@ -19,14 +19,16 @@
 //
 // A handle is {beat, field, anchor, sign, value, min, max}: the edit's beat and field, the value
 // it holds now in milliseconds, the bounds a drag keeps it in, and where its edge sits on the
-// output clock — at anchor + sign × value. A drag moves the edge in steps of SNAP_MS, shows the
-// new extent locally, and sends one edit when it is let go.
+// output clock — at anchor + sign × value. drag.js's window.tuneDrag, which loads before this
+// file, runs the drag: it moves the edge in steps of SNAP_MS, shows the new extent locally, and
+// sends one edit when it is let go; while it runs, a redraw from state waits for its end.
 "use strict";
 
 (() => {
   const tune = window.tune;
   const page = window.tunePage;
-  const SNAP_MS = 50;
+  const dragging = window.tuneDrag;
+  const SNAP_MS = dragging.SNAP_MS;
   const PERCENT = 100;
   const MILLISECONDS_PER_SECOND = 1000;
   const MIN_TICK_SPACING_PX = 72;
@@ -52,9 +54,7 @@
   let playhead = null;
   let shownTime = null;
   let shownSelection = null;
-  let drag = null;
   let isScrubbing = false;
-  let isRedrawPending = false;
 
   // --- the lanes ---
 
@@ -179,11 +179,9 @@
 
   // render redraws the axis and every lane from state; a drag in progress defers it to its end.
   function render(state) {
-    if (drag || !state) {
-      isRedrawPending = Boolean(drag);
+    if (dragging.defersRedraw() || !state) {
       return;
     }
-    isRedrawPending = false;
     clipLength = state.length_ms;
     playhead = element("div", { className: "playhead" });
     const playheadColumn = element("div", { className: "playhead-column" }, playhead);
@@ -322,84 +320,37 @@
 
   // --- dragging a handle ---
 
+  // handleNode is handle's edge on track, dragged through window.tuneDrag: a drag selects the
+  // handle's beat and sends the edit of the handle's field.
   function handleNode(handle, track) {
     const node = element("div", { className: "handle", title: "Drag to set " + handle.field });
     node.style.left = percentOf(edgeOf(handle, handle.value)) + "%";
-    node.addEventListener("pointerdown", (event) => startDrag(event, handle, node, track));
-    node.addEventListener("pointermove", moveDrag);
-    node.addEventListener("pointerup", endDrag);
-    node.addEventListener("pointercancel", cancelDrag);
+    dragging.attach({
+      node,
+      track,
+      value: handle.value,
+      min: handle.min,
+      max: handle.max,
+      axis: { msAt, percentOf },
+      valueAt: (ms) => handle.sign * (ms - handle.anchor),
+      extent: (value) => handleExtent(handle, value),
+      select: () => tune.select(handle.beat),
+      edit: (value) => ({ owner: { kind: OWNER_BEAT, index: handle.beat }, field: handle.field, value }),
+      redraw: () => render(tune.state()),
+    });
     return node;
   }
 
-  function startDrag(event, handle, node, track) {
-    event.preventDefault();
-    event.stopPropagation();
-    tune.pause();
-    tune.select(handle.beat);
-    const ghost = element("div", { className: "drag-ghost" });
-    track.append(ghost);
-    node.setPointerCapture(event.pointerId);
-    node.classList.add("dragging");
-    drag = { handle, node, ghost, rect: track.getBoundingClientRect(), value: handle.value };
-    showDrag();
-  }
-
-  // moveDrag snaps the dragged value to SNAP_MS within the handle's bounds and shows it.
-  function moveDrag(event) {
-    if (!drag) {
-      return;
-    }
-    const handle = drag.handle;
-    const raw = handle.sign * (msAt(event.clientX, drag.rect) - handle.anchor);
-    const snapped = Math.round(raw / SNAP_MS) * SNAP_MS;
-    drag.value = Math.min(Math.max(snapped, handle.min), handle.max);
-    showDrag();
-  }
-
-  // showDrag moves the handle to the dragged value and spans the ghost from the handle's anchor
-  // to it, labelled with the value the edit will send.
-  function showDrag() {
-    const edge = edgeOf(drag.handle, drag.value);
-    const from = Math.min(edge, drag.handle.anchor);
-    const to = Math.max(edge, drag.handle.anchor);
-    drag.node.style.left = percentOf(edge) + "%";
-    drag.ghost.style.left = percentOf(from) + "%";
-    drag.ghost.style.width = percentOf(to - from) + "%";
-    drag.ghost.textContent = drag.handle.field + " " + drag.value + "ms";
-  }
-
-  // endDrag sends the dragged value as one edit when it changed. A refused edit stands on its
-  // beat in the inspector, which app.js shows, so the lanes only redraw.
-  function endDrag() {
-    if (!drag) {
-      return;
-    }
-    const { handle, value } = drag;
-    finishDrag();
-    if (value === handle.value) {
-      render(tune.state());
-      return;
-    }
-    tune
-      .edit({ owner: { kind: OWNER_BEAT, index: handle.beat }, field: handle.field, value })
-      .catch(() => render(tune.state()));
-  }
-
-  function cancelDrag() {
-    if (drag) {
-      finishDrag();
-      render(tune.state());
-    }
-  }
-
-  function finishDrag() {
-    drag.ghost.remove();
-    drag.node.classList.remove("dragging");
-    drag = null;
-    if (isRedrawPending) {
-      render(tune.state());
-    }
+  // handleExtent draws handle at value: its edge, and a ghost from its anchor to the edge
+  // labelled with the value the edit will send.
+  function handleExtent(handle, value) {
+    const edge = edgeOf(handle, value);
+    return {
+      edge,
+      from: Math.min(edge, handle.anchor),
+      to: Math.max(edge, handle.anchor),
+      label: handle.field + " " + value + "ms",
+    };
   }
 
   // --- scrubbing the axis ---

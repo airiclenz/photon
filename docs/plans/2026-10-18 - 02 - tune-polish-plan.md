@@ -105,7 +105,10 @@ longer holds the refusal; `TestPageJS_LoadsAndWires` still passes.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/ -run 'TestPage'`
 **Commit:** `fix(tune): show a refused lane add in the status bar`
 
-## 3. Move the timeline's pointer drag into drag.js
+## 3. Move the timeline's pointer drag into drag.js — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): window.tuneDrag is {SNAP_MS, attach(drag), defersRedraw()}; a drag descriptor is {node, track, value, min, max, axis: {msAt, percentOf}, valueAt(ms), extent(value) -> {edge, from, to, label}, select(), edit(value), redraw()}, so drag.js snaps and clamps the value while the timeline keeps the clock mapping; timeline.js's render asks defersRedraw() instead of reading its own drag state.
+NOTES (2026-10-18): timeline.js's file-top comment reworded (window.tune's edit is now used there for a lane's add; a drag's edit goes through window.tuneDrag), as the item's own change made the old wording false.
 
 **What:** Refactor, no behaviour change, so item 5 has room.
 **Regression guard.** `SNAP_MS` stays readable from timeline.js (`beatHandles`, `holdHandles`,
