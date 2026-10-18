@@ -245,7 +245,11 @@ internal/tune/page/app.js — request; internal/tune/server.go — guard; intern
 **Closes:** tune-pan-target-test
 **Commit:** `test(tune): drive the page under goja and set a pick as the pan target`
 
-## 7. Insert, delete and move a sequence item in yamledit
+## 7. Insert, delete and move a sequence item in yamledit — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): API is `InsertItem(sequence Path, index int, value string)`, `DeleteItem(sequence Path, index int)`, `MoveItem(sequence Path, from, to int)`; deleting a sequence's only item goes through `Replace(sequence, "[]")`, so the only item of a block sequence at the document's root is refused with ErrUnsupported, as Replace refuses a root block node.
+
+NOTES (2026-10-18): a block item's span is its dash line through `itemEnd`, so comment lines between items (and a comment above the first dash) stay where they stand on a move or delete; an item whose dash has text before it on its line (the inner first item of `- - a`) is refused with ErrUnsupported.
 
 **What:**
 **Regression guard.** Move cuts and re-splices the item's whole span verbatim (dash line through
