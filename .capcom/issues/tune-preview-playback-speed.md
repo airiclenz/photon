@@ -32,3 +32,7 @@ The preview is the tool's whole point: timing a beat by eye needs the clip to pl
 - Paused, stepped or after a scrub, the preview settles on the exact frame `photon render`
   composes at that time.
 - A draft frame request on the clip above answers in well under 100 ms on the Pi 5 host.
+
+## Log
+
+- 2026-10-18 Airic Lenz: Plan 2026-10-18 - 03 - tune-playback-plan landed (741d7aa): draft frames at scale 1 with ApproxBiLinear, GET /api/frame?t=<ms>&draft=1, exact-frame settle on pause/step/scrub release, 4-in-flight prefetch with a 48-entry client cache. Left open: the on-host acceptance (fps playback without stalls, draft request well under 100 ms on the 135x44 clip on the Pi 5) was not measured by the run.
