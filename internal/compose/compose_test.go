@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/draw"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -721,5 +722,43 @@ captions:
 				t.Errorf("at %s: want the caption gone", tc.hidden)
 			}
 		})
+	}
+}
+
+func TestCompositorCaptionBoxes(t *testing.T) {
+	t.Parallel()
+	recorded := &take.Take{
+		Snapshots: []take.Snapshot{{At: 0}, {At: 6 * sec}},
+		Events:    []take.Event{beatStart(0, 1), beatStart(2*sec, 2)},
+	}
+	board := parseBoard(t, `beats:
+  - {id: 1, title: one, duration: 2s}
+  - {id: 2, title: two, duration: 4s}
+captions:
+`+boxCaption("First", "{beat: 1}", "1s", bottomMiddle)+
+		boxCaption("Second", "{beat: 2}", "1s", "position: {x: 40, y: 40}"))
+	compositor, _ := newTestCompositor(t, board, recorded)
+	first, _ := captionBox(t, compositor, 0)
+	second, _ := captionBox(t, compositor, 2*sec)
+
+	boxes := compositor.CaptionBoxes()
+
+	if want := []image.Rectangle{first, second}; !slices.Equal(boxes, want) {
+		t.Errorf("CaptionBoxes() = %v, want the drawn boxes %v", boxes, want)
+	}
+	if _, unit, _ := Output(testLayout, board.Frame.Width); compositor.Unit() != unit {
+		t.Errorf("Unit() = %g, want Output's %g", compositor.Unit(), unit)
+	}
+}
+
+func TestCompositorCaptionBoxes_NoCaptions_IsNil(t *testing.T) {
+	t.Parallel()
+	board, recorded := zoomClickTake(take.Box{X: 30, Y: 7, W: 1, H: 1})
+	compositor, _ := newTestCompositor(t, board, recorded)
+
+	boxes := compositor.CaptionBoxes()
+
+	if boxes != nil {
+		t.Errorf("CaptionBoxes() = %v, want nil for a storyboard with no captions", boxes)
 	}
 }

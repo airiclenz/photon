@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"image"
 	"math"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -284,5 +285,24 @@ func TestNew_BadArguments_Fail(t *testing.T) {
 				t.Errorf("New error = %v, want one containing %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestBoxes_AreTheRectanglesDrawPaints(t *testing.T) {
+	const captions = "  - {text: Hi, at: 0s, for: 1s, place: top, align: left, box: {color: '#0000ff', opacity: 1}}\n" +
+		"  - {text: There, at: 2s, for: 1s, position: {x: 100, y: 80}, box: {color: '#0000ff', opacity: 1}}\n"
+	layer := newTestLayer(t, captions, testOut, testUnit)
+
+	boxes := layer.Boxes()
+
+	want := []image.Rectangle{
+		inkRect(drawAt(layer, testOut, 0)),
+		inkRect(drawAt(layer, testOut, 2*time.Second)),
+	}
+	if !slices.Equal(boxes, want) {
+		t.Errorf("Boxes() = %v, want the painted boxes %v", boxes, want)
+	}
+	if wantMin := image.Pt(50, 40); len(boxes) == 2 && boxes[1].Min != wantMin {
+		t.Errorf("the positioned caption's box starts at %v, want %v", boxes[1].Min, wantMin)
 	}
 }

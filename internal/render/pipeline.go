@@ -36,8 +36,8 @@ type RasterCache interface {
 //
 // A pipeline [Build] could not finish holds its schedule and the error that stopped it: its
 // frame methods return that error, [Pipeline.Cell] reports no cell, [Pipeline.Rect] the empty
-// rectangle and [Pipeline.Size] the zero size. It is safe for concurrent use when its
-// [RasterCache] is.
+// rectangle, [Pipeline.Size] the zero size, [Pipeline.Unit] 0 and [Pipeline.CaptionBoxes] none.
+// It is safe for concurrent use when its [RasterCache] is.
 type Pipeline struct {
 	// loaded is the clip the pipeline was built over: its frame and config decide what a later
 	// [Build] may reuse.
@@ -235,6 +235,25 @@ func (p *Pipeline) Size() image.Point {
 		return image.Point{}
 	}
 	return p.compositor.Size()
+}
+
+// Unit is how many shipped pixels one design pixel spans, as [compose.Compositor.Unit] reports
+// it; 0 on a partial pipeline.
+func (p *Pipeline) Unit() float64 {
+	if p.compositor == nil {
+		return 0
+	}
+	return p.compositor.Unit()
+}
+
+// CaptionBoxes returns the box each of the storyboard's captions fills on the shipped frame, in
+// storyboard order and in shipped pixels, as [compose.Compositor.CaptionBoxes] lays them out; nil
+// on a partial pipeline and for a storyboard with no captions.
+func (p *Pipeline) CaptionBoxes() []image.Rectangle {
+	if p.compositor == nil {
+		return nil
+	}
+	return p.compositor.CaptionBoxes()
 }
 
 // lastRaster is the [RasterCache] a render streams through: the frames come in output order, so

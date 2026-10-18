@@ -433,7 +433,11 @@ internal/storyboard/edit_test.go — TestApply_CaptionNull_IsRefusedButForUntil;
 - `GOMEMLIMIT=2GiB go test ./internal/tune/ -run TestPage_EntryFields_AreEditFields`
 **Commit:** `feat(storyboard): edit a caption's offset and position`
 
-## 12. Tune state carries a caption's style and laid-out box
+## 12. Tune state carries a caption's style and laid-out box — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): new `/api/state` caption keys: `offset {x,y}`, `position {x,y}` (omitted when unset), `font_size`, `font_weight`, `color`, `box_color`, `box_opacity`, `fade_in_ms`, `fade_out_ms` (defaults filled as Parse resolves them, colours as #rrggbb), `box {x,y,w,h}` in shipped pixels and `box_position {x,y}`, its top-left in design pixels (box min / unit, rounded); both box keys are omitted unless `s.current.frames` built in full.
+
+NOTES (2026-10-18): accessors added: `caption.Layer.Boxes`, `compose.Compositor.CaptionBoxes` and `Unit`, `render.Pipeline.CaptionBoxes` and `Unit` (none / 0 on a partial pipeline, added to the Pipeline doc's partial-pipeline list). internal/tune/session.go needed no change: `State()` lives in state.go, which now passes `s.current.frames` to `captionStates`.
 
 **What:** Depends on item 11.
 **Regression guard.** The box is in shipped pixels, position/offset in design pixels: `CaptionState`

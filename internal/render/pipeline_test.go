@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"image"
+	"image/color"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -195,6 +196,12 @@ func TestBuild_AZoomTargetNotOnScreen_LeavesAPartialPipeline(t *testing.T) {
 	if size := built.Size(); size != (image.Point{}) {
 		t.Errorf("Size: want zero on a partial pipeline, got %v", size)
 	}
+	if unit := built.Unit(); unit != 0 {
+		t.Errorf("Unit: want 0 on a partial pipeline, got %g", unit)
+	}
+	if boxes := built.CaptionBoxes(); boxes != nil {
+		t.Errorf("CaptionBoxes: want none on a partial pipeline, got %v", boxes)
+	}
 }
 
 // resizedStoryboard is renderStoryboard at another font size: another raster geometry.
@@ -359,5 +366,37 @@ func TestRun_ScheduleWarnings_PrintBeforeAComposeError(t *testing.T) {
 	}
 	if !strings.HasPrefix(stderr.String(), "warning: beat 1 plays at ") {
 		t.Errorf("want beat 1's speed warning on stderr, got %q", stderr.String())
+	}
+}
+
+func TestPipeline_CaptionBoxes_AreWhereTheFrameShowsTheBoxes(t *testing.T) {
+	t.Parallel()
+	loaded := loadRenderClipOf(t, captionedStoryboard)
+	takePath, recorded := loadRenderTake(t, 20)
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster()})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	// Caption one shows in an opaque red box over [100ms, 800ms).
+	const shown = 200 * time.Millisecond
+	red := color.RGBA{R: 0xff, A: 0xff}
+
+	boxes := built.CaptionBoxes()
+
+	if len(boxes) != 2 {
+		t.Fatalf("CaptionBoxes() = %v, want one box per caption", boxes)
+	}
+	if built.Unit() <= 0 {
+		t.Errorf("Unit() = %g, want a positive unit", built.Unit())
+	}
+	frame, err := built.FrameAt(shown)
+	if err != nil {
+		t.Fatalf("FrameAt: %v", err)
+	}
+	box := boxes[0]
+	for _, corner := range []image.Point{box.Min, box.Max.Sub(image.Pt(1, 1))} {
+		if got := frame.RGBAAt(corner.X, corner.Y); got != red {
+			t.Errorf("pixel %v of the frame at %s is %v, want the caption's red box", corner, shown, got)
+		}
 	}
 }

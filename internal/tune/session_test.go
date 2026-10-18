@@ -315,14 +315,109 @@ func TestSession_State_ReportsCameraMovesAndCaptions(t *testing.T) {
 		{
 			Index: 0, Text: "Watch this", StartMS: 100, StopMS: 800, At: MomentState{1, 100}, ForMS: 700,
 			Place: "top", Align: "left",
+			FontSize: 10, FontWeight: "regular", Color: "#ffffff", BoxColor: "#000000", BoxOpacity: 0.6,
 		},
 		{
 			Index: 1, Text: "All green", StartMS: 1000, StopMS: 2200, At: MomentState{2, 0},
 			Until: &MomentState{2, 1200}, Place: "bottom", Align: "middle",
+			FontSize: 10, FontWeight: "regular", Color: "#ffffff", BoxColor: "#000000", BoxOpacity: 0.6,
 		},
 	}
-	if !reflect.DeepEqual(state.Captions, wantCaptions) {
-		t.Errorf("captions\n got %+v\nwant %+v", state.Captions, wantCaptions)
+	// The laid-out boxes come from the pipeline, which TestSession_State_CaptionBoxes_* check.
+	if got := withoutBoxes(state.Captions); !reflect.DeepEqual(got, wantCaptions) {
+		t.Errorf("captions\n got %+v\nwant %+v", got, wantCaptions)
+	}
+}
+
+// withoutBoxes returns a copy of captions without the boxes the pipeline lays them out in.
+func withoutBoxes(captions []CaptionState) []CaptionState {
+	stripped := slices.Clone(captions)
+	for index := range stripped {
+		stripped[index].Box, stripped[index].BoxPosition = nil, nil
+	}
+	return stripped
+}
+
+// styledCaptionsStoryboard is sessionStoryboard with two captions in beat 1: one setting every
+// style field and an offset, one placed by position.
+const styledCaptionsStoryboard = sessionStoryboard + `captions:
+  - text: 'Styled'
+    at: 100ms
+    for: 700ms
+    font: {size: 12, weight: bold}
+    color: '#ff8000'
+    box: {color: '#102030', opacity: 0.8}
+    fade: {in: 100ms, out: 200ms}
+    offset: {x: 4, y: -6}
+  - {text: 'Placed', at: 100ms, for: 300ms, position: {x: 10, y: 8}}
+`
+
+func TestSession_State_ReportsACaptionsStyle(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixtureOf(t, styledCaptionsStoryboard)
+
+	state := f.session.State()
+
+	wantCaptions := []CaptionState{
+		{
+			Index: 0, Text: "Styled", StartMS: 100, StopMS: 800, At: MomentState{0, 100}, ForMS: 700,
+			Place: "bottom", Align: "middle", Offset: PixelsState{X: 4, Y: -6},
+			FontSize: 12, FontWeight: "bold", Color: "#ff8000", BoxColor: "#102030", BoxOpacity: 0.8,
+			FadeInMS: 100, FadeOutMS: 200,
+		},
+		{
+			Index: 1, Text: "Placed", StartMS: 100, StopMS: 400, At: MomentState{0, 100}, ForMS: 300,
+			Position: &PixelsState{X: 10, Y: 8},
+			FontSize: 10, FontWeight: "regular", Color: "#ffffff", BoxColor: "#000000", BoxOpacity: 0.6,
+		},
+	}
+	if got := withoutBoxes(state.Captions); !reflect.DeepEqual(got, wantCaptions) {
+		t.Errorf("captions\n got %+v\nwant %+v", got, wantCaptions)
+	}
+}
+
+func TestSession_State_CaptionBoxes_AreThePipelinesLayout(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixtureOf(t, styledCaptionsStoryboard)
+	frames := f.session.current.frames
+	boxes, unit := frames.CaptionBoxes(), frames.Unit()
+	if len(boxes) != 2 || unit <= 0 {
+		t.Fatalf("the pipeline lays out boxes %v at unit %g, want two at a positive unit", boxes, unit)
+	}
+
+	captions := f.session.State().Captions
+
+	for index, caption := range captions {
+		box := boxes[index]
+		want := BoxState{X: box.Min.X, Y: box.Min.Y, W: box.Dx(), H: box.Dy()}
+		if caption.Box == nil || *caption.Box != want {
+			t.Errorf("caption %d: box %+v, want the pipeline's %+v", index, caption.Box, want)
+		}
+	}
+	// The box's top-left in design pixels is the position that places it where it is.
+	if placed := captions[1]; placed.BoxPosition == nil || *placed.BoxPosition != *placed.Position {
+		t.Errorf("box position %+v, want the caption's position %+v", placed.BoxPosition, placed.Position)
+	}
+}
+
+func TestSession_State_CaptionBoxes_AbsentWithoutAFullPipeline(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixtureOf(t, styledCaptionsStoryboard)
+
+	f.apply(t, beatEdit(2, storyboard.FieldZoomTarget, json.RawMessage(`{"text": "nowhere"}`)))
+
+	captions := f.session.State().Captions
+	if len(captions) != 2 {
+		t.Fatalf("captions %+v, want the storyboard's two", captions)
+	}
+	for _, caption := range captions {
+		if caption.Box != nil || caption.BoxPosition != nil {
+			t.Errorf("caption %d: box %+v at %+v, want none while the pipeline does not build",
+				caption.Index, caption.Box, caption.BoxPosition)
+		}
+		if caption.FontSize == 0 {
+			t.Errorf("caption %d: no font size, want the style still reported", caption.Index)
+		}
 	}
 }
 

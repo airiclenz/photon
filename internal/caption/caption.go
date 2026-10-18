@@ -108,6 +108,16 @@ func opaque(c storyboard.RGB) color.RGBA {
 	return color.RGBA{R: c.R, G: c.G, B: c.B, A: maxAlpha}
 }
 
+// Boxes returns the box each caption fills, in storyboard order and in shipped pixels: the
+// rectangle [Layer.Draw] paints the caption's box and text in. The slice is the caller's own.
+func (l *Layer) Boxes() []image.Rectangle {
+	boxes := make([]image.Rectangle, 0, len(l.captions))
+	for _, caption := range l.captions {
+		boxes = append(boxes, caption.box)
+	}
+	return boxes
+}
+
 // Draw paints every caption showing at output time t onto dst: first its box, at the box's
 // opacity × the caption's fade, then its text at the fade. dst must be a frame of the size the
 // Layer was built for; Draw writes only dst, so calls on distinct frames may run concurrently.

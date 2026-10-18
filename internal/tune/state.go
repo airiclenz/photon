@@ -1,6 +1,8 @@
 package tune
 
 import (
+	"image"
+	"math"
 	"slices"
 	"time"
 
@@ -13,7 +15,8 @@ import (
 // whole milliseconds, the spelling an [Edit] takes. Beats, Camera and Captions come from the
 // current storyboard, and so does Fields, the description of every field the page shows; Sections,
 // Warnings and Length from its schedule, or from the last good pipeline's while the current bytes
-// do not schedule. Version rises on every change, so a page that saw it already has nothing new
+// do not schedule; a caption's laid-out box from the current bytes' pipeline, only while it builds
+// in full. Version rises on every change, so a page that saw it already has nothing new
 // to draw.
 type State struct {
 	Version  int            `json:"version"`
@@ -107,19 +110,51 @@ type CellState struct {
 }
 
 // CaptionState is one caption, in storyboard order: its Index in the storyboard's captions
-// list, its text, where it starts and stops on the output clock, and its timing and placement.
-// It ends after ForMS or at Until, exactly one of the two. Place and Align are empty for a
-// caption set by position.
+// list, its text, where it starts and stops on the output clock, its timing, placement and style,
+// and where the render pipeline lays it out. It ends after ForMS or at Until, exactly one of the
+// two. Place and Align are empty for a caption set by Position, which is nil for one set by place
+// and align and moved by Offset; both are in design pixels. The style carries the defaults the
+// storyboard leaves out: FontSize in the unit of frame.font_size, colours as #rrggbb.
+//
+// Box is the box the caption fills on the shipped frame, in shipped pixels, and BoxPosition its
+// top-left in design pixels — the Position that would place the box where it is; both are nil
+// while the current bytes build no full pipeline.
 type CaptionState struct {
-	Index   int          `json:"index"`
-	Text    string       `json:"text"`
-	StartMS int64        `json:"start_ms"`
-	StopMS  int64        `json:"stop_ms"`
-	At      MomentState  `json:"at"`
-	ForMS   int64        `json:"for_ms,omitempty"`
-	Until   *MomentState `json:"until,omitempty"`
-	Place   string       `json:"place"`
-	Align   string       `json:"align"`
+	Index       int          `json:"index"`
+	Text        string       `json:"text"`
+	StartMS     int64        `json:"start_ms"`
+	StopMS      int64        `json:"stop_ms"`
+	At          MomentState  `json:"at"`
+	ForMS       int64        `json:"for_ms,omitempty"`
+	Until       *MomentState `json:"until,omitempty"`
+	Place       string       `json:"place"`
+	Align       string       `json:"align"`
+	Offset      PixelsState  `json:"offset"`
+	Position    *PixelsState `json:"position,omitempty"`
+	FontSize    float64      `json:"font_size"`
+	FontWeight  string       `json:"font_weight"`
+	Color       string       `json:"color"`
+	BoxColor    string       `json:"box_color"`
+	BoxOpacity  float64      `json:"box_opacity"`
+	FadeInMS    int64        `json:"fade_in_ms"`
+	FadeOutMS   int64        `json:"fade_out_ms"`
+	Box         *BoxState    `json:"box,omitempty"`
+	BoxPosition *PixelsState `json:"box_position,omitempty"`
+}
+
+// PixelsState is a pair of lengths in design pixels: X to the right and Y down.
+type PixelsState struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
+// BoxState is a rectangle of the shipped frame in shipped pixels: its top-left X and Y, its
+// width W and its height H.
+type BoxState struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+	W int `json:"w"`
+	H int `json:"h"`
 }
 
 // MomentState is a moment on the clip's output clock as the storyboard spells it: OffsetMS
@@ -167,7 +202,7 @@ func (s *Session) State() State {
 		Version:    s.version,
 		Beats:      beatStates(board),
 		Camera:     cameraStates(board),
-		Captions:   captionStates(board),
+		Captions:   captionStates(board, s.current.frames),
 		Sections:   sectionStates(clipSchedule),
 		Warnings:   append([]string{}, clipSchedule.Warnings...),
 		LengthMS:   clipSchedule.Length.Milliseconds(),
@@ -254,27 +289,63 @@ func movedState(kind string, start time.Duration, at storyboard.Moment, over tim
 	}
 }
 
-// captionStates lists board's captions in storyboard order.
-func captionStates(board *storyboard.Storyboard) []CaptionState {
+// captionStates lists board's captions in storyboard order, each with the box frames lays it
+// out in. frames is the pipeline built on board, or nil when none was; a partial one lays out
+// no box.
+func captionStates(board *storyboard.Storyboard, frames *render.Pipeline) []CaptionState {
+	var (
+		boxes []image.Rectangle
+		unit  float64
+	)
+	if frames != nil {
+		boxes, unit = frames.CaptionBoxes(), frames.Unit()
+	}
 	captions := make([]CaptionState, 0, len(board.Captions))
 	for index, caption := range board.Captions {
-		state := CaptionState{
-			Index:   index,
-			Text:    caption.Text,
-			StartMS: caption.Start().Milliseconds(),
-			StopMS:  caption.Stop().Milliseconds(),
-			At:      momentState(caption.At),
-			ForMS:   caption.For.Milliseconds(),
-			Place:   string(caption.Place),
-			Align:   string(caption.Align),
-		}
-		if until := caption.Until; until != nil {
-			untilState := momentState(*until)
-			state.Until = &untilState
+		state := captionState(caption)
+		state.Index = index
+		if index < len(boxes) && unit > 0 {
+			box := boxes[index]
+			state.Box = &BoxState{X: box.Min.X, Y: box.Min.Y, W: box.Dx(), H: box.Dy()}
+			state.BoxPosition = &PixelsState{
+				X: int(math.Round(float64(box.Min.X) / unit)),
+				Y: int(math.Round(float64(box.Min.Y) / unit)),
+			}
 		}
 		captions = append(captions, state)
 	}
 	return captions
+}
+
+// captionState is caption's state as the storyboard sets it: its timing, placement and style.
+func captionState(caption storyboard.Caption) CaptionState {
+	state := CaptionState{
+		Text:       caption.Text,
+		StartMS:    caption.Start().Milliseconds(),
+		StopMS:     caption.Stop().Milliseconds(),
+		At:         momentState(caption.At),
+		ForMS:      caption.For.Milliseconds(),
+		Place:      string(caption.Place),
+		Align:      string(caption.Align),
+		Offset:     PixelsState{X: caption.Offset.X, Y: caption.Offset.Y},
+		FontSize:   caption.Font.Size,
+		FontWeight: string(caption.Font.Weight),
+		Color:      caption.Color,
+		BoxColor:   caption.Box.Color,
+		FadeInMS:   caption.Fade.In.Milliseconds(),
+		FadeOutMS:  caption.Fade.Out.Milliseconds(),
+	}
+	if until := caption.Until; until != nil {
+		untilState := momentState(*until)
+		state.Until = &untilState
+	}
+	if position := caption.Position; position != nil {
+		state.Position = &PixelsState{X: position.X, Y: position.Y}
+	}
+	if opacity := caption.Box.Opacity; opacity != nil {
+		state.BoxOpacity = *opacity
+	}
+	return state
 }
 
 // momentState spells moment as the page reads it.

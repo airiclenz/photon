@@ -156,6 +156,19 @@ func Output(layout Layout, width int) (size image.Point, unit float64, err error
 // Size is the shipped frame's pixel size.
 func (c *Compositor) Size() image.Point { return c.out }
 
+// Unit is how many shipped pixels one design pixel spans, as [Output] computes it.
+func (c *Compositor) Unit() float64 { return c.unit }
+
+// CaptionBoxes returns the box each of the storyboard's captions fills on the shipped frame, in
+// storyboard order and in shipped pixels, as [caption.Layer.Boxes] lays them out; nil when the
+// storyboard has no captions.
+func (c *Compositor) CaptionBoxes() []image.Rectangle {
+	if c.captions == nil {
+		return nil
+	}
+	return c.captions.Boxes()
+}
+
 // Compose builds the shipped frame at output time t from src, the rasterized snapshot the
 // schedule shows then: the camera's crop scaled to the shipped width, the cursor over it and the
 // captions showing at t last, in output space, so no zoom or pan moves or scales them. src is
