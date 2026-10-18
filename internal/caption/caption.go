@@ -50,7 +50,12 @@ type placed struct {
 // when out or unit is not positive, a face is missing, or a caption's text cannot be laid out or
 // its box is wider or taller than the frame; a caption's error names the caption and is filed
 // under it as a [storyboard.LocatedError].
-func New(board *storyboard.Storyboard, faces fonts.CaptionSet, out image.Point, unit float64) (*Layer, error) {
+func New(
+	board *storyboard.Storyboard,
+	faces fonts.CaptionSet,
+	out image.Point,
+	unit float64,
+) (*Layer, error) {
 	if out.X <= 0 || out.Y <= 0 {
 		return nil, fmt.Errorf("caption: want a frame of positive size, got %dx%d", out.X, out.Y)
 	}
@@ -73,7 +78,12 @@ func New(board *storyboard.Storyboard, faces fonts.CaptionSet, out image.Point, 
 }
 
 // place lays out and rasterizes one caption, keeping the start, stop and colours Parse resolved.
-func place(caption storyboard.Caption, faces fonts.CaptionSet, out image.Point, unit float64) (placed, error) {
+func place(
+	caption storyboard.Caption,
+	faces fonts.CaptionSet,
+	out image.Point,
+	unit float64,
+) (placed, error) {
 	face := faces.Regular
 	if caption.Font.Weight == storyboard.WeightBold {
 		face = faces.Bold
@@ -130,7 +140,9 @@ func (l *Layer) Draw(dst *image.RGBA, t time.Duration) {
 		box := &image.Uniform{C: withAlpha(caption.boxColor, caption.boxOpacity*fade)}
 		draw.Draw(dst, caption.box, box, image.Point{}, draw.Over)
 		text := &image.Uniform{C: withAlpha(caption.textColor, fade)}
-		draw.DrawMask(dst, caption.box, text, image.Point{}, caption.text, caption.box.Min, draw.Over)
+		draw.DrawMask(
+			dst, caption.box, text, image.Point{}, caption.text, caption.box.Min, draw.Over,
+		)
 	}
 }
 

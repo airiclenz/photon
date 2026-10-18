@@ -133,7 +133,9 @@ func (p zoomPlanner) planMoves(
 		switch {
 		case cameraMove.Zoom != nil:
 			zoom := cameraMove.Zoom
-			zooms = append(zooms, move[float64]{Start: zoom.Start(), Over: zoom.Over, To: zoom.To, Ease: zoom.Ease})
+			zooms = append(zooms, move[float64]{
+				Start: zoom.Start(), Over: zoom.Over, To: zoom.To, Ease: zoom.Ease,
+			})
 		case cameraMove.Pan != nil:
 			pan, err := p.planPan(*cameraMove.Pan, clipSchedule)
 			if err != nil {
@@ -153,7 +155,10 @@ func (p zoomPlanner) planMoves(
 // or the last of its Via as the destination and the rest as the waypoints between. Where the
 // path starts is the camera's business: the centre its pan track holds at the move's start. The
 // pan comes from a parsed storyboard, so it has a To or a Via of at least two points.
-func (p zoomPlanner) planPan(pan storyboard.PanMove, clipSchedule *schedule.Schedule) (move[pointF], error) {
+func (p zoomPlanner) planPan(
+	pan storyboard.PanMove,
+	clipSchedule *schedule.Schedule,
+) (move[pointF], error) {
 	start := pan.Start()
 	since, until := shownAt(clipSchedule, start), shownAt(clipSchedule, start+pan.Over)
 	points := pan.Via
@@ -172,7 +177,9 @@ func (p zoomPlanner) planPan(pan storyboard.PanMove, clipSchedule *schedule.Sche
 		centres = append(centres, centre)
 	}
 	last := len(centres) - 1
-	return move[pointF]{Start: start, Over: pan.Over, To: centres[last], Via: centres[:last], Ease: pan.Ease}, nil
+	return move[pointF]{
+		Start: start, Over: pan.Over, To: centres[last], Via: centres[:last], Ease: pan.Ease,
+	}, nil
 }
 
 // panPoint is the source pixel a pan's point aims at: a cell's centre, or the centre of the box

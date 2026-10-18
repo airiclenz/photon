@@ -83,10 +83,16 @@ func padding(unit float64) image.Point {
 // position when the caption sets one, else by place and align a margin in from the edges and
 // moved by offset. The box is then clamped inside the frame; a box larger than the frame is an
 // error.
-func boxRect(caption storyboard.Caption, block textBlock, out image.Point, unit float64) (image.Rectangle, error) {
+func boxRect(
+	caption storyboard.Caption,
+	block textBlock,
+	out image.Point,
+	unit float64,
+) (image.Rectangle, error) {
 	size := block.size.Add(padding(unit).Mul(2))
 	if size.X > out.X || size.Y > out.Y {
-		return image.Rectangle{}, fmt.Errorf("the caption's box is %dx%d pixels, larger than the %dx%d frame",
+		return image.Rectangle{}, fmt.Errorf(
+			"the caption's box is %dx%d pixels, larger than the %dx%d frame",
 			size.X, size.Y, out.X, out.Y)
 	}
 
@@ -94,8 +100,10 @@ func boxRect(caption storyboard.Caption, block textBlock, out image.Point, unit 
 	if caption.Position != nil {
 		x, y = float64(caption.Position.X)*unit, float64(caption.Position.Y)*unit
 	} else {
-		x = along(caption.Align == storyboard.AlignLeft, caption.Align == storyboard.AlignRight, size.X, out.X, unit)
-		y = along(caption.Place == storyboard.PlaceTop, caption.Place == storyboard.PlaceBottom, size.Y, out.Y, unit)
+		x = along(caption.Align == storyboard.AlignLeft, caption.Align == storyboard.AlignRight,
+			size.X, out.X, unit)
+		y = along(caption.Place == storyboard.PlaceTop, caption.Place == storyboard.PlaceBottom,
+			size.Y, out.Y, unit)
 		x += float64(caption.Offset.X) * unit
 		y += float64(caption.Offset.Y) * unit
 	}

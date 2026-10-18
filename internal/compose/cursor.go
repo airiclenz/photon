@@ -193,7 +193,13 @@ func (c cursorTrack) ring(t time.Duration) (diameter, opacity float64, centre po
 // paintAnnulus blends colour at opacity over every pixel between the radii inner and outer
 // around centre, anti-aliased over one pixel at both edges. An inner radius below zero fills a
 // disc.
-func paintAnnulus(dst *image.RGBA, centre pointF, inner, outer float64, colour color.RGBA, opacity float64) {
+func paintAnnulus(
+	dst *image.RGBA,
+	centre pointF,
+	inner, outer float64,
+	colour color.RGBA,
+	opacity float64,
+) {
 	if opacity <= 0 || outer <= 0 {
 		return
 	}

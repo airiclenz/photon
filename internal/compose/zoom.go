@@ -56,7 +56,8 @@ func (p zoomPlanner) plan(clipSchedule *schedule.Schedule) (camera, error) {
 		}
 		box, err := p.zoomBox(beat, section)
 		if err != nil {
-			return camera{}, fmt.Errorf("compose: %w", storyboard.AtBeat(beat.ID, fmt.Errorf("zoom: %w", err)))
+			located := storyboard.AtBeat(beat.ID, fmt.Errorf("zoom: %w", err))
+			return camera{}, fmt.Errorf("compose: %w", located)
 		}
 		push, pull, aim := p.planSection(beat.Zoom, section, box)
 		zooms = append(zooms, push, pull)
@@ -111,14 +112,19 @@ func (p zoomPlanner) zoomBox(beat storyboard.Beat, section schedule.Section) (ta
 		// A beat of no length has no snapshot of its own to stop before.
 		until = math.MaxInt64
 	}
-	return p.resolveShown(beat.Zoom.Target, p.recorded.ScreensDuring(section.Start, until), "the beat")
+	shown := p.recorded.ScreensDuring(section.Start, until)
+	return p.resolveShown(beat.Zoom.Target, shown, "the beat")
 }
 
 // resolveShown resolves goal on the shown snapshots, indices into the take's oldest first: the
 // newest one that shows it, walking back to the oldest. It fails with the last
 // [target.ErrNotOnScreen] when none of them shows goal, at once on any other resolver error, and
 // when shown is empty, naming the stretch where.
-func (p zoomPlanner) resolveShown(goal storyboard.Target, shown []int, where string) (take.Box, error) {
+func (p zoomPlanner) resolveShown(
+	goal storyboard.Target,
+	shown []int,
+	where string,
+) (take.Box, error) {
 	var lastErr error
 	for _, index := range slices.Backward(shown) {
 		box, err := p.resolver.Target(p.recorded.Snapshots[index], goal)

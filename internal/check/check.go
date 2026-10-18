@@ -57,8 +57,8 @@ type Options struct {
 // It is an error, before any expect is judged, when the take's beats and the storyboard's do not
 // agree — a storyboard beat the take never started, a take beat the storyboard lacks, or one the
 // take started twice, each named — or when the take started them in another order than the
-// storyboard's, and when a `seen` expect names an area resolver does not know. A failing expect is a
-// FAIL row, never an error.
+// storyboard's, and when a `seen` expect names an area resolver does not know. A failing expect is
+// a FAIL row, never an error.
 func Judge(
 	ctx context.Context,
 	board *storyboard.Storyboard,
@@ -84,7 +84,8 @@ func Judge(
 
 	var rows []Row
 	for _, beat := range board.Beats {
-		beatRows, err := judge.expects(beatSubject(beat.ID), beat.Expect, screens[beat.ID], &beat.ID)
+		beatRows, err := judge.expects(
+			beatSubject(beat.ID), beat.Expect, screens[beat.ID], &beat.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +106,8 @@ func WriteTable(w io.Writer, rows []Row) error {
 		width = max(width, len(row.Subject))
 	}
 	for _, row := range rows {
-		if _, err := fmt.Fprintf(w, "%-*s | %s | %s\n", width, row.Subject, row.Verdict, row.Detail); err != nil {
+		_, err := fmt.Fprintf(w, "%-*s | %s | %s\n", width, row.Subject, row.Verdict, row.Detail)
+		if err != nil {
 			return fmt.Errorf("write the check table: %w", err)
 		}
 	}
@@ -129,7 +131,9 @@ func hasRun(board *storyboard.Storyboard) bool {
 	for _, beat := range board.Beats {
 		expects = append(expects, beat.Expect...)
 	}
-	return slices.ContainsFunc(expects, func(expect storyboard.Expect) bool { return expect.Run != "" })
+	return slices.ContainsFunc(expects, func(expect storyboard.Expect) bool {
+		return expect.Run != ""
+	})
 }
 
 // beatSubject is the subject of a beat's rows.
@@ -147,7 +151,12 @@ type judgement struct {
 
 // expects judges one beat's expects (beat is its id), or the take-level ones (beat nil), against
 // screens, one row each.
-func (j judgement) expects(subject string, expects []storyboard.Expect, screens []take.Snapshot, beat *int) ([]Row, error) {
+func (j judgement) expects(
+	subject string,
+	expects []storyboard.Expect,
+	screens []take.Snapshot,
+	beat *int,
+) ([]Row, error) {
 	rows := make([]Row, 0, len(expects))
 	for _, expect := range expects {
 		row := Row{Subject: subject}
@@ -169,7 +178,11 @@ func (j judgement) expects(subject string, expects []storyboard.Expect, screens 
 // seen judges a `seen` expect on screens: PASS naming the first screen whose area text the regex
 // matches, on the take's clock, or FAIL counting the screens searched. Only an area the resolver
 // does not know is an error; an area missing from one screen leaves that screen unmatched.
-func (j judgement) seen(expect storyboard.Expect, screens []take.Snapshot, subject string) (Verdict, string, error) {
+func (j judgement) seen(
+	expect storyboard.Expect,
+	screens []take.Snapshot,
+	subject string,
+) (Verdict, string, error) {
 	where := ""
 	if expect.Area != "" {
 		where = " in area " + expect.Area
@@ -187,14 +200,16 @@ func (j judgement) seen(expect storyboard.Expect, screens []take.Snapshot, subje
 			return "", "", err
 		}
 		if pattern.MatchString(text) {
-			return Pass, fmt.Sprintf("seen /%s/%s at %s", expect.Seen, where, screen.At.Round(screenTimeRound)), nil
+			at := screen.At.Round(screenTimeRound)
+			return Pass, fmt.Sprintf("seen /%s/%s at %s", expect.Seen, where, at), nil
 		}
 	}
 	owner := "the take"
 	if subject != takeSubject {
 		owner = "the beat"
 	}
-	return Fail, fmt.Sprintf("not seen /%s/%s on any of %s's %d screen(s)", expect.Seen, where, owner, len(screens)), nil
+	return Fail, fmt.Sprintf("not seen /%s/%s on any of %s's %d screen(s)",
+		expect.Seen, where, owner, len(screens)), nil
 }
 
 // beatScreens groups the take's snapshots by the beat they were on screen during, after checking
@@ -202,7 +217,10 @@ func (j judgement) seen(expect storyboard.Expect, screens []take.Snapshot, subje
 // every beat whose span its display interval — from its own time to the next snapshot's — overlaps,
 // so the screen showing when a beat starts counts for that beat. Spans are half-open except the
 // last, which keeps the take's final instant.
-func beatScreens(board *storyboard.Storyboard, recorded *take.Take) (map[int][]take.Snapshot, error) {
+func beatScreens(
+	board *storyboard.Storyboard,
+	recorded *take.Take,
+) (map[int][]take.Snapshot, error) {
 	if err := recorded.MatchBeats(board.BeatIDs()); err != nil {
 		return nil, err
 	}

@@ -669,7 +669,10 @@ cmd/release/dist.go — newDistCommand; internal/testkit/docmap.go — CheckDocM
 - `GOMEMLIMIT=2GiB go test ./cmd/release/`
 **Commit:** `style(release): wrap at 100 columns`
 
-## 19. Wrap cmd/photon and internal/{caption,check,clip,compose,config,engine} to 100 columns
+## 19. Wrap cmd/photon and internal/{caption,check,clip,compose,config,engine} to 100 columns — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): as in item 18, the over-long cobra Long texts (root, check, lint, record, render, setup, tune, version) were re-chunked into `+`-joined literals that no longer break at each `\n`; every `photon [cmd] --help` output is byte-identical before and after.
+NOTES (2026-10-18): a few over-long lines were wrapped by moving a subexpression into a local (`at` in check.seen, `field` in clip.namedAreas, `inner` in drawCursor, `step` in centripetalPoint, `located`/`shown` in zoom.go, `paths` in config.resolvePaths) or splitting an `if` header in check.WriteTable; none changes behaviour. The main.go `//nolint:errcheck` stays directly above the `fmt.Fprintf` with a shorter reason, its explanation moved to a comment line above it. No doc.go had a finding.
 
 **What:** Depends on item 17. As item 18, for these packages. Doc-map lines in `doc.go` keep the
 shape the doc-map structural test parses.

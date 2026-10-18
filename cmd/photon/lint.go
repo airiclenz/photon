@@ -20,13 +20,12 @@ func newLintCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lint <storyboard>",
 		Short: "Check a storyboard and its photon config without recording",
-		Long: "lint loads a storyboard and the photon config it uses (--config, else the nearest\n" +
-			"photon.yaml at or above the storyboard), and prints every problem the two files have,\n" +
-			"or ok with the clip's name, beat count and config path. Once both are clean it lays the\n" +
-			"captions out with the config's fonts and reports a caption box larger than the frame.\n" +
-			"It records nothing.\n" +
-			"Exit status: 0 when both files are clean; 1 when either has a problem; 2 for a bad\n" +
-			"command line.",
+		Long: "lint loads a storyboard and the photon config it uses (--config, else the " +
+			"nearest\nphoton.yaml at or above the storyboard), and prints every problem the two " +
+			"files have,\nor ok with the clip's name, beat count and config path. Once both are " +
+			"clean it lays the\ncaptions out with the config's fonts and reports a caption box " +
+			"larger than the frame.\nIt records nothing.\nExit status: 0 when both files are " +
+			"clean; 1 when either has a problem; 2 for a bad\ncommand line.",
 		Args: cobra.ExactArgs(1),
 		RunE: runE(func(cmd *cobra.Command, args []string) error {
 			loaded, err := clip.Load(args[0], configPath, "")
@@ -41,6 +40,7 @@ func newLintCommand() *cobra.Command {
 			return err
 		}),
 	}
-	cmd.Flags().StringVar(&configPath, configFlag, "", "the photon config to use instead of the nearest photon.yaml")
+	cmd.Flags().StringVar(&configPath, configFlag, "",
+		"the photon config to use instead of the nearest photon.yaml")
 	return cmd
 }

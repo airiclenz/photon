@@ -28,8 +28,9 @@ const (
 // read from.
 //
 // [Load] and [Clip.WithStoryboard] are the only ways to get one: a Clip in hand has a storyboard
-// and a config that each passed validation and that agree with each other. Its work dir and take path resolve on demand
-// ([Clip.Work], [Clip.Take]), so a command that needs neither, such as lint, never fails on them.
+// and a config that each passed validation and that agree with each other. Its work dir and take
+// path resolve on demand ([Clip.Work], [Clip.Take]), so a command that needs neither, such as
+// lint, never fails on them.
 type Clip struct {
 	Storyboard *storyboard.Storyboard
 	Config     *config.Config
@@ -158,7 +159,8 @@ func namedAreas(board *storyboard.Storyboard) []namedArea {
 	var named []namedArea
 	wholeClip := storyboard.Owner{Kind: storyboard.OwnerClip}
 	for index, expect := range board.Expect {
-		named = append(named, namedArea{wholeClip, fmt.Sprintf("expect[%d]: area", index), expect.Area})
+		field := fmt.Sprintf("expect[%d]: area", index)
+		named = append(named, namedArea{wholeClip, field, expect.Area})
 	}
 	for _, beat := range board.Beats {
 		owner := storyboard.Owner{Kind: storyboard.OwnerBeat, Index: beat.ID}
@@ -199,7 +201,8 @@ func cameraAreas(board *storyboard.Storyboard) []namedArea {
 			named = append(named, namedArea{owner, "pan.to.area", move.Pan.To.Area})
 		}
 		for point, via := range move.Pan.Via {
-			named = append(named, namedArea{owner, fmt.Sprintf("pan.via[%d].area", point), via.Area})
+			field := fmt.Sprintf("pan.via[%d].area", point)
+			named = append(named, namedArea{owner, field, via.Area})
 		}
 	}
 	return named

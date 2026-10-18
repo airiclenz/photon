@@ -288,7 +288,8 @@ func (c *Compositor) drawCursor(dst *image.RGBA, t time.Duration, crop rectF) {
 	unit := c.unit
 	if diameter, opacity, centre, ok := c.cursor.ring(t); ok {
 		outer := diameter / 2 * unit
-		paintAnnulus(dst, c.toOutput(centre, crop), outer-ringStroke*unit, outer, cursorColor, opacity)
+		inner := outer - ringStroke*unit
+		paintAnnulus(dst, c.toOutput(centre, crop), inner, outer, cursorColor, opacity)
 	}
 	opacity := c.cursor.opacity(t)
 	if opacity <= 0 {

@@ -66,7 +66,12 @@ func (e *Engine) dragEnd(
 // it along the eased path to to, and dragStepGap after the last step releases it at to. A step
 // whose cell repeats the last one sends nothing but still waits its gap, so the timing stays
 // even and the ease reads in the motion.
-func (e *Engine) sendDrag(ctx context.Context, step take.Event, from, to take.Point, steps int) error {
+func (e *Engine) sendDrag(
+	ctx context.Context,
+	step take.Event,
+	from, to take.Point,
+	steps int,
+) error {
 	e.logCell(take.EventPress, step, from)
 	if err := e.term.Send(keys.Click(from.X, from.Y)); err != nil {
 		return err

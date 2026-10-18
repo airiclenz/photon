@@ -186,7 +186,8 @@ func (e *Engine) sendClick(ctx context.Context, cell take.Point) error {
 // once when the program exits first.
 func (e *Engine) wait(ctx context.Context, action storyboard.WaitAction) error {
 	if action.Timeout <= 0 || action.Timeout > storyboard.MaxWaitTimeout {
-		return fmt.Errorf("wait: timeout %s outside (0, %s]", action.Timeout, storyboard.MaxWaitTimeout)
+		return fmt.Errorf("wait: timeout %s outside (0, %s]",
+			action.Timeout, storyboard.MaxWaitTimeout)
 	}
 	pattern, err := regexp.Compile(action.Screen)
 	if err != nil {
@@ -211,7 +212,8 @@ func (e *Engine) wait(ctx context.Context, action storyboard.WaitAction) error {
 		select {
 		case <-poll.C:
 		case <-deadline.C:
-			return fmt.Errorf("wait for /%s/ %s: timed out after %s", action.Screen, want, action.Timeout)
+			return fmt.Errorf("wait for /%s/ %s: timed out after %s",
+				action.Screen, want, action.Timeout)
 		case <-e.term.Done():
 			return fmt.Errorf("wait for /%s/ %s: the program exited", action.Screen, want)
 		case <-ctx.Done():

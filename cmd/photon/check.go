@@ -21,14 +21,14 @@ func newCheckCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check <storyboard> [<take>]",
 		Short: "Judge a take against its storyboard's expects",
-		Long: "check judges every expect of a storyboard against a take: a seen expect on the screens\n" +
-			"recorded during its beat (any screen, for a take-level expect), a run expect by running\n" +
-			"its command in the work dir with PHOTON_WORK, PHOTON_TAKE and PHOTON_BEAT set. It prints\n" +
-			"one `beat N | PASS/FAIL | detail` row per expect and exits 1 on any FAIL.\n" +
-			"The take defaults to <work>/<clip>.take; the work dir is --work, else $" + clip.WorkEnv + ",\n" +
-			"else the config's work, else ~/.cache/<name>-photon.\n" +
-			"Exit status: 0 when every expect passed; 1 when an expect failed or the take could not\n" +
-			"be judged; 2 for a bad command line.",
+		Long: "check judges every expect of a storyboard against a take: a seen expect on the " +
+			"screens\nrecorded during its beat (any screen, for a take-level expect), a run " +
+			"expect by running\nits command in the work dir with PHOTON_WORK, PHOTON_TAKE and " +
+			"PHOTON_BEAT set. It prints\none `beat N | PASS/FAIL | detail` row per expect and " +
+			"exits 1 on any FAIL.\nThe take defaults to <work>/<clip>.take; the work dir is " +
+			"--work, else $" + clip.WorkEnv + ",\nelse the config's work, else " +
+			"~/.cache/<name>-photon.\nExit status: 0 when every expect passed; 1 when an expect " +
+			"failed or the take could not\nbe judged; 2 for a bad command line.",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: runE(func(cmd *cobra.Command, args []string) error {
 			loaded, err := clip.Load(args[0], configPath, workPath)
@@ -48,8 +48,10 @@ func newCheckCommand() *cobra.Command {
 			return nil
 		}),
 	}
-	cmd.Flags().StringVar(&configPath, configFlag, "", "the photon config to use instead of the nearest photon.yaml")
-	cmd.Flags().StringVar(&workPath, workFlag, "", "the rig's work dir, where the take is read from and run expects run")
+	cmd.Flags().StringVar(&configPath, configFlag, "",
+		"the photon config to use instead of the nearest photon.yaml")
+	cmd.Flags().StringVar(&workPath, workFlag, "",
+		"the rig's work dir, where the take is read from and run expects run")
 	return cmd
 }
 
@@ -73,5 +75,6 @@ func judgeClip(cmd *cobra.Command, loaded *clip.Clip, takeArgs []string) ([]chec
 	if err != nil {
 		return nil, err
 	}
-	return check.Judge(cmd.Context(), loaded.Storyboard, recorded, resolver, work, takePath, check.Options{})
+	return check.Judge(
+		cmd.Context(), loaded.Storyboard, recorded, resolver, work, takePath, check.Options{})
 }

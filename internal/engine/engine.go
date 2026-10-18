@@ -61,7 +61,9 @@ func (e *Engine) runBeat(ctx context.Context, beat storyboard.Beat) error {
 		step := take.Event{Beat: beat.ID, Action: index, Form: formOf(action), Text: textOf(action)}
 		e.logStep(take.EventActionStart, step)
 		if err := e.perform(ctx, step, action); err != nil {
-			return &BeatError{Beat: beat.ID, Title: beat.Title, Action: index, Form: step.Form, Err: err}
+			return &BeatError{
+				Beat: beat.ID, Title: beat.Title, Action: index, Form: step.Form, Err: err,
+			}
 		}
 		e.logStep(take.EventActionEnd, step)
 	}

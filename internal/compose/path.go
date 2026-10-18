@@ -110,10 +110,13 @@ func (p path) spanAt(span int, u float64) pointF {
 func centripetalPoint(points [4]pointF, u float64) pointF {
 	var knots [4]float64
 	for index := 1; index < len(knots); index++ {
-		knots[index] = knots[index-1] + math.Pow(distance(points[index-1], points[index]), centripetalAlpha)
+		step := distance(points[index-1], points[index])
+		knots[index] = knots[index-1] + math.Pow(step, centripetalAlpha)
 	}
 	t := knots[1] + u*(knots[2]-knots[1])
-	blend := func(a, b pointF, start, end float64) pointF { return lerp(a, b, (t-start)/(end-start)) }
+	blend := func(a, b pointF, start, end float64) pointF {
+		return lerp(a, b, (t-start)/(end-start))
+	}
 
 	first := blend(points[0], points[1], knots[0], knots[1])
 	second := blend(points[1], points[2], knots[1], knots[2])

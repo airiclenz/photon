@@ -193,7 +193,8 @@ func Load(file string) (*Config, error) {
 // resolvePaths joins each relative path the file gives to Dir, and sets an omitted launch dir to
 // Dir itself.
 func (c *Config) resolvePaths() {
-	for _, field := range []*string{&c.Work, &c.Fonts, &c.CaptionFont.Regular, &c.CaptionFont.Bold} {
+	paths := []*string{&c.Work, &c.Fonts, &c.CaptionFont.Regular, &c.CaptionFont.Bold}
+	for _, field := range paths {
 		if *field != "" && !filepath.IsAbs(*field) {
 			*field = filepath.Join(c.Dir, *field)
 		}
@@ -297,7 +298,8 @@ func (l Launch) validate(report reporter) {
 func (e End) validate(report reporter) {
 	for index, name := range e.Keys {
 		if _, known := keys.Lookup(name); !known {
-			report("keys[%d]: unknown key %q, want one of %s", index, name, strings.Join(keys.Names(), ", "))
+			report("keys[%d]: unknown key %q, want one of %s",
+				index, name, strings.Join(keys.Names(), ", "))
 		}
 	}
 	for _, timeout := range []struct {
