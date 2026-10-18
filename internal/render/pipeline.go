@@ -100,7 +100,8 @@ func Build(
 // over the pipeline's clip, taking from previous what it can reuse, and keeps every stage or
 // none.
 func (p *Pipeline) buildFrames(previous *Pipeline) error {
-	rasterizer, cache := p.rasterizer, p.cache
+	var rasterizer *raster.Rasterizer
+	cache := p.cache
 	if p.canReuseRasters(previous) {
 		rasterizer, cache = previous.rasterizer, previous.cache
 	} else {
