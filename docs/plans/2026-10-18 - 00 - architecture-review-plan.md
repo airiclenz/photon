@@ -389,7 +389,9 @@ Depends on items 5 and 13.
 **Closes:** resolve-at-parse
 **Commit:** `feat(lint): check caption layout with the real fonts`
 
-## 16. yamledit answers queries and upserts
+## 16. yamledit answers queries and upserts — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): Upsert refuses a mapping path that names a sequence (`Upsert(beats, "0", …)`) with ErrKind rather than Setting the sequence item, and DeleteIfPresent treats only ErrNotFound as absent — a path stepping into a scalar keeps Delete's ErrKind.
 
 **What:** Recast at the regression check (2026-10-18).
 **Goal:** `yamledit.Document` has `Has(path) bool`, `Scalar(path) (string, bool)` (the scalar's decoded value, no quotes), `Upsert(mapping Path, key, value string, order []string) error` and `DeleteIfPresent(path) error`, working on block, flow and sequence-item mappings.
