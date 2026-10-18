@@ -17,9 +17,11 @@ import (
 // Warnings and Length from its schedule, or from the last good pipeline's while the current bytes
 // do not schedule; a caption's laid-out box from the current bytes' pipeline, only while it builds
 // in full. Version rises on every change, so a page that saw it already has nothing new
-// to draw.
+// to draw. Build is the build string of the photon serving the page, as `photon version` prints
+// it.
 type State struct {
 	Version  int            `json:"version"`
+	Build    string         `json:"build"`
 	Beats    []BeatState    `json:"beats"`
 	Camera   []CameraState  `json:"camera"`
 	Captions []CaptionState `json:"captions"`
@@ -209,6 +211,7 @@ func (s *Session) State() State {
 	}
 	return State{
 		Version:    s.version,
+		Build:      s.photonBuild,
 		Beats:      beatStates(board),
 		Camera:     cameraStates(board),
 		Captions:   captionStates(board, s.current.frames),

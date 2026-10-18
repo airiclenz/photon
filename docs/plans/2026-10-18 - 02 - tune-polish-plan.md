@@ -380,7 +380,11 @@ FAIL pins (smoke_test.go:377, 402) stay; "binaries built from a modified tree" (
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./cmd/release/`; `LLL ./cmd/release/...`
 **Commit:** `fix(release): read the version out of photon version's build string`
 
-## 11. Show the build string on the tune page
+## 11. Show the build string on the tune page — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the Session field is `photonBuild`, not `build`: `Session` already has a `build` method (session.go), and Go refuses a field and method of one name.
+NOTES (2026-10-18): transport.js fills `#build` from `renderTime` (only when the text differs), not from an onState listener; app.js is untouched.
+NOTES (2026-10-18): README.md's Tuning paragraph gains one sentence on the build at the transport bar's right end (user-facing docs; not in **Files:**).
 
 **What:** Depends on items 2 and 9.
 **Regression guard.** `Session` gains an unexported build field that `Run` sets after `NewSession`,

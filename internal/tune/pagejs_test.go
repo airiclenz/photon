@@ -46,6 +46,7 @@ const (
 	elementTimeline   = "timeline"
 	elementTime       = "time"
 	elementStatus     = "status"
+	elementBuild      = "build"
 	elementDocument   = "document"
 )
 
@@ -468,6 +469,18 @@ func TestPageJS_LoadsAndWires(t *testing.T) {
 	}
 	if page.isHidden(elementPickPan) {
 		t.Error("the pan target button is hidden on a storyboard with pan moves")
+	}
+}
+
+func TestPageJS_Build_ShowsTheSessionsBuild(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixture(t).session
+	session.photonBuild = testBuild
+
+	page := loadPage(t, session)
+
+	if got := page.text(elementBuild); got != testBuild {
+		t.Errorf("the transport bar's build: want %q, got %q", testBuild, got)
 	}
 }
 

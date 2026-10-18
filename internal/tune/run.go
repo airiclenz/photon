@@ -15,10 +15,12 @@ import (
 )
 
 // Options are a tuning run's settings: Take is the take to tune against, the clip's own take
-// when empty, and Port the port to listen on, any free one when 0.
+// when empty, Port the port to listen on, any free one when 0, and Build the build string the
+// page shows, the one `photon version` prints.
 type Options struct {
-	Take string
-	Port int
+	Take  string
+	Port  int
+	Build string
 }
 
 // listenHost is the one address the server listens on: the page is for this machine only.
@@ -40,11 +42,11 @@ const (
 	shutdownTimeout = 5 * time.Second
 )
 
-// Run tunes loaded against its take: it starts a [Session], listens on 127.0.0.1 at
-// options.Port only, prints `photon tune: http://127.0.0.1:<port>/` to stdout, and serves the
-// page and its API (see [newHandler]) until ctx ends, then shuts the server down and returns
-// nil. The HTTP server's own errors go to stderr. It fails when the session cannot start, when
-// the port cannot be listened on, and when serving stops on its own.
+// Run tunes loaded against its take: it starts a [Session] that reports options.Build, listens
+// on 127.0.0.1 at options.Port only, prints `photon tune: http://127.0.0.1:<port>/` to stdout,
+// and serves the page and its API (see [newHandler]) until ctx ends, then shuts the server down
+// and returns nil. The HTTP server's own errors go to stderr. It fails when the session cannot
+// start, when the port cannot be listened on, and when serving stops on its own.
 func Run(
 	ctx context.Context,
 	loaded *clip.Clip,
@@ -55,6 +57,7 @@ func Run(
 	if err != nil {
 		return err
 	}
+	session.photonBuild = options.Build
 	address := net.JoinHostPort(listenHost, strconv.Itoa(options.Port))
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", address)
 	if err != nil {

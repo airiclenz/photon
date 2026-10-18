@@ -32,6 +32,9 @@ const printedPrefix = "photon tune: "
 // runStopTimeout bounds how long Run may take to return once its context ends.
 const runStopTimeout = 10 * time.Second
 
+// testBuild is the build string the tests hand a run or a session to report.
+const testBuild = "photon 9.8.7 (a1b2c3d, dirty)"
+
 // serveRequest sends a request for method and target with body, declared as contentType when it
 // is not empty, to handler under host, and returns the recorded response.
 func serveRequest(
@@ -498,7 +501,7 @@ func TestRun_PortZero_ListensOnLoopbackAndStopsOnCancel(t *testing.T) {
 	stopped := make(chan error, 1)
 
 	go func() {
-		err := Run(ctx, loaded, Options{Take: fixture.takePath}, stdoutWriter, io.Discard)
+		err := Run(ctx, loaded, Options{Take: fixture.takePath, Build: testBuild}, stdoutWriter, io.Discard)
 		// Closing the pipe ends the read below should Run fail before printing.
 		stdoutWriter.CloseWithError(err) //nolint:errcheck,gosec // a pipe writer's close always returns nil
 		stopped <- err
@@ -512,6 +515,8 @@ func TestRun_PortZero_ListensOnLoopbackAndStopsOnCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET the state: %v", err)
 	}
+	var state State
+	decodeErr := json.NewDecoder(response.Body).Decode(&state)
 	if err := response.Body.Close(); err != nil {
 		t.Fatalf("close the response: %v", err)
 	}
@@ -519,6 +524,11 @@ func TestRun_PortZero_ListensOnLoopbackAndStopsOnCancel(t *testing.T) {
 
 	if response.StatusCode != http.StatusOK {
 		t.Errorf("GET the state: want 200, got %d", response.StatusCode)
+	}
+	if decodeErr != nil {
+		t.Errorf("decode the state: %v", decodeErr)
+	} else if state.Build != testBuild {
+		t.Errorf("the state's build: want %q, got %q", testBuild, state.Build)
 	}
 	select {
 	case err := <-stopped:

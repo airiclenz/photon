@@ -72,6 +72,8 @@ type Session struct {
 	isStale bool
 	// version rises on every change to what [Session.State] reports.
 	version int
+	// photonBuild is the build string of the photon serving the page; [Run] sets it before serving.
+	photonBuild string
 }
 
 // pipeline is one version of the storyboard as the preview builds on it: the board parsed, the

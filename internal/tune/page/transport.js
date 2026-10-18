@@ -1,6 +1,7 @@
 // photon tune's frame clock and transport: the playhead on the clip's output clock, the frames
 // the preview shows at it, playing, stepping and jumping between section starts, the keys that
-// drive them, and the bar's status, which tells how the last action went.
+// drive them, the bar's status, which tells how the last action went, and the build of the
+// photon serving the page, at the bar's right end.
 //
 // It loads after app.js and adds its functions to window.tunePage, the page's internal namespace,
 // where app.js's window.tune contract (time, frameTime, seek, pause), its wiring and its actions
@@ -19,6 +20,7 @@
 
   const view = page.view;
   const frameImage = page.frame;
+  const buildText = document.getElementById("build");
 
   let playhead = 0;
   let playing = null;
@@ -221,6 +223,9 @@
     const section = sectionAt(playhead);
     const beat = section ? "  beat " + section.beat : "";
     view.time.textContent = page.formatTime(playhead) + " / " + page.formatTime(state.length_ms) + beat;
+    if (buildText.textContent !== state.build) {
+      buildText.textContent = state.build;
+    }
   }
 
   // --- the keys ---

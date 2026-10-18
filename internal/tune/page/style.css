@@ -390,6 +390,12 @@ textarea {
   color: var(--danger);
 }
 
+.build {
+  color: var(--muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
 .timeline {
   grid-area: timeline;
   padding: 8px var(--gap);

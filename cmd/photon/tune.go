@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/airiclenz/photon"
 	"github.com/airiclenz/photon/internal/clip"
 	"github.com/airiclenz/photon/internal/tune"
 )
@@ -45,6 +46,7 @@ func newTuneCommand() *cobra.Command {
 			if len(args) > 1 {
 				options.Take = args[1]
 			}
+			options.Build = photon.Build()
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			return tune.Run(ctx, loaded, options, cmd.OutOrStdout(), cmd.ErrOrStderr())

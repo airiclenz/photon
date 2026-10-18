@@ -178,7 +178,8 @@ target, the selected pan's `to` or one of its `via` waypoints, or to copy as a `
 or `drag` end. `pause` and the `do` actions show read-only:
 changing them needs a new `photon record`. Save writes the storyboard in place and changes only
 the edited values, so comments and layout stay. It is refused while an edit leaves the
-storyboard invalid, or when the file changed on disk since it was loaded.
+storyboard invalid, or when the file changed on disk since it was loaded. The transport bar's
+right end shows the build serving the page, the string `photon version` prints.
 
 **Exit status** is the same for every command:
 
