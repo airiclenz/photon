@@ -121,10 +121,11 @@ func trackAt[V any, M interface{ timing() move[V] }](
 
 // planMoves plans every camera move of the storyboard onto the camera's tracks, each starting at
 // the start Parse resolved on the output clock and lasting its `over`, and lists each via pan's
-// resolved points as waypoints, keyed by the pan's index in the storyboard's camera list. A pan's
-// points resolve as [zoomPlanner.panPoint] does, on the screens clipSchedule shows across the
-// move. It fails, under camera[i] as a [storyboard.LocatedError], on a pan target that no screen
-// of its move shows, wrapping [target.ErrNotOnScreen].
+// resolved points as waypoints, keyed by the pan's index in the storyboard's camera list. A
+// targeted zoom also aims the pan track at its target, as [zoomPlanner.planZoomAim] plans. A
+// pan's points and a zoom's target resolve as [zoomPlanner.panPoint] does, on the screens
+// clipSchedule shows across the move. It fails, under camera[i] as a [storyboard.LocatedError],
+// on a pan or zoom target that no screen of its move shows, wrapping [target.ErrNotOnScreen].
 func (p zoomPlanner) planMoves(
 	clipSchedule *schedule.Schedule,
 ) (zooms []move[float64], pans []move[pointF], waypoints map[int][]pointF, err error) {
@@ -136,6 +137,15 @@ func (p zoomPlanner) planMoves(
 			zooms = append(zooms, move[float64]{
 				Start: zoom.Start(), Over: zoom.Over, To: zoom.To, Ease: zoom.Ease,
 			})
+			if zoom.Target == nil {
+				continue
+			}
+			aim, err := p.planZoomAim(*zoom, clipSchedule)
+			if err != nil {
+				located := storyboard.AtCamera(index, fmt.Errorf("zoom: target: %w", err))
+				return nil, nil, nil, fmt.Errorf("compose: %w", located)
+			}
+			pans = append(pans, aim)
 		case cameraMove.Pan != nil:
 			pan, err := p.planPan(*cameraMove.Pan, clipSchedule)
 			if err != nil {
@@ -180,6 +190,22 @@ func (p zoomPlanner) planPan(
 	return move[pointF]{
 		Start: start, Over: pan.Over, To: centres[last], Via: centres[:last], Ease: pan.Ease,
 	}, nil
+}
+
+// planZoomAim is the pan move a targeted zoom aims the camera with: to its target box's centre
+// over the zoom's own `over` with its ease, the box resolved as a pan's target point is, on the
+// screens clipSchedule shows across the move. The zoom must have a Target.
+func (p zoomPlanner) planZoomAim(
+	zoom storyboard.ZoomMove,
+	clipSchedule *schedule.Schedule,
+) (move[pointF], error) {
+	start := zoom.Start()
+	since, until := shownAt(clipSchedule, start), shownAt(clipSchedule, start+zoom.Over)
+	centre, err := p.panPoint(storyboard.Point{Target: *zoom.Target}, since, until)
+	if err != nil {
+		return move[pointF]{}, err
+	}
+	return move[pointF]{Start: start, Over: zoom.Over, To: centre, Ease: zoom.Ease}, nil
 }
 
 // panPoint is the source pixel a pan's point aims at: a cell's centre, or the centre of the box

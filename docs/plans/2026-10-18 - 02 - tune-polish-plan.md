@@ -472,7 +472,9 @@ editFields, splicer.apply (isNullTaken); internal/storyboard/fields.go — camer
 `GOMEMLIMIT=2GiB go test ./internal/tune/`; `LLL ./internal/storyboard/...`
 **Commit:** `feat(storyboard): edit a camera zoom's target`
 
-## 14. Aim a targeted camera zoom in compose
+## 14. Aim a targeted camera zoom in compose — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the zoom's aim is planned in a new `zoomPlanner.planZoomAim` helper (beside `planPan`) rather than inline in `planMoves`; it resolves through `panPoint` with the zoom's target, so the box resolves exactly as a pan's `to` target does.
 
 **What:** Depends on item 12.
 **Goal:** A targeted camera zoom pans the camera to its target box's centre over the zoom's

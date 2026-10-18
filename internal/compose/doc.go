@@ -21,7 +21,9 @@
 // to the snapshot in effect at the beat's start. The storyboard's `camera` moves join the tracks
 // beside the beat zooms, each at its `at` on the output clock for its `over`: a zoom move eases
 // to its factor, and a pan move's points are a cell's centre or a target's box centre, resolved
-// on the screen shown at the move's end and walking back to the one shown at its start. A
+// on the screen shown at the move's end and walking back to the one shown at its start. A zoom
+// move with a `target` also pans to its target's box centre over its own `over` with its `ease`,
+// the box resolved as a pan's target is. A
 // zoomed frame is cleared to the background colour [New] is given before the push is drawn, and
 // the cursor is mapped through the same crop, so it follows the camera.
 //
