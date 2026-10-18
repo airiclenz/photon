@@ -327,17 +327,29 @@ func problemsOf(err error, board *storyboard.Storyboard) []Problem {
 	return problems
 }
 
-// ownerOn returns owner, or the clip when owner is a beat board does not have, so the problem
-// still shows on a panel.
+// ownerOn returns owner, or the clip when owner is a beat, camera move or caption board does not
+// have, so the problem still shows on a panel: an outside write that fails to parse adds what the
+// last good board, the one the page shows, lacks.
 func ownerOn(owner storyboard.Owner, board *storyboard.Storyboard) storyboard.Owner {
-	if owner.Kind != storyboard.OwnerBeat {
+	if owner.Kind == storyboard.OwnerClip {
 		return owner
 	}
-	isOnBoard := board != nil && slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool {
-		return beat.ID == owner.Index
-	})
-	if !isOnBoard {
+	if board == nil || !hasOwner(board, owner) {
 		return storyboard.Owner{Kind: storyboard.OwnerClip}
 	}
 	return owner
+}
+
+// hasOwner reports whether board has the beat, camera move or caption owner names.
+func hasOwner(board *storyboard.Storyboard, owner storyboard.Owner) bool {
+	switch owner.Kind {
+	case storyboard.OwnerBeat:
+		return slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool { return beat.ID == owner.Index })
+	case storyboard.OwnerCamera:
+		return owner.Index >= 0 && owner.Index < len(board.Camera)
+	case storyboard.OwnerCaption:
+		return owner.Index >= 0 && owner.Index < len(board.Captions)
+	default:
+		return false
+	}
 }

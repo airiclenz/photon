@@ -338,22 +338,63 @@ func TestSession_State_CaptionTimesFollowABeatDuration(t *testing.T) {
 	}
 }
 
-func TestSession_Refresh_CameraProblemNamingABeat_IsOnTheMove(t *testing.T) {
+func TestSession_Refresh_InvalidOutsideWrite_ShowsEachProblemOnAPanel(t *testing.T) {
 	t.Parallel()
-	f := newSessionFixture(t)
-	writeTestFile(t, f.boardPath, sessionStoryboard+"camera:\n  - zoom: {to: 2, at: 1200ms, over: 300ms}\n")
-
-	if err := f.session.Refresh(); err != nil {
-		t.Fatalf("Refresh: %v", err)
+	clipOwner := storyboard.Owner{Kind: storyboard.OwnerClip}
+	cases := []struct {
+		name       string
+		good       string
+		written    string
+		wantPrefix string
+		wantOwner  storyboard.Owner
+	}{
+		{
+			name:       "camera move past the shown list is on the clip",
+			good:       sessionStoryboard,
+			written:    sessionStoryboard + "camera:\n  - zoom: {to: 2, at: 1200ms, over: 300ms}\n",
+			wantPrefix: "camera[0]:",
+			wantOwner:  clipOwner,
+		},
+		{
+			name:       "caption past the shown list is on the clip",
+			good:       sessionStoryboard,
+			written:    sessionStoryboard + "captions:\n  - {text: 'hi', at: 100ms, for: 300ms, color: red}\n",
+			wantPrefix: "captions[0]:",
+			wantOwner:  clipOwner,
+		},
+		{
+			name:       "camera move on the shown list is on the move",
+			good:       cameraCaptionsStoryboard,
+			written:    strings.Replace(cameraCaptionsStoryboard, "zoom: {to: 2, at: 100ms,", "zoom: {to: 2, at: 1200ms,", 1),
+			wantPrefix: "camera[0]:",
+			wantOwner:  storyboard.Owner{Kind: storyboard.OwnerCamera, Index: 0},
+		},
+		{
+			name:       "caption on the shown list is on the caption",
+			good:       cameraCaptionsStoryboard,
+			written:    strings.Replace(cameraCaptionsStoryboard, "align: left}", "align: left, color: red}", 1),
+			wantPrefix: "captions[0]:",
+			wantOwner:  storyboard.Owner{Kind: storyboard.OwnerCaption, Index: 0},
+		},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := newSessionFixtureOf(t, tc.good)
+			writeTestFile(t, f.boardPath, tc.written)
 
-	errs := f.session.State().Errors
-	isOnTheMove := slices.ContainsFunc(errs, func(problem Problem) bool {
-		return problem.Owner == storyboard.Owner{Kind: storyboard.OwnerCamera, Index: 0} &&
-			strings.HasPrefix(problem.Message, "camera[0]:") && strings.Contains(problem.Message, "beat 2")
-	})
-	if !isOnTheMove {
-		t.Errorf("errors %+v, want camera[0]'s problem naming beat 2 on camera 0", errs)
+			if err := f.session.Refresh(); err != nil {
+				t.Fatalf("Refresh: %v", err)
+			}
+
+			errs := f.session.State().Errors
+			isOnThePanel := slices.ContainsFunc(errs, func(problem Problem) bool {
+				return problem.Owner == tc.wantOwner && strings.HasPrefix(problem.Message, tc.wantPrefix)
+			})
+			if !isOnThePanel {
+				t.Errorf("errors %+v, want a %s problem on %+v", errs, tc.wantPrefix, tc.wantOwner)
+			}
+		})
 	}
 }
 
