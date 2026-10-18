@@ -323,23 +323,33 @@ func (t Theme) validate(report reporter) {
 	}
 }
 
-// validateFiles reports every caption font file named that cannot be opened for reading.
+// validateFiles reports every caption font file named that cannot be opened for reading or that
+// is a directory.
 func (f CaptionFont) validateFiles() []error {
 	var problems []error
 	for _, file := range []struct{ name, path string }{{"regular", f.Regular}, {"bold", f.Bold}} {
 		if file.path == "" {
 			continue
 		}
-		opened, err := os.Open(file.path)
-		if err != nil {
-			problems = append(problems, fmt.Errorf("caption_font.%s: %w", file.name, err))
-			continue
-		}
-		if err := opened.Close(); err != nil {
+		if err := readableFile(file.path); err != nil {
 			problems = append(problems, fmt.Errorf("caption_font.%s: %w", file.name, err))
 		}
 	}
 	return problems
+}
+
+// readableFile reports why path cannot be read as a file: it cannot be opened, or it is a
+// directory, which os.Open opens without complaint.
+func readableFile(path string) error {
+	opened, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	info, err := opened.Stat()
+	if err == nil && info.IsDir() {
+		err = fmt.Errorf("%s is a directory", path)
+	}
+	return errors.Join(err, opened.Close())
 }
 
 // validateColor reports a set colour that is not written `#rrggbb`.

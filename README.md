@@ -296,7 +296,7 @@ fonts: fonts/
 | `theme.ansi` | The 16 ANSI colours, normal then bright: all 16 or none. Default: Catppuccin Mocha. Colours 16-255 use the standard xterm palette. Truecolor is drawn as is. |
 | `fonts` | A folder of fonts that replaces the built-in terminal fonts. See [Fonts and licences](#fonts-and-licences). |
 | `caption_font` | Font files that replace the built-in caption font. See [Fonts and licences](#fonts-and-licences). |
-| `caption_font.regular`, `caption_font.bold` | The regular and bold caption font files, relative to the config's folder. Each must be readable. A style left out keeps Source Sans 3. |
+| `caption_font.regular`, `caption_font.bold` | The regular and bold caption font files, relative to the config's folder. Each must be a readable file, not a directory. A style left out keeps Source Sans 3. |
 
 Every command (`setup`, `reset`, `launch.command`, a service's `command`, `on_success`, a `run`
 expect) is one string run by `sh -c`, with the `PHOTON_*` variables set. photon expands

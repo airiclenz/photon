@@ -259,6 +259,38 @@ func TestLoadRejectsAnUnreadableCaptionFont(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsADirectoryAsCaptionFont(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name          string
+		regular, bold string
+	}{
+		{"regular", "fonts", ""},
+		{"bold", "", "fonts"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := writeConfig(t, fmt.Sprintf(captionFontConfig, tc.regular, tc.bold))
+			directory := filepath.Join(filepath.Dir(path), "fonts")
+			if err := os.Mkdir(directory, 0o700); err != nil {
+				t.Fatalf("create %s: %v", directory, err)
+			}
+
+			_, err := Load(path)
+
+			var invalid *ValidationError
+			if !errors.As(err, &invalid) {
+				t.Fatalf("want a *ValidationError, got %v", err)
+			}
+			want := "caption_font." + tc.name + ": " + directory + " is a directory"
+			if len(invalid.Problems) != 1 || !strings.Contains(err.Error(), want) {
+				t.Errorf("want one problem %q, got:\n%v", want, err)
+			}
+		})
+	}
+}
+
 func TestLoadRejects(t *testing.T) {
 	t.Parallel()
 	const servicesSection = "  mail-relay:\n    command: ./bin/relay\n"

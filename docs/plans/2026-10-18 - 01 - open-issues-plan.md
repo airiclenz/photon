@@ -92,7 +92,11 @@ Storyboard.Clock, OutputClock.Resolve, OutputClock.Length
 **Closes:** caption-cut-beat-test
 **Commit:** `test(storyboard): cover a caption anchored to a cut beat`
 
-## 2. Refuse a directory named as a caption font
+## 2. Refuse a directory named as a caption font — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the open/stat/close check moved into a small `readableFile(path) error` helper beside `CaptionFont.validateFiles`, which wraps its error as `caption_font.<name>: %w`; the directory problem reads `caption_font.<name>: <path> is a directory`; no sentinel, as no caller tells it apart
+NOTES (2026-10-18): consequential edit — README.md: made necessary by the directory check; the `caption_font` row now says "Each must be a readable file, not a directory."
+
 
 **What:** Fix: `config.Load` accepts a directory as `caption_font.regular`/`.bold` because
 `os.Open` succeeds on one.
