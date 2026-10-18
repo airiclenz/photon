@@ -260,7 +260,12 @@ internal/tune/state.go — problemsOf, beatNamed, beatMention; internal/tune/ses
 **Closes:** output-clock; take-screen-lookup
 **Commit:** `feat(take): refuse a take whose beats ran out of order`
 
-## 10. Split the tune page's app.js
+## 10. Split the tune page's app.js — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): re-derived from the assumption that app.js keeps the frame clock and the transport and still fits below 400 lines: with the session API, selection, wiring and window.tune it ran ~500, so the frame clock, transport, playback drawing and keys (frameCount…showFrame, seek/play/pause/tick, jumpSection, renderPlay/renderTime, onKey/onKeyUp) moved to a fifth script, page/transport.js; app.js keeps the contract (time, frameTime, seek, pause delegate to it) and ends at 395 lines.
+NOTES (2026-10-18): the split scripts load after app.js and share state through one internal namespace, window.tunePage (state(), refusal(), applyEdit, view, frame, helpers; each split script Object.assigns its own functions); window.tune is unchanged and wire() now runs on DOMContentLoaded, so no /api/state answer is handled before every script has run. renderInspector, renderBeatSelect and the selection stay in app.js (they own selectedBeat/selectedEntry) and call page.beatPanel/framePanel/entryPanel/errorMark.
+NOTES (2026-10-18): page_test.go: pageFileNames and entryFieldSenders were replaced by a pageScripts(t) glob over page/*.js (plus pageAssetNames for style.css), which the embed, index-loads, EntryFields and EntryReads tests all read; TestPage_App_ReadOnlyFrameFields_AreStateKeys keeps its name and now reads panels.js; new tests TestPage_SplitScripts_StayBelowTheFileSizeGuide (all five split scripts < 400 lines) and TestPage_App_WiresOnceEverySplitScriptHasRun (index loads app.js first; app.js wires on DOMContentLoaded).
+NOTES (2026-10-18): doc.go's file map now names every page asset, as issue tune-page-app-split's acceptance asks. A throwaway headless-chromium run against a camera+captions session fixture showed the clip frame, beat, camera and caption panels, a refused and an accepted inspector edit, seek, frameTime and arrow-key stepping all working (test file deleted afterwards).
 
 **What:**
 **Goal:** `internal/tune/page/app.js` and every script split from it are under 400 lines; the `window.tune` contract is unchanged; the page behaves as before.

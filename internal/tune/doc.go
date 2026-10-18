@@ -48,4 +48,11 @@
 //   - session.go: the [Session]: its pipelines, history, refresh from disk and guarded save.
 //   - state.go: the [State] a session reports and the errors attributed to beats.
 //   - value.go: reading an edit's value spellings and writing a duration in its old unit.
+//   - page/index.html, page/style.css: the page and its styles.
+//   - page/app.js: the window.tune contract, the session's API, the selection and the wiring.
+//   - page/transport.js: the frame clock, the transport and its keys.
+//   - page/controls.js: the inspector's field controls and its error and refusal rows.
+//   - page/panels.js: the inspector's beat and frame panels.
+//   - page/entries.js: the inspector's camera move and caption panels.
+//   - page/lanes.js, page/timeline.js, page/picker.js: the timeline, its lanes and the target picker.
 package tune

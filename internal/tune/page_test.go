@@ -14,8 +14,17 @@ import (
 	"testing"
 )
 
-// pageFileNames are the files the page is made of, each embedded under page/.
-var pageFileNames = []string{"index.html", "style.css", "app.js", "lanes.js", "timeline.js", "picker.js"}
+// pageScriptPattern finds every script of the page among the embedded files.
+const pageScriptPattern = "*.js"
+
+// pageAssetNames are the files index.html loads besides its scripts.
+var pageAssetNames = []string{"style.css"}
+
+// splitScripts are app.js and the scripts split from it, each kept under maxScriptLines.
+var splitScripts = []string{"app.js", "transport.js", "controls.js", "panels.js", "entries.js"}
+
+// maxScriptLines is the file-size guide of Note coding-conventions a split script stays below.
+const maxScriptLines = 400
 
 // pickerCalls are what picker.js must call: the pick endpoint and the clipboard its copy buttons
 // write the snippets to.
@@ -51,16 +60,13 @@ var entryReaders = []struct {
 	{"moment", MomentState{}},
 }
 
-// entryFieldSenders are the page files that send camera move and caption edits.
-var entryFieldSenders = []string{"app.js", "picker.js"}
-
 // entryFieldName finds a camera move's or caption's edit field written as a string literal.
 var entryFieldName = regexp.MustCompile(`"((?:camera|caption)\.[a-z_]+)"`)
 
 // readOnlyFrameFields are the frame keys the Clip frame panel prints, read-only, from the state.
 var readOnlyFrameFields = []string{"cols", "rows", "padding", "font_size", "line_height", "scale", "max_colors"}
 
-// readOnlyFrameList is the READ_ONLY_FRAME_FIELDS array in app.js; quotedName finds each name in it.
+// readOnlyFrameList is the READ_ONLY_FRAME_FIELDS array in panels.js; quotedName finds each name in it.
 var (
 	readOnlyFrameList = regexp.MustCompile(`(?s)READ_ONLY_FRAME_FIELDS\s*=\s*\[(.*?)\]`)
 	quotedName        = regexp.MustCompile(`"([^"]+)"`)
@@ -90,6 +96,30 @@ func jsonKeys(t *testing.T, value any) map[string]bool {
 	return keys
 }
 
+// pageScripts returns the name of every script embedded under page/, so a check over the page's
+// scripts reaches one added later without a list to update.
+func pageScripts(t *testing.T) []string {
+	t.Helper()
+	paths, err := fs.Glob(pageFiles, path.Join(pageDir, pageScriptPattern))
+	if err != nil {
+		t.Fatalf("list the page scripts: %v", err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("the page embeds no script")
+	}
+	names := make([]string, 0, len(paths))
+	for _, script := range paths {
+		names = append(names, path.Base(script))
+	}
+	return names
+}
+
+// pageLoads returns the files index.html must load: its assets and every page script.
+func pageLoads(t *testing.T) []string {
+	t.Helper()
+	return append(slices.Clone(pageAssetNames), pageScripts(t)...)
+}
+
 // readPageFile returns the embedded page file name, failing the test when it is missing.
 func readPageFile(t *testing.T, name string) []byte {
 	t.Helper()
@@ -103,7 +133,7 @@ func readPageFile(t *testing.T, name string) []byte {
 func TestPage_Files_AreEmbedded(t *testing.T) {
 	t.Parallel()
 
-	for _, name := range pageFileNames {
+	for _, name := range append([]string{pageIndex}, pageLoads(t)...) {
 		if content := readPageFile(t, name); len(content) == 0 {
 			t.Errorf("the page file %s is empty", name)
 		}
@@ -137,7 +167,7 @@ func TestPage_IndexReferences_AreServed(t *testing.T) {
 		}
 		served[name] = true
 	}
-	for _, name := range pageFileNames[1:] {
+	for _, name := range pageLoads(t) {
 		if !served[name] {
 			t.Errorf("index.html does not load %s", name)
 		}
@@ -218,7 +248,7 @@ func TestPage_App_DefinesTheTuneContract(t *testing.T) {
 
 func TestPage_App_ReadOnlyFrameFields_AreStateKeys(t *testing.T) {
 	t.Parallel()
-	app := readPageFile(t, "app.js")
+	panels := readPageFile(t, "panels.js")
 	encoded, err := json.Marshal(State{})
 	if err != nil {
 		t.Fatalf("marshal State: %v", err)
@@ -228,10 +258,10 @@ func TestPage_App_ReadOnlyFrameFields_AreStateKeys(t *testing.T) {
 		t.Fatalf("unmarshal State: %v", err)
 	}
 
-	list := readOnlyFrameList.FindSubmatch(app)
+	list := readOnlyFrameList.FindSubmatch(panels)
 
 	if list == nil {
-		t.Fatal("app.js does not define READ_ONLY_FRAME_FIELDS = [...]")
+		t.Fatal("panels.js does not define READ_ONLY_FRAME_FIELDS = [...]")
 	}
 	var names []string
 	for _, match := range quotedName.FindAllSubmatch(list[1], -1) {
@@ -262,7 +292,7 @@ func TestPage_EntryFields_AreEditFields(t *testing.T) {
 	t.Parallel()
 	sent := map[string]bool{}
 
-	for _, name := range entryFieldSenders {
+	for _, name := range pageScripts(t) {
 		for _, match := range entryFieldName.FindAllSubmatch(readPageFile(t, name), -1) {
 			field := string(match[1])
 			sent[field] = true
@@ -315,9 +345,7 @@ func TestPage_Index_LoadsLanesBeforeTimeline(t *testing.T) {
 
 func TestPage_EntryReads_AreStateKeys(t *testing.T) {
 	t.Parallel()
-	files := []string{"lanes.js", "app.js"}
-
-	for _, name := range files {
+	for _, name := range pageScripts(t) {
 		content := readPageFile(t, name)
 		for _, reader := range entryReaders {
 			keys := jsonKeys(t, reader.of)
@@ -341,5 +369,34 @@ func TestPage_Lanes_ReadCameraAndCaptions(t *testing.T) {
 		if !strings.Contains(lanes, "state."+key) {
 			t.Errorf("lanes.js does not read state.%s", key)
 		}
+	}
+}
+
+func TestPage_SplitScripts_StayBelowTheFileSizeGuide(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range splitScripts {
+		lines := bytes.Count(readPageFile(t, name), []byte("\n"))
+
+		if lines >= maxScriptLines {
+			t.Errorf("%s has %d lines, want fewer than %d", name, lines, maxScriptLines)
+		}
+	}
+}
+
+func TestPage_App_WiresOnceEverySplitScriptHasRun(t *testing.T) {
+	t.Parallel()
+	index := string(readPageFile(t, pageIndex))
+	app := string(readPageFile(t, "app.js"))
+
+	appAt := strings.Index(index, assetsPrefix+"app.js")
+
+	for _, name := range splitScripts[1:] {
+		if at := strings.Index(index, assetsPrefix+name); at < 0 || at < appAt {
+			t.Errorf("index.html loads %s at %d and app.js at %d; want app.js first", name, at, appAt)
+		}
+	}
+	if !strings.Contains(app, `document.addEventListener("DOMContentLoaded", wire)`) {
+		t.Error("app.js does not wire the page on DOMContentLoaded, after every split script has run")
 	}
 }
