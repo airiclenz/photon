@@ -128,8 +128,8 @@ type PauseAction struct {
 // Target is an on-screen place a click, drag or zoom resolves on the current screen: Text is a
 // regex over the screen's rows, Nth picks which match counts and Area limits the rows searched to
 // an area the config declares (empty or [AreaAny] means the whole screen). It is also a target on
-// the JSON wire, {"text", "nth", "area"}, as a zoom.target or camera.to [Edit] types it and photon
-// tune's pick proposes it: a zero Nth and an empty Area are left out.
+// the JSON wire, {"text", "nth", "area"}, as a pan's camera.to [Edit] types it and photon tune's
+// pick proposes it: a zero Nth and an empty Area are left out.
 type Target struct {
 	Text string `yaml:"text" json:"text"`
 	Nth  Nth    `yaml:"nth" json:"nth,omitempty"`

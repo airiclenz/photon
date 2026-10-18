@@ -301,12 +301,9 @@ func TestPage_EntryFields_AreEditFields(t *testing.T) {
 		}
 	}
 
-	// TODO(zoom-target-removal): drop this exemption once the storyboard no longer describes
-	// camera.target as editable; the page already offers no zoom target.
-	unsent := map[string]bool{storyboard.FieldCameraTarget: true}
 	for field := range editable {
 		isEntryField := strings.HasPrefix(field, "camera.") || strings.HasPrefix(field, "caption.")
-		if isEntryField && !sent[field] && !unsent[field] {
+		if isEntryField && !sent[field] {
 			t.Errorf("the page sends no %s edit", field)
 		}
 	}

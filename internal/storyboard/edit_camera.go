@@ -14,11 +14,10 @@ import (
 
 // The camera move fields an [Edit] names; each edits the move its owner's index names.
 const (
-	FieldCameraAt     = "camera.at"
-	FieldCameraOver   = "camera.over"
-	FieldCameraEase   = "camera.ease"
-	FieldCameraTo     = "camera.to"
-	FieldCameraTarget = "camera.target"
+	FieldCameraAt   = "camera.at"
+	FieldCameraOver = "camera.over"
+	FieldCameraEase = "camera.ease"
+	FieldCameraTo   = "camera.to"
 )
 
 // cameraFieldPrefix starts the name of every camera move field.
@@ -49,7 +48,7 @@ func isCameraField(field string) bool {
 
 // editCamera sets field, typed as value, on the move at index in board, the storyboard s.doc
 // holds, edits a pan's via path for a via field, or adds, removes or reorders a move for a list
-// field. A camera.target is refused on a pan, which aims with its camera.to.
+// field.
 func (s *splicer) editCamera(
 	board *Storyboard, index int, field string, value json.RawMessage,
 ) error {
@@ -80,11 +79,6 @@ func (s *splicer) editCamera(
 		return s.writeDuration(move, keyOver, order, 0, length)
 	case FieldCameraEase:
 		return s.setEase(move, order, value)
-	case FieldCameraTarget:
-		if camera.Zoom == nil {
-			return fmt.Errorf("a pan takes no target; set where it goes with %s", FieldCameraTo)
-		}
-		return s.setZoomTarget(move, value)
 	default:
 		if camera.Zoom != nil {
 			return s.setZoomTo(move, value)
@@ -116,19 +110,6 @@ func (s *splicer) setZoomTo(move yamledit.Path, value json.RawMessage) error {
 	return s.doc.Upsert(move, keyTo, strconv.FormatFloat(factor, 'f', -1, 64), zoomMoveKeyOrder)
 }
 
-// setZoomTarget writes a zoom move's target as the flow mapping [Target.YAMLFlow] spells, in
-// place of the target it holds or after its to, or deletes the key for null, an untargeted zoom.
-func (s *splicer) setZoomTarget(move yamledit.Path, value json.RawMessage) error {
-	if isNull(value) {
-		return s.doc.DeleteIfPresent(under(move, keyTarget))
-	}
-	target, err := decodeTarget(value)
-	if err != nil {
-		return err
-	}
-	return s.replaceOrInsert(move, keyTarget, target.YAMLFlow(), zoomMoveKeyOrder)
-}
-
 // setPanTo replaces a straight pan's destination with the target or cell value types. A pan
 // along a via path is refused: its waypoints are edited by camera.via, and camera.path turns it
 // into a straight pan.
@@ -150,8 +131,8 @@ type wireCell struct {
 	Y int `json:"y"`
 }
 
-// wirePoint is a pan's destination as an [Edit] types it: a target as a zoom.target takes it,
-// {"text", "nth", "area"}, or a cell, {"cell": {"x": 3, "y": 4}} — one of the two.
+// wirePoint is a pan's destination as an [Edit] types it: a target, {"text", "nth", "area"}, or
+// a cell, {"cell": {"x": 3, "y": 4}} — one of the two.
 type wirePoint struct {
 	Target
 	Cell *wireCell `json:"cell"`

@@ -373,7 +373,13 @@ the guard's deletions.
 
 **Commit:** `refactor(compose)!: plan no beat zoom and no zoom aim`
 
-## 8. Drop zoom-target and beat-zoom edits
+## 8. Drop zoom-target and beat-zoom edits — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): consequential edit — internal/storyboard/beat.go: made necessary by dropping zoom.target (the Target doc comment named "a zoom.target or camera.to [Edit]"; now "a pan's camera.to [Edit]").
+NOTES (2026-10-18): edit_list_test.go is in the item's Files but needed no change: it holds no zoom-target or beat-zoom edit rows (its InsertOverlappingAMove case stays as is).
+NOTES (2026-10-18): TestKeyOrder's "a zoom" row (reflect.TypeFor[Zoom]) is kept, as the plan header says: `type Zoom` stays until item 10.
+NOTES (2026-10-18): the exported FieldKind KindTarget no longer describes any field (camera.to on a pan is KindPoint); kept, since the item does not name it and no lint flags an exported constant.
+NOTES (2026-10-18): the remaining comment-rule grep hits are code and load-error test rows for the Zoom and ZoomMove.Target types (camera.go, storyboard.go, storyboard_test.go), which items 9 and 10 own.
 
 **What:**
 Part of `zoom-target-removal` and `beat-zoom-removal`. Depends on items 4 and 5.

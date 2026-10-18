@@ -68,29 +68,6 @@ func TestApply_Edit_ChangesOnlyTheEditedText(t *testing.T) {
 			"      - pause: {for: 1s}\n", "      - pause: {for: 1s}\n    cut: true\n"},
 		{"duration is inserted into a cut beat", beatEdit(3, FieldDuration, 1200),
 			"      - key: {name: enter}\n", "      - key: {name: enter}\n    duration: 1.2s\n"},
-		{"auto factor deletes a block key", beatEdit(2, FieldZoomFactor, 0), "      factor: 1.5\n", ""},
-		{"auto factor deletes a flow key", beatEdit(4, FieldZoomFactor, 0),
-			"{target: {text: 'beta', nth: 2}, factor: 2}", "{target: {text: 'beta', nth: 2}}"},
-		{"factor is set", beatEdit(2, FieldZoomFactor, 1.8), "factor: 1.5", "factor: 1.8"},
-		{"factor goes after a block target", beatEdit(6, FieldZoomFactor, 2.5),
-			"        text: 'gamma'\n", "        text: 'gamma'\n      factor: 2.5\n"},
-		{"target on a block zoom", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": "hi", "nth": 2}`)),
-			"target: {text: 'hello', area: status}", "target: {text: 'hi', nth: 2}"},
-		{"target on a flow zoom", beatEdit(4, FieldZoomTarget, json.RawMessage(`{"text": "gamma", "area": "list"}`)),
-			"{target: {text: 'beta', nth: 2}, factor: 2}", "{target: {text: 'gamma', area: 'list'}, factor: 2}"},
-		{"a target's last match is written as nth: last", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": "hi", "nth": "last"}`)),
-			"target: {text: 'hello', area: status}", "target: {text: 'hi', nth: last}"},
-		{"target on a block zoom holding only its target", beatEdit(6, FieldZoomTarget, json.RawMessage(`{"text": "delta"}`)),
-			"    zoom:\n      target:\n        text: 'gamma'\n", "    zoom: {target: {text: 'delta'}}\n"},
-		{"zoom in goes after the factor", beatEdit(2, FieldZoomIn, 1500),
-			"      factor: 1.5\n", "      factor: 1.5\n      in: 1.5s\n"},
-		{"zoom out goes last in a flow zoom", beatEdit(4, FieldZoomOut, 750), "factor: 2}", "factor: 2, out: 750ms}"},
-		{"zoom is added as a flow mapping", beatEdit(5, FieldZoom, json.RawMessage(`{"text": "x", "area": "list"}`)),
-			"      - pause: {for: 1s}\n", "      - pause: {for: 1s}\n    zoom: {target: {text: 'x', area: 'list'}}\n"},
-		{"a block zoom is removed", beatEdit(2, FieldZoom, nil),
-			"    zoom:\n      target: {text: 'hello', area: status}\n      factor: 1.5\n", ""},
-		{"a flow zoom is removed", beatEdit(4, FieldZoom, nil),
-			"    zoom: {target: {text: 'beta', nth: 2}, factor: 2}\n", ""},
 		{"frame width in a flow frame", frameEdit(FieldFrameWidth, 640), "width: 600", "width: 640"},
 		{"frame fps in a flow frame", frameEdit(FieldFrameFPS, 30), "fps: 24", "fps: 30"},
 		{"frame padding in a flow frame", frameEdit(FieldFramePadding, 0), "padding: 16", "padding: 0"},
@@ -160,8 +137,6 @@ func TestApply_DefaultOrAbsentKey_LeavesTheSourceAsItIs(t *testing.T) {
 	}{
 		{"a zero hold is not written out", beatEdit(5, FieldHold, 0)},
 		{"cut off on a beat with no cut", beatEdit(5, FieldCut, false)},
-		{"auto factor on a zoom with no factor", beatEdit(6, FieldZoomFactor, 0)},
-		{"a default ramp is not written out", beatEdit(2, FieldZoomIn, 1000)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -202,8 +177,6 @@ func TestApply_InvalidResult_IsRefusedWithTheValidationError(t *testing.T) {
 	}{
 		{"hold reaching the duration", beatEdit(1, FieldHold, 1800)},
 		{"cut off on a beat with no duration", beatEdit(3, FieldCut, false)},
-		{"a factor beyond the range", beatEdit(2, FieldZoomFactor, 3.5)},
-		{"a target with no text", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"area": "list"}`))},
 		{"a zero frame width", frameEdit(FieldFrameWidth, 0)},
 		{"a frame font size below the caption range", frameEdit(FieldFrameFontSize, 5)},
 		{"a frame font size beyond the caption range", frameEdit(FieldFrameFontSize, 73)},
@@ -234,11 +207,6 @@ func TestApply_EditOnWhatIsNotThere_IsRefused(t *testing.T) {
 		edit    Edit
 		message string
 	}{
-		{"a zero ramp names the default", beatEdit(2, FieldZoomIn, 0), "zoom.in: want a ramp longer than 0ms; a ramp left out runs the 1s default"},
-		{"a zero out ramp names the default", beatEdit(4, FieldZoomOut, 0), "zoom.out: want a ramp longer than 0ms; a ramp left out runs the 1s default"},
-		{"a zoom field on a beat with no zoom", beatEdit(5, FieldZoomTarget, json.RawMessage(`{"text": "x"}`)), "beat 5: zoom.target: the beat has no zoom"},
-		{"a second zoom", beatEdit(2, FieldZoom, json.RawMessage(`{"text": "x"}`)), "beat 2: zoom: the beat already zooms"},
-		{"removing a zoom that is not there", beatEdit(5, FieldZoom, nil), "beat 5: zoom: the beat has no zoom to remove"},
 		{"an unknown beat", beatEdit(9, FieldDuration, 1000), "beat 9: duration: the storyboard has no beat with id 9"},
 		{"an unknown field", beatEdit(1, "title", "x"), "beat 1: title: unknown field"},
 		{"a frame field on a beat", beatEdit(1, FieldFrameFPS, 30), "beat 1: frame.fps: want a clip owner"},
@@ -248,7 +216,6 @@ func TestApply_EditOnWhatIsNotThere_IsRefused(t *testing.T) {
 		{"a null duration", beatEdit(2, FieldDuration, nil), "beat 2: duration: want a value, got null"},
 		{"an absent duration", Edit{Owner: Owner{Kind: OwnerBeat, Index: 2}, Field: FieldDuration},
 			"beat 2: duration: want a value, got none"},
-		{"a null zoom target", beatEdit(2, FieldZoomTarget, nil), "beat 2: zoom.target: want a value, got null"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -276,17 +243,10 @@ func TestApply_WireSpellings(t *testing.T) {
 		{"a duration with a unit", beatEdit(2, FieldDuration, "1.85s"), false},
 		{"fractional milliseconds", beatEdit(2, FieldDuration, 1850.5), false},
 		{"a negative hold", beatEdit(2, FieldHold, -5), false},
-		{"a ramp with a unit", beatEdit(2, FieldZoomIn, "1s"), false},
-		{"a ramp as a bool", beatEdit(2, FieldZoomOut, true), false},
 		{"cut true", beatEdit(5, FieldCut, true), true},
 		{"cut false", beatEdit(2, FieldCut, false), true},
 		{"cut as a string", beatEdit(2, FieldCut, "true"), false},
 		{"cut as a number", beatEdit(2, FieldCut, 1), false},
-		{"a decimal factor", beatEdit(2, FieldZoomFactor, 1.8), true},
-		{"a whole factor", beatEdit(2, FieldZoomFactor, 2), true},
-		{"factor 0 for auto", beatEdit(2, FieldZoomFactor, 0), true},
-		{"a negative factor", beatEdit(2, FieldZoomFactor, -1.5), false},
-		{"auto as a string", beatEdit(2, FieldZoomFactor, "auto"), false},
 		{"a frame integer", frameEdit(FieldFrameWidth, 640), true},
 		{"a frame decimal", frameEdit(FieldFrameWidth, 6.5), false},
 		{"a frame integer as a string", frameEdit(FieldFrameFPS, "30"), false},
@@ -297,17 +257,6 @@ func TestApply_WireSpellings(t *testing.T) {
 		{"a whole frame line height", frameEdit(FieldFrameLineHeight, 2), true},
 		{"a zero frame line height", frameEdit(FieldFrameLineHeight, 0), false},
 		{"a frame font size as a string", frameEdit(FieldFrameFontSize, "14"), false},
-		{"a target", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": "ok", "area": "list", "nth": 2}`)), true},
-		{"a target with nth last", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": "ok", "nth": "last"}`)), true},
-		{"a target with nth 0", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": "ok", "nth": 0}`)), false},
-		{"a target with nth first", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": "ok", "nth": "first"}`)), false},
-		{"a target with nth as a decimal", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": "ok", "nth": 1.5}`)), false},
-		{"a target as YAML flow text", beatEdit(2, FieldZoomTarget, "{text: 'ok'}"), false},
-		{"a target with an unknown key", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": "ok", "bogus": 1}`)), false},
-		{"a target with a numeric text", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": 7}`)), false},
-		{"a zoom added onto a target", beatEdit(5, FieldZoom, json.RawMessage(`{"text": "ok", "area": "list"}`)), true},
-		{"a zoom added onto a sequence", beatEdit(5, FieldZoom, []string{"ok"}), false},
-		{"a zoom removed", beatEdit(2, FieldZoom, nil), true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -558,7 +507,6 @@ func TestApply_CameraEditToWhatAnAbsentKeyMeans_LeavesTheSourceAsItIs(t *testing
 		edit Edit
 	}{
 		{"a clip start on a move without at", cameraEdit(4, FieldCameraAt, moment(0, 0))},
-		{"no target on a zoom without one", cameraEdit(4, FieldCameraTarget, nil)},
 		{"smooth on a move without ease", cameraEdit(1, FieldCameraEase, "smooth")},
 	}
 	for _, tc := range cases {
@@ -621,97 +569,6 @@ func TestApply_CameraEditOnWhatIsNotThere_IsRefused(t *testing.T) {
 			t.Parallel()
 
 			_, _, err := Apply([]byte(tc.board), cameraEditPath, tc.edit)
-
-			if err == nil || !strings.Contains(err.Error(), tc.message) {
-				t.Errorf("Apply(%+v) = %v, want an error containing %q", tc.edit, err, tc.message)
-			}
-		})
-	}
-}
-
-// zoomTargetBoard is editBaseBoard with four zooms in beat 1, one after another so that each
-// may aim: a block and a flow zoom with a target, and a block and a flow zoom without one.
-const zoomTargetBoard = editBaseBoard + `camera:
-  - zoom:
-      to: 1.5
-      target:
-        text: 'failing'
-      at: 100ms
-      over: 200ms
-  - zoom:
-      to: 2
-      at: 300ms # after the first
-      over: 200ms
-  - zoom: {to: 1.2, target: {text: 'tests', nth: last}, at: 500ms, over: 200ms}
-  - zoom: {to: 1.8, at: 700ms, over: 200ms}
-`
-
-func TestApply_CameraTarget_ChangesOnlyTheTarget(t *testing.T) {
-	t.Parallel()
-	ok := json.RawMessage(`{"text": "ok", "nth": 2, "area": "list"}`)
-	cases := []struct {
-		name     string
-		edit     Edit
-		old, new string
-	}{
-		{"a block target is replaced", cameraEdit(0, FieldCameraTarget, ok),
-			"      target:\n        text: 'failing'\n", "      target: {text: 'ok', nth: 2, area: 'list'}\n"},
-		{"a block target is set after to", cameraEdit(1, FieldCameraTarget, ok),
-			"      to: 2\n", "      to: 2\n      target: {text: 'ok', nth: 2, area: 'list'}\n"},
-		{"a block target is removed", cameraEdit(0, FieldCameraTarget, nil),
-			"      target:\n        text: 'failing'\n", ""},
-		{"a flow target is replaced", cameraEdit(2, FieldCameraTarget, ok),
-			"target: {text: 'tests', nth: last}", "target: {text: 'ok', nth: 2, area: 'list'}"},
-		{"a flow target is set after to", cameraEdit(3, FieldCameraTarget, ok),
-			"{to: 1.8, at:", "{to: 1.8, target: {text: 'ok', nth: 2, area: 'list'}, at:"},
-		{"a flow target is removed", cameraEdit(2, FieldCameraTarget, nil),
-			"target: {text: 'tests', nth: last}, ", ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			if count := strings.Count(zoomTargetBoard, tc.old); count != 1 {
-				t.Fatalf("the board holds %q %d times, want once", tc.old, count)
-			}
-			want := strings.Replace(zoomTargetBoard, tc.old, tc.new, 1)
-
-			got, _, err := Apply([]byte(zoomTargetBoard), cameraEditPath, tc.edit)
-
-			if err != nil {
-				t.Fatalf("Apply(%+v): %v", tc.edit, err)
-			}
-			if string(got) != want {
-				t.Errorf("Apply(%+v) =\n%s\nwant\n%s", tc.edit, got, want)
-			}
-		})
-	}
-}
-
-func TestApply_CameraTarget_IsRefused(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name    string
-		edit    Edit
-		message string
-	}{
-		{"a target on a pan", cameraEdit(1, FieldCameraTarget, json.RawMessage(`{"text": "x"}`)),
-			"camera[1]: camera.target: a pan takes no target"},
-		{"a null target on a pan", cameraEdit(2, FieldCameraTarget, nil),
-			"camera[2]: camera.target: a pan takes no target"},
-		{"a target with an unknown key", cameraEdit(4, FieldCameraTarget, json.RawMessage(`{"text": "x", "size": 2}`)),
-			"camera[4]: camera.target: want a target"},
-		{"a target as YAML text", cameraEdit(4, FieldCameraTarget, "{text: x}"),
-			"camera[4]: camera.target: want a target"},
-		{"a target without text", cameraEdit(4, FieldCameraTarget, json.RawMessage(`{"area": "list"}`)),
-			"camera[4]: zoom.target.text: missing"},
-		{"a targeted zoom overlapping a pan", cameraEdit(0, FieldCameraTarget, json.RawMessage(`{"text": "x"}`)),
-			"camera[1]: pan: overlaps camera[0] on the pan track"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			_, _, err := Apply([]byte(cameraEditBoard), cameraEditPath, tc.edit)
 
 			if err == nil || !strings.Contains(err.Error(), tc.message) {
 				t.Errorf("Apply(%+v) = %v, want an error containing %q", tc.edit, err, tc.message)
