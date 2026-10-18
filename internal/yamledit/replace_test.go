@@ -37,6 +37,26 @@ func TestReplace_Node_SwapsOnlyItsText(t *testing.T) {
 		{"a scalar in a flow mapping", "a: {x: 1, y: 2}\n", Path{"a", "y"}, "{p: 3}", "a: {x: 1, y: {p: 3}}\n"},
 		{"a flow mapping in a flow mapping", "a: {x: {p: 1}, y: 2}\n", Path{"a", "x"}, "7", "a: {x: 7, y: 2}\n"},
 		{"a block mapping with CRLF lines", "a:\r\n  x: 1\r\nb: 2\r\n", Path{"a"}, "3", "a: 3\r\nb: 2\r\n"},
+		{
+			"a block mapping that is a sequence item",
+			"a:\n  - x: 1 # gone\n    y: 2\n  - x: 3\n", Path{"a", "0"}, "{x: 2}",
+			"a:\n  - {x: 2}\n  - x: 3\n",
+		},
+		{
+			"a block scalar sequence item keeps its header comment",
+			"a:\n  - | # keep\n    one\n    two\n  - b\n", Path{"a", "0"}, "'x'",
+			"a:\n  - 'x' # keep\n  - b\n",
+		},
+		{"a block scalar item indented less than its dash's content", "- |\n line\n- b\n", Path{"0"}, "x", "- x\n- b\n"},
+		{"a block sequence that is a sequence item", "a:\n  - - 1\n    - 2\n  - 3\n", Path{"a", "0"}, "[9]", "a:\n  - [9]\n  - 3\n"},
+		{"an indentless sequence's item", "a:\n- x: 1\n  y: 2\nb: 3\n", Path{"a", "0"}, "5", "a:\n- 5\nb: 3\n"},
+		{"an item below its dash", "a:\n  -\n    x: 1\n  - 2\n", Path{"a", "0"}, "{x: 2}", "a:\n  -\n    {x: 2}\n  - 2\n"},
+		{
+			"a sequence item leaves the trailing blank and comment lines",
+			"a:\n  - x: 1\n    y: 2\n\n# trailing\nb: 2\n", Path{"a", "0"}, "{x: 9}",
+			"a:\n  - {x: 9}\n\n# trailing\nb: 2\n",
+		},
+		{"a sequence item at the end without a newline", "a:\n  - x: 1\n    y: 2", Path{"a", "0"}, "7", "a:\n  - 7"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -69,7 +89,7 @@ func TestReplace_Refuses(t *testing.T) {
 		{"an alias", "a: &x 1\nb: *x\n", Path{"b"}, "2", ErrUnsupported},
 		{"a tagged scalar", "a: !!str 5\n", Path{"a"}, "6", ErrUnsupported},
 		{"a value spanning lines", "a: 1\n", Path{"a"}, "{x: 1,\ny: 2}", ErrUnsupported},
-		{"a block mapping that is a sequence item", "a:\n  - x: 1\n    y: 2\n", Path{"a", "0"}, "{x: 2}", ErrUnsupported},
+		{"a block mapping at the root", "x: 1\ny: 2\n", Path{}, "{x: 2}", ErrUnsupported},
 		{"a plain scalar spanning lines", "a: one\n  two\nb: 2\n", Path{"a"}, "3", ErrUnsupported},
 		{"a result that does not parse", "a: 1\nb: 2\n", Path{"a"}, "{x: 1", ErrUnsupported},
 	}

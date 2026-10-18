@@ -11,12 +11,15 @@ import (
 // quoted or block scalar, or a flow or block mapping or sequence — whatever the old node's kind
 // and the new text's: a mapping may become a scalar and a scalar a flow mapping. A scalar's or a
 // flow collection's text is swapped where it stands. A block collection or block scalar must be
-// a block mapping's value: its key's line keeps the key and any comment on it, takes value after
-// the colon, and loses the lines below it that the value held, while comment and blank lines
-// trailing the value stay with what follows. An anchored, tagged or alias node, a plain scalar
-// running over several lines, and a block collection or block scalar that is not a block
-// mapping's value are refused with [ErrUnsupported], as is a result that does not parse or no
-// longer holds the path; a path that does not resolve is [ErrNotFound]. Errors name the path.
+// a block mapping's value or a block sequence item. As a mapping's value, its key's line keeps
+// the key and any comment on it, takes value after the colon, and loses the lines below it that
+// the value held. As a sequence item, value takes its place after the dash and the item's lines
+// go with it, but for the comment on a block scalar's header line, which stays. Either way,
+// comment and blank lines trailing the value stay with what follows. An anchored, tagged or
+// alias node, a plain scalar running over several lines, and a block collection or block scalar
+// at the document's root are refused with [ErrUnsupported], as is a result that does not parse
+// or no longer holds the path; a path that does not resolve is [ErrNotFound]. Errors name the
+// path.
 func (d *Document) Replace(path Path, value string) error {
 	at, err := d.locate(path)
 	if err != nil {
@@ -49,7 +52,27 @@ func (d *Document) replaceSpan(at located, value string) (int, int, string, erro
 		end, err := d.valueEnd(node)
 		return d.offset(node.Line, node.Column), end, value, err
 	}
+	if at.sequence != nil {
+		return d.blockItemSpan(at, value)
+	}
 	return d.blockValueSpan(at, value)
+}
+
+// blockItemSpan returns the span and text that put value in place of a block collection or a
+// block scalar that is a block sequence item: from the node's start after its dash to the end of
+// the item's last line, its line break kept, with any comment on a block scalar's header line
+// carried over. A collection's first line holds its content, so nothing on it is carried.
+func (d *Document) blockItemSpan(at located, value string) (int, int, string, error) {
+	start := d.offset(at.node.Line, at.node.Column)
+	text := value
+	if at.node.Kind == yaml.ScalarNode {
+		header := string(d.src[start:withoutLineBreak(d.src, d.lineEnd(at.node.Line))])
+		if comment := lineComment(header); comment != "" {
+			text += " " + comment
+		}
+	}
+	end := d.itemEnd(at.node.Line, at.sequence.Column-1)
+	return start, withoutLineBreak(d.src, end), text, nil
 }
 
 // blockValueSpan returns the span and text that put value in place of a block collection or a
@@ -57,7 +80,7 @@ func (d *Document) replaceSpan(at located, value string) (int, int, string, erro
 // entry's last line, its line break kept, with any comment on the key's line carried over.
 func (d *Document) blockValueSpan(at located, value string) (int, int, string, error) {
 	if at.parent == nil || isFlow(at.parent) {
-		return 0, 0, "", fmt.Errorf("replace a block %s that is not a block mapping's value: %w",
+		return 0, 0, "", fmt.Errorf("replace a block %s at the document's root: %w",
 			kindName(at.node.Kind), ErrUnsupported)
 	}
 	colon, err := d.keyEnd(at.key)

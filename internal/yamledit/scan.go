@@ -54,8 +54,22 @@ func (d *Document) startsLine(node *yaml.Node) bool {
 // deeper, or at the same indent and opening an indentless sequence item. Blank and comment lines
 // count only when a line of the entry follows them, so trailing ones stay with what comes next.
 func (d *Document) entryEnd(key *yaml.Node, indent int) int {
-	end := d.lineEnd(key.Line)
-	for line := key.Line + 1; line <= len(d.lineStarts); line++ {
+	return d.blockEnd(key.Line, indent, true)
+}
+
+// itemEnd returns the offset just past the last line of the block sequence item that starts on
+// line, in a sequence whose dashes are indented by indent: that line, then every following line
+// indented deeper, with blank and comment lines counted as [Document.entryEnd] counts them.
+func (d *Document) itemEnd(line, indent int) int {
+	return d.blockEnd(line, indent, false)
+}
+
+// blockEnd returns the offset just past the last line of the block that starts on first: every
+// following line indented deeper than indent, and, when isDashKept, one at indent that opens a
+// sequence item. Blank and comment lines count only when a line of the block follows them.
+func (d *Document) blockEnd(first, indent int, isDashKept bool) int {
+	end := d.lineEnd(first)
+	for line := first + 1; line <= len(d.lineStarts); line++ {
 		text := strings.TrimRight(string(d.src[d.lineStarts[line-1]:d.lineEnd(line)]), "\r\n")
 		content := strings.TrimLeft(text, " ")
 		if strings.TrimSpace(content) == "" || content[0] == '#' {
@@ -63,7 +77,7 @@ func (d *Document) entryEnd(key *yaml.Node, indent int) int {
 		}
 		lead := len(text) - len(content)
 		isDash := content == "-" || strings.HasPrefix(content, "- ")
-		if lead < indent || (lead == indent && !isDash) {
+		if lead < indent || (lead == indent && !(isDashKept && isDash)) {
 			break
 		}
 		end = d.lineEnd(line)

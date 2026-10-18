@@ -197,12 +197,14 @@ func Quote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
-// located is a resolved path: the node, and when it is a mapping value, its mapping and key.
+// located is a resolved path: the node, and when it is a mapping value, its mapping and key, or
+// when it is a sequence item, its sequence.
 type located struct {
 	node     *yaml.Node
 	parent   *yaml.Node
 	key      *yaml.Node
 	keyIndex int
+	sequence *yaml.Node
 	isInFlow bool
 }
 
@@ -235,7 +237,7 @@ func child(node *yaml.Node, step string) (located, error) {
 		if err != nil || index < 0 || index >= len(node.Content) {
 			return located{}, fmt.Errorf("index %q: %w", step, ErrNotFound)
 		}
-		return located{node: node.Content[index]}, nil
+		return located{node: node.Content[index], sequence: node}, nil
 	default:
 		return located{}, fmt.Errorf("step %q into a %s: %w", step, kindName(node.Kind), ErrKind)
 	}
