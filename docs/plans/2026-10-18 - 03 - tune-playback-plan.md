@@ -81,7 +81,10 @@ goldens still pass.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/compose`
 **Commit:** `feat(compose): compose a draft frame from a smaller raster`
 
-## 2. Draw draft frames from the render pipeline
+## 2. Draw draft frames from the render pipeline — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): when a build makes both a draft and an exact rasterizer afresh (frame.scale other than 1, nothing reused), each loads the terminal fonts once (two `fonts.Load` calls); sharing one parsed font set between them is a possible later saving, not done here.
+NOTES (2026-10-18): internal/render/pipeline_test.go grows to ~580 lines with the six new tests, past the ~400-line guideline the plan's Files list kept them in.
 
 Depends on item 1.
 

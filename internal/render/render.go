@@ -192,11 +192,22 @@ func palettePath(loaded *clip.Clip) (string, error) {
 // [rasterGeometry]. It fails when a font cannot be loaded or the geometry is refused by
 // [raster.New].
 func newRasterizer(loaded *clip.Clip) (*raster.Rasterizer, error) {
+	return newRasterizerAt(loaded, rasterGeometry(loaded.Storyboard.Frame))
+}
+
+// newDraftRasterizer builds the rasterizer draft frames are drawn from over the config's fonts
+// and theme at the frame's [draftGeometry]. It fails as [newRasterizer] does.
+func newDraftRasterizer(loaded *clip.Clip) (*raster.Rasterizer, error) {
+	return newRasterizerAt(loaded, draftGeometry(loaded.Storyboard.Frame))
+}
+
+// newRasterizerAt builds a rasterizer over the config's fonts and theme at geometry.
+func newRasterizerAt(loaded *clip.Clip, geometry raster.Geometry) (*raster.Rasterizer, error) {
 	faces, err := fonts.Load(loaded.Config.Fonts)
 	if err != nil {
 		return nil, err
 	}
-	return raster.New(faces, loaded.Config.Theme, rasterGeometry(loaded.Storyboard.Frame))
+	return raster.New(faces, loaded.Config.Theme, geometry)
 }
 
 // rasterGeometry is the geometry a rasterizer draws frame at: its cells, padding and font size
@@ -209,6 +220,16 @@ func rasterGeometry(frame storyboard.Frame) raster.Geometry {
 		FontSize:   frame.FontSize * float64(frame.Scale),
 		LineHeight: frame.LineHeight,
 	}
+}
+
+// draftScale is the scale draft frames are rasterized at: padding and font size unscaled.
+const draftScale = 1
+
+// draftGeometry is the geometry draft frames are rasterized at: frame's [rasterGeometry] at scale
+// 1, whatever frame.scale says, so a change of frame.scale alone keeps the draft rasters.
+func draftGeometry(frame storyboard.Frame) raster.Geometry {
+	frame.Scale = draftScale
+	return rasterGeometry(frame)
 }
 
 // captionLoads counts the caption-font loads [loadCaptionFaces] made in this process, so a test
