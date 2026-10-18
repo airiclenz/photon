@@ -507,7 +507,6 @@ func TestSession_PanTargetNotOnScreen_IsOnTheMove(t *testing.T) {
 	}
 
 	errs := f.session.State().Errors
-
 	want := storyboard.Owner{Kind: storyboard.OwnerCamera, Index: 0}
 	if len(errs) != 1 || errs[0].Owner != want || !strings.HasPrefix(errs[0].Message, "compose: camera[0]: ") {
 		t.Errorf("errors %+v, want one compose problem on camera 0", errs)

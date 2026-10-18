@@ -615,7 +615,10 @@ internal/tune/page/index.html — #stage; internal/tune/page/controls.js — tar
 **Closes:** tune-edit-pan-via
 **Commit:** `feat(tune): edit a pan's via waypoints and draw its path`
 
-## 17. Enforce the 100-column wrap for non-test Go files
+## 17. Enforce the 100-column wrap for non-test Go files — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): `make lint` and CI's golangci-lint step now fail on existing `lll` findings (168 in cmd/release alone) until items 18–23 land; closeout must not fast-forward main while 17 is done and 23 is not.
+NOTES (2026-10-18): Makefile's header comment was rewrapped to stay within 100 columns after naming lll; ci.yml carries no linter-set wording, so it is unchanged.
 
 **What:**
 **Regression guard.** Closeout never fast-forwards main while item 17 is done and item 23 is not

@@ -3,9 +3,15 @@
 version: "2"
 
 linters:
-  # The standard set: the checks golangci-lint ships as its default.
+  # The standard set: the checks golangci-lint ships as its default, plus lll for the wrap.
   default: standard
+  enable:
+    - lll
   settings:
+    lll:
+      # The house wrap (Note coding-conventions): 100 columns, a tab counted as 4.
+      line-length: 100
+      tab-width: 4
     staticcheck:
       # Setting `checks` replaces golangci-lint's own default list, so the style checks it
       # disables by default are restated here. `-QF*` drops the quickfix group: those are
@@ -19,6 +25,13 @@ linters:
         - -ST1021
         - -ST1022
         - -QF*
+  exclusions:
+    rules:
+      # Tests are exempt from the wrap: table rows, fixtures and long literal inputs read best
+      # on one line, and breaking them buys nothing a reviewer needs.
+      - path: _test\.go
+        linters:
+          - lll
 
 formatters:
   # gofmt is the one formatter (Note coding-conventions); `run` reports any file it would change.

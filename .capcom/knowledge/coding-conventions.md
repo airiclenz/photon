@@ -14,7 +14,8 @@ shape this repository from its first commit:
   `internal/testkit`). One package per directory, named by what it owns, short and lowercase. The package
   map and dependency direction are Note `package-layout`.
 - **Formatting.** `gofmt`/`goimports` only, no divider comments. `golangci-lint` runs in CI with
-  the config committed at the repo root.
+  the config committed at the repo root. Lines wrap at 100 columns (a tab counts as 4), enforced
+  by its `lll` linter for non-test Go files; `_test.go` files are exempt.
 - **Deep modules.** A package exposes a small interface over substantial behaviour. An interface
   type exists only where two adapters exist (production plus test fake counts). A helper used by
   one caller stays in that caller.

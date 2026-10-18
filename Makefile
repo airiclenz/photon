@@ -10,9 +10,10 @@ PKG    := ./cmd/photon
 GOMEMLIMIT ?= 2GiB
 export GOMEMLIMIT
 
-# golangci-lint runs the standard linter set over the module, configured by `.golangci.yml`. It is
-# pinned by module version and fetched by `go run`, so nothing needs installing; after the first
-# run the module cache serves it. CI reads this version from here, so it is the only literal.
+# golangci-lint runs the standard linter set plus lll over the module, configured by
+# `.golangci.yml`. It is pinned by module version and fetched by `go run`, so nothing needs
+# installing; after the first run the module cache serves it. CI reads this version from here, so
+# it is the only literal.
 GOLANGCI_LINT_VERSION := v2.13.2
 GOLANGCI_LINT = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
@@ -30,7 +31,7 @@ test:
 vet:
 	go vet ./...
 
-## lint: run golangci-lint (standard set plus gofmt, .golangci.yml) over the module
+## lint: run golangci-lint (standard set plus lll and gofmt, .golangci.yml) over the module
 lint:
 	$(GOLANGCI_LINT) run ./...
 
