@@ -10,7 +10,7 @@ values resolved once at Parse, yamledit query/upsert, and storyboard-owned typed
 **Closes:** (per item)
 
 **Sources:**
-- `docs/reviews/architecture-review-2026-10-18.html` (findings 1–7)
+- `docs/reviews/archived/architecture-review-2026-10-18.html` (findings 1–7)
 - `.capcom/issues/`: `frame-pipeline`, `take-screen-lookup`, `located-problems`, `output-clock`,
   `resolve-at-parse`, `yamledit-upsert`, `typed-storyboard-edits`, `tune-page-app-split`
 - Notes `package-layout`, `coding-conventions`, `glossary`

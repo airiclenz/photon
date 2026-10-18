@@ -17,3 +17,7 @@ a cut beat. Found closing out plan `2026-10-17 - 05 - camera-captions-plan` (ite
 
 - `TestLoadRejects_Captions` gains cases for a caption whose `at`, and one whose `until`, names a
   cut beat, each asserting the problem the loader reports.
+
+## Log
+
+- 2026-10-18 Airic Lenz: body is stale: Storyboard.ClipTime was removed by plan 2026-10-18 - 00 - architecture-review-plan (item 8); a cut-beat moment is now refused by OutputClock.Resolve (internal/storyboard/clock.go:59), called from Caption.validateTiming (internal/storyboard/caption.go:226 and :242)

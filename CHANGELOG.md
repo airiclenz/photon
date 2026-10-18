@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `photon render`, `photon tune` and `photon check` refuse a take whose beats started in another order than the storyboard's, naming both orders ("re-record it"); `render` and `tune` now word a take/storyboard beat mismatch as `check` does (`beat N: the take never started it`, `beat N: the take started it but the storyboard has no such beat`, `beat N: started twice in the take`) and report every mismatched beat, not just the first.
+- `photon tune`: a camera move's or caption's error from rendering, such as a pan target that is not on screen or a caption box larger than the frame, now shows on that move's or caption's own panel and not on a beat or the clip. The Inspect list marks camera moves and captions that have an error standing.
+- A storyboard whose every beat is cut is now refused when it loads (`beats: every beat is cut`), so `photon lint` reports it instead of a later step failing.
+- `photon lint` now lays the captions out with the config's fonts and reports a caption whose box is larger than the frame, instead of leaving it for `photon render` to fail on.
+- `photon tune`: the beat inspector edits a zoom's target as separate text, nth and area fields instead of one line of YAML, and a target's last match (`nth: last`) is kept when a target is set or copied.
+- `photon tune`'s camera move panel sets a move's start with a beat (or clip time) select and an offset in milliseconds, a pan's target with text, nth and area inputs, and a pan's cell with x and y inputs, instead of YAML text.
+- `photon tune`'s caption panel sets a caption's start and end with a beat (or clip time) select and an offset in milliseconds instead of YAML text; choosing "none" for the end turns an until into a `for` of the same length.
 - `photon tune`: the inspector's Clip frame panel now shows the values of `cols`, `rows`, `padding`, `font_size`, `line_height`, `scale` and `max_colors`. They stay read-only.
 - A storyboard may declare a top-level `camera:` list of zoom and pan moves placed on the clip's clock; `photon lint` reports every bad move, overlapping moves on one track and undeclared pan areas.
 - Storyboards take a top-level `camera` list of zoom and pan moves placed on the clip's timeline (`at` a clip time or `{beat, offset}`, `over`, `ease`); a pan aims at a target or a `cell`, in a straight line or along a smooth `via` path, and a beat's `zoom` is now a shorthand for camera moves.
