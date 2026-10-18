@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- A `caption_font.regular` or `caption_font.bold` that names a directory is now refused when the config loads, instead of failing later when the caption font is read.
+- `photon tune` adds a zoom, a pan or a caption at the playhead from a `+` beside its lane, and the inspector moves the camera move or caption it shows up or down its list, or removes it.
+- `photon tune`'s caption panel now edits a caption's style and placement: a font size, a regular or bold weight, colour pickers for the text and the box, a 0–1 slider for the box's opacity, fade in and fade out in milliseconds, and an x/y offset. Checking "explicit position" sets the caption's `position` to where its box sits now, with x/y inputs to move it; unchecking it drops the `position`, and the caption goes back to `place` and `align`. The preview frame reloads after each accepted edit.
+- `photon tune`'s camera move panel edits a pan's path: a to/via select turns a straight pan into one along a `via` path and back, and a via pan lists each waypoint with cell x/y inputs and Set from pick, Insert after and Remove buttons. While a via pan is selected, the preview draws the path it runs on the frame shown.
+- `golangci-lint` now enforces a 100-column wrap (a tab counts as 4) on non-test Go files through its `lll` linter; `_test.go` files are exempt.
 - `photon render`, `photon tune` and `photon check` refuse a take whose beats started in another order than the storyboard's, naming both orders ("re-record it"); `render` and `tune` now word a take/storyboard beat mismatch as `check` does (`beat N: the take never started it`, `beat N: the take started it but the storyboard has no such beat`, `beat N: started twice in the take`) and report every mismatched beat, not just the first.
 - `photon tune`: a camera move's or caption's error from rendering, such as a pan target that is not on screen or a caption box larger than the frame, now shows on that move's or caption's own panel and not on a beat or the clip. The Inspect list marks camera moves and captions that have an error standing.
 - A storyboard whose every beat is cut is now refused when it loads (`beats: every beat is cut`), so `photon lint` reports it instead of a later step failing.
