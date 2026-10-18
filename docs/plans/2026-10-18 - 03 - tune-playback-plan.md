@@ -122,7 +122,10 @@ still passes.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/render`
 **Commit:** `feat(render): draw draft frames at scale 1`
 
-## 3. Serve draft frames from photon tune
+## 3. Serve draft frames from photon tune — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): consequential edit — internal/tune/session.go: `build`'s doc comment now names the draft rasterizer and draft raster cache that carry over, made necessary by passing DraftCache in render.BuildOptions
+NOTES (2026-10-18): the Unreleased `photon tune` entry in CHANGELOG.md (line 42) still says the page previews "frame for frame as `photon render` composes it"; the closeout may want to reword it to match the README now that playback shows draft frames
 
 Depends on item 2.
 

@@ -143,6 +143,58 @@ func TestSession_Frame_RewrittenTake_ShowsTheNewTake(t *testing.T) {
 	}
 }
 
+func TestSession_DraftFrame_IsTheExactFramesSizeWithOtherPixels(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixture(t)
+	out := 500 * time.Millisecond
+	exact, err := fixture.session.Frame(out)
+	if err != nil {
+		t.Fatalf("Frame: %v", err)
+	}
+
+	draft, err := fixture.session.DraftFrame(out)
+	if err != nil {
+		t.Fatalf("DraftFrame: %v", err)
+	}
+
+	assertSameSize(t, draft, exact)
+	if bytes.Equal(draft, exact) {
+		t.Error("the draft frame is the exact frame on a scale-2 clip")
+	}
+}
+
+func TestSession_DraftFrame_OutsideTheClip_IsRefused(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixture(t)
+	length := time.Duration(fixture.session.State().LengthMS) * time.Millisecond
+
+	for _, out := range []time.Duration{-time.Millisecond, length} {
+		_, err := fixture.session.DraftFrame(out)
+
+		if !errors.Is(err, render.ErrOutsideClip) {
+			t.Errorf("DraftFrame(%s) error = %v, want ErrOutsideClip", out, err)
+		}
+	}
+}
+
+// assertSameSize fails the test unless the PNGs got and want decode to frames of one size.
+func assertSameSize(t *testing.T, got, want []byte) {
+	t.Helper()
+	gotConfig, err := png.DecodeConfig(bytes.NewReader(got))
+	if err != nil {
+		t.Fatalf("decode the frame: %v", err)
+	}
+	wantConfig, err := png.DecodeConfig(bytes.NewReader(want))
+	if err != nil {
+		t.Fatalf("decode the exact frame: %v", err)
+	}
+	gotSize := image.Pt(gotConfig.Width, gotConfig.Height)
+	wantSize := image.Pt(wantConfig.Width, wantConfig.Height)
+	if gotSize != wantSize {
+		t.Fatalf("frame size = %v, want %v", gotSize, wantSize)
+	}
+}
+
 func TestSession_FrameAndApply_RunInParallel(t *testing.T) {
 	t.Parallel()
 	fixture := newSessionFixture(t)

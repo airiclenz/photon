@@ -355,8 +355,8 @@ func (s *Session) rebuild() {
 
 // build parses src and builds the render pipeline on it against the take. On an error the
 // pipeline returned holds the stages built before it. The build is given the good pipeline to
-// reuse, so its rasterizer, raster cache and caption faces carry over where render finds them
-// unchanged, and the caption fonts load once a session.
+// reuse, so its rasterizer, raster cache, draft rasterizer, draft raster cache and caption faces
+// carry over where render finds them unchanged, and the caption fonts load once a session.
 func (s *Session) build(src []byte) (pipeline, error) {
 	var built pipeline
 	board, err := storyboard.Parse(src, s.path)
@@ -368,8 +368,9 @@ func (s *Session) build(src []byte) (pipeline, error) {
 		return built, err
 	}
 	built.frames, err = s.buildPipeline(built.loaded, s.takePath, s.recorded, render.BuildOptions{
-		Cache: newRasterCache(rasterCacheBytes),
-		Reuse: s.good.frames,
+		Cache:      newRasterCache(rasterCacheBytes),
+		DraftCache: newRasterCache(draftCacheBytes),
+		Reuse:      s.good.frames,
 	})
 	return built, err
 }

@@ -143,6 +143,45 @@ func TestHandler_Frame_IsTheSessionsFrameAsPNG(t *testing.T) {
 	}
 }
 
+func TestHandler_Frame_Draft_IsADraftOfTheExactFramesSize(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixture(t)
+	handler := newHandler(fixture.session, testAddr)
+	exact := frameOf(t, handler, "500")
+
+	draft := frameOf(t, handler, "500&draft=1")
+
+	assertSameSize(t, draft, exact)
+	if bytes.Equal(draft, exact) {
+		t.Error("the served draft frame is the exact frame on a scale-2 clip")
+	}
+}
+
+func TestHandler_Frame_DraftOff_IsTheExactFrame(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixture(t)
+	handler := newHandler(fixture.session, testAddr)
+
+	frame := frameOf(t, handler, "500&draft=0")
+
+	want, err := fixture.session.Frame(500 * time.Millisecond)
+	if err != nil {
+		t.Fatalf("Frame: %v", err)
+	}
+	if !bytes.Equal(frame, want) {
+		t.Error("the frame served with draft=0 is not the session's exact frame")
+	}
+}
+
+func TestHandler_Frame_BadDraft_IsRefused(t *testing.T) {
+	t.Parallel()
+	handler := newHandler(newSessionFixture(t).session, testAddr)
+
+	response := get(t, handler, "/api/frame?t=500&draft=x")
+
+	assertStatus(t, response, http.StatusBadRequest)
+}
+
 func TestHandler_Frame_BadTime_IsRefused(t *testing.T) {
 	t.Parallel()
 	handler := newHandler(newSessionFixture(t).session, testAddr)

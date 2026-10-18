@@ -23,25 +23,30 @@
 // storyboard is loaded when nothing is unsaved and turns the session stale otherwise — and
 // [Session.Save] writes in place, refused while stale ([ErrStale]) or while an error stands
 // ([ErrInvalid]). [Session.State] reports everything the page shows, and [Session.Frame] the PNG of
-// the frame `photon render` composes at an output time, from the last good pipeline, its rasterized
-// snapshots kept in a cache bounded at 1 GiB that a new take or raster geometry starts afresh.
-// [Session.Pick] turns cells picked on that frame into a [Proposal]: the picked text, escaped, as a
-// target the resolver resolves back onto them, with its area and nth, and its YAML for a zoom, a
-// click, a seen expect and either end of a drag. [Session.Path] maps a via pan's points onto that
-// frame, through its camera's crop at the output time.
+// the exact frame `photon render` composes at an output time, from the last good pipeline, its
+// rasterized snapshots kept in a cache bounded at 1 GiB that a new take or raster geometry starts
+// afresh; [Session.DraftFrame] the PNG of the draft frame the page shows while it plays or scrubs,
+// drawn from a scale-1 raster with a fast scaler, its scale-1 rasters kept in a draft cache bounded
+// at 256 MiB that carries across rebuilds as the exact one does; once stopped the page settles on
+// the exact frame. [Session.Pick] turns cells picked on that frame into a [Proposal]: the picked
+// text, escaped, as a target the resolver resolves back onto them, with its area and nth, and its
+// YAML for a zoom, a click, a seen expect and either end of a drag. [Session.Path] maps a via pan's
+// points onto that frame, through its camera's crop at the output time.
 //
 // [Run] serves a session to a browser on this machine: it listens on 127.0.0.1 only, prints the
 // page's address, and serves the embedded page under page/ and a JSON API over the session —
-// its state, frames as PNG, a via pan's path on a frame, edits, undo, redo, revert, reload, save
-// and picks — until its context ends. A request naming any Host but the printed address or
-// localhost on its port is refused, as is a POST whose body is not JSON, so another site's page
-// reaches neither.
+// its state, exact and draft frames as PNG, a via pan's path on a frame, edits, undo, redo, revert,
+// reload, save and picks — until its context ends. A request naming any Host but the printed
+// address or localhost on its port is refused, as is a POST whose body is not JSON, so another
+// site's page reaches neither.
 //
 // The file map:
-//   - cache.go: the bounded, least-recently-used cache of a take's rasterized snapshots.
+//   - cache.go: the bounded, least-recently-used cache of a take's rasterized snapshots, sized for
+//     the exact frames' 1 GiB raster cache and [Session.DraftFrame]'s 256 MiB draft cache.
 //   - doc.go: this package comment and file map.
 //   - edit.go: the [Edit], the storyboard.Edit the page sends and storyboard.Apply applies.
-//   - frame.go: [Session.Frame], one composed frame of the preview as a PNG.
+//   - frame.go: [Session.Frame] and [Session.DraftFrame], one exact or draft frame of the preview
+//     as a PNG.
 //   - history.go: a session's storyboard versions, for undo and redo.
 //   - pick.go: [Session.Pick], a resolver-checked target [Proposal] from picked cells.
 //   - run.go: [Run] and its [Options]: listen on 127.0.0.1, print the address, serve until done.

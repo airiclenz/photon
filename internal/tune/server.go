@@ -60,6 +60,16 @@ const (
 // milliseconds.
 const frameTimeParam = "t"
 
+// frameDraftParam is the frame route's query parameter asking for a draft frame: 1 asks for one,
+// absent or 0 for the exact frame.
+const frameDraftParam = "draft"
+
+// draftOn and draftOff are the values of [frameDraftParam] asking for a draft and the exact frame.
+const (
+	draftOn  = "1"
+	draftOff = "0"
+)
+
 // pathCameraParam is the path route's query parameter: the via pan's index in the camera list.
 const pathCameraParam = "camera"
 
@@ -212,13 +222,22 @@ func (s *server) handleState(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.session.State())
 }
 
-// handleFrame answers the PNG of the frame at the output time ?t=, in whole milliseconds.
+// handleFrame answers the PNG of the frame at the output time ?t=, in whole milliseconds: the
+// draft frame with ?draft=1, the exact frame without it or with ?draft=0.
 func (s *server) handleFrame(w http.ResponseWriter, r *http.Request) {
 	out, ok := frameTimeOf(w, r)
 	if !ok {
 		return
 	}
-	frame, err := s.session.Frame(out)
+	isDraft, ok := frameDraftOf(w, r)
+	if !ok {
+		return
+	}
+	encodeAt := s.session.Frame
+	if isDraft {
+		encodeAt = s.session.DraftFrame
+	}
+	frame, err := encodeAt(out)
 	if err != nil {
 		writeError(w, statusOf(err), err.Error())
 		return
@@ -264,6 +283,20 @@ func frameTimeOf(w http.ResponseWriter, r *http.Request) (time.Duration, bool) {
 		return 0, false
 	}
 	return time.Duration(ms) * time.Millisecond, true
+}
+
+// frameDraftOf reports whether r asks for a draft frame with ?draft=1; absent or 0 asks for the
+// exact frame. Any other value answers 400 and reports ok false.
+func frameDraftOf(w http.ResponseWriter, r *http.Request) (isDraft, ok bool) {
+	switch r.URL.Query().Get(frameDraftParam) {
+	case "", draftOff:
+		return false, true
+	case draftOn:
+		return true, true
+	default:
+		writeError(w, http.StatusBadRequest, "draft must be 1 or 0")
+		return false, false
+	}
 }
 
 // handleEdit applies the [Edit] in the body and answers the state, or 422 when it is refused.

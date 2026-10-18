@@ -15,17 +15,20 @@ import (
 // portFlag is the flag naming the port the tuning page is served on.
 const portFlag = "port"
 
-// newTuneCommand serves the timing editor: a page on this machine that previews a take as
-// `photon render` composes it and saves timing, zoom and frame edits back into the storyboard.
+// newTuneCommand serves the timing editor: a page on this machine that previews a take, in draft
+// frames while playing or scrubbing and settled on the frame `photon render` composes once
+// stopped, and saves timing, zoom and frame edits back into the storyboard.
 func newTuneCommand() *cobra.Command {
 	var configPath, workPath string
 	var options tune.Options
 	cmd := &cobra.Command{
 		Use:   "tune <storyboard> [<take>]",
 		Short: "Tune a storyboard's timing, zoom and frame against a take in a local page",
-		Long: "tune serves a page on 127.0.0.1 that previews the take frame for frame as render\n" +
-			"composes it, and edits each beat's duration, hold, cut and zoom on a timeline and\n" +
-			"the clip's frame.width, fps, font_size, line_height, padding and scale. Save\n" +
+		Long: "tune serves a page on 127.0.0.1 that previews the take: playing or scrubbing\n" +
+			"shows draft frames, drawn from a scale-1 raster with a fast scaler, and the\n" +
+			"preview settles on the exact frame render composes once stopped. It edits each\n" +
+			"beat's duration, hold, cut and zoom on a timeline and the clip's frame.width,\n" +
+			"fps, font_size, line_height, padding and scale. Save\n" +
 			"writes the edits back into the storyboard in place, changing only the edited\n" +
 			"values; it is refused while an edit leaves the storyboard invalid or the file\n" +
 			"changed on disk since it was loaded. A " +
