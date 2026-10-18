@@ -9,7 +9,7 @@ import (
 // programName is the command's name: its usage line and the prefix of every error it prints.
 const programName = "photon"
 
-// versionTemplate is what --version prints: the bare version, the same line `photon version`
+// versionTemplate is what --version prints: the build string, the same line `photon version`
 // prints.
 const versionTemplate = "{{.Version}}\n"
 
@@ -25,7 +25,7 @@ func newRootCommand() *cobra.Command {
 			"photon.yaml at or above\nthe storyboard. The retake loop is `until photon record " +
 			"<storyboard>; do :; done`.\nExit status: 0 on success; 1 when a run started and " +
 			"failed; 2 for a bad command line.",
-		Version:       photon.Version(),
+		Version:       photon.Build(),
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
 	}

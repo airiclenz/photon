@@ -143,7 +143,7 @@ storyboard's folder. Each command's `--help` says the same as this section.
 | `photon check <storyboard> [<take>]` | Checks a take (default `<work>/<clip>.take`) against the storyboard's expects and prints the check table. |
 | `photon render <storyboard> [<take>]` | Renders a take (default `<work>/<clip>.take`) to the GIF at the storyboard's `ship` path. |
 | `photon tune <storyboard> [<take>]` | Serves a page on `127.0.0.1` to tune the storyboard's timing, zoom and frame against a take (default `<work>/<clip>.take`), and saves the edits back into the storyboard. Runs until Ctrl-C. |
-| `photon version` | Prints photon's version, such as `1.0.0`. `photon --version` does the same. |
+| `photon version` | Prints photon's build string, such as `photon 1.0.0 (a1b2c3d)`: the version, the commit it was built from and `, dirty` when that tree had uncommitted changes; `photon 1.0.0` alone when the binary carries no VCS info. `photon --version` does the same. |
 
 Flags:
 

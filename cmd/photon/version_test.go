@@ -31,7 +31,7 @@ func TestVersion(t *testing.T) {
 			if code != tt.wantCode {
 				t.Errorf("exit code = %d, want %d (stderr %q)", code, tt.wantCode, stderr.String())
 			}
-			if want := photon.Version() + "\n"; stdout.String() != want {
+			if want := photon.Build() + "\n"; stdout.String() != want {
 				t.Errorf("stdout = %q, want %q", stdout.String(), want)
 			}
 		})

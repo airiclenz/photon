@@ -314,7 +314,9 @@ renamed and updated.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/ ./cmd/photon/`; `LLL ./internal/tune/... ./cmd/photon/...`
 **Commit:** `feat(tune): edit the frame's font fields in the Clip frame panel`
 
-## 9. Print the build string from photon version
+## 9. Print the build string from photon version — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): `TestBuild` is the table (clean, dirty, no VCS settings, nil info) over the unexported `build(version, info)`; `TestBuildStartsWithVersion` also checks `Build()` keeps the VERSION semver. `docs/releasing.md:94` ("against the bare version") and smoke's bare-version comparison are left to item 10.
 
 **What:** CLI half of `tune-show-version`; the page is item 11.
 **Regression guard.** Every comment, help text and doc saying `photon version` prints the bare

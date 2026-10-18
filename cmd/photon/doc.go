@@ -15,6 +15,7 @@
 //     the table.
 //   - render.go: `photon render`, which renders a take to the shipped GIF and prints its summary.
 //   - tune.go: `photon tune`, which serves the timing editor's page on 127.0.0.1 until Ctrl-C.
-//   - version.go: `photon version`, which prints the version the root package embeds from VERSION.
+//   - version.go: `photon version`, which prints the root package's build string: the version
+//     embedded from VERSION and the commit the binary was built from.
 //   - exit.go: the exit codes, and the wrapping that tells a failed run from a bad command line.
 package main

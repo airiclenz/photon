@@ -30,7 +30,7 @@ imports upward, and there are no cycles.
 | `internal/tune` | the timing editor behind `photon tune`: session, typed edits forwarded to storyboard's `Apply`, undo, guarded save, frames on demand, target picks, and the embedded page served on 127.0.0.1; nothing imports it but `cmd/photon`; frames come from render's pipeline, rebuilt on each edit over the last good one | `clip`, `render`, `schedule`, `target`, `storyboard`, `take`, `yamledit`, `config` |
 | `internal/testkit` | test support: doc-map check, fixture TUI build, polling | — |
 | `cmd/photon` | the Cobra commands and the exit-code mapping only | the packages above |
-| `photon` (module root) | `Version()`, embedded from the root `VERSION` file, photon's one version source | — |
+| `photon` (module root) | `Version()`, embedded from the root `VERSION` file, photon's one version source; `Build()`, the build string `photon version` prints: the version plus the commit and dirty state from Go's build info | — |
 | `cmd/release` | the release tool, a self-contained `package main` never shipped in an archive: `dist`, `status`, `prepare`, `publish`, `smoke` | non-test code imports only the standard library and cobra; its tests use `internal/testkit` |
 
 Rules: `cmd/photon` holds no logic beyond flags and wiring. `cmd/release` is a dev tool run as
@@ -42,5 +42,5 @@ process, pty or image code; the emulator-cell conversion lives in `terminal`, pa
 in `raster`.
 
 The root package exists only because `go:embed` reaches no file above a package's directory and
-`VERSION` sits at the module root; it holds `Version()` and nothing else. A release updates
-`VERSION` and nothing in Go code.
+`VERSION` sits at the module root; it holds `Version()` and `Build()` and nothing else. A release
+updates `VERSION` and nothing in Go code.

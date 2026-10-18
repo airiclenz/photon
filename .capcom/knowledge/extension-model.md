@@ -6,9 +6,10 @@ labels: [decision]
 **Decision (2026-10-17):** photon is one generic CLI. A project customizes it only through its
 photon config and storyboards: the commands photon runs and the services it starts for a take.
 photon exports no Go API, and every package except `cmd/photon` is `internal/`, save the
-module root's `Version()`, which only embeds the `VERSION` file, and `cmd/release`, the release
-tool: a self-contained `package main` whose non-test code imports only the standard library and
-cobra (its tests use `internal/testkit`), never shipped in an archive (Note `package-layout`).
+module root's `Version()` and `Build()`, which only embed the `VERSION` file and read the build
+info, and `cmd/release`, the release tool: a self-contained `package main` whose non-test code
+imports only the standard library and cobra (its tests use `internal/testkit`), never shipped in an
+archive (Note `package-layout`).
 
 **Why.** What a project needs beyond typing, clicking and rendering varies with the project: a
 fake backend, checks against the app's own records, its environment variables, its screen
