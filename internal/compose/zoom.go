@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/airiclenz/photon/internal/schedule"
@@ -108,23 +109,17 @@ func (p zoomPlanner) zoomBox(beat storyboard.Beat, section schedule.Section) (ta
 		// A beat of no length has no snapshot of its own to stop before.
 		until = math.MaxInt64
 	}
-	return p.resolveShown(beat.Zoom.Target, section.Start, until, "the beat")
+	return p.resolveShown(beat.Zoom.Target, p.recorded.ScreensDuring(section.Start, until), "the beat")
 }
 
-// resolveShown resolves goal on the take's snapshots: the latest one taken before source time
-// until that shows it, walking back to the snapshot in effect at source time since, the
-// earliest the stretch shows. It fails with the last [target.ErrNotOnScreen] when none of them
-// shows goal, at once on any other resolver error, and when the take has no snapshot in the
-// stretch, which where names.
-func (p zoomPlanner) resolveShown(goal storyboard.Target, since, until time.Duration, where string) (take.Box, error) {
+// resolveShown resolves goal on the shown snapshots, indices into the take's oldest first: the
+// newest one that shows it, walking back to the oldest. It fails with the last
+// [target.ErrNotOnScreen] when none of them shows goal, at once on any other resolver error, and
+// when shown is empty, naming the stretch where.
+func (p zoomPlanner) resolveShown(goal storyboard.Target, shown []int, where string) (take.Box, error) {
 	var lastErr error
-	snapshots := p.recorded.Snapshots
-	for index := len(snapshots) - 1; index >= 0; index-- {
-		snapshot := snapshots[index]
-		if snapshot.At >= until {
-			continue
-		}
-		box, err := p.resolver.Target(snapshot, goal)
+	for _, index := range slices.Backward(shown) {
+		box, err := p.resolver.Target(p.recorded.Snapshots[index], goal)
 		if err == nil {
 			return box, nil
 		}
@@ -132,9 +127,6 @@ func (p zoomPlanner) resolveShown(goal storyboard.Target, since, until time.Dura
 			return take.Box{}, err
 		}
 		lastErr = err
-		if snapshot.At <= since {
-			break
-		}
 	}
 	if lastErr == nil {
 		lastErr = fmt.Errorf("target /%s/: the take has no snapshot in %s", goal.Text, where)

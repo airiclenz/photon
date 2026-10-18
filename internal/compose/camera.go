@@ -180,9 +180,7 @@ func (p zoomPlanner) panPoint(point storyboard.Point, since, until time.Duration
 	if point.Cell != nil {
 		return p.layout.cellCentre(point.Cell.X, point.Cell.Y), nil
 	}
-	// The screen shown at until is the snapshot taken at or before it, so the walk stops just
-	// after it.
-	box, err := p.resolveShown(point.Target, since, until+time.Nanosecond, "the move")
+	box, err := p.resolveShown(point.Target, p.recorded.ScreensThrough(since, until), "the move")
 	if err != nil {
 		return pointF{}, err
 	}

@@ -51,6 +51,38 @@ func (t *Take) ScreenAt(at time.Duration) int {
 	return max(after-1, 0)
 }
 
+// ScreensDuring returns the indices, oldest first, of the snapshots on screen at some instant of
+// the half-open stretch [start, end) of the take's clock, where snapshot i is shown over
+// [At_i, At_{i+1}) and the last one from its At onward. A zero-length stretch between two
+// snapshots yields the one on show; one exactly on a snapshot's At yields none. The result is
+// empty when no snapshot is on screen during the stretch.
+func (t *Take) ScreensDuring(start, end time.Duration) []int {
+	stop := sort.Search(len(t.Snapshots), func(i int) bool { return t.Snapshots[i].At >= end })
+	return t.screensSince(start, stop)
+}
+
+// ScreensThrough is [Take.ScreensDuring] over the closed stretch [start, end]: it also counts the
+// snapshot taken exactly at end.
+func (t *Take) ScreensThrough(start, end time.Duration) []int {
+	stop := sort.Search(len(t.Snapshots), func(i int) bool { return t.Snapshots[i].At > end })
+	return t.screensSince(start, stop)
+}
+
+// screensSince returns the indices of the snapshots before stop still on screen after start: the
+// one in effect at start (the first, when start precedes them all) through stop-1.
+func (t *Take) screensSince(start time.Duration, stop int) []int {
+	after := sort.Search(len(t.Snapshots), func(i int) bool { return t.Snapshots[i].At > start })
+	first := max(after-1, 0)
+	if first >= stop {
+		return nil
+	}
+	indices := make([]int, 0, stop-first)
+	for index := first; index < stop; index++ {
+		indices = append(indices, index)
+	}
+	return indices
+}
+
 // BeatSpan is one beat's stretch of the take's clock: from its beat-start event to the next
 // beat's start, or, for the last beat, to the take's end.
 type BeatSpan struct {

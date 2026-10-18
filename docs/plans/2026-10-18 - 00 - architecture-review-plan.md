@@ -85,7 +85,9 @@ NOTES (2026-10-18): the method's parameter is named `at`, not `t` as the Goal's 
 - `! grep -rn 'SnapshotAt' internal/`
 **Commit:** `refactor(take): own the screen-at-time lookup`
 
-## 2. Take answers "which screens show during a stretch"
+## 2. Take answers "which screens show during a stretch" — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the shared private helper is `Take.screensSince(start, stop)` (sort.Search based, no full walk); `ScreensDuring`/`ScreensThrough` differ only in the stop index, so no boolean flag. `compose.resolveShown` now takes the shown indices instead of since/until and walks them newest first with `slices.Backward`; no reversed-stretch guard was added in `panPoint` because schedule sections run in take span order, so since <= until there.
 
 **What:**
 **Goal:** `take` exposes `ScreensDuring(start, end)` (half-open `[start, end)`) and `ScreensThrough(start, end)` (closed `[start, end]`), each returning snapshot indices oldest first, where snapshot i is shown over `[At_i, At_{i+1})` and the last one from its `At` onward; `check` and `compose` call them and no longer walk snapshots; `compose`'s `+time.Nanosecond` workaround is gone.

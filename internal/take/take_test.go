@@ -117,3 +117,38 @@ func TestTake_ScreenAt(t *testing.T) {
 		})
 	}
 }
+
+func TestTake_ScreensDuringAndThrough(t *testing.T) {
+	t.Parallel()
+	recorded := Take{Snapshots: []Snapshot{{At: time.Second}, {At: 2 * time.Second}, {At: 4 * time.Second}}}
+	cases := []struct {
+		name        string
+		take        Take
+		start, end  time.Duration
+		wantDuring  []int
+		wantThrough []int
+	}{
+		{name: "before the first snapshot", take: recorded, start: 0, end: 500 * time.Millisecond},
+		{name: "ending exactly on the first snapshot", take: recorded, start: 0, end: time.Second, wantThrough: []int{0}},
+		{name: "inside one", take: recorded, start: 2500 * time.Millisecond, end: 3 * time.Second, wantDuring: []int{1}, wantThrough: []int{1}},
+		{name: "across several", take: recorded, start: 1500 * time.Millisecond, end: 5 * time.Second, wantDuring: []int{0, 1, 2}, wantThrough: []int{0, 1, 2}},
+		{name: "from before the first into the second", take: recorded, start: 0, end: 3 * time.Second, wantDuring: []int{0, 1}, wantThrough: []int{0, 1}},
+		{name: "ending exactly on a snapshot's At", take: recorded, start: 1500 * time.Millisecond, end: 4 * time.Second, wantDuring: []int{0, 1}, wantThrough: []int{0, 1, 2}},
+		{name: "starting exactly on a snapshot's At", take: recorded, start: 2 * time.Second, end: 3 * time.Second, wantDuring: []int{1}, wantThrough: []int{1}},
+		{name: "zero length between snapshots", take: recorded, start: 3 * time.Second, end: 3 * time.Second, wantDuring: []int{1}, wantThrough: []int{1}},
+		{name: "zero length exactly on a snapshot's At", take: recorded, start: 2 * time.Second, end: 2 * time.Second, wantThrough: []int{1}},
+		{name: "after the last", take: recorded, start: 9 * time.Second, end: 10 * time.Second, wantDuring: []int{2}, wantThrough: []int{2}},
+		{name: "empty take", take: Take{}, start: 0, end: time.Second},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.take.ScreensDuring(tt.start, tt.end); !reflect.DeepEqual(got, tt.wantDuring) {
+				t.Errorf("ScreensDuring(%s, %s): want %v, got %v", tt.start, tt.end, tt.wantDuring, got)
+			}
+			if got := tt.take.ScreensThrough(tt.start, tt.end); !reflect.DeepEqual(got, tt.wantThrough) {
+				t.Errorf("ScreensThrough(%s, %s): want %v, got %v", tt.start, tt.end, tt.wantThrough, got)
+			}
+		})
+	}
+}

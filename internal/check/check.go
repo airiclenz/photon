@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"regexp"
 	"slices"
 	"time"
@@ -211,19 +210,14 @@ func beatScreens(board *storyboard.Storyboard, recorded *take.Take) (map[int][]t
 		return nil, err
 	}
 
-	snapshots := recorded.Snapshots
 	screens := make(map[int][]take.Snapshot, len(spans))
 	for index, span := range spans {
-		isLast := index == len(spans)-1
-		for at, snapshot := range snapshots {
-			shownUntil := time.Duration(math.MaxInt64)
-			if at+1 < len(snapshots) {
-				shownUntil = snapshots[at+1].At
-			}
-			startsInside := snapshot.At < span.End || (isLast && snapshot.At <= span.End)
-			if startsInside && shownUntil > span.Start {
-				screens[span.Beat] = append(screens[span.Beat], snapshot)
-			}
+		shown := recorded.ScreensDuring(span.Start, span.End)
+		if index == len(spans)-1 {
+			shown = recorded.ScreensThrough(span.Start, span.End)
+		}
+		for _, at := range shown {
+			screens[span.Beat] = append(screens[span.Beat], recorded.Snapshots[at])
 		}
 	}
 	return screens, nil
