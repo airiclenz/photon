@@ -3,9 +3,10 @@
 //
 // An [Edit] is one typed change — a beat's duration, hold, cut or zoom, the clip's frame.width
 // or frame.fps, a camera move's start, length, ease or destination, or a caption's start, end,
-// text, place or align — spelled as the page sends it. Applying one splices only the edited
-// scalar, or the one node a moment, a pan destination or a caption's text replaces, into the
-// storyboard's source through yamledit, so comments, quoting, key order and flow or block style
+// text, place or align — spelled as the page sends it. A beat or frame edit is applied by
+// [storyboard.Apply], a camera move or caption edit here; either way applying one splices only
+// the edited scalar, or the one node a moment, a pan destination or a caption's text replaces,
+// into the storyboard's source through yamledit, so comments, quoting, key order and flow or block style
 // stay as the person wrote them: a duration keeps its unit, a new key goes in the storyboard's
 // field order, a default is never written out, switching cut off, the zoom factor to auto, a
 // camera move's ease to smooth or a caption's place or align to its default removes the key, and
@@ -38,7 +39,7 @@
 // The file map:
 //   - cache.go: the bounded, least-recently-used cache of a take's rasterized snapshots.
 //   - doc.go: this package comment and file map.
-//   - edit.go: the [Edit] and applying one to storyboard source, key by key.
+//   - edit.go: the [Edit], routing a beat or frame one to storyboard.Apply, and applying a camera or caption one to storyboard source.
 //   - edit_camera.go: an Edit of a camera move's at, over, ease or to.
 //   - edit_caption.go: an Edit of a caption's at, for, until, text, place or align.
 //   - frame.go: [Session.Frame], one composed frame of the preview as a PNG.
@@ -48,7 +49,7 @@
 //   - server.go: the HTTP handler: the embedded page, the JSON API and its Host and POST guards.
 //   - session.go: the [Session]: its pipelines, history, refresh from disk and guarded save.
 //   - state.go: the [State] a session reports and the errors attributed to their owners.
-//   - value.go: decoding an edit's typed values and writing a duration in its old unit.
+//   - value.go: decoding a camera or caption edit's typed values and writing a duration in its old unit.
 //   - page/index.html, page/style.css: the page and its styles.
 //   - page/app.js: the window.tune contract, the session's API, the selection and the wiring.
 //   - page/transport.js: the frame clock, the transport and its keys.

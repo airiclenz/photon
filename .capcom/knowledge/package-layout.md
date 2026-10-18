@@ -11,7 +11,8 @@ imports upward, and there are no cycles.
 |---|---|---|
 | `internal/keys` | named keys to bytes, SGR mouse press, motion and release | — |
 | `internal/take` | the Take: snapshots, cells, colours, typed events, `Box`, beat spans; its versioned file format | — |
-| `internal/storyboard` | a clip's Storyboard; strict decode and validation | `keys` |
+| `internal/yamledit` | YAML source splicing: replace, insert or remove one scalar or key, leaving the rest of the bytes as written | — |
+| `internal/storyboard` | a clip's Storyboard; strict decode and validation; typed edits (`Apply`) spliced into its source, a new key placed by its yaml struct tags | `keys`, `yamledit` |
 | `internal/config` | the project's `photon.yaml` (rig, launch, services, profiles, end, areas, theme, fonts) and its lookup | `keys` |
 | `internal/clip` | a storyboard and its config loaded together, cross-checked; work dir and take path | `storyboard`, `config` |
 | `internal/target` | a target's cell box and an area's rows on a snapshot; the only resolver (clicks, drags, zooms, `seen`) | `take`, `storyboard`, `config` |
@@ -26,8 +27,7 @@ imports upward, and there are no cycles.
 | `internal/caption` | a storyboard's captions laid out, timed and drawn over a shipped frame, in output space | `storyboard`, `fonts` |
 | `internal/compose` | camera, drawn cursor and captions over each frame | `schedule`, `target`, `take`, `storyboard`, `caption`, `fonts` |
 | `internal/render` | the render run: frames through ffmpeg, then gifsicle; the frame pipeline (`Build`) every shipped and previewed frame comes from, reusing an earlier pipeline's rasterizer, raster cache and caption faces where they hold; the font-bound caption check `photon lint` runs (`CheckCaptions`) | `clip`, `schedule`, `raster`, `compose`, `caption`, `fonts`, `target`, `storyboard`, `take` |
-| `internal/yamledit` | YAML source splicing: replace, insert or remove one scalar or key, leaving the rest of the bytes as written | — |
-| `internal/tune` | the timing editor behind `photon tune`: session, edits spliced into the storyboard, undo, guarded save, frames on demand, target picks, and the embedded page served on 127.0.0.1; nothing imports it but `cmd/photon`; frames come from render's pipeline, rebuilt on each edit over the last good one | `clip`, `render`, `schedule`, `target`, `storyboard`, `take`, `yamledit`, `config` |
+| `internal/tune` | the timing editor behind `photon tune`: session, beat and frame edits forwarded to storyboard's `Apply`, camera and caption edits spliced into the storyboard, undo, guarded save, frames on demand, target picks, and the embedded page served on 127.0.0.1; nothing imports it but `cmd/photon`; frames come from render's pipeline, rebuilt on each edit over the last good one | `clip`, `render`, `schedule`, `target`, `storyboard`, `take`, `yamledit`, `config` |
 | `internal/testkit` | test support: doc-map check, fixture TUI build, polling | — |
 | `cmd/photon` | the Cobra commands and the exit-code mapping only | the packages above |
 | `photon` (module root) | `Version()`, embedded from the root `VERSION` file, photon's one version source | — |

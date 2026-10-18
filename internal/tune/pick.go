@@ -7,7 +7,6 @@ import (
 	"image"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -247,7 +246,7 @@ func covers(box, inner take.Box) bool {
 // snippetsOf writes proposed as YAML for each place a storyboard takes a target. A seen expect
 // has no nth: it passes on any match, so it carries the text and the area alone.
 func snippetsOf(proposed storyboard.Target) map[string]string {
-	flow := targetFlow(proposed)
+	flow := proposed.YAMLFlow()
 	seen := "seen: " + yamledit.Quote(proposed.Text)
 	if proposed.Area != "" {
 		seen = "{" + seen + ", area: " + yamledit.Quote(proposed.Area) + "}"
@@ -261,22 +260,5 @@ func snippetsOf(proposed storyboard.Target) map[string]string {
 	}
 }
 
-// nthLast spells the last match's nth, in YAML and on the wire alike.
+// nthLast spells the last match's nth on the wire.
 const nthLast = "last"
-
-// targetFlow writes a target as a YAML flow mapping, the one spelling of a target a pick's
-// snippets and a zoom or zoom.target [Edit] write: the last match is nth: last, and an nth of
-// first and an empty area are left out.
-func targetFlow(proposed storyboard.Target) string {
-	fields := []string{"text: " + yamledit.Quote(proposed.Text)}
-	switch {
-	case proposed.Nth == storyboard.NthLast:
-		fields = append(fields, "nth: "+nthLast)
-	case proposed.Nth > storyboard.NthFirst:
-		fields = append(fields, "nth: "+strconv.Itoa(int(proposed.Nth)))
-	}
-	if proposed.Area != "" {
-		fields = append(fields, "area: "+yamledit.Quote(proposed.Area))
-	}
-	return "{" + strings.Join(fields, ", ") + "}"
-}

@@ -500,7 +500,13 @@ internal/tune/page/app.js — captionPanel, captionForField, captionUntilField, 
 - `! grep -n 'yaml\.' internal/tune/value.go internal/tune/edit_caption.go`
 **Commit:** `feat(tune): send typed caption edits`
 
-## 21. Storyboard applies typed beat and frame edits
+## 21. Storyboard applies typed beat and frame edits — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): re-derived from the assumption that the target speller is private to tune's edit code: `targetFlow` lives in internal/tune/pick.go, shared with the pick snippets and value.go's decodePoint; it moved to storyboard as the exported `Target.YAMLFlow` (edit_beat.go), and pick.go and value.go now call it, so there is still one spelling of a target.
+NOTES (2026-10-18): internal/tune/value.go loses decodeCount, decodeBool, decodeTarget and decodeFactor, which only the moved beat and frame edits used (golangci-lint `unused` flags them otherwise); its camera and caption decoders stay for item 22.
+NOTES (2026-10-18): until item 22, storyboard holds its own private copies of writeDuration, under, editName, isNull, decodeMilliseconds, formatDuration and the JSON nth decoder, which tune's camera and caption edits still use from their tune originals; item 22 deletes the tune copies.
+NOTES (2026-10-18): `tune.Edit` is now an alias of `storyboard.Edit`, and storyboard exports the beat and frame field names (`FieldDuration` … `FieldFrameFPS`); tune/edit_test.go maps the used ones to the old `field*` names so session_test, frame_test and pick_test compile untouched until item 22 switches them.
+NOTES (2026-10-18): until item 22, the unknown-field error offers only the side's own fields: a `camera.`/`caption.` field lists tune's camera and caption fields, any other field storyboard's beat and frame fields.
 
 Depends on item 20.
 

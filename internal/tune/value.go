@@ -41,48 +41,6 @@ func decodeMilliseconds(value json.RawMessage) (time.Duration, error) {
 	return time.Duration(count) * time.Millisecond, nil
 }
 
-// decodeCount reads a frame field typed as a whole JSON number.
-func decodeCount(value json.RawMessage) (int, error) {
-	var count int
-	err := json.Unmarshal(value, &count)
-	if err != nil || count < 0 {
-		return 0, fmt.Errorf("want a whole number, got %s", value)
-	}
-	return count, nil
-}
-
-// decodeBool reads cut typed as a JSON bool.
-func decodeBool(value json.RawMessage) (bool, error) {
-	var isOn bool
-	if err := json.Unmarshal(value, &isOn); err != nil {
-		return false, fmt.Errorf("want true or false, got %s", value)
-	}
-	return isOn, nil
-}
-
-// decodeFactor reads a zoom factor typed as a JSON number, 0 for auto.
-func decodeFactor(value json.RawMessage) (float64, error) {
-	var factor float64
-	err := json.Unmarshal(value, &factor)
-	if err != nil || factor < 0 {
-		return 0, fmt.Errorf("want a number above 0, or 0 for auto, got %s", value)
-	}
-	return factor, nil
-}
-
-// decodeTarget reads a target typed as a pick answers it, {"text", "nth", "area"}, refusing any
-// other key.
-func decodeTarget(value json.RawMessage) (storyboard.Target, error) {
-	decoder := json.NewDecoder(bytes.NewReader(value))
-	decoder.DisallowUnknownFields()
-	var wire pickTarget
-	if err := decoder.Decode(&wire); err != nil {
-		return storyboard.Target{}, fmt.Errorf(
-			`want a target such as {"text": "ok", "nth": 2, "area": "list"}, got %s: %w`, value, err)
-	}
-	return wire.target(), nil
-}
-
 // wireMoment is a moment as an edit types it, {"beat": 3, "offset_ms": 200}: beat 0 is a clip
 // time, offset_ms after the clip's first frame; a beat id from 1 is that beat's start plus
 // offset_ms, which may be negative. Both keys are required.
@@ -116,7 +74,7 @@ type wirePoint struct {
 }
 
 // decodePoint reads a pan's target or cell, refusing any other key and both at once, and spells
-// it as the YAML flow mapping a camera.to writes: a target as [targetFlow] does, a cell as
+// it as the YAML flow mapping a camera.to writes: a target as [storyboard.Target.YAMLFlow] does, a cell as
 // {cell: {x: 3, y: 4}}.
 func decodePoint(value json.RawMessage) (string, error) {
 	decoder := json.NewDecoder(bytes.NewReader(value))
@@ -134,7 +92,7 @@ func decodePoint(value json.RawMessage) (string, error) {
 		cell := "{x: " + strconv.Itoa(wire.Cell.X) + ", y: " + strconv.Itoa(wire.Cell.Y) + "}"
 		return "{cell: " + cell + "}", nil
 	}
-	return targetFlow(wire.target()), nil
+	return wire.target().YAMLFlow(), nil
 }
 
 // decodeText reads a caption's text, typed as a JSON string.

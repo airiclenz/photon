@@ -1,11 +1,9 @@
 package tune
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,19 +11,10 @@ import (
 	"github.com/airiclenz/photon/internal/yamledit"
 )
 
-// Edit is one change the page asks for, as it arrives on the wire:
-// {"owner": {"kind": "<kind>", "index": <n>}, "field": "<name>", "value": <JSON>}. Owner is
-// what the field edits: the beat by its id for a beat field, the clip with index 0 for
-// frame.width and frame.fps, and the camera move or caption by its index in the storyboard's
-// camera or captions list, from 0, for a camera or caption field. Value is typed per field:
-//   - duration, hold, zoom.in, zoom.out: a whole number of milliseconds (1850);
-//   - cut: true or false;
-//   - zoom.factor: a number, 0 for auto, fitted to the target (1.8);
-//   - frame.width, frame.fps: a whole number;
-//   - zoom.target, and zoom when it adds one: a target, {"text": "ok", "nth": 2, "area":
-//     "list"}, its nth a whole number from 1 or "last" and left out for the first match, its
-//     area left out for the whole screen — the target a pick answers;
-//   - zoom as null removes the beat's zoom;
+// Edit is one change the page asks for, a [storyboard.Edit], whose doc gives its wire shape and
+// the beat and frame fields' values; [storyboard.Apply] applies those. The camera and caption
+// fields, applied here, edit the camera move or caption by its index in the storyboard's camera
+// or captions list, from 0, and type their values so:
 //   - camera.at: a moment, {"beat": 3, "offset_ms": 200}, beat 0 for a clip time offset_ms
 //     after the clip's first frame, which replaces the move's whole at;
 //   - camera.over: a whole number of milliseconds;
@@ -40,80 +29,43 @@ import (
 //   - caption.place: "top", "middle" or "bottom", which removes the key;
 //   - caption.align: "left", "middle", which removes the key, or "right".
 //
-// A value of another JSON type or spelling, a null or absent value but zoom's and caption.until's,
-// and an owner of another kind than the field's are refused with an error naming the field.
-type Edit struct {
-	Owner storyboard.Owner `json:"owner"`
-	Field string           `json:"field"`
-	Value json.RawMessage  `json:"value"`
-}
+// A value of another JSON type or spelling, a null or absent value but caption.until's, and an
+// owner of another kind than the field's are refused with an error naming the field.
+type Edit = storyboard.Edit
 
-// The fields an Edit names.
-const (
-	fieldDuration   = "duration"
-	fieldHold       = "hold"
-	fieldCut        = "cut"
-	fieldZoom       = "zoom"
-	fieldZoomTarget = "zoom.target"
-	fieldZoomFactor = "zoom.factor"
-	fieldZoomIn     = "zoom.in"
-	fieldZoomOut    = "zoom.out"
-	fieldFrameWidth = "frame.width"
-	fieldFrameFPS   = "frame.fps"
-)
-
-// editFields lists every field an Edit can name, as the unknown-field error offers them.
+// editFields lists every field an Edit names that tune applies itself, as the unknown-field
+// error offers them.
 var editFields = []string{
-	fieldDuration, fieldHold, fieldCut, fieldZoom, fieldZoomTarget, fieldZoomFactor, fieldZoomIn,
-	fieldZoomOut, fieldFrameWidth, fieldFrameFPS, fieldCameraAt, fieldCameraOver, fieldCameraEase,
-	fieldCameraTo, fieldCaptionAt, fieldCaptionFor, fieldCaptionUntil, fieldCaptionText,
-	fieldCaptionPlace, fieldCaptionAlign,
+	fieldCameraAt, fieldCameraOver, fieldCameraEase, fieldCameraTo, fieldCaptionAt, fieldCaptionFor,
+	fieldCaptionUntil, fieldCaptionText, fieldCaptionPlace, fieldCaptionAlign,
 }
 
-// The storyboard keys an edit addresses directly; a field's own key is its name past the dot.
-const (
-	keyBeats  = "beats"
-	keyFrame  = "frame"
-	keyCut    = "cut"
-	keyZoom   = "zoom"
-	keyTarget = "target"
-	keyFactor = "factor"
-)
-
-// valueTrue is the YAML text of cut switched on.
-const valueTrue = "true"
-
-// beatKeyOrder, zoomKeyOrder and frameKeyOrder are the storyboard's keys in its struct field
-// order: a new key goes after whichever of the keys before it the mapping holds.
-var (
-	beatKeyOrder  = []string{"id", "title", "why", "notes", "do", "duration", "hold", "cut", "zoom"}
-	zoomKeyOrder  = []string{"target", "factor", "in", "out"}
-	frameKeyOrder = []string{
-		"cols", "rows", "padding", "font_size", "line_height", "scale", "width", "fps", "max_colors",
-	}
-)
+// keyZoom is the storyboard key of a zoom move, the camera move a camera edit may address.
+const keyZoom = "zoom"
 
 // apply returns src, the valid storyboard at path, with edit spliced in, and the storyboard
-// those bytes decode to. Only the edited key's text changes. A duration keeps its unit: an old
-// value in ms is written in ms, one in plain seconds in seconds with the fewest decimals, any
-// other or new value as time.Duration.String(). A new key goes after the keys that precede it in
-// the storyboard's field order; a value equal to the default of a key that is absent writes
-// nothing; cut false, zoom.factor 0 (auto) and camera.ease smooth delete their key, as do a
-// caption.place of bottom and a caption.align of middle. A target is written as the flow
-// mapping a pick's zoom snippet spells ([targetFlow]), and a zoom.target on a zoom holding
-// nothing but its target rewrites that zoom as a flow mapping. A camera.at, caption.at or
+// those bytes decode to. A beat or frame field goes to [storyboard.Apply], which documents how
+// it is written; a camera or caption field is spliced here. Only the edited key's text changes.
+// A duration keeps its unit: an old value in ms is written in ms, one in plain seconds in
+// seconds with the fewest decimals, any other or new value as time.Duration.String(). A new key
+// goes after the keys that precede it in the storyboard's field order; a value equal to the
+// default of a key that is absent writes nothing; camera.ease smooth deletes its key, as do a
+// caption.place of bottom and a caption.align of middle. A camera.at, caption.at or
 // caption.until is written as a clip time in ms or a {beat: 3, offset: 200ms} flow mapping
-// ([momentFlow]), and a pan's cell as
+// ([momentFlow]), a pan's target as [storyboard.Target.YAMLFlow] spells it, and a pan's cell as
 // {cell: {x: 3, y: 4}}. A camera.at, a caption.at or caption.until, or a pan's camera.to
 // replaces its whole node with the value's flow text, and a caption.text replaces its
 // whole node, a block scalar too, with one double-quoted line; a caption.for deletes the
 // caption's until and a caption.until its for, or, as null, writes the for that keeps the
 // caption's stretch in place of its until. The edit is refused with an error naming the
-// beat, the camera move or the caption, and field when its value is of the wrong JSON type or
-// misspelled, when its owner is of another kind than the field's, when it names a beat, zoom,
-// camera move or caption that is not there, or when the result fails validation; the last wraps
-// the *storyboard.ValidationError.
+// camera move or the caption, and field when its value is of the wrong JSON type or
+// misspelled, when its owner is of another kind than the field's, when it names a camera move
+// or caption that is not there, or when the result fails validation; the last wraps the
+// *storyboard.ValidationError.
 func apply(src []byte, path string, edit Edit) ([]byte, *storyboard.Storyboard, error) {
+	if !isCameraField(edit.Field) && !isCaptionField(edit.Field) {
+		return storyboard.Apply(src, path, edit)
+	}
 	board, err := storyboard.Parse(src, path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse the storyboard before the edit: %w", err)
@@ -150,24 +102,12 @@ func editName(edit Edit) string {
 	}
 }
 
-// ownerKindOf is the kind of owner field edits: the clip for a frame field, a camera move or a
-// caption for theirs, and a beat for every other.
+// ownerKindOf is the kind of owner field, a camera or caption field, edits.
 func ownerKindOf(field string) storyboard.OwnerKind {
-	switch {
-	case isFrameField(field):
-		return storyboard.OwnerClip
-	case isCameraField(field):
+	if isCameraField(field) {
 		return storyboard.OwnerCamera
-	case isCaptionField(field):
-		return storyboard.OwnerCaption
-	default:
-		return storyboard.OwnerBeat
 	}
-}
-
-// isFrameField reports whether field is one of the clip's frame fields rather than a beat's.
-func isFrameField(field string) bool {
-	return field == fieldFrameWidth || field == fieldFrameFPS
+	return storyboard.OwnerCaption
 }
 
 // splicer applies one edit to doc, which says what keys are present and how the old values are
@@ -176,8 +116,8 @@ type splicer struct {
 	doc *yamledit.Document
 }
 
-// apply routes edit to the frame, to a camera move, to a caption or to its beat in board, the
-// storyboard doc holds, once its field, its owner's kind and the presence of its value check out.
+// apply applies edit to its camera move or caption in board, the storyboard doc holds, once its
+// field, its owner's kind and the presence of its value check out.
 func (s *splicer) apply(board *storyboard.Storyboard, edit Edit) error {
 	if !slices.Contains(editFields, edit.Field) {
 		return fmt.Errorf("unknown field, want one of %s", strings.Join(editFields, ", "))
@@ -188,72 +128,14 @@ func (s *splicer) apply(board *storyboard.Storyboard, edit Edit) error {
 	if len(edit.Value) == 0 {
 		return errors.New("want a value, got none")
 	}
-	if isNull(edit.Value) && edit.Field != fieldZoom && edit.Field != fieldCaptionUntil {
+	if isNull(edit.Value) && edit.Field != fieldCaptionUntil {
 		return errors.New("want a value, got null")
 	}
 
-	switch edit.Owner.Kind {
-	case storyboard.OwnerClip:
-		return s.editFrame(edit)
-	case storyboard.OwnerCamera, storyboard.OwnerCaption:
-		return s.editEntry(board, edit)
-	}
-	index := slices.IndexFunc(board.Beats, func(beat storyboard.Beat) bool { return beat.ID == edit.Owner.Index })
-	if index < 0 {
-		return fmt.Errorf("the storyboard has no beat with id %d", edit.Owner.Index)
-	}
-	beat := yamledit.Path{keyBeats, strconv.Itoa(index)}
-	return s.editBeat(beat, board.Beats[index].Zoom != nil, edit)
-}
-
-// editEntry applies a camera move's or a caption's field, each typed per field.
-func (s *splicer) editEntry(board *storyboard.Storyboard, edit Edit) error {
 	if edit.Owner.Kind == storyboard.OwnerCamera {
 		return s.editCamera(board, edit.Owner.Index, edit.Field, edit.Value)
 	}
 	return s.editCaption(board, edit.Owner.Index, edit.Field, edit.Value)
-}
-
-// editFrame sets frame.width or frame.fps.
-func (s *splicer) editFrame(edit Edit) error {
-	if edit.Owner.Index != 0 {
-		return fmt.Errorf("want the clip at index 0, got index %d", edit.Owner.Index)
-	}
-	count, err := decodeCount(edit.Value)
-	if err != nil {
-		return err
-	}
-	key := strings.TrimPrefix(edit.Field, keyFrame+".")
-	return s.doc.Upsert(yamledit.Path{keyFrame}, key, strconv.Itoa(count), frameKeyOrder)
-}
-
-// editBeat applies a beat field's edit to the beat at beat; hasZoom says whether it zooms.
-func (s *splicer) editBeat(beat yamledit.Path, hasZoom bool, edit Edit) error {
-	switch edit.Field {
-	case fieldDuration, fieldHold:
-		length, err := decodeMilliseconds(edit.Value)
-		if err != nil {
-			return err
-		}
-		return s.writeDuration(beat, edit.Field, beatKeyOrder, 0, length)
-	case fieldCut:
-		return s.setCut(beat, edit.Value)
-	case fieldZoom:
-		return s.addOrRemoveZoom(beat, hasZoom, edit.Value)
-	}
-
-	if !hasZoom {
-		return errors.New("the beat has no zoom; add one first")
-	}
-	zoom := under(beat, keyZoom)
-	switch edit.Field {
-	case fieldZoomTarget:
-		return s.replaceTarget(beat, edit.Value)
-	case fieldZoomFactor:
-		return s.setFactor(zoom, edit.Value)
-	default:
-		return s.setRamp(zoom, strings.TrimPrefix(edit.Field, keyZoom+"."), edit.Value)
-	}
 }
 
 // writeDuration writes length to the duration key in mapping, whose keys follow order; absent
@@ -276,82 +158,6 @@ func (s *splicer) writeDuration(
 	return s.doc.Upsert(mapping, key, formatDuration(length, old), order)
 }
 
-// setRamp writes a zoom's in or out ramp. A ramp of 0 is refused: an absent ramp already runs
-// the default, and an explicit 0 would cut the push in or out.
-func (s *splicer) setRamp(zoom yamledit.Path, key string, value json.RawMessage) error {
-	length, err := decodeMilliseconds(value)
-	if err != nil {
-		return err
-	}
-	if length == 0 {
-		return fmt.Errorf("want a ramp longer than 0ms; a ramp left out runs the %s default", storyboard.DefaultZoomRamp)
-	}
-	return s.writeDuration(zoom, key, zoomKeyOrder, storyboard.DefaultZoomRamp, length)
-}
-
-// setCut writes `cut: true` or deletes the key for false.
-func (s *splicer) setCut(beat yamledit.Path, value json.RawMessage) error {
-	isCut, err := decodeBool(value)
-	if err != nil {
-		return err
-	}
-	if isCut {
-		return s.doc.Upsert(beat, keyCut, valueTrue, beatKeyOrder)
-	}
-	return s.doc.DeleteIfPresent(under(beat, keyCut))
-}
-
-// setFactor writes a zoom's factor, or deletes the key for 0, auto.
-func (s *splicer) setFactor(zoom yamledit.Path, value json.RawMessage) error {
-	factor, err := decodeFactor(value)
-	if err != nil {
-		return err
-	}
-	if factor == 0 {
-		return s.doc.DeleteIfPresent(under(zoom, keyFactor))
-	}
-	return s.doc.Upsert(zoom, keyFactor, strconv.FormatFloat(factor, 'f', -1, 64), zoomKeyOrder)
-}
-
-// addOrRemoveZoom adds a zoom onto the target value holds, or removes the beat's zoom when
-// value is null.
-func (s *splicer) addOrRemoveZoom(beat yamledit.Path, hasZoom bool, value json.RawMessage) error {
-	if isNull(value) {
-		if !hasZoom {
-			return errors.New("the beat has no zoom to remove")
-		}
-		return s.doc.Delete(under(beat, keyZoom))
-	}
-	if hasZoom {
-		return errors.New("the beat already zooms; edit its target instead")
-	}
-	target, err := decodeTarget(value)
-	if err != nil {
-		return err
-	}
-	return s.doc.Upsert(beat, keyZoom, zoomOnto(targetFlow(target)), beatKeyOrder)
-}
-
-// replaceTarget swaps the zoom's target for the one value holds, in its place. A zoom holding
-// nothing but its target is replaced whole by a flow zoom onto the new target, the form a zoom
-// is added in.
-func (s *splicer) replaceTarget(beat yamledit.Path, value json.RawMessage) error {
-	decoded, err := decodeTarget(value)
-	if err != nil {
-		return err
-	}
-	target := targetFlow(decoded)
-	zoom := under(beat, keyZoom)
-	isOnlyTarget := true
-	for _, key := range zoomKeyOrder[1:] {
-		isOnlyTarget = isOnlyTarget && !s.doc.Has(under(zoom, key))
-	}
-	if isOnlyTarget {
-		return s.doc.Replace(zoom, zoomOnto(target))
-	}
-	return s.doc.Replace(under(zoom, keyTarget), target)
-}
-
 // replaceOrInsert puts text, a value's one line of YAML, in place of the whole node at key in
 // mapping, whatever its form, a block scalar too, or inserts `key: text` after the keys that
 // precede it in order when the key is absent. Upsert serves only the absent case: its Set
@@ -367,9 +173,4 @@ func (s *splicer) replaceOrInsert(mapping yamledit.Path, key, text string, order
 // under returns path extended by key, never sharing path's backing array.
 func under(path yamledit.Path, key string) yamledit.Path {
 	return append(append(yamledit.Path{}, path...), key)
-}
-
-// zoomOnto spells a zoom onto target, a target's flow text, with every other key left out.
-func zoomOnto(target string) string {
-	return "{" + keyTarget + ": " + target + "}"
 }
