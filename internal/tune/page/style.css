@@ -270,6 +270,23 @@ textarea {
   resize: vertical;
 }
 
+.field input[type="color"] {
+  width: 48px;
+  height: 28px;
+  padding: 2px;
+}
+
+.field input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+}
+
+.field input[type="checkbox"] {
+  justify-self: start;
+}
+
 .entry-actions {
   display: flex;
   gap: 8px;

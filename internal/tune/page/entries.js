@@ -1,7 +1,7 @@
 // photon tune's camera move and caption panels: what the inspector shows for a selected entry —
-// its timing, where a camera move goes, a caption's text and placement, when it is on the output
-// clock and the errors standing on it — and the buttons that move it up or down its list or
-// remove it.
+// its timing, where a camera move goes, a caption's text, placement and style, when it is on the
+// output clock and the errors standing on it — and the buttons that move it up or down its list
+// or remove it.
 //
 // It loads after controls.js and adds entryPanel to window.tunePage, the page's internal
 // namespace, where app.js's inspector draws it; every field is a control from controls.js.
@@ -20,6 +20,10 @@
     millisecondsField,
     momentField,
     choiceField,
+    decimalField,
+    colorField,
+    fractionField,
+    pixelsField,
     errorRows,
     numberOf,
     targetInputs,
@@ -28,6 +32,8 @@
   } = page;
   const KIND_ZOOM = "zoom";
   const CAPTION_TEXT_ROWS = 3;
+  // The step a caption's font size is typed in, in the unit of the frame's font size.
+  const FONT_SIZE_STEP = "0.5";
   // The list fields that move an entry within its list, or remove it, by list.
   const CAMERA_LIST = Object.freeze({ move: "camera.move", remove: "camera.remove" });
   const CAPTION_LIST = Object.freeze({ move: "caption.move", remove: "caption.remove" });
@@ -89,29 +95,68 @@
     return fieldRow("to (x, y)", element("span", { className: "inline" }, x, y));
   }
 
-  // captionPanel edits a caption's text, timing and placement, and shows when it is on the
-  // output clock and the errors standing on it. It ends after for or at until: either field
+  // captionPanel edits a caption's text, timing, placement and style, and shows when it is on
+  // the output clock and the errors standing on it. It ends after for or at until: either field
   // sets its end and drops the other, and an until of none ends it after a for of the stretch it
-  // shows. A caption set by position has no place or align to edit. The panel ends with its list
-  // buttons.
+  // shows. The panel ends with its list buttons.
   function captionPanel(caption) {
     const owner = { kind: ENTRY_CAPTION, index: caption.index };
-    const placement = caption.place
-      ? [
-          choiceField("place", owner, "caption.place", caption.place),
-          choiceField("align", owner, "caption.align", caption.align),
-        ]
-      : [];
     return [
       element("h2", {}, "caption " + caption.index),
       captionTextField(owner, caption.text),
       momentField("at", owner, "caption.at", caption.at),
       captionForField(owner, caption),
       momentField("until", owner, "caption.until", caption.until || null, true),
-      ...placement,
+      ...placementRows(owner, caption),
+      ...styleRows(owner, caption),
       readOnlyRow("shows", formatTime(caption.start_ms) + " – " + formatTime(caption.stop_ms)),
       ...errorRows(owner),
       listRow(owner, CAPTION_LIST, page.state().captions.length),
+    ];
+  }
+
+  // placementRows edit where a caption sits: its place, its align and its offset from where those
+  // put it, or, with explicit position checked, its position, which comes instead of all three.
+  function placementRows(owner, caption) {
+    const toggle = positionToggle(owner, caption);
+    if (caption.position) {
+      return [toggle, pixelsField("position", owner, "caption.position", caption.position)];
+    }
+    return [
+      choiceField("place", owner, "caption.place", caption.place),
+      choiceField("align", owner, "caption.align", caption.align),
+      pixelsField("offset", owner, "caption.offset", caption.offset),
+      toggle,
+    ];
+  }
+
+  // positionToggle is the explicit position checkbox. Checking it sets the caption's position to
+  // the top-left of the box it is laid out in now, so it stays where it is; unchecking it drops
+  // the position, and the caption sits where an absent place and align put it. It is disabled
+  // while the caption has no laid-out box to seed the position from.
+  function positionToggle(owner, caption) {
+    const corner = caption.box_position;
+    const input = element("input", {
+      type: "checkbox",
+      checked: Boolean(caption.position),
+      disabled: !corner,
+    });
+    input.addEventListener("change", () =>
+      applyEdit(owner, "caption.position", input.checked ? { x: corner.x, y: corner.y } : null),
+    );
+    return fieldRow("explicit position", input);
+  }
+
+  // styleRows edit a caption's font, its text and box colours, its box's opacity and its fade.
+  function styleRows(owner, caption) {
+    return [
+      decimalField("font size", owner, "caption.font.size", caption.font_size, FONT_SIZE_STEP),
+      choiceField("weight", owner, "caption.font.weight", caption.font_weight),
+      colorField("colour", owner, "caption.color", caption.color),
+      colorField("box colour", owner, "caption.box.color", caption.box_color),
+      fractionField("box opacity", owner, "caption.box.opacity", caption.box_opacity),
+      millisecondsField("fade in", owner, "caption.fade.in", caption.fade_in_ms),
+      millisecondsField("fade out", owner, "caption.fade.out", caption.fade_out_ms),
     ];
   }
 

@@ -72,20 +72,11 @@ var entryReaders = []struct {
 // pendingPageFields are the storyboard's editable entry fields the page does not send yet; each
 // is exempt from the check that the page sends every entry field, never from the check that every
 // field the page sends is one the storyboard describes.
-var pendingPageFields = map[string]bool{
-	storyboard.FieldCaptionFontSize:   true,
-	storyboard.FieldCaptionFontWeight: true,
-	storyboard.FieldCaptionColor:      true,
-	storyboard.FieldCaptionBoxColor:   true,
-	storyboard.FieldCaptionBoxOpacity: true,
-	storyboard.FieldCaptionFadeIn:     true,
-	storyboard.FieldCaptionFadeOut:    true,
-	storyboard.FieldCaptionOffset:     true,
-	storyboard.FieldCaptionPosition:   true,
-}
+var pendingPageFields = map[string]bool{}
 
-// entryFieldName finds a camera move's or caption's edit field written as a string literal.
-var entryFieldName = regexp.MustCompile(`"((?:camera|caption)\.[a-z_]+)"`)
+// entryFieldName finds a camera move's or caption's edit field written as a string literal, its
+// name one or more dotted words: caption.at, caption.font.size, camera.via.insert.
+var entryFieldName = regexp.MustCompile(`"((?:camera|caption)(?:\.[a-z_]+)+)"`)
 
 // stringLiteral finds a double-quoted JavaScript string literal; yamlFlowKey finds, inside one,
 // a storyboard key spelled as YAML flow text ({beat: 3, offset: 200ms}, {text: 'ok', nth: 2}),

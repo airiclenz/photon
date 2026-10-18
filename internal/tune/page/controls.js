@@ -1,6 +1,6 @@
 // photon tune's inspector controls: the field rows the panels are built from, each sending its
 // edit through app.js's applyEdit, the rows of errors and of a refused edit standing on what a
-// panel shows, and the typed moment and target inputs.
+// panel shows, and the typed moment, target, colour, fraction and pixel inputs.
 //
 // It loads after app.js and adds its functions to window.tunePage, the page's internal namespace,
 // where panels.js and entries.js build with them and app.js marks the beat select's errors.
@@ -22,6 +22,10 @@
   const TEXT_PLACEHOLDER = "a regex, such as ok";
   const NTH_PLACEHOLDER = "blank for the first; 2, 3 … or last";
   const AREA_PLACEHOLDER = "the whole screen";
+  // A fraction slider's bounds and the step it moves in.
+  const FRACTION_MIN = "0";
+  const FRACTION_MAX = "1";
+  const FRACTION_STEP = "0.05";
   // The kinds of a problem's owner besides a camera move's and a caption's, as /api/state sends them.
   const OWNER_CLIP = "clip";
   const OWNER_BEAT = "beat";
@@ -73,6 +77,49 @@
     input.value = chosen || field.default;
     input.addEventListener("change", () => applyEdit(owner, field.name, input.value));
     return fieldRow(label, input);
+  }
+
+  // decimalField edits owner's field as a number, typed in steps of step.
+  function decimalField(label, owner, field, number, step) {
+    const input = element("input", { type: "number", min: "0", step, value: String(number) });
+    input.addEventListener("change", () => applyEdit(owner, field, numberOf(input.value)));
+    return fieldRow(label, input);
+  }
+
+  // colorField edits owner's field as a #rrggbb colour chosen in the browser's colour picker.
+  function colorField(label, owner, field, color) {
+    const input = element("input", { type: "color", value: color });
+    input.addEventListener("change", () => applyEdit(owner, field, input.value));
+    return fieldRow(label, input);
+  }
+
+  // fractionField edits owner's field as a fraction from 0 to 1 on a slider, whose value shows
+  // beside it as it moves; the edit is sent once the slider is let go.
+  function fractionField(label, owner, field, fraction) {
+    const input = element("input", {
+      type: "range",
+      min: FRACTION_MIN,
+      max: FRACTION_MAX,
+      step: FRACTION_STEP,
+      value: String(fraction),
+    });
+    const shown = element("span", { className: "read-only" }, String(fraction));
+    input.addEventListener("input", () => {
+      shown.textContent = input.value;
+    });
+    input.addEventListener("change", () => applyEdit(owner, field, numberOf(input.value)));
+    return fieldRow(label, element("span", { className: "inline" }, input, shown));
+  }
+
+  // pixelsField edits owner's field as whole design pixels, {x, y}: x to the right and y down.
+  function pixelsField(label, owner, field, pixels) {
+    const input = (value) => element("input", { type: "number", step: "1", value: String(value) });
+    const x = input(pixels.x);
+    const y = input(pixels.y);
+    const send = () => applyEdit(owner, field, { x: numberOf(x.value), y: numberOf(y.value) });
+    x.addEventListener("change", send);
+    y.addEventListener("change", send);
+    return fieldRow(label + " (x, y)", element("span", { className: "inline" }, x, y));
   }
 
   function countField(label, field, count) {
@@ -181,6 +228,10 @@
     millisecondsField,
     momentField,
     choiceField,
+    decimalField,
+    colorField,
+    fractionField,
+    pixelsField,
     countField,
     fieldsOf,
     errorRows,

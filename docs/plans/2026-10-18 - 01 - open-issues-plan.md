@@ -465,7 +465,11 @@ still passes.
 - `GOMEMLIMIT=2GiB go test ./internal/tune/`
 **Commit:** `feat(tune): report a caption's style and laid-out box`
 
-## 13. Page: caption style controls
+## 13. Page: caption style controls — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): internal/tune/testdata/dom.js is unchanged: the DOM stub already fires an img's onload when its src is set (item 6), so loadFrame's reload after an edit runs under the tests as it stands.
+
+NOTES (2026-10-18): the offset row, like place and align, shows only while the caption has no position, since a position replaces all three; TestPageJS_CaptionPosition_SeedsTheLaidOutCorner also unchecks the box and asserts the null edit.
 
 **What:** Depends on items 6 and 12.
 **Regression guard.** Widens `entryFieldName` in internal/tune/page_test.go to admit dotted field names (caption.font.size, caption.box.opacity, camera.via.insert) and removes items 10 and 11's fields from `pendingPageFields`.

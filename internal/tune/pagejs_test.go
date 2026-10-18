@@ -59,6 +59,13 @@ const (
 	addedCaption   = 1
 )
 
+// styledCaption is the caption of cameraCaptionsStoryboard the style tests edit: set by place
+// and align, and laid out in a box.
+const styledCaption = 0
+
+// frameAPIPrefix starts the path of every preview frame request.
+const frameAPIPrefix = "/api/frame?"
+
 // roomyCameraStoryboard is sessionStoryboard without beat 2's zoom, its camera a zoom early in
 // beat 1 and a pan late in beat 2: a 600ms zoom or pan added at addMoveAtMS overlaps neither.
 const roomyCameraStoryboard = `clip: tuned
@@ -338,6 +345,51 @@ func (p *pageHarness) isDisabled(within, name string) bool {
 		.find((button) => button.textContent === %q).disabled`, within, name)).ToBoolean()
 }
 
+// setField sets property of the first input in the inspector's one field row labelled label to
+// value, fires the input's change and settles the page.
+func (p *pageHarness) setField(label, property string, value any) {
+	p.t.Helper()
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		p.t.Fatalf("encode %v: %v", value, err)
+	}
+	found := p.eval(fmt.Sprintf(`{
+		const rows = document.getElementById(%q).querySelectorAll("label")
+			.filter((row) => row.children.length > 0 && row.children[0].textContent === %q);
+		const input = rows.length === 1 ? rows[0].querySelectorAll("input")[0] : undefined;
+		if (input && !input.disabled) {
+			input[%q] = %s;
+			input.dispatchEvent(new Event("change"));
+		}
+		Boolean(input && !input.disabled);
+	}`, elementInspector, label, property, encoded)).ToBoolean()
+	if !found {
+		p.t.Fatalf("no one enabled input in a field row labelled %q under #%s", label, elementInspector)
+	}
+	p.settle()
+}
+
+// isRequestedAfter says the page sent a request whose path starts with prefix after its last
+// request for path.
+func (p *pageHarness) isRequestedAfter(path, prefix string) bool {
+	p.t.Helper()
+	last := -1
+	for i, request := range p.requests {
+		if request.path == path {
+			last = i
+		}
+	}
+	if last < 0 {
+		return false
+	}
+	for _, request := range p.requests[last+1:] {
+		if strings.HasPrefix(request.path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // selectedEntry is window.tune.selectedEntry() as JSON, "null" when no entry is selected.
 func (p *pageHarness) selectedEntry() string {
 	p.t.Helper()
@@ -569,5 +621,51 @@ func TestPageJS_MoveButtons_DisabledAtTheListEnds(t *testing.T) {
 		if !page.isDisabled(elementInspector, tc.button) {
 			t.Errorf("%s %d: %s is enabled", tc.kind, tc.index, tc.button)
 		}
+	}
+}
+
+func TestPageJS_CaptionColour_SendsTheEditAndReloadsTheFrame(t *testing.T) {
+	t.Parallel()
+	const color = "#ff8800"
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	page := loadPage(t, session)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCaption, styledCaption))
+
+	page.setField("colour", "value", color)
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%q}`,
+		storyboard.OwnerCaption, styledCaption, storyboard.FieldCaptionColor, color))
+	if got := session.State().Captions[styledCaption].Color; got != color {
+		t.Errorf("the caption's colour after the edit: want %s, got %s", color, got)
+	}
+	if !page.isRequestedAfter("/api/edit", frameAPIPrefix) {
+		t.Error("the page did not reload the preview frame after the edit")
+	}
+}
+
+func TestPageJS_CaptionPosition_SeedsTheLaidOutCorner(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	corner := session.State().Captions[styledCaption].BoxPosition
+	if corner == nil {
+		t.Fatalf("caption %d: want a laid-out box, got none", styledCaption)
+	}
+	page := loadPage(t, session)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCaption, styledCaption))
+
+	page.setField("explicit position", "checked", true)
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":{"x":%d,"y":%d}}`,
+		storyboard.OwnerCaption, styledCaption, storyboard.FieldCaptionPosition, corner.X, corner.Y))
+	if got := session.State().Captions[styledCaption].Position; got == nil || *got != *corner {
+		t.Fatalf("the caption's position after the check: want %+v, got %+v", *corner, got)
+	}
+
+	page.setField("explicit position", "checked", false)
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":null}`,
+		storyboard.OwnerCaption, styledCaption, storyboard.FieldCaptionPosition))
+	if got := session.State().Captions[styledCaption].Position; got != nil {
+		t.Errorf("the caption's position after the uncheck: want none, got %+v", *got)
 	}
 }
