@@ -210,18 +210,17 @@ func beatStates(board *storyboard.Storyboard) []BeatState {
 
 // cameraStates lists board's camera moves in storyboard order.
 func cameraStates(board *storyboard.Storyboard) []CameraState {
-	clock := board.Clock()
 	moves := make([]CameraState, 0, len(board.Camera))
 	for index, move := range board.Camera {
 		var state CameraState
 		switch {
 		case move.Zoom != nil:
 			zoom := move.Zoom
-			state = movedState(clock, cameraKindZoom, zoom.At, zoom.Over, zoom.Ease)
+			state = movedState(cameraKindZoom, zoom.Start(), zoom.At, zoom.Over, zoom.Ease)
 			state.Factor = zoom.To
 		case move.Pan != nil:
 			pan := move.Pan
-			state = movedState(clock, cameraKindPan, pan.At, pan.Over, pan.Ease)
+			state = movedState(cameraKindPan, pan.Start(), pan.At, pan.Over, pan.Ease)
 			state.ViaCount = len(pan.Via)
 			if to := pan.To; to != nil && to.Cell != nil {
 				state.Cell = &CellState{X: to.Cell.X, Y: to.Cell.Y}
@@ -236,13 +235,13 @@ func cameraStates(board *storyboard.Storyboard) []CameraState {
 }
 
 // movedState is the part of a camera move's state every form shares: its kind, its timing as
-// the storyboard spells it, and where it starts and ends on clock, the board's output clock.
-func movedState(clock storyboard.OutputClock, kind string, at storyboard.Moment, over time.Duration, ease storyboard.Ease) CameraState {
-	start := clipMS(clock, at)
+// the storyboard spells it, and where it starts and ends on the output clock, from start, its
+// resolved At.
+func movedState(kind string, start time.Duration, at storyboard.Moment, over time.Duration, ease storyboard.Ease) CameraState {
 	return CameraState{
 		Kind:    kind,
-		StartMS: start,
-		EndMS:   start + over.Milliseconds(),
+		StartMS: start.Milliseconds(),
+		EndMS:   (start + over).Milliseconds(),
 		At:      momentState(at),
 		OverMS:  over.Milliseconds(),
 		Ease:    string(ease),
@@ -251,22 +250,19 @@ func movedState(clock storyboard.OutputClock, kind string, at storyboard.Moment,
 
 // captionStates lists board's captions in storyboard order.
 func captionStates(board *storyboard.Storyboard) []CaptionState {
-	clock := board.Clock()
 	captions := make([]CaptionState, 0, len(board.Captions))
 	for index, caption := range board.Captions {
-		start := clipMS(clock, caption.At)
 		state := CaptionState{
 			Index:   index,
 			Text:    caption.Text,
-			StartMS: start,
-			StopMS:  start + caption.For.Milliseconds(),
+			StartMS: caption.Start().Milliseconds(),
+			StopMS:  caption.Stop().Milliseconds(),
 			At:      momentState(caption.At),
 			ForMS:   caption.For.Milliseconds(),
 			Place:   string(caption.Place),
 			Align:   string(caption.Align),
 		}
 		if until := caption.Until; until != nil {
-			state.StopMS = clipMS(clock, *until)
 			untilState := momentState(*until)
 			state.Until = &untilState
 		}
@@ -278,17 +274,6 @@ func captionStates(board *storyboard.Storyboard) []CaptionState {
 // momentState spells moment as the page reads it.
 func momentState(moment storyboard.Moment) MomentState {
 	return MomentState{Beat: moment.Beat, OffsetMS: moment.Offset.Milliseconds()}
-}
-
-// clipMS resolves moment on clock, a board's output clock, in whole milliseconds. Every board
-// State reports passed validation, which resolves each of its moments, so a moment that does not
-// resolve cannot arise; were one to, it reports the clip's start.
-func clipMS(clock storyboard.OutputClock, moment storyboard.Moment) int64 {
-	at, err := clock.Resolve(moment)
-	if err != nil {
-		return 0
-	}
-	return at.Milliseconds()
 }
 
 // pausesOf lists how long each of beat's pause actions idles, in action order.

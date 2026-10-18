@@ -290,9 +290,6 @@ func TestNew_RejectsBadSpans(t *testing.T) {
 			beats:   []beat{{id: 1, start: 2 * sec, duration: sec}, {id: 2, duration: sec}},
 			wantErr: "schedule: the take started its beats in the order 2, 1; the storyboard runs 1, 2 — re-record it",
 		},
-		{name: "no duration", end: 3 * sec, beats: []beat{{id: 1}}, wantErr: "duration"},
-		{name: "hold not under duration", end: 3 * sec, beats: []beat{{id: 1, duration: sec, hold: sec}}, wantErr: "hold"},
-		{name: "every beat cut", end: 3 * sec, beats: []beat{{id: 1, cut: true}}, wantErr: "every beat is cut"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

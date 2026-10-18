@@ -342,7 +342,10 @@ Depends on item 12.
 - `! grep -nE 'func (span|parseColor)\(' internal/caption/*.go`
 **Commit:** `refactor(caption): read resolved times and colours`
 
-## 14. Schedule and tune stop re-checking validated values
+## 14. Schedule and tune stop re-checking validated values — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): internal/storyboard/storyboard_test.go needed no change: `TestLoadRejects` already covers a zero duration (`duration missing`) and a hold not under its duration (`hold not under duration`), and the all-cut refusal (`beats: every beat is cut`) has its own test from item 12, so the three removed `TestNew_RejectsBadSpans` cases were dropped without a storyboard copy.
+NOTES (2026-10-18): tune's `movedState` now takes the move's resolved start (`zoom.Start()`/`pan.Start()`) in place of the output clock; a caption's StopMS is `Stop()` for both `for` and `until` captions, so the until branch only fills the authored `Until` field.
 
 Depends on items 9 and 12.
 

@@ -47,14 +47,14 @@ type Frame struct {
 }
 
 // New lays the take's beats onto the storyboard's section timings, end to end on the output
-// clock. Every storyboard beat must have started exactly once in the take, in storyboard order,
-// and the take must start no beat the storyboard lacks: each disagreement is its own
-// `schedule: `-prefixed error, all of them joined, and one about a storyboard beat is filed under
-// that beat ([storyboard.AtBeat]). Each kept beat needs a positive duration with a hold in
-// [0, duration). Every section starts where [storyboard.OutputClock.SectionStart] places its
-// beat and the schedule's Length is the clock's, so the schedule agrees with the storyboard's
-// clock by construction. A schedule whose every beat is cut is an error, since it has no clip to
-// show.
+// clock. The board must come from [storyboard.Parse] or [storyboard.Load], whose validation
+// already settles every beat's section timing and refuses a board with no kept beat; New does not
+// check them again. Every storyboard beat must have started exactly once in the take, in
+// storyboard order, and the take must start no beat the storyboard lacks: each disagreement is
+// its own `schedule: `-prefixed error, all of them joined, and one about a storyboard beat is
+// filed under that beat ([storyboard.AtBeat]). Every section starts where
+// [storyboard.OutputClock.SectionStart] places its beat and the schedule's Length is the
+// clock's, so the schedule agrees with the storyboard's clock by construction.
 func New(board *storyboard.Storyboard, recorded *take.Take) (*Schedule, error) {
 	if err := recorded.MatchBeats(board.BeatIDs()); err != nil {
 		return nil, mismatchOf(board, err)
@@ -63,10 +63,7 @@ func New(board *storyboard.Storyboard, recorded *take.Take) (*Schedule, error) {
 	if err != nil {
 		return nil, fmt.Errorf("schedule: %w", err)
 	}
-	sections, err := sectionsOf(board, spans)
-	if err != nil {
-		return nil, err
-	}
+	sections := sectionsOf(board, spans)
 
 	clock := board.Clock()
 	schedule := &Schedule{Sections: sections, Length: clock.Length()}
@@ -88,9 +85,6 @@ func New(board *storyboard.Storyboard, recorded *take.Take) (*Schedule, error) {
 				"beat %d plays at %.1f× (%s of take in %s), above %d×",
 				section.Beat, section.Speed, section.length(), section.Duration, maxSectionSpeed))
 		}
-	}
-	if schedule.Length == 0 {
-		return nil, errors.New("schedule: every beat is cut")
 	}
 	return schedule, nil
 }
@@ -119,10 +113,9 @@ func declares(board *storyboard.Storyboard, id int) bool {
 	return slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool { return beat.ID == id })
 }
 
-// sectionsOf pairs each span with its storyboard beat's timing, in span order, after checking
-// that every kept beat's timing can be scheduled. [take.Take.MatchBeats] has already matched the
-// spans to the storyboard's beats.
-func sectionsOf(board *storyboard.Storyboard, spans []take.BeatSpan) ([]Section, error) {
+// sectionsOf pairs each span with its storyboard beat's timing, in span order.
+// [take.Take.MatchBeats] has already matched the spans to the storyboard's beats.
+func sectionsOf(board *storyboard.Storyboard, spans []take.BeatSpan) []Section {
 	beats := make(map[int]storyboard.Beat, len(board.Beats))
 	for _, beat := range board.Beats {
 		beats[beat.ID] = beat
@@ -131,26 +124,9 @@ func sectionsOf(board *storyboard.Storyboard, spans []take.BeatSpan) ([]Section,
 	sections := make([]Section, 0, len(spans))
 	for _, span := range spans {
 		beat := beats[span.Beat]
-		if err := checkTiming(beat); err != nil {
-			return nil, err
-		}
 		sections = append(sections, Section{BeatSpan: span, Duration: beat.Duration, Hold: beat.Hold, Cut: beat.Cut})
 	}
-	return sections, nil
-}
-
-// checkTiming rejects a kept beat whose duration or hold cannot be scheduled. The storyboard
-// loader refuses both already; this guards a board built any other way.
-func checkTiming(beat storyboard.Beat) error {
-	switch {
-	case beat.Cut:
-		return nil
-	case beat.Duration <= 0:
-		return fmt.Errorf("schedule: beat %d: duration: want >0, got %s", beat.ID, beat.Duration)
-	case beat.Hold < 0 || beat.Hold >= beat.Duration:
-		return fmt.Errorf("schedule: beat %d: hold: want in [0, %s), got %s", beat.ID, beat.Duration, beat.Hold)
-	}
-	return nil
+	return sections
 }
 
 // Source maps an output time onto the source time it shows and that time's beat. It reports
