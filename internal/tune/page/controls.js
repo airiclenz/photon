@@ -1,7 +1,6 @@
 // photon tune's inspector controls: the field rows the panels are built from, each sending its
 // edit through app.js's applyEdit, the rows of errors and of a refused edit standing on what a
-// panel shows, the typed moment and target inputs, and the spellings of moments as the storyboard
-// writes them.
+// panel shows, and the typed moment and target inputs.
 //
 // It loads after app.js and adds its functions to window.tunePage, the page's internal namespace,
 // where panels.js and entries.js build with them and app.js marks the beat select's errors.
@@ -11,9 +10,10 @@
   const page = window.tunePage;
   const { CLIP, applyEdit, element, isEntry, entryValue } = page;
   const NEEDS_RECORD = "needs photon record";
-  const MOMENT_PLACEHOLDER = "{beat: 3, offset: 200ms} or 4500ms";
   // A moment's beat 0 is a clip time, offset_ms after the clip's first frame.
   const CLIP_TIME_BEAT = 0;
+  // A clearable moment field's select value for no moment, which sends null.
+  const NO_MOMENT = "";
   // A target's nth: /api/state sends 0 for the first match and -1 for the last; an edit leaves
   // the first out and spells the last "last".
   const STATE_NTH_FIRST = 0;
@@ -42,25 +42,27 @@
   }
 
   // momentField edits field as a typed moment, {beat, offset_ms}: a select of the clip time or a
-  // beat, and the milliseconds after it.
-  function momentField(label, owner, field, moment) {
+  // beat, and the milliseconds after it. A clearable field, whose moment may be null, offers
+  // none as well, which sends null.
+  function momentField(label, owner, field, moment, isClearable = false) {
     const beats = page.state().beats.map((beat) => page.option(String(beat.id), "beat " + beat.id));
-    const beat = element("select", {}, page.option(String(CLIP_TIME_BEAT), "clip time"), ...beats);
-    beat.value = String(moment.beat);
-    const offset = element("input", { type: "number", step: "1", value: String(moment.offset_ms) });
-    const send = () =>
+    const none = isClearable ? [page.option(NO_MOMENT, "none")] : [];
+    const clipTime = page.option(String(CLIP_TIME_BEAT), "clip time");
+    const beat = element("select", {}, ...none, clipTime, ...beats);
+    beat.value = moment ? String(moment.beat) : NO_MOMENT;
+    const offsetMS = moment ? moment.offset_ms : 0;
+    const offset = element("input", { type: "number", step: "1", value: String(offsetMS) });
+    const send = () => {
+      if (beat.value === NO_MOMENT) {
+        applyEdit(owner, field, null);
+        return;
+      }
       applyEdit(owner, field, { beat: Number(beat.value), offset_ms: numberOf(offset.value) });
+    };
     beat.addEventListener("change", send);
     offset.addEventListener("change", send);
     const after = element("span", {}, "+");
     return fieldRow(label + " (ms)", element("span", { className: "inline" }, beat, after, offset));
-  }
-
-  // textField edits field as the one line of text typed, a moment as YAML flow text.
-  function textField(label, owner, field, text, placeholder) {
-    const input = element("input", { type: "text", value: text, placeholder });
-    input.addEventListener("change", () => applyEdit(owner, field, input.value.trim()));
-    return fieldRow(label, input);
   }
 
   // choiceField edits field as one of choices, chosen now.
@@ -123,15 +125,6 @@
     return element("span", { className: "needs-record" }, NEEDS_RECORD);
   }
 
-  // momentText spells a moment as the storyboard does: {beat: N, offset: D} or a bare clip time.
-  function momentText(moment) {
-    if (moment.beat === 0) {
-      return moment.offset_ms + "ms";
-    }
-    const offset = moment.offset_ms === 0 ? "" : ", offset: " + moment.offset_ms + "ms";
-    return "{beat: " + moment.beat + offset + "}";
-  }
-
   // targetInputs are a target's text, nth and area inputs, holding target when there is one.
   function targetInputs(target) {
     const input = (value, placeholder) => element("input", { type: "text", value, placeholder });
@@ -172,12 +165,10 @@
   }
 
   Object.assign(page, {
-    MOMENT_PLACEHOLDER,
     fieldRow,
     readOnlyRow,
     millisecondsField,
     momentField,
-    textField,
     choiceField,
     countField,
     errorRows,
@@ -185,7 +176,6 @@
     problemOwner,
     numberOf,
     needsRecord,
-    momentText,
     targetInputs,
     targetRows,
     targetOf,

@@ -521,8 +521,8 @@ const captionEditBoard = sessionStoryboard + `captions:
   - {text: 'Start', for: 300ms}
 `
 
-// captionEdit is an Edit of the caption at index, its text value sent as a JSON string.
-func captionEdit(index int, field, value string) Edit {
+// captionEdit is an Edit of the caption at index, its value typed as value encodes.
+func captionEdit(index int, field string, value any) Edit {
 	owner := storyboard.Owner{Kind: storyboard.OwnerCaption, Index: index}
 	return Edit{Owner: owner, Field: field, Value: typedValue(value)}
 }
@@ -534,18 +534,22 @@ func TestApply_CaptionEdit_ChangesOnlyTheEditedText(t *testing.T) {
 		edit     Edit
 		old, new string
 	}{
-		{"a block beat at becomes a clip time", captionEdit(0, fieldCaptionAt, "150ms"),
+		{"a block beat at becomes a clip time", captionEdit(0, fieldCaptionAt, MomentState{Beat: 0, OffsetMS: 150}),
 			"    at:\n      beat: 1\n      offset: 100ms\n", "    at: 150ms\n"},
-		{"a flow beat at moves to another beat", captionEdit(1, fieldCaptionAt, "{beat: 1, offset: 900ms}"),
+		{"a flow beat at moves to another beat", captionEdit(1, fieldCaptionAt, MomentState{Beat: 1, OffsetMS: 900}),
 			"at: {beat: 2},", "at: {beat: 1, offset: 900ms},"},
-		{"an absent at is inserted after text", captionEdit(3, fieldCaptionAt, "100ms"),
+		{"an absent at is inserted after text", captionEdit(3, fieldCaptionAt, MomentState{Beat: 0, OffsetMS: 100}),
 			"{text: 'Start', for: 300ms}", "{text: 'Start', at: 100ms, for: 300ms}"},
-		{"for keeps its unit", captionEdit(0, fieldCaptionFor, "650"), "for: 700ms # short", "for: 650ms # short"},
-		{"until replaces a block for", captionEdit(0, fieldCaptionUntil, "{beat: 1, offset: 900ms}"),
+		{"for keeps its unit", captionEdit(0, fieldCaptionFor, 650), "for: 700ms # short", "for: 650ms # short"},
+		{"until replaces a block for", captionEdit(0, fieldCaptionUntil, MomentState{Beat: 1, OffsetMS: 900}),
 			"    for: 700ms # short\n", "    until: {beat: 1, offset: 900ms}\n"},
-		{"for replaces a flow until", captionEdit(1, fieldCaptionFor, "1000"),
+		{"for replaces a flow until", captionEdit(1, fieldCaptionFor, 1000),
 			", until: {beat: 2, offset: 1200ms}", ", for: 1s"},
-		{"until is set", captionEdit(2, fieldCaptionUntil, "2200ms"), "until: 2s", "until: 2200ms"},
+		{"until is set", captionEdit(2, fieldCaptionUntil, MomentState{Beat: 0, OffsetMS: 2200}), "until: 2s", "until: 2200ms"},
+		{"a null until becomes the for of its stretch", captionEdit(2, fieldCaptionUntil, nil),
+			"    at: 1200ms\n    until: 2s\n", "    at: 1200ms\n    for: 800ms\n"},
+		{"a null flow until becomes the for of its stretch", captionEdit(1, fieldCaptionUntil, nil),
+			", until: {beat: 2, offset: 1200ms}", ", for: 1.2s"},
 		{"text replaces a block scalar", captionEdit(0, fieldCaptionText, "Look\nhere"),
 			"text: |\n      Watch\n      this\n", "text: \"Look\\nhere\"\n"},
 		{"text replaces a single-quoted string", captionEdit(1, fieldCaptionText, "All good"),
@@ -586,7 +590,8 @@ func TestApply_CaptionEditToWhatAnAbsentKeyMeans_LeavesTheSourceAsItIs(t *testin
 		name string
 		edit Edit
 	}{
-		{"a clip start on a caption without at", captionEdit(3, fieldCaptionAt, "0ms")},
+		{"a clip start on a caption without at", captionEdit(3, fieldCaptionAt, MomentState{Beat: 0, OffsetMS: 0})},
+		{"a null until on a caption without until", captionEdit(3, fieldCaptionUntil, nil)},
 		{"bottom on a caption without place", captionEdit(2, fieldCaptionPlace, "bottom")},
 		{"middle on a caption without align", captionEdit(2, fieldCaptionAlign, "middle")},
 	}
@@ -646,9 +651,9 @@ func TestApply_CaptionEditFailingValidation_IsRefused(t *testing.T) {
 		edit    Edit
 		message string
 	}{
-		{"a stop before the start", captionEdit(2, fieldCaptionUntil, "1000ms"), "until: want a stop after the start"},
-		{"a for past the clip's end", captionEdit(0, fieldCaptionFor, "5000"), "for: want the caption to end by the clip's end"},
-		{"a start past the clip's end", captionEdit(3, fieldCaptionAt, "3s"), "at: want a start in"},
+		{"a stop before the start", captionEdit(2, fieldCaptionUntil, MomentState{Beat: 0, OffsetMS: 1000}), "until: want a stop after the start"},
+		{"a for past the clip's end", captionEdit(0, fieldCaptionFor, 5000), "for: want the caption to end by the clip's end"},
+		{"a start past the clip's end", captionEdit(3, fieldCaptionAt, MomentState{Beat: 0, OffsetMS: 3000}), "at: want a start in"},
 		{"an empty text", captionEdit(1, fieldCaptionText, ""), "text: missing"},
 	}
 	for _, tc := range cases {
@@ -678,9 +683,9 @@ func TestApply_CaptionEditOnWhatIsNotThere_IsRefused(t *testing.T) {
 		edit    Edit
 		message string
 	}{
-		{"an index past the last caption", captionEditBoard, captionEdit(9, fieldCaptionFor, "100"),
+		{"an index past the last caption", captionEditBoard, captionEdit(9, fieldCaptionFor, 100),
 			"captions[9]: caption.for: the storyboard has no caption at index 9"},
-		{"a negative index", captionEditBoard, captionEdit(-1, fieldCaptionFor, "100"),
+		{"a negative index", captionEditBoard, captionEdit(-1, fieldCaptionFor, 100),
 			"captions[-1]: caption.for: the storyboard has no caption at index -1"},
 		{"a storyboard without captions", sessionStoryboard, captionEdit(0, fieldCaptionPlace, "top"),
 			"captions[0]: caption.place: the storyboard has no caption at index 0"},
@@ -700,6 +705,49 @@ func TestApply_CaptionEditOnWhatIsNotThere_IsRefused(t *testing.T) {
 	}
 }
 
+func TestApply_CaptionNull_IsRefusedButForUntil(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		edit    Edit
+		message string
+	}{
+		{"a null at", captionEdit(1, fieldCaptionAt, nil), "captions[1]: caption.at: want a value, got null"},
+		{"a null for", captionEdit(1, fieldCaptionFor, nil), "captions[1]: caption.for: want a value, got null"},
+		{"a null text", captionEdit(1, fieldCaptionText, nil), "captions[1]: caption.text: want a value, got null"},
+		{"a null place", captionEdit(1, fieldCaptionPlace, nil), "captions[1]: caption.place: want a value, got null"},
+		{"a null align", captionEdit(1, fieldCaptionAlign, nil), "captions[1]: caption.align: want a value, got null"},
+		{"an until with no value", Edit{Owner: storyboard.Owner{Kind: storyboard.OwnerCaption, Index: 1}, Field: fieldCaptionUntil},
+			"captions[1]: caption.until: want a value, got none"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, _, err := apply([]byte(captionEditBoard), captionEditPath, tc.edit)
+
+			if err == nil || err.Error() != tc.message {
+				t.Errorf("apply(%+v) = %v, want %q", tc.edit, err, tc.message)
+			}
+		})
+	}
+
+	t.Run("a null until is cleared", func(t *testing.T) {
+		t.Parallel()
+
+		_, board, err := apply([]byte(captionEditBoard), captionEditPath, captionEdit(1, fieldCaptionUntil, nil))
+		if err != nil {
+			t.Fatalf("apply: %v", err)
+		}
+
+		caption := board.Captions[1]
+		if caption.Until != nil || caption.For != 1200*time.Millisecond || caption.Stop() != 2200*time.Millisecond {
+			t.Errorf("captions[1] until %v, for %v, stop %v; want no until, for 1.2s, the stop still at 2.2s",
+				caption.Until, caption.For, caption.Stop())
+		}
+	})
+}
+
 func TestApply_CaptionWireSpellings(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -707,16 +755,24 @@ func TestApply_CaptionWireSpellings(t *testing.T) {
 		edit       Edit
 		isAccepted bool
 	}{
-		{"a beat moment", captionEdit(0, fieldCaptionAt, "{beat: 1, offset: 200ms}"), true},
-		{"a moment as words", captionEdit(0, fieldCaptionAt, "soon"), false},
-		{"milliseconds of for", captionEdit(0, fieldCaptionFor, "500"), true},
-		{"a for with a unit", captionEdit(0, fieldCaptionFor, "500ms"), false},
-		{"a for of 0", captionEdit(0, fieldCaptionFor, "0"), false},
-		{"an until as a clip time", captionEdit(1, fieldCaptionUntil, "2s"), true},
-		{"an until as a block mapping", captionEdit(1, fieldCaptionUntil, "beat: 2"), false},
+		{"a beat moment", captionEdit(0, fieldCaptionAt, json.RawMessage(`{"beat": 1, "offset_ms": 200}`)), true},
+		{"a moment as YAML text", captionEdit(0, fieldCaptionAt, "{beat: 1, offset: 200ms}"), false},
+		{"a moment without an offset", captionEdit(0, fieldCaptionAt, json.RawMessage(`{"beat": 1}`)), false},
+		{"a moment with another key", captionEdit(0, fieldCaptionAt,
+			json.RawMessage(`{"beat": 1, "offset_ms": 0, "offset": "200ms"}`)), false},
+		{"milliseconds of for", captionEdit(0, fieldCaptionFor, 500), true},
+		{"a for as text", captionEdit(0, fieldCaptionFor, "500"), false},
+		{"a for with a fraction", captionEdit(0, fieldCaptionFor, 500.5), false},
+		{"a negative for", captionEdit(0, fieldCaptionFor, -500), false},
+		{"a for of 0", captionEdit(0, fieldCaptionFor, 0), false},
+		{"an until as a clip time", captionEdit(1, fieldCaptionUntil, json.RawMessage(`{"beat": 0, "offset_ms": 2000}`)), true},
+		{"an until as YAML text", captionEdit(1, fieldCaptionUntil, "2s"), false},
+		{"a text", captionEdit(0, fieldCaptionText, "Look"), true},
+		{"a text as a number", captionEdit(0, fieldCaptionText, 42), false},
 		{"a place", captionEdit(0, fieldCaptionPlace, "middle"), true},
 		{"a place as another word", captionEdit(0, fieldCaptionPlace, "center"), false},
 		{"an empty place", captionEdit(0, fieldCaptionPlace, ""), false},
+		{"a place as a number", captionEdit(0, fieldCaptionPlace, 1), false},
 		{"an align", captionEdit(0, fieldCaptionAlign, "right"), true},
 		{"an align as a place", captionEdit(0, fieldCaptionAlign, "top"), false},
 	}
@@ -740,7 +796,7 @@ func TestSession_CaptionEdit_SwapsTheEndAndUndoes(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
 
-	f.apply(t, captionEdit(1, fieldCaptionFor, "1000"))
+	f.apply(t, captionEdit(1, fieldCaptionFor, 1000))
 	edited := f.session.State()
 	undoErr := f.session.Undo()
 	undone := f.session.State()

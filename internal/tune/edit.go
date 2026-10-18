@@ -32,19 +32,16 @@ import (
 //   - camera.ease: "smooth", which removes the key, or "linear";
 //   - camera.to: a number, the factor, for a zoom move; for a pan, a target as zoom.target
 //     takes it or a cell, {"cell": {"x": 3, "y": 4}}, refused on a pan along a via path;
-//   - every caption field: a JSON string holding the text below.
+//   - caption.at: a moment as camera.at takes it, which replaces the caption's whole at;
+//   - caption.for: a whole number of milliseconds above 0, which removes the caption's until;
+//   - caption.until: a moment, which removes the caption's for; null clears the until, the
+//     caption then ending after a for of the length it shows now;
+//   - caption.text: a string, its lines separated by \n;
+//   - caption.place: "top", "middle" or "bottom", which removes the key;
+//   - caption.align: "left", "middle", which removes the key, or "right".
 //
-// A caption field's text is spelled:
-//   - caption.at: a moment as one line of YAML, a beat's {beat: 3, offset: 200ms} or a clip
-//     time 4500ms, which replaces the caption's whole at;
-//   - caption.for: a decimal integer of milliseconds above 0, which removes the caption's until;
-//   - caption.until: a moment, as caption.at spells it, which removes the caption's for;
-//   - caption.text: the text itself, its lines separated by \n;
-//   - caption.place: top, middle or bottom, which removes the key;
-//   - caption.align: left, middle, which removes the key, or right.
-//
-// A value of another JSON type or spelling, a null or absent value but zoom's, and an owner of
-// another kind than the field's are refused with an error naming the field.
+// A value of another JSON type or spelling, a null or absent value but zoom's and caption.until's,
+// and an owner of another kind than the field's are refused with an error naming the field.
 type Edit struct {
 	Owner storyboard.Owner `json:"owner"`
 	Field string           `json:"field"`
@@ -104,12 +101,14 @@ var (
 // nothing; cut false, zoom.factor 0 (auto) and camera.ease smooth delete their key, as do a
 // caption.place of bottom and a caption.align of middle. A target is written as the flow
 // mapping a pick's zoom snippet spells ([targetFlow]), and a zoom.target on a zoom holding
-// nothing but its target rewrites that zoom as a flow mapping. A camera.at is written as a clip
-// time in ms or a {beat: 3, offset: 200ms} flow mapping ([momentFlow]), and a pan's cell as
+// nothing but its target rewrites that zoom as a flow mapping. A camera.at, caption.at or
+// caption.until is written as a clip time in ms or a {beat: 3, offset: 200ms} flow mapping
+// ([momentFlow]), and a pan's cell as
 // {cell: {x: 3, y: 4}}. A camera.at, a caption.at or caption.until, or a pan's camera.to
 // replaces its whole node with the value's flow text, and a caption.text replaces its
 // whole node, a block scalar too, with one double-quoted line; a caption.for deletes the
-// caption's until and a caption.until its for. The edit is refused with an error naming the
+// caption's until and a caption.until its for, or, as null, writes the for that keeps the
+// caption's stretch in place of its until. The edit is refused with an error naming the
 // beat, the camera move or the caption, and field when its value is of the wrong JSON type or
 // misspelled, when its owner is of another kind than the field's, when it names a beat, zoom,
 // camera move or caption that is not there, or when the result fails validation; the last wraps
@@ -189,7 +188,7 @@ func (s *splicer) apply(board *storyboard.Storyboard, edit Edit) error {
 	if len(edit.Value) == 0 {
 		return errors.New("want a value, got none")
 	}
-	if isNull(edit.Value) && edit.Field != fieldZoom {
+	if isNull(edit.Value) && edit.Field != fieldZoom && edit.Field != fieldCaptionUntil {
 		return errors.New("want a value, got null")
 	}
 
@@ -207,17 +206,12 @@ func (s *splicer) apply(board *storyboard.Storyboard, edit Edit) error {
 	return s.editBeat(beat, board.Beats[index].Zoom != nil, edit)
 }
 
-// editEntry applies a camera move's field, typed per field, or a caption's, whose value is a
-// JSON string holding the field's text.
+// editEntry applies a camera move's or a caption's field, each typed per field.
 func (s *splicer) editEntry(board *storyboard.Storyboard, edit Edit) error {
 	if edit.Owner.Kind == storyboard.OwnerCamera {
 		return s.editCamera(board, edit.Owner.Index, edit.Field, edit.Value)
 	}
-	text, err := decodeText(edit.Value)
-	if err != nil {
-		return err
-	}
-	return s.editCaption(board, edit.Owner.Index, edit.Field, text)
+	return s.editCaption(board, edit.Owner.Index, edit.Field, edit.Value)
 }
 
 // editFrame sets frame.width or frame.fps.

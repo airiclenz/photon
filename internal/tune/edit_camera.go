@@ -64,7 +64,7 @@ func (s *splicer) editCamera(
 
 	switch field {
 	case fieldCameraAt:
-		return s.setMoveAt(move, order, value)
+		return s.setMoment(move, order, value)
 	case fieldCameraOver:
 		length, err := decodeMilliseconds(value)
 		if err != nil {
@@ -81,37 +81,18 @@ func (s *splicer) editCamera(
 	}
 }
 
-// setMoveAt replaces a camera move's whole at, whatever its form, with the moment value types.
-func (s *splicer) setMoveAt(move yamledit.Path, order []string, value json.RawMessage) error {
+// setMoment replaces the whole at of mapping, a camera move or a caption, whatever its form,
+// with the moment value types, spelled as [momentFlow] does. A clip start on a mapping without at
+// writes nothing: an absent at already starts it there.
+func (s *splicer) setMoment(mapping yamledit.Path, order []string, value json.RawMessage) error {
 	moment, err := decodeMoment(value)
 	if err != nil {
 		return err
 	}
-	return s.writeMoment(move, order, momentFlow(moment), moment)
-}
-
-// setMoment replaces a caption's whole at, whatever its form, with the moment value spells as
-// one line of YAML.
-func (s *splicer) setMoment(mapping yamledit.Path, order []string, value string) error {
-	text, moment, err := parseMoment(value)
-	if err != nil {
-		return err
-	}
-	return s.writeMoment(mapping, order, text, moment)
-}
-
-// writeMoment puts text, moment's one line of YAML, in place of the whole at of mapping. A clip
-// start on a mapping without at writes nothing: an absent at already starts it there.
-func (s *splicer) writeMoment(
-	mapping yamledit.Path,
-	order []string,
-	text string,
-	moment storyboard.Moment,
-) error {
 	if moment == (storyboard.Moment{}) && !s.doc.Has(under(mapping, keyAt)) {
 		return nil
 	}
-	return s.replaceOrInsert(mapping, keyAt, text, order)
+	return s.replaceOrInsert(mapping, keyAt, momentFlow(moment), order)
 }
 
 // momentFlow spells moment as the storyboard writes one: a clip time in milliseconds (4500ms),

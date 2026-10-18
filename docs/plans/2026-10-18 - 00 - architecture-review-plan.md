@@ -472,7 +472,15 @@ internal/tune/state.go — MomentState, CellState, TargetState; internal/storybo
 - `GOMEMLIMIT=2GiB go test ./internal/tune/`
 **Commit:** `feat(tune): send typed camera edits`
 
-## 20. Typed edit wire for captions
+## 20. Typed edit wire for captions — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): re-derived from the assumption that editCaption decodes its own value: item 18's editEntry in internal/tune/edit.go decoded every caption value as text first, so it now passes the raw value to editCaption, and apply's null check exempts caption.until beside zoom; Edit's and apply's wire doc comments are rewritten to match.
+NOTES (2026-10-18): re-derived from the assumption that setMoment's string path lives in value.go: it lives in edit_camera.go, so setMoment now decodes a typed moment and spells it with momentFlow, and it takes in camera.at's setMoveAt and writeMoment, which were left with one caller and a redundant text parameter.
+NOTES (2026-10-18): `caption.until: null` deletes the until and writes a `for` of the caption's current stretch (stop − start), so the caption stays valid (a caption must end by exactly one of for or until) and shows over the same span; on a caption without an until it changes nothing. On the page the until's beat select offers "none", which sends that null.
+NOTES (2026-10-18): a `caption.at: null` (and every other caption null but until's) is refused by apply's shared null check, `captions[N]: caption.at: want a value, got null`, pinned in TestApply_CaptionNull_IsRefusedButForUntil beside the until-null clear case.
+NOTES (2026-10-18): controls.js lost textField (its only users were caption.at and caption.until) besides momentText and MOMENT_PLACEHOLDER; page_test.go gained TestPage_Scripts_SpellNoYAML, which refuses a page string literal spelling a storyboard key as YAML flow text, and its pattern test.
+NOTES (2026-10-18): consequential edit — internal/tune/doc.go: made necessary by value.go no longer reading value spellings (its file-map line now says it decodes typed values).
+NOTES (2026-10-18): no JavaScript runtime is installed on this host, so the page scripts got no syntax check beyond the Go page tests.
 
 Depends on item 19.
 

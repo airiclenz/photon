@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/airiclenz/photon/internal/storyboard"
 )
 
@@ -22,25 +20,8 @@ const maxMilliseconds = math.MaxInt64 / int64(time.Millisecond)
 // millisecondsPerSecond splits a duration into whole seconds and the milliseconds past them.
 const millisecondsPerSecond = int64(time.Second / time.Millisecond)
 
-var (
-	// wholeNumber is the spelling of milliseconds and of a frame integer.
-	wholeNumber = regexp.MustCompile(`^[0-9]+$`)
-	// secondsForm is a duration written as plain seconds (`2s`, `2.35s`), which an edit keeps.
-	secondsForm = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?s$`)
-)
-
-// parseMilliseconds reads a duration spelled as a decimal integer of milliseconds.
-func parseMilliseconds(value string) (time.Duration, error) {
-	spellingError := fmt.Errorf("want a whole number of milliseconds such as 1850, got %q", value)
-	if !wholeNumber.MatchString(value) {
-		return 0, spellingError
-	}
-	count, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || count > maxMilliseconds {
-		return 0, spellingError
-	}
-	return time.Duration(count) * time.Millisecond, nil
-}
+// secondsForm is a duration written as plain seconds (`2s`, `2.35s`), which an edit keeps.
+var secondsForm = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?s$`)
 
 // jsonNull is the JSON null literal.
 const jsonNull = "null"
@@ -156,54 +137,13 @@ func decodePoint(value json.RawMessage) (string, error) {
 	return targetFlow(wire.target()), nil
 }
 
-// decodeText reads a camera or caption field's text, typed as a JSON string.
+// decodeText reads a caption's text, typed as a JSON string.
 func decodeText(value json.RawMessage) (string, error) {
 	var text string
 	if err := json.Unmarshal(value, &text); err != nil {
 		return "", fmt.Errorf("want the field's text as a JSON string, got %s", value)
 	}
 	return text, nil
-}
-
-// parseMoment checks that value is a moment as one line of YAML — a {beat, offset} flow mapping
-// or a clip time, with no comment — and returns it trimmed with the moment it reads as.
-func parseMoment(value string) (string, storyboard.Moment, error) {
-	trimmed := strings.TrimSpace(value)
-	spellingError := fmt.Errorf("want a moment as YAML such as {beat: 3, offset: 200ms} or 4500ms, got %q", value)
-	node, isOneLine := oneLineNode(trimmed)
-	if !isOneLine {
-		return "", storyboard.Moment{}, spellingError
-	}
-	isFlowMapping := node.Kind == yaml.MappingNode && node.Style&yaml.FlowStyle != 0
-	isLineScalar := node.Kind == yaml.ScalarNode && node.Style&(yaml.LiteralStyle|yaml.FoldedStyle) == 0
-	if !isFlowMapping && !isLineScalar {
-		return "", storyboard.Moment{}, spellingError
-	}
-
-	var moment storyboard.Moment
-	if err := node.Decode(&moment); err != nil {
-		return "", storyboard.Moment{}, fmt.Errorf("%w: %v", spellingError, err)
-	}
-	return trimmed, moment, nil
-}
-
-// oneLineNode parses text, which must hold no line break, as YAML and returns its one node;
-// isOneLine is false when text spans lines, is not YAML, holds nothing, or carries a comment.
-func oneLineNode(text string) (node *yaml.Node, isOneLine bool) {
-	if strings.ContainsAny(text, "\r\n") {
-		return nil, false
-	}
-	var file yaml.Node
-	if err := yaml.Unmarshal([]byte(text), &file); err != nil || len(file.Content) == 0 {
-		return nil, false
-	}
-	node = file.Content[0]
-	for _, holder := range []*yaml.Node{&file, node} {
-		if holder.HeadComment != "" || holder.LineComment != "" || holder.FootComment != "" {
-			return nil, false
-		}
-	}
-	return node, true
 }
 
 // formatDuration spells length in the unit old, the value it replaces, is written in.

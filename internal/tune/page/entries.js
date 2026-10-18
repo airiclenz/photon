@@ -18,15 +18,12 @@
     readOnlyRow,
     millisecondsField,
     momentField,
-    textField,
     choiceField,
     errorRows,
-    momentText,
     numberOf,
     targetInputs,
     targetRows,
     targetOf,
-    MOMENT_PLACEHOLDER,
   } = page;
   const KIND_ZOOM = "zoom";
   const EASES = ["smooth", "linear"];
@@ -92,7 +89,8 @@
 
   // captionPanel edits a caption's text, timing and placement, and shows when it is on the
   // output clock and the errors standing on it. It ends after for or at until: either field
-  // sets its end and drops the other. A caption set by position has no place or align to edit.
+  // sets its end and drops the other, and an until of none ends it after a for of the stretch it
+  // shows. A caption set by position has no place or align to edit.
   function captionPanel(caption) {
     const owner = { kind: ENTRY_CAPTION, index: caption.index };
     const placement = caption.place
@@ -104,9 +102,9 @@
     return [
       element("h2", {}, "caption " + caption.index),
       captionTextField(owner, caption.text),
-      textField("at", owner, "caption.at", momentText(caption.at), MOMENT_PLACEHOLDER),
+      momentField("at", owner, "caption.at", caption.at),
       captionForField(owner, caption),
-      captionUntilField(owner, caption),
+      momentField("until", owner, "caption.until", caption.until || null, true),
       ...placement,
       readOnlyRow("shows", formatTime(caption.start_ms) + " – " + formatTime(caption.stop_ms)),
       ...errorRows(owner),
@@ -121,15 +119,8 @@
       step: "1",
       value: caption.until ? "" : String(caption.for_ms),
     });
-    input.addEventListener("change", () => applyEdit(owner, "caption.for", input.value.trim()));
+    input.addEventListener("change", () => applyEdit(owner, "caption.for", numberOf(input.value)));
     return fieldRow("for (ms)", input);
-  }
-
-  // captionUntilField edits the moment a caption ends at; it is empty while the caption ends
-  // after for.
-  function captionUntilField(owner, caption) {
-    const until = caption.until ? momentText(caption.until) : "";
-    return textField("until", owner, "caption.until", until, MOMENT_PLACEHOLDER);
   }
 
   // captionTextField edits a caption's text, its lines as the textarea's lines.

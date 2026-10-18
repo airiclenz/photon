@@ -48,7 +48,7 @@
 //   - server.go: the HTTP handler: the embedded page, the JSON API and its Host and POST guards.
 //   - session.go: the [Session]: its pipelines, history, refresh from disk and guarded save.
 //   - state.go: the [State] a session reports and the errors attributed to their owners.
-//   - value.go: reading an edit's value spellings and writing a duration in its old unit.
+//   - value.go: decoding an edit's typed values and writing a duration in its old unit.
 //   - page/index.html, page/style.css: the page and its styles.
 //   - page/app.js: the window.tune contract, the session's API, the selection and the wiring.
 //   - page/transport.js: the frame clock, the transport and its keys.

@@ -68,6 +68,25 @@ var entryReaders = []struct {
 // entryFieldName finds a camera move's or caption's edit field written as a string literal.
 var entryFieldName = regexp.MustCompile(`"((?:camera|caption)\.[a-z_]+)"`)
 
+// stringLiteral finds a double-quoted JavaScript string literal; yamlFlowKey finds, inside one,
+// a storyboard key spelled as YAML flow text ({beat: 3, offset: 200ms}, {text: 'ok', nth: 2}),
+// which the page, sending typed values, never spells.
+var (
+	stringLiteral = regexp.MustCompile(`"(?:[^"\\\n]|\\.)*"`)
+	yamlFlowKey   = regexp.MustCompile(`(?:^|[{,] ?)(?:beat|offset|text|nth|area|cell|x|y|target|factor): `)
+)
+
+// yamlSpellings returns the string literals in script that spell storyboard keys as YAML.
+func yamlSpellings(script []byte) []string {
+	var spellings []string
+	for _, literal := range stringLiteral.FindAll(script, -1) {
+		if yamlFlowKey.Match(literal[1 : len(literal)-1]) {
+			spellings = append(spellings, string(literal))
+		}
+	}
+	return spellings
+}
+
 // readOnlyFrameFields are the frame keys the Clip frame panel prints, read-only, from the state.
 var readOnlyFrameFields = []string{"cols", "rows", "padding", "font_size", "line_height", "scale", "max_colors"}
 
@@ -311,6 +330,36 @@ func TestPage_EntryFields_AreEditFields(t *testing.T) {
 		isEntryField := strings.HasPrefix(field, "camera.") || strings.HasPrefix(field, "caption.")
 		if isEntryField && !sent[field] {
 			t.Errorf("the page sends no %s edit", field)
+		}
+	}
+}
+
+func TestPage_YAMLSpellings_Pattern(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		script string
+		want   []string
+	}{
+		{`return "{beat: " + moment.beat + offset + "}";`, []string{`"{beat: "`}},
+		{`const offset = ", offset: " + ms + "ms";`, []string{`", offset: "`}},
+		{`const hint = "{text: 'ok', area: list}";`, []string{`"{text: 'ok', area: list}"`}},
+		{`applyEdit(owner, field, { beat: Number(beat.value), offset_ms: 0 });`, nil},
+		{`element("input", { type: "number", step: "1", value: "0" });`, nil},
+		{`console.error("tune: a state listener failed", err);`, nil},
+		{`const quote = "say \"{nth: 2}\"";`, []string{`"say \"{nth: 2}\""`}},
+	}
+	for _, tc := range cases {
+		if got := yamlSpellings([]byte(tc.script)); !slices.Equal(got, tc.want) {
+			t.Errorf("yamlSpellings(%s) = %q, want %q", tc.script, got, tc.want)
+		}
+	}
+}
+
+func TestPage_Scripts_SpellNoYAML(t *testing.T) {
+	t.Parallel()
+	for _, name := range pageScripts(t) {
+		for _, spelling := range yamlSpellings(readPageFile(t, name)) {
+			t.Errorf("%s spells YAML in %s; send the value typed instead", name, spelling)
 		}
 	}
 }
