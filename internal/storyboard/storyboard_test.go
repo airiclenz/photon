@@ -312,16 +312,24 @@ const captionBase = validBase + `captions:
   - {text: 'Done', at: 4s, for: 500ms, position: {x: 10, y: 20}}
 `
 
+// captionCutBase is validBase with beat 2 cut and a kept beat 3 of 2s, so the clip keeps its 5s,
+// and a caption that breaks no rule. Only a swapped fragment names the cut beat.
+var captionCutBase = strings.Replace(validBase, "    title: next\n    duration: 2s\n",
+	"    title: next\n    cut: true\n  - id: 3\n    title: last\n    duration: 2s\n", 1) + `captions:
+  - {text: 'Cut', at: {beat: 1}, until: {beat: 3}}
+`
+
 func TestLoadRejects_Captions(t *testing.T) {
 	t.Parallel()
 
-	cases := []struct {
+	type rejectCase struct {
 		name     string
 		old, new string
 		want     string
 		// decode marks a rule the strict decode enforces, which fails before validation runs.
 		decode bool
-	}{
+	}
+	cases := []rejectCase{
 		{"unknown caption field", "text: 'Done',", "text: 'Done', style: plain,", "field style not found", true},
 		{"unknown box field", "opacity: 0.5}", "opacity: 0.5, blur: 2}", "field blur not found", true},
 		{"text missing", "text: 'Done', ", "", "captions[1]: text: missing", false},
@@ -356,17 +364,37 @@ func TestLoadRejects_Captions(t *testing.T) {
 		{"fades longer than the caption", "in: 600ms, out: 400ms", "in: 2s, out: 600ms",
 			"captions[0]: fade: want in + out within the caption's length 2.5s, got 2.6s", false},
 	}
-	if _, err := Parse([]byte(captionBase), "captions.yaml"); err != nil {
-		t.Fatalf("the caption base storyboard must parse clean: %v", err)
+	// cutBeatCases swap fragments of captionCutBase, whose beat 2 is cut.
+	cutBeatCases := []rejectCase{
+		{"start at a cut beat", "at: {beat: 1}", "at: {beat: 2}",
+			"captions[0]: at: beat 2 is cut, so it has no clip time", false},
+		{"stop at a cut beat", "until: {beat: 3}", "until: {beat: 2}",
+			"captions[0]: until: beat 2 is cut, so it has no clip time", false},
+	}
+	type basedCase struct {
+		base string
+		rejectCase
+	}
+	var runs []basedCase
+	for _, base := range []string{captionBase, captionCutBase} {
+		if _, err := Parse([]byte(base), "captions.yaml"); err != nil {
+			t.Fatalf("the caption base storyboard must parse clean: %v\n%s", err, base)
+		}
 	}
 	for _, tc := range cases {
+		runs = append(runs, basedCase{captionBase, tc})
+	}
+	for _, tc := range cutBeatCases {
+		runs = append(runs, basedCase{captionCutBase, tc})
+	}
+	for _, tc := range runs {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if count := strings.Count(captionBase, tc.old); count != 1 {
+			if count := strings.Count(tc.base, tc.old); count != 1 {
 				t.Fatalf("fragment %q occurs %d times in the base, want once", tc.old, count)
 			}
 
-			_, err := Parse([]byte(strings.Replace(captionBase, tc.old, tc.new, 1)), "captions.yaml")
+			_, err := Parse([]byte(strings.Replace(tc.base, tc.old, tc.new, 1)), "captions.yaml")
 
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("want an error containing %q, got:\n%v", tc.want, err)

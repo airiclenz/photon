@@ -67,7 +67,10 @@ version or CHANGELOG release headings.
 - 21: guard folded
 - 23: guard folded (writer's decision)
 
-## 1. Test a caption anchored to a cut beat
+## 1. Test a caption anchored to a cut beat — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the variant base is a package-level `var captionCutBase` (validBase with beat 2 `cut: true` plus a kept beat 3 of 2s, one caption `at: {beat: 1}, until: {beat: 3}`); TestLoadRejects_Captions names its row type `rejectCase`, adds `cutBeatCases`, and runs both tables through the one subtest body via an embedded `basedCase{base, rejectCase}`, checking both bases parse clean.
+
 
 **What:** Test-only. `TestLoadRejects_Captions` (`internal/storyboard/storyboard_test.go`) gains two
 cases over a base whose beat 2 is `cut: true`: a caption `at: {beat: 2}` expecting
