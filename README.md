@@ -19,7 +19,7 @@ binary for Linux, macOS and Windows, written in Go.
 [Quick start](#quick-start) · [Commands](#commands) · [How a take works](#how-a-take-works) ·
 [photon.yaml](#photonyaml-reference) · [Storyboard](#storyboard-reference) ·
 [Targets and areas](#targets-and-areas) · [Expects](#expects) ·
-[Services and profiles](#services-and-profiles) · [Sections, zoom and cursor](#sections-zoom-and-cursor) ·
+[Services and profiles](#services-and-profiles) · [Sections and cursor](#sections-and-cursor) ·
 [Environment variables](#environment-variables) · [Fonts](#fonts-and-licences) · [FAQ](#faq) ·
 [License](#license)
 
@@ -42,8 +42,8 @@ always matches the current app.
   app save the file? did the fake backend get the request?). `record` exits 0 only on a clean take.
 - **One-line retake loop.** `until photon record clip.yaml; do :; done`.
 - **Fixed section lengths.** Each beat plays for exactly its `duration`. Slow parts speed up to fit.
-- **Zoom and cursor.** Push into an on-screen target. A drawn cursor glides to each click and
-  follows each drag.
+- **Camera and cursor.** Zoom in and pan to an on-screen target. A drawn cursor glides to each
+  click and follows each drag.
 - **Helper services.** Start a fake API or other helper before the take, on a free port, and stop
   it after.
 - **Small GIFs.** A per-clip palette via ffmpeg, plus an optional gifsicle pass.
@@ -142,7 +142,7 @@ storyboard's folder. Each command's `--help` says the same as this section.
 | `photon record <storyboard>` | Records one take to `<work>/<clip>.take`, checks it and prints the check table. |
 | `photon check <storyboard> [<take>]` | Checks a take (default `<work>/<clip>.take`) against the storyboard's expects and prints the check table. |
 | `photon render <storyboard> [<take>]` | Renders a take (default `<work>/<clip>.take`) to the GIF at the storyboard's `ship` path. |
-| `photon tune <storyboard> [<take>]` | Serves a page on `127.0.0.1` to tune the storyboard's timing, zoom and frame against a take (default `<work>/<clip>.take`), and saves the edits back into the storyboard. Runs until Ctrl-C. |
+| `photon tune <storyboard> [<take>]` | Serves a page on `127.0.0.1` to tune the storyboard's timing, camera moves and frame against a take (default `<work>/<clip>.take`), and saves the edits back into the storyboard. Runs until Ctrl-C. |
 | `photon version` | Prints photon's build string, such as `photon 1.0.0 (a1b2c3d)`: the version, the commit it was built from and `, dirty` when that tree had uncommitted changes; `photon 1.0.0` alone when the binary carries no VCS info. `photon --version` does the same. |
 
 Flags:
@@ -165,19 +165,19 @@ take, each service's log (`<work>/<service>.log`), and the clip's palette
 `photon tune: http://127.0.0.1:41234/`, and never opens a browser. The page previews the take:
 while it plays or scrubs it shows draft frames, drawn from a scale-1 raster with a fast scaler,
 and once stopped it settles on the exact frame `photon render` composes. Its timeline edits
-each beat's `duration`, `hold`, `cut` and `zoom`, and its inspector the clip's `frame.width`,
+each beat's `duration`, `hold` and `cut`, and its inspector the clip's `frame.width`,
 `fps`, `font_size`, `line_height`, `padding` and `scale`; `cols`, `rows` and `max_colors` show read-only. The
 storyboard's `camera` moves and `captions` show as bars on lanes of their own under the beats,
 and a click on a bar shows that entry in the inspector, which edits a camera move's `at`,
-`over`, `ease` and `to`, a zoom's `target`, a pan's `via` waypoints and whether it moves
-straight `to` its point or along a `via` path, and a caption's `text`, `at`, `for` or `until`,
+`over`, `ease` and `to`, a pan's `via` waypoints and whether it moves straight `to` its point or
+along a `via` path, and a caption's `text`, `at`, `for` or `until`,
 `place`, `align`, `offset` or `position`, font, colours, box and fade. While a `via` pan is selected, the preview draws
 the path it runs. A lane's `+` adds a zoom, a pan or a caption at the playhead, and the
 inspector moves the entry it shows up or down its list, or removes it.
 A pick on the paused preview proposes a target for the picked cells, ready to use as the
-selected beat's zoom target or camera zoom's `target`, the selected pan's `to` or one of its
-`via` waypoints, or to copy as a `click`, `seen` or `drag` end. `pause` and the `do` actions show read-only:
-changing them needs a new `photon record`. Save writes the storyboard in place and changes only
+selected pan's `to` or one of its `via` waypoints, or to copy as a `click`, `seen` or `drag` end.
+`pause` and the `do` actions show read-only: changing them needs a new `photon record`. Save
+writes the storyboard in place and changes only
 the edited values, so comments and layout stay. It is refused while an edit leaves the
 storyboard invalid, or when the file changed on disk since it was loaded. The transport bar's
 right end shows the build serving the page, the string `photon version` prints.
@@ -353,11 +353,6 @@ beats:
       - pause: {for: 500ms}
       - click: {target: {text: 'beta', nth: first, area: list}, times: 1}
       - wait: {screen: 'loading', gone: true, timeout: 10s}
-    zoom:
-      target: {text: 'beta', area: list}
-      factor: 1.5
-      in: 800ms
-      out: 800ms
     expect:
       - seen: '\* beta'
         area: list
@@ -366,6 +361,10 @@ beats:
     cut: true
     do:
       - pause: {for: 2s}
+
+camera:                         # zoom in on beta while panning to it
+  - zoom: {to: 1.5, at: {beat: 1}, over: 800ms}
+  - pan: {to: {text: 'beta', area: list}, at: {beat: 1}, over: 800ms}
 ```
 
 ### Header
@@ -400,10 +399,6 @@ beats:
 | `duration` | How long the beat plays in the clip, >0. Not needed on a cut beat. |
 | `hold` | How much of the start plays at 1×, ≥0 and less than `duration`. Default 0. |
 | `cut` | `true` records the beat but leaves it out of the clip. |
-| `zoom` | A push into an on-screen target. See [Sections, zoom and cursor](#sections-zoom-and-cursor). |
-| `zoom.target` | The [target](#targets-and-areas) to zoom into. |
-| `zoom.factor` | The magnification, 1 to 3. Leave it out to fit the target. |
-| `zoom.in`, `zoom.out` | The ramp in at the start and back out before the end. Default `1s` each. |
 | `expect` | What the beat must show. See [Expects](#expects). |
 
 ### Actions
@@ -443,11 +438,9 @@ shipped GIF, not the take's. The camera has two tracks: a **zoom** track (the ma
 rest at 1×) and a **pan** track (the point the crop centres on, at rest at the frame's centre).
 Each entry of `camera` is exactly one move:
 
-- `zoom`: eases the magnification to `to`, a factor from 1 to 3. `to: 1` zooms back out. An
-  optional `target` (a [target](#targets-and-areas): `text`, with `nth` and `area`) aims the zoom:
-  the camera pans to the centre of the target's box over the zoom's own `over`, with its `ease`.
-  photon finds the target the way it finds a pan's target point, below. A targeted zoom holds the
-  pan track as well as the zoom track.
+- `zoom`: eases the magnification to `to`, a factor from 1 to 3. `to: 1` zooms back out. A zoom
+  holds the zoom track only and aims nowhere: it pushes in on wherever the pan track has the
+  centre, so a pan over the same stretch is what aims it.
 - `pan`: carries the centre to a point. Set exactly one of two forms:
   - `to`: one point. The camera moves there in a straight line.
   - `via`: a list of at least two points. The camera follows a smooth curve through them,
@@ -483,20 +476,19 @@ camera:
       over: 2s
       ease: linear
   - zoom: {to: 1, at: 9500ms, over: 800ms}
-  - zoom: {to: 2, target: {text: 'Saved'}, at: 11s, over: 600ms}
+  - zoom: {to: 2, at: 11s, over: 600ms}
+  - pan: {to: {text: 'Saved'}, at: 11s, over: 600ms}
 ```
 
-A zoom without a `target` and a pan may overlap: that is how the camera pushes in while it moves.
-Two moves on the same track may not, so a targeted zoom overlaps neither a pan nor another zoom.
-A beat's `zoom` holds both tracks for its whole section, so no camera move may overlap that
-section. Between moves, each track holds where the last move left it. A pan shows only while the
-camera is zoomed in: at 1× the whole frame is in view. A pan at 1× still sets where the next zoom
-without a `target` aims.
+A zoom and a pan may overlap: that is how the camera pushes in while it moves, and how it pushes
+into a target. Two moves on the same track may not. Between moves, each track holds where the
+last move left it. A pan shows only while the camera is zoomed in: at 1× the whole frame is in
+view. A pan at 1× still sets where the next zoom aims.
 
 `photon lint` reports a move that sets both or neither of `zoom` and `pan`, a `zoom.to` outside
 1-3, a pan with both or neither of `to` and `via`, a `via` with fewer than two points, a point
-with both or neither of `text` and `cell`, a zoom `target` without `text` or with a bad `text` or
-`area`, a cell outside the grid, an `ease` other than `smooth` or `linear`, an `over` that is not
+with both or neither of `text` and `cell`, a `target` on a zoom (it names a pan move to aim with
+instead), a cell outside the grid, an `ease` other than `smooth` or `linear`, an `over` that is not
 >0, an `at` that names a missing or cut beat, a move that starts outside the clip or ends after
 it, and every overlap above.
 
@@ -572,7 +564,7 @@ the frame.
 
 ## Targets and areas
 
-A **target** is a place on screen that a `click`, `drag` or `zoom` aims at:
+A **target** is a place on screen that a `click`, `drag` or `pan` aims at:
 
 | Field | Meaning |
 | --- | --- |
@@ -612,7 +604,7 @@ areas:
 If an anchor finds no row, or the top lands below the bottom, the area is not on screen. A
 `click` or `drag` there fails, and a `seen` expect does not match. Area names start with a letter
 and use letters, digits, `-` and `_`. `any` is reserved for the whole screen. A storyboard may
-only use areas its config declares, and `photon lint` checks this. Clicks, drags, zooms and
+only use areas its config declares, and `photon lint` checks this. Clicks, drags, pans and
 `seen` expects all use the same area logic, so they always agree.
 
 ## Expects
@@ -666,7 +658,7 @@ A **profile** is a named variant of the services. Pick it with `photon record --
 A service's name, port and readiness stay the same under every profile, so its
 `PHOTON_PORT_<NAME>` never changes.
 
-## Sections, zoom and cursor
+## Sections and cursor
 
 Each beat becomes a **section** of the clip. A section is exactly `duration` long, however long
 the beat took in the take:
@@ -680,21 +672,13 @@ the beat took in the take:
 `photon render` prints one row per beat: `beat N  <speed>×  <take> of take in <duration>`, or
 `beat N  cut`.
 
-A **zoom** pushes into its target over the `in` ramp, holds, and eases back out over the `out`
-ramp before the section ends. If the two ramps are longer than the section, both shrink to fit.
-With no `factor`, the zoom fits the target: the target plus two cells each side fills 70 percent
-of the frame width, clamped to 1.25-2.5×. The zoom aims at the spot where a click or drag in the
-same beat hit the same target. If there is none, it aims at the target on the latest screen of
-the beat that shows it.
-
-A beat's `zoom` is a shorthand for [camera](#camera) moves. When the section starts, the pan
-track aims at the zoom's target. The zoom track then pushes in over `in`, holds, and comes back
-to 1× over `out`. The zoom holds both tracks for its section, and no `camera` move may overlap
-it. Between moves the camera holds its last state: a factor stays put until the next zoom, and
-the centre stays put until the next pan. The crop never leaves the frame. When the centre is
-near an edge, the crop stops at that edge, so the aimed point sits off-centre rather than
-showing empty space. The cursor follows the camera: it is drawn through the same crop, so it
-stays on the cell it points at.
+A beat does not zoom or aim the camera: the storyboard's [camera](#camera) moves do, on the
+clip's clock. A `zoom` sets the magnification and a `pan` aims it at a target or a cell. A `zoom`
+key on a beat is a load error that names those two camera moves. Between moves the camera holds
+its last state: a factor stays put until the next zoom, and the centre stays put until the next
+pan. The crop never leaves the frame. When the centre is near an edge, the crop stops at that
+edge, so the aimed point sits off-centre rather than showing empty space. The cursor follows the
+camera: it is drawn through the same crop, so it stays on the cell it points at.
 
 The **cursor** is drawn, not recorded. It is a white dot with a dark outline. It fades in, glides
 from the last point (the bottom row's centre at first) to each click and each drag's press, and

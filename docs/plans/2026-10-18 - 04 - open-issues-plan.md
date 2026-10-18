@@ -528,7 +528,12 @@ the guard names.
 
 **Commit:** `feat(storyboard)!: refuse a beat zoom`
 
-## 11. Document aiming through pans only
+## 11. Document aiming through pans only — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the CHANGELOG sidecar does not repeat the breaking-removal entries, since items 9 and 10's sidecars already record that a camera zoom no longer takes `target` and a beat no longer takes `zoom` (with their load errors); this entry adds the docs bullet and the closeout list of stale Unreleased bullets.
+NOTES (2026-10-18): README heading "Sections, zoom and cursor" renamed "Sections and cursor"; its TOC anchor follows (`#sections-and-cursor`); the Features bullet is now "Camera and cursor"; the `photon tune` command row says "timing, camera moves and frame", matching the command's own Short text.
+NOTES (2026-10-18): README's example storyboard drops the beat `zoom` block and gains a `camera` list (a zoom and a pan at beat 1); the extracted README config and storyboard pass `photon lint`.
+NOTES (2026-10-18): `photon render`'s help now says it "composes the camera and the cursor" (was "the zooms"), and its doc comment drops zoom from what the storyboard decides per section.
 
 **What:**
 Docs for `zoom-target-removal` and `beat-zoom-removal`. Depends on items 9 and 10. The CHANGELOG

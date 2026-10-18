@@ -1,6 +1,6 @@
 // Package target finds things on a snapshot: where a storyboard target sits, which rows an area
 // covers, and the text an area shows. It is the only place targets and areas are resolved — the
-// engine aims clicks, drags and waits with it, compose aims zooms with it and check reads `seen`
+// engine aims clicks, drags and waits with it, compose aims pans with it and check reads `seen`
 // expects through it — so all of them agree on what a pattern and an area mean.
 //
 // A snapshot is read row by row as plain text, trailing blanks trimmed, a wide grapheme counted
