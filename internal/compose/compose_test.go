@@ -13,6 +13,9 @@ import (
 	"testing"
 	"time"
 
+	xdraw "golang.org/x/image/draw"
+	"golang.org/x/image/math/f64"
+
 	"github.com/airiclenz/photon/internal/fonts"
 	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
@@ -760,5 +763,140 @@ func TestCompositorCaptionBoxes_NoCaptions_IsNil(t *testing.T) {
 
 	if boxes != nil {
 		t.Errorf("CaptionBoxes() = %v, want nil for a storyboard with no captions", boxes)
+	}
+}
+
+// directCompose is Compose's direct path before ComposeDraft shared its body: CatmullRom's Scale
+// of the whole source at a factor of 1, else its Transform of the crop in layout pixels, then the
+// cursor and the captions.
+func directCompose(compositor *Compositor, at time.Duration, src *image.RGBA) *image.RGBA {
+	dst := image.NewRGBA(image.Rectangle{Max: compositor.out})
+	crop := compositor.crop(at)
+	if crop.W >= float64(compositor.layout.Size.X) {
+		xdraw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src, nil)
+	} else {
+		draw.Draw(dst, dst.Bounds(), &image.Uniform{C: compositor.background}, image.Point{}, draw.Src)
+		scaleX, scaleY := float64(compositor.out.X)/crop.W, float64(compositor.out.Y)/crop.H
+		transform := f64.Aff3{scaleX, 0, -crop.X * scaleX, 0, scaleY, -crop.Y * scaleY}
+		xdraw.CatmullRom.Transform(dst, transform, src, src.Bounds(), xdraw.Src, nil)
+	}
+	compositor.drawCursor(dst, at, crop)
+	if compositor.captions != nil {
+		compositor.captions.Draw(dst, at)
+	}
+	return dst
+}
+
+// draftBoard is zoomClickTake's two beats with a caption over both, the second beat zoomed 2×
+// onto the clicked target when zoomed is set.
+func draftBoard(t *testing.T, zoomed bool) *storyboard.Storyboard {
+	t.Helper()
+	zoom := ""
+	if zoomed {
+		zoom = "    zoom: {target: {text: target}, factor: 2}\n"
+	}
+	return parseBoard(t, `beats:
+  - {id: 1, title: idle, duration: 2s}
+  - id: 2
+    title: click
+    duration: 4s
+    do:
+      - click: {target: {text: target}}
+`+zoom+`captions:
+`+boxCaption("Caption", "{beat: 1}", "6s", bottomMiddle))
+}
+
+// draftColour is the uniform source colour the draft tests compose, unlike the zoom's background.
+var draftColour = color.RGBA{0x40, 0x80, 0x30, 0xff}
+
+// uniformFrame is a source frame of size filled with draftColour.
+func uniformFrame(size image.Point) *image.RGBA {
+	img := image.NewRGBA(image.Rectangle{Max: size})
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: draftColour}, image.Point{}, draw.Src)
+	return img
+}
+
+func TestComposeMatchesTheDirectPath(t *testing.T) {
+	t.Parallel()
+	_, recorded := zoomClickTake(take.Box{X: 30, Y: 3, W: 6, H: 1})
+	compositor, _ := newTestCompositor(t, draftBoard(t, true), recorded)
+	src := stripedFrame()
+	for _, tc := range []struct {
+		name   string
+		at     time.Duration
+		zoomed bool
+	}{
+		{name: "at factor 1", at: 1 * sec},
+		{name: "in a zoom", at: 4 * sec, zoomed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if crop := compositor.crop(tc.at); (crop.W < float64(testLayout.Size.X)) != tc.zoomed {
+				t.Fatalf("crop at %s: want zoomed %v, got %+v", tc.at, tc.zoomed, crop)
+			}
+
+			got := compositor.Compose(tc.at, src)
+
+			if want := directCompose(compositor, tc.at, src); !bytes.Equal(got.Pix, want.Pix) {
+				t.Error("Compose: want the direct path's bytes, got different pixels")
+			}
+		})
+	}
+}
+
+func TestComposeDraftAtTheLayoutsSizeFillsTheShippedFrame(t *testing.T) {
+	t.Parallel()
+	_, recorded := zoomClickTake(take.Box{X: 30, Y: 3, W: 6, H: 1})
+	compositor, _ := newTestCompositor(t, draftBoard(t, true), recorded)
+
+	got := compositor.ComposeDraft(1*sec, stripedFrame())
+
+	if got.Bounds() != (image.Rectangle{Max: compositor.Size()}) {
+		t.Errorf("draft bounds: want %v, got %v", image.Rectangle{Max: compositor.Size()}, got.Bounds())
+	}
+}
+
+func TestComposeDraftDrawsTheCursorAndCaptionsAsCompose(t *testing.T) {
+	t.Parallel()
+	draftSize := image.Pt(617, 353)
+	for _, tc := range []struct {
+		name   string
+		zoomed bool
+	}{
+		{name: "at factor 1"},
+		{name: "in a zoom", zoomed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, recorded := zoomClickTake(take.Box{X: 30, Y: 3, W: 6, H: 1})
+			compositor, _ := newTestCompositor(t, draftBoard(t, tc.zoomed), recorded)
+			at := 3 * sec
+			if crop := compositor.crop(at); (crop.W < float64(testLayout.Size.X)) != tc.zoomed {
+				t.Fatalf("crop at %s: want zoomed %v, got %+v", at, tc.zoomed, crop)
+			}
+			exact := compositor.Compose(at, uniformFrame(testLayout.Size))
+
+			draft := compositor.ComposeDraft(at, uniformFrame(draftSize))
+
+			if draft.Bounds() != exact.Bounds() {
+				t.Fatalf("draft bounds: want %v, got %v", exact.Bounds(), draft.Bounds())
+			}
+			box, _ := captionBox(t, compositor, at)
+			var drawn image.Rectangle
+			cursorPixels := 0
+			for y := range exact.Rect.Max.Y {
+				for x := range exact.Rect.Max.X {
+					if exact.RGBAAt(x, y) == draftColour {
+						continue
+					}
+					drawn = drawn.Union(image.Rect(x, y, x+1, y+1))
+					if !image.Pt(x, y).In(box) {
+						cursorPixels++
+					}
+				}
+			}
+			if cursorPixels == 0 {
+				t.Fatalf("exact frame at %s: want the cursor drawn outside the caption", at)
+			}
+			assertSameRegion(t, draft, exact, drawn)
+		})
 	}
 }

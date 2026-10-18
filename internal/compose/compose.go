@@ -174,15 +174,44 @@ func (c *Compositor) CaptionBoxes() []image.Rectangle {
 // captions showing at t last, in output space, so no zoom or pan moves or scales them. src is
 // only read.
 func (c *Compositor) Compose(t time.Duration, src *image.RGBA) *image.RGBA {
+	return c.compose(t, src, draw.CatmullRom)
+}
+
+// ComposeDraft builds a draft of the shipped frame at output time t: the frame
+// [Compositor.Compose] builds, at exactly [Compositor.Size] and with the same cursor and captions,
+// but with the camera's crop scaled from src by the fast [draw.ApproxBiLinear]. src may be of any
+// size — typically the snapshot rasterized at scale 1 — and the crop is mapped onto it by its size
+// against the layout's per axis, so its terminal text may sit a pixel or so off the exact frame's.
+// src is only read.
+func (c *Compositor) ComposeDraft(t time.Duration, src *image.RGBA) *image.RGBA {
+	return c.compose(t, src, draw.ApproxBiLinear)
+}
+
+// compose builds the shipped frame at output time t from src with scaler: the camera's crop, in
+// layout pixels, mapped onto src by src's size against the layout's per axis and scaled to the
+// shipped width, then the cursor and the captions in output space.
+func (c *Compositor) compose(
+	t time.Duration,
+	src *image.RGBA,
+	scaler draw.Interpolator,
+) *image.RGBA {
 	dst := image.NewRGBA(image.Rectangle{Max: c.out})
 	crop := c.crop(t)
 	if crop.W >= float64(c.layout.Size.X) {
-		draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Src, nil)
+		scaler.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Src, nil)
 	} else {
 		draw.Draw(dst, dst.Bounds(), &image.Uniform{C: c.background}, image.Point{}, draw.Src)
-		scaleX, scaleY := float64(c.out.X)/crop.W, float64(c.out.Y)/crop.H
-		transform := f64.Aff3{scaleX, 0, -crop.X * scaleX, 0, scaleY, -crop.Y * scaleY}
-		draw.CatmullRom.Transform(dst, transform, src, src.Bounds(), draw.Src, nil)
+		ratioX := float64(src.Bounds().Dx()) / float64(c.layout.Size.X)
+		ratioY := float64(src.Bounds().Dy()) / float64(c.layout.Size.Y)
+		shown := rectF{
+			X: crop.X * ratioX,
+			Y: crop.Y * ratioY,
+			W: crop.W * ratioX,
+			H: crop.H * ratioY,
+		}
+		scaleX, scaleY := float64(c.out.X)/shown.W, float64(c.out.Y)/shown.H
+		transform := f64.Aff3{scaleX, 0, -shown.X * scaleX, 0, scaleY, -shown.Y * scaleY}
+		scaler.Transform(dst, transform, src, src.Bounds(), draw.Src, nil)
 	}
 	c.drawCursor(dst, t, crop)
 	if c.captions != nil {

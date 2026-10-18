@@ -45,7 +45,9 @@ captions as the exact one does; `photon render` never draws drafts; the draft ra
 speeding up the exact compose (`photon render`'s output stays byte-identical); changing the
 frame PNG encoding; `tune-page-js-check`.
 
-## 1. Compose a draft frame
+## 1. Compose a draft frame — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the regression guard's wording fix ("scale 1", never "the design scale") was already in the plan's Goal, Writer's calls and item text at dispatch; no code or doc wording needed it, and the plan file was left untouched as the run protocol requires.
 
 **What:**
 **Goal:** `compose.Compositor` has a `ComposeDraft(t, src)` method that builds the frame at `t`
