@@ -178,7 +178,8 @@ func (f CaptionFont) validate(frameFontSize float64, report reporter) {
 		size, source = frameFontSize, " from frame.font_size"
 	}
 	if size < minCaptionSize || size > maxCaptionSize {
-		report("font.size: want in [%d, %d], got %g%s", minCaptionSize, maxCaptionSize, size, source)
+		report("font.size: want in [%d, %d], got %g%s",
+			minCaptionSize, maxCaptionSize, size, source)
 	}
 }
 
@@ -213,7 +214,9 @@ func (b CaptionBox) validate(report reporter) RGB {
 // validateTiming checks that the caption sets exactly one end, that it starts inside the clip
 // and that it ends after its start and by the clip's end, and returns where it starts and stops
 // on clock. isTimed is false when any of that fails, so there is no stretch to fit the fades in.
-func (c Caption) validateTiming(clock OutputClock, report reporter) (start, stop time.Duration, isTimed bool) {
+func (c Caption) validateTiming(
+	clock OutputClock, report reporter,
+) (start, stop time.Duration, isTimed bool) {
 	hasEnd := true
 	if (c.For == 0) == (c.Until == nil) {
 		report("want exactly one of for or until")
@@ -249,7 +252,8 @@ func (c Caption) validateTiming(clock OutputClock, report reporter) (start, stop
 		}
 	}
 	if stop > clipLength {
-		report("%s: want the caption to end by the clip's end %s, got an end at %s", field, clipLength, stop)
+		report("%s: want the caption to end by the clip's end %s, got an end at %s",
+			field, clipLength, stop)
 		return 0, 0, false
 	}
 	return start, stop, true

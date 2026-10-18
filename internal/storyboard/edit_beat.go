@@ -87,7 +87,8 @@ func (s *splicer) setRamp(zoom yamledit.Path, key string, value json.RawMessage)
 		return err
 	}
 	if length == 0 {
-		return fmt.Errorf("want a ramp longer than 0ms; a ramp left out runs the %s default", DefaultZoomRamp)
+		return fmt.Errorf(
+			"want a ramp longer than 0ms; a ramp left out runs the %s default", DefaultZoomRamp)
 	}
 	return s.writeDuration(zoom, key, zoomKeyOrder, DefaultZoomRamp, length)
 }
@@ -185,7 +186,8 @@ func decodeTarget(value json.RawMessage) (Target, error) {
 	var target Target
 	if err := decoder.Decode(&target); err != nil {
 		return Target{}, fmt.Errorf(
-			`want a target such as {"text": "ok", "nth": 2, "area": "list"}, got %s: %w`, value, err)
+			`want a target such as {"text": "ok", "nth": 2, "area": "list"}, `+
+				`got %s: %w`, value, err)
 	}
 	return target, nil
 }

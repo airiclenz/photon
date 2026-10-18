@@ -141,27 +141,27 @@ const (
 // holding no key goes with it, while a style value a caption lacks the mapping for creates it as
 // a one-key flow mapping. A colour is written quoted, '#ffcc00', and compared to its default
 // case-insensitively. A target is written as the flow mapping [Target.YAMLFlow] spells, and a
-// zoom.target on a zoom holding nothing but its target rewrites that zoom as a flow mapping. A camera.at, caption.at or caption.until is written as a clip time
-// in ms or a {beat: 3, offset: 200ms} flow mapping, and a pan's cell as {cell: {x: 3, y: 4}}; a
-// camera.at, a caption.at or caption.until, or a pan's camera.to replaces its whole node with the
-// value's flow text, and a caption.text replaces its whole node, a block scalar too, with one
-// double-quoted line; a caption.offset or caption.position is written as an {x: 8, y: -4} flow
-// mapping in place of its whole node, a position deletes the caption's place, align and offset,
-// a place, align or offset deletes its position, and a null position deletes the key; a
-// caption.for deletes the caption's until and a caption.until its for, or, as null, writes the
-// for that keeps the caption's stretch in place of its until. An insert writes its entry as one
-// flow line from presets — a zoom to 1.5 or a pan to the frame's centre cell, over 600ms, or a
-// caption "Caption" for 2s — and creates a camera or captions key the storyboard lacks as a flow
-// list after the keys that precede it; a remove or move splices only its list's items, and
-// removing a list's only entry deletes its key. A waypoint set, insert or remove splices only
-// its item of the via list, a camera.path to via writes `via: [<centre cell>, <old to>]` in place
-// of the pan's to, and one to "to" writes `to: <last waypoint>` in place of its via. The edit is
-// refused with an error led by its owner and field — the beat, camera move or caption, or
-// nothing for a frame field — when its value is of the wrong JSON type or misspelled, when its
-// owner is of another kind than the field's, when it names a beat, zoom, camera move, caption or
-// waypoint that is not there, an insert index past the list's length among them, or when the
-// result fails validation, an inserted move overlapping another on its track and a via path left
-// with one waypoint among them; the last wraps the
+// zoom.target on a zoom holding nothing but its target rewrites that zoom as a flow mapping. A
+// camera.at, caption.at or caption.until is written as a clip time in ms or a
+// {beat: 3, offset: 200ms} flow mapping, and a pan's cell as {cell: {x: 3, y: 4}}; a camera.at, a
+// caption.at or caption.until, or a pan's camera.to replaces its whole node with the value's flow
+// text, and a caption.text replaces its whole node, a block scalar too, with one double-quoted
+// line; a caption.offset or caption.position is written as an {x: 8, y: -4} flow mapping in place
+// of its whole node, a position deletes the caption's place, align and offset, a place, align or
+// offset deletes its position, and a null position deletes the key; a caption.for deletes the
+// caption's until and a caption.until its for, or, as null, writes the for that keeps the caption's
+// stretch in place of its until. An insert writes its entry as one flow line from presets — a zoom
+// to 1.5 or a pan to the frame's centre cell, over 600ms, or a caption "Caption" for 2s — and
+// creates a camera or captions key the storyboard lacks as a flow list after the keys that precede
+// it; a remove or move splices only its list's items, and removing a list's only entry deletes its
+// key. A waypoint set, insert or remove splices only its item of the via list, a camera.path to via
+// writes `via: [<centre cell>, <old to>]` in place of the pan's to, and one to "to" writes
+// `to: <last waypoint>` in place of its via. The edit is refused with an error led by its owner and
+// field — the beat, camera move or caption, or nothing for a frame field — when its value is of the
+// wrong JSON type or misspelled, when its owner is of another kind than the field's, when it names
+// a beat, zoom, camera move, caption or waypoint that is not there, an insert index past the list's
+// length among them, or when the result fails validation, an inserted move overlapping another on
+// its track and a via path left with one waypoint among them; the last wraps the
 // *[ValidationError].
 func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 	board, err := Parse(src, path)
@@ -221,8 +221,8 @@ type splicer struct {
 	doc *yamledit.Document
 }
 
-// apply routes edit to the frame or to its beat, camera move or caption in board, the storyboard doc holds, once its
-// field, its owner's kind and the presence of its value check out.
+// apply routes edit to the frame or to its beat, camera move or caption in board, the storyboard
+// doc holds, once its field, its owner's kind and the presence of its value check out.
 func (s *splicer) apply(board *Storyboard, edit Edit) error {
 	if !slices.Contains(editFields, edit.Field) {
 		return fmt.Errorf("unknown field, want one of %s", strings.Join(editFields, ", "))
@@ -247,7 +247,8 @@ func (s *splicer) apply(board *Storyboard, edit Edit) error {
 	case OwnerCaption:
 		return s.editCaption(board, edit.Owner.Index, edit.Field, edit.Value)
 	}
-	index := slices.IndexFunc(board.Beats, func(beat Beat) bool { return beat.ID == edit.Owner.Index })
+	isOwner := func(beat Beat) bool { return beat.ID == edit.Owner.Index }
+	index := slices.IndexFunc(board.Beats, isOwner)
 	if index < 0 {
 		return fmt.Errorf("the storyboard has no beat with id %d", edit.Owner.Index)
 	}
@@ -332,7 +333,8 @@ func keyOrder(of reflect.Type) []string {
 			continue
 		}
 		name, options, _ := strings.Cut(field.Tag.Get(yamlTag), tagSeparator)
-		if name == yamlSkipped || slices.Contains(strings.Split(options, tagSeparator), yamlInline) {
+		isInline := slices.Contains(strings.Split(options, tagSeparator), yamlInline)
+		if name == yamlSkipped || isInline {
 			continue
 		}
 		if name == "" {
@@ -377,7 +379,8 @@ func decodeMoment(value json.RawMessage) (Moment, error) {
 	if !isWhole || *wire.Beat < 0 || (*wire.Beat == 0 && *wire.OffsetMS < 0) ||
 		*wire.OffsetMS > maxMilliseconds || *wire.OffsetMS < -maxMilliseconds {
 		return Moment{}, fmt.Errorf(
-			`want a moment such as {"beat": 3, "offset_ms": 200}, or beat 0 for a clip time from 0, got %s`, value)
+			`want a moment such as {"beat": 3, "offset_ms": 200}, `+
+				`or beat 0 for a clip time from 0, got %s`, value)
 	}
 	offset := time.Duration(*wire.OffsetMS) * time.Millisecond
 	return Moment{Beat: *wire.Beat, Offset: offset}, nil

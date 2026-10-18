@@ -153,7 +153,8 @@ const (
 // UnmarshalYAML accepts `first`, `last` or a positive integer.
 func (n *Nth) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind != yaml.ScalarNode {
-		return fmt.Errorf("nth: want first, last or a positive integer, got a %s", nodeKindName(value.Kind))
+		return fmt.Errorf(
+			"nth: want first, last or a positive integer, got a %s", nodeKindName(value.Kind))
 	}
 	switch value.Value {
 	case "first":

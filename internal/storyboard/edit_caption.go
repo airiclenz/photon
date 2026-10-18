@@ -56,7 +56,9 @@ func isCaptionField(field string) bool {
 // holds — its timing, text, place and align here, its offset and position by
 // [splicer.setCaptionOffset] and [splicer.setCaptionPosition], its font, colours, box and fade by
 // [splicer.setCaptionStyle] — or adds, removes or reorders a caption for a list field.
-func (s *splicer) editCaption(board *Storyboard, index int, field string, value json.RawMessage) error {
+func (s *splicer) editCaption(
+	board *Storyboard, index int, field string, value json.RawMessage,
+) error {
 	if isListField(field) {
 		return s.editList(board, captionList(board), index, field, value)
 	}
@@ -115,7 +117,9 @@ func (s *splicer) writeCaptionFor(caption yamledit.Path, length time.Duration) e
 // types, and deletes its for, since a caption ends by exactly one of the two. A null clears the
 // until: the caption then ends after a for of the length it shows now, the same stretch; a
 // caption without an until is left as it is.
-func (s *splicer) setCaptionUntil(caption yamledit.Path, shown Caption, value json.RawMessage) error {
+func (s *splicer) setCaptionUntil(
+	caption yamledit.Path, shown Caption, value json.RawMessage,
+) error {
 	if isNull(value) {
 		if shown.Until == nil {
 			return nil
@@ -126,7 +130,8 @@ func (s *splicer) setCaptionUntil(caption yamledit.Path, shown Caption, value js
 	if err != nil {
 		return err
 	}
-	if err := s.replaceOrInsert(caption, keyUntil, momentFlow(moment), captionKeyOrder); err != nil {
+	err = s.replaceOrInsert(caption, keyUntil, momentFlow(moment), captionKeyOrder)
+	if err != nil {
 		return err
 	}
 	return s.doc.DeleteIfPresent(under(caption, keyFor))
@@ -169,7 +174,8 @@ func (s *splicer) setPlacement(
 // decodeSpelling reads a JSON string holding one of spellings.
 func decodeSpelling(value json.RawMessage, spellings []string) (string, error) {
 	var spelling string
-	if err := json.Unmarshal(value, &spelling); err != nil || !slices.Contains(spellings, spelling) {
+	err := json.Unmarshal(value, &spelling)
+	if err != nil || !slices.Contains(spellings, spelling) {
 		last := len(spellings) - 1
 		leading := strings.Join(spellings[:last], ", ")
 		return "", fmt.Errorf("want %s or %s, got %s", leading, spellings[last], value)

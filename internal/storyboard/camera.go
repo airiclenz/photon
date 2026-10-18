@@ -128,12 +128,14 @@ func (s *Storyboard) validateCamera(collect collector) {
 		placed.holder = holder
 		for _, other := range held[track] {
 			if placed.overlaps(other) {
-				moveReport("%s: overlaps %s on the %s track (%s and %s)", track, other.holder, track, other, placed)
+				moveReport("%s: overlaps %s on the %s track (%s and %s)",
+					track, other.holder, track, other, placed)
 			}
 		}
 		for _, zoom := range beatZooms {
 			if placed.overlaps(zoom) {
-				moveReport("%s: overlaps %s section %s, which holds both tracks", track, zoom.holder, zoom)
+				moveReport("%s: overlaps %s section %s, which holds both tracks",
+					track, zoom.holder, zoom)
 			}
 		}
 		held[track] = append(held[track], placed)
@@ -149,14 +151,17 @@ func (s *Storyboard) beatZoomSpans(clock OutputClock) []span {
 			continue
 		}
 		start := clock.sections[index].start
-		spans = append(spans, span{fmt.Sprintf("beat %d's zoom", beat.ID), start, start + beat.Duration})
+		holder := fmt.Sprintf("beat %d's zoom", beat.ID)
+		spans = append(spans, span{holder, start, start + beat.Duration})
 	}
 	return spans
 }
 
 // validateForm checks that exactly one move form is set and that its fields fit it, and returns
 // the form's track and timing. isFormValid is false only when no single form is set.
-func (m CameraMove) validateForm(frame Frame, report reporter) (track string, timing moveTiming, isFormValid bool) {
+func (m CameraMove) validateForm(
+	frame Frame, report reporter,
+) (track string, timing moveTiming, isFormValid bool) {
 	if (m.Zoom == nil) == (m.Pan == nil) {
 		report("want exactly one of %s or %s", trackZoom, trackPan)
 		return "", moveTiming{}, false
@@ -224,14 +229,17 @@ func (p Point) validate(field string, frame Frame, report reporter) {
 	}
 	cell := *p.Cell
 	if cell.X < 0 || cell.X >= frame.Cols || cell.Y < 0 || cell.Y >= frame.Rows {
-		report("%s.cell: want x in [0, %d) and y in [0, %d), got x %d, y %d", field, frame.Cols, frame.Rows, cell.X, cell.Y)
+		report("%s.cell: want x in [0, %d) and y in [0, %d), got x %d, y %d",
+			field, frame.Cols, frame.Rows, cell.X, cell.Y)
 	}
 }
 
 // placeMove checks the move's length, start, end and ease, and returns the stretch it holds on
 // the output clock. isPlaced is false when the move has no length or does not fit in the clip,
 // so it holds no stretch to check for overlaps. Problems are filed under the move's form.
-func placeMove(clock OutputClock, timing moveTiming, form string, report reporter) (placed span, isPlaced bool) {
+func placeMove(
+	clock OutputClock, timing moveTiming, form string, report reporter,
+) (placed span, isPlaced bool) {
 	if timing.ease != "" && timing.ease != EaseSmooth && timing.ease != EaseLinear {
 		report("%s.ease: want %s or %s, got %q", form, EaseSmooth, EaseLinear, timing.ease)
 	}
@@ -251,7 +259,8 @@ func placeMove(clock OutputClock, timing moveTiming, form string, report reporte
 		return span{}, false
 	}
 	if isPlaced && start+timing.over > length {
-		report("%s.over: want the move to end by the clip's end %s, got an end at %s", form, length, start+timing.over)
+		report("%s.over: want the move to end by the clip's end %s, got an end at %s",
+			form, length, start+timing.over)
 		return span{}, false
 	}
 	return span{start: start, end: start + timing.over}, isPlaced

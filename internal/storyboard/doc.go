@@ -32,18 +32,30 @@
 //   - doc.go: this package comment and file map.
 //   - storyboard.go: the [Storyboard] and its [Frame], [Load], [Parse] and [ValidationError].
 //   - beat.go: a [Beat], its [Zoom], [Action] forms, [Target] and [Nth], and [Expect].
-//   - camera.go: a [CameraMove] — a [ZoomMove] or [PanMove] — its [Point], [Cell] and [Ease], and their rules.
-//   - edit.go: an [Edit], [Apply] and the splicing every edit shares: field and owner checks, durations, moments, key order from yaml tags.
-//   - edit_beat.go: the beat and frame edits — duration, hold, cut, zoom and its fields, frame.width and frame.fps — and [Target.YAMLFlow].
+//   - camera.go: a [CameraMove] — a [ZoomMove] or [PanMove] — its [Point], [Cell] and [Ease], and
+//     their rules.
+//   - edit.go: an [Edit], [Apply] and the splicing every edit shares: field and owner checks,
+//     durations, moments, key order from yaml tags.
+//   - edit_beat.go: the beat and frame edits — duration, hold, cut, zoom and its fields,
+//     frame.width and frame.fps — and [Target.YAMLFlow].
 //   - edit_camera.go: the camera move edits — camera.at, camera.over, camera.ease and camera.to.
-//   - edit_caption.go: the caption edits — caption.at, caption.for, caption.until, caption.text, caption.place and caption.align.
-//   - edit_caption_style.go: the caption style edits — caption.font.size and .weight, caption.color, caption.box.color and .opacity, caption.fade.in and .out — and caption.offset and caption.position.
-//   - edit_via.go: the pan path edits — camera.via, camera.via.insert and camera.via.remove on a via path's waypoints, and camera.path between to and via.
-//   - edit_list.go: the list edits that add, remove and reorder camera moves and captions — camera.insert|remove|move and caption.insert|remove|move.
-//   - fields.go: [Fields], each owner's editable and read-only [Field] with its [FieldKind], choices and default.
-//   - clock.go: the clip's [OutputClock], from [Storyboard.Clock]: section starts, moments and length.
-//   - caption.go: a [Caption], its [CaptionFont] and [Weight], [Place], [Align], [Pixels], [CaptionBox], [Fade] and [RGB], and their rules.
-//   - located.go: a problem's [Owner] and [OwnerKind], the [LocatedError] that carries one, [AtBeat], [AtCamera], [AtCaption] and [OwnerOf].
+//   - edit_caption.go: the caption edits — caption.at, caption.for, caption.until, caption.text,
+//     caption.place and caption.align.
+//   - edit_caption_style.go: the caption style edits — caption.font.size and .weight,
+//     caption.color, caption.box.color and .opacity, caption.fade.in and .out — and caption.offset
+//     and caption.position.
+//   - edit_via.go: the pan path edits — camera.via, camera.via.insert and camera.via.remove on a
+//     via path's waypoints, and camera.path between to and via.
+//   - edit_list.go: the list edits that add, remove and reorder camera moves and captions —
+//     camera.insert|remove|move and caption.insert|remove|move.
+//   - fields.go: [Fields], each owner's editable and read-only [Field] with its [FieldKind],
+//     choices and default.
+//   - clock.go: the clip's [OutputClock], from [Storyboard.Clock]: section starts, moments and
+//     length.
+//   - caption.go: a [Caption], its [CaptionFont] and [Weight], [Place], [Align], [Pixels],
+//     [CaptionBox], [Fade] and [RGB], and their rules.
+//   - located.go: a problem's [Owner] and [OwnerKind], the [LocatedError] that carries one,
+//     [AtBeat], [AtCamera], [AtCaption] and [OwnerOf].
 //   - moment.go: a [Moment] on the clip's output clock and how it decodes.
 //   - validate.go: every other validation rule, each reporting its problem under the field's path.
 package storyboard

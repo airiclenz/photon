@@ -38,7 +38,8 @@ func (m *Moment) UnmarshalYAML(value *yaml.Node) error {
 	case yaml.MappingNode:
 		return m.decodeMapping(value)
 	default:
-		return fmt.Errorf("moment: want a duration or a {beat, offset} mapping, got a %s", nodeKindName(value.Kind))
+		return fmt.Errorf("moment: want a duration or a {beat, offset} mapping, got a %s",
+			nodeKindName(value.Kind))
 	}
 }
 
@@ -47,7 +48,8 @@ func (m *Moment) decodeMapping(value *yaml.Node) error {
 	for index := 0; index < len(value.Content); index += 2 {
 		key := value.Content[index].Value
 		if key != momentKeyBeat && key != momentKeyOffset {
-			return fmt.Errorf("moment: unknown key %q, want %s or %s", key, momentKeyBeat, momentKeyOffset)
+			return fmt.Errorf(
+				"moment: unknown key %q, want %s or %s", key, momentKeyBeat, momentKeyOffset)
 		}
 	}
 

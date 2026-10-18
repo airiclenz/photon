@@ -715,7 +715,9 @@ internal/raster/raster.go — palette
 - `GOMEMLIMIT=2GiB go test` on each of those packages, one at a time
 **Commit:** `style: wrap the raster-to-service packages at 100 columns`
 
-## 21. Wrap internal/storyboard to 100 columns
+## 21. Wrap internal/storyboard to 100 columns — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): a few over-long lines were wrapped by moving a subexpression into a local (`holder` in beatZoomSpans, `isOwner` in apply, `isInline` in the yaml key walk, `formsSet` in Action.validate) or by turning an `if err := ...` header into an assignment (`err =` in setCaptionUntil, `err :=` in decodeSpelling); none changes behaviour. The decodeMoment and decodeTarget raw-string errors are split with `+` and stay byte-identical. The over-long doc-map items in doc.go wrap onto 5-space continuation lines, the shape the doc-map test parses; Apply's doc comment is reflowed from the over-long line to its end.
 
 **What:** Depends on items 8, 10, 11, 14 and 17. As item 19, for `internal/storyboard`.
 **Regression guard.** `LLL` runs lll alone (`--enable-only` clears gofmt and every other

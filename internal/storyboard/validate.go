@@ -180,7 +180,10 @@ func (z Zoom) validate(report reporter) {
 // validate checks that exactly one action form is set and that its fields fit that form.
 func (a Action) validate(report reporter) {
 	forms := 0
-	for _, isSet := range []bool{a.Type != nil, a.Key != nil, a.Click != nil, a.Drag != nil, a.Wait != nil, a.Pause != nil} {
+	formsSet := []bool{
+		a.Type != nil, a.Key != nil, a.Click != nil, a.Drag != nil, a.Wait != nil, a.Pause != nil,
+	}
+	for _, isSet := range formsSet {
 		if isSet {
 			forms++
 		}

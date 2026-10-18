@@ -147,7 +147,9 @@ func clipFields() []Field {
 	fields := make([]Field, 0, frame.NumField())
 	for goField := range frame.Fields() {
 		key, _, _ := strings.Cut(goField.Tag.Get(yamlTag), tagSeparator)
-		described := Field{Owner: owner, Name: frameFieldPrefix + key, Kind: KindCount, Default: raw(defaultZero)}
+		described := Field{
+			Owner: owner, Name: frameFieldPrefix + key, Kind: KindCount, Default: raw(defaultZero),
+		}
 		if kind := goField.Type.Kind(); kind == reflect.Float32 || kind == reflect.Float64 {
 			described.Kind = KindDecimal
 		}
@@ -193,7 +195,10 @@ func cameraFields(index int, move CameraMove) []Field {
 	fields := []Field{
 		{Owner: owner, Name: FieldCameraAt, Kind: KindMoment, Default: raw(defaultClipStart)},
 		{Owner: owner, Name: FieldCameraOver, Kind: KindDuration, Default: raw(defaultZero)},
-		{Owner: owner, Name: FieldCameraEase, Kind: KindEnum, Choices: slices.Clone(easeChoices), Default: quoted(string(EaseSmooth))},
+		{
+			Owner: owner, Name: FieldCameraEase, Kind: KindEnum,
+			Choices: slices.Clone(easeChoices), Default: quoted(string(EaseSmooth)),
+		},
 		to,
 	}
 	if move.Pan != nil {
@@ -242,15 +247,36 @@ func captionFields(index int, frameFontSize float64) []Field {
 		{Owner: owner, Name: FieldCaptionFor, Kind: KindDuration, Default: raw(defaultZero)},
 		{Owner: owner, Name: FieldCaptionUntil, Kind: KindMoment, Default: raw(jsonNull)},
 		{Owner: owner, Name: FieldCaptionText, Kind: KindText, Default: raw(defaultText)},
-		{Owner: owner, Name: FieldCaptionPlace, Kind: KindEnum, Choices: slices.Clone(placeChoices), Default: quoted(string(PlaceBottom))},
-		{Owner: owner, Name: FieldCaptionAlign, Kind: KindEnum, Choices: slices.Clone(alignChoices), Default: quoted(string(AlignMiddle))},
+		{
+			Owner: owner, Name: FieldCaptionPlace, Kind: KindEnum,
+			Choices: slices.Clone(placeChoices), Default: quoted(string(PlaceBottom)),
+		},
+		{
+			Owner: owner, Name: FieldCaptionAlign, Kind: KindEnum,
+			Choices: slices.Clone(alignChoices), Default: quoted(string(AlignMiddle)),
+		},
 		{Owner: owner, Name: FieldCaptionOffset, Kind: KindPixels, Default: raw(defaultNoOffset)},
 		{Owner: owner, Name: FieldCaptionPosition, Kind: KindPixels, Default: raw(jsonNull)},
-		{Owner: owner, Name: FieldCaptionFontSize, Kind: KindDecimal, Default: raw(formatDecimal(frameFontSize))},
-		{Owner: owner, Name: FieldCaptionFontWeight, Kind: KindEnum, Choices: slices.Clone(weightChoices), Default: quoted(string(WeightRegular))},
-		{Owner: owner, Name: FieldCaptionColor, Kind: KindColor, Default: quoted(defaultCaptionColor)},
-		{Owner: owner, Name: FieldCaptionBoxColor, Kind: KindColor, Default: quoted(defaultBoxColor)},
-		{Owner: owner, Name: FieldCaptionBoxOpacity, Kind: KindFraction, Default: raw(formatDecimal(defaultBoxOpacity))},
+		{
+			Owner: owner, Name: FieldCaptionFontSize, Kind: KindDecimal,
+			Default: raw(formatDecimal(frameFontSize)),
+		},
+		{
+			Owner: owner, Name: FieldCaptionFontWeight, Kind: KindEnum,
+			Choices: slices.Clone(weightChoices), Default: quoted(string(WeightRegular)),
+		},
+		{
+			Owner: owner, Name: FieldCaptionColor, Kind: KindColor,
+			Default: quoted(defaultCaptionColor),
+		},
+		{
+			Owner: owner, Name: FieldCaptionBoxColor, Kind: KindColor,
+			Default: quoted(defaultBoxColor),
+		},
+		{
+			Owner: owner, Name: FieldCaptionBoxOpacity, Kind: KindFraction,
+			Default: raw(formatDecimal(defaultBoxOpacity)),
+		},
 		{Owner: owner, Name: FieldCaptionFadeIn, Kind: KindDuration, Default: raw(defaultZero)},
 		{Owner: owner, Name: FieldCaptionFadeOut, Kind: KindDuration, Default: raw(defaultZero)},
 	}
