@@ -37,17 +37,28 @@ var (
 	frameKeyOrder = keyOrder(reflect.TypeFor[Frame]())
 )
 
-// editFrame sets frame.width or frame.fps.
+// editFrame sets one of the frame's edit fields: frame.font_size or frame.line_height, a decimal,
+// or frame.padding, frame.scale, frame.width or frame.fps, a whole number.
 func (s *splicer) editFrame(edit Edit) error {
 	if edit.Owner.Index != 0 {
 		return fmt.Errorf("want the clip at index 0, got index %d", edit.Owner.Index)
 	}
-	count, err := decodeCount(edit.Value)
-	if err != nil {
-		return err
+	var text string
+	if edit.Field == FieldFrameFontSize || edit.Field == FieldFrameLineHeight {
+		number, err := decodeFrameDecimal(edit.Value)
+		if err != nil {
+			return err
+		}
+		text = formatDecimal(number)
+	} else {
+		count, err := decodeCount(edit.Value)
+		if err != nil {
+			return err
+		}
+		text = strconv.Itoa(count)
 	}
 	key := strings.TrimPrefix(edit.Field, keyFrame+".")
-	return s.doc.Upsert(yamledit.Path{keyFrame}, key, strconv.Itoa(count), frameKeyOrder)
+	return s.doc.Upsert(yamledit.Path{keyFrame}, key, text, frameKeyOrder)
 }
 
 // editBeat applies a beat field's edit to the beat at beat; hasZoom says whether it zooms.
@@ -200,6 +211,16 @@ func decodeCount(value json.RawMessage) (int, error) {
 		return 0, fmt.Errorf("want a whole number, got %s", value)
 	}
 	return count, nil
+}
+
+// decodeFrameDecimal reads frame.font_size or frame.line_height, typed as a JSON number above 0;
+// whether the font size lies in the caption bounds is the storyboard's rule to check.
+func decodeFrameDecimal(value json.RawMessage) (float64, error) {
+	var number float64
+	if err := json.Unmarshal(value, &number); err != nil || number <= 0 {
+		return 0, fmt.Errorf("want a number above 0, got %s", value)
+	}
+	return number, nil
 }
 
 // decodeBool reads cut typed as a JSON bool.

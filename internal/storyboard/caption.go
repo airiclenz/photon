@@ -114,8 +114,8 @@ type Fade struct {
 	Out time.Duration `yaml:"out"`
 }
 
-// Caption size bounds, in the unit of frame.font_size: below 6 the text is unreadable in a GIF,
-// beyond 72 one line fills the frame.
+// Caption size bounds, in the unit of frame.font_size, which bound frame.font_size too: below 6
+// the text is unreadable in a GIF, beyond 72 one line fills the frame.
 const (
 	minCaptionSize = 6
 	maxCaptionSize = 72

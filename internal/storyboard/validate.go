@@ -103,8 +103,12 @@ func (s *Storyboard) validateHeader(report reporter) {
 	if frame.Padding < 0 {
 		report("frame.padding: want ≥0, got %d", frame.Padding)
 	}
-	if frame.FontSize <= 0 {
+	switch {
+	case frame.FontSize <= 0:
 		report("frame.font_size: want >0, got %g", frame.FontSize)
+	case frame.FontSize < minCaptionSize || frame.FontSize > maxCaptionSize:
+		report("frame.font_size: want in [%d, %d], got %g",
+			minCaptionSize, maxCaptionSize, frame.FontSize)
 	}
 	if frame.LineHeight <= 0 {
 		report("frame.line_height: want >0, got %g", frame.LineHeight)

@@ -50,6 +50,9 @@ func textOwner(index int) Owner { return Owner{Kind: OwnerCaption, Index: index}
 var defaultRefusals = map[fieldKey]json.RawMessage{
 	{clipOwner, FieldFrameWidth}:         typedValue(300),
 	{clipOwner, FieldFrameFPS}:           typedValue(12),
+	{clipOwner, FieldFrameFontSize}:      typedValue(16),
+	{clipOwner, FieldFrameLineHeight}:    typedValue(1.3),
+	{clipOwner, FieldFrameScale}:         typedValue(3),
 	{beatOwner(1), FieldDuration}:        typedValue(2500),
 	{beatOwner(2), FieldDuration}:        typedValue(5000),
 	{beatOwner(3), FieldDuration}:        typedValue(7000),
@@ -155,7 +158,7 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		owner Owner
 		want  []string
 	}{
-		{clipOwner, []string{"cols", "rows", "padding", "font_size", "line_height", "scale", FieldFrameWidth, FieldFrameFPS, "max_colors"}},
+		{clipOwner, []string{"cols", "rows", FieldFramePadding, FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldFrameWidth, FieldFrameFPS, "max_colors"}},
 		{beatOwner(1), []string{FieldDuration, FieldHold, FieldCut, FieldZoom}},
 		{beatOwner(2), []string{FieldDuration, FieldHold, FieldCut, FieldZoom, FieldZoomTarget, FieldZoomFactor, FieldZoomIn, FieldZoomOut}},
 		{moveOwner(0), []string{FieldCameraAt, FieldCameraOver, FieldCameraEase, FieldCameraTo, FieldCameraRemove, FieldCameraMove, FieldCameraInsert}},
@@ -178,7 +181,9 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		isReadOnly bool
 	}{
 		{fieldKey{clipOwner, "cols"}, KindCount, nil, "0", true},
-		{fieldKey{clipOwner, "line_height"}, KindDecimal, nil, "0", true},
+		{fieldKey{clipOwner, FieldFrameLineHeight}, KindDecimal, nil, "0", false},
+		{fieldKey{clipOwner, FieldFramePadding}, KindCount, nil, "0", false},
+		{fieldKey{clipOwner, "max_colors"}, KindCount, nil, "0", true},
 		{fieldKey{clipOwner, FieldFrameFPS}, KindCount, nil, "0", false},
 		{fieldKey{beatOwner(1), FieldCut}, KindBool, nil, "false", false},
 		{fieldKey{beatOwner(1), FieldZoom}, KindTarget, nil, "null", false},

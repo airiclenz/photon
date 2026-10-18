@@ -249,7 +249,10 @@ test arms a pick proposal, fires `resize` on a short window, and asserts `#pick-
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/ -run 'TestPage'`
 **Commit:** `feat(tune): shrink the preview to fit a short window`
 
-## 7. Make the frame's render-only fields edit fields
+## 7. Make the frame's render-only fields edit fields — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the shared size constants already existed (`minCaptionSize`/`maxCaptionSize` in caption.go); validateHeader reuses them and caption.go only gains a comment saying they bound frame.font_size too.
+NOTES (2026-10-18): frame-field mentions left for item 8 as page-side sites: README.md:167 (tune inspector), cmd/photon/tune.go:27 help text, internal/tune/page/panels.js:44, internal/tune/doc.go:5, internal/tune/state.go:32.
 
 **What:** Storyboard half of `tune-frame-font-edit`; the panel is item 8.
 **Regression guard.** The Clip frame panel lists only read-only clip fields until item 8 adds

@@ -19,12 +19,14 @@ import (
 // Edit is one typed change to a storyboard field, as photon tune's page sends it:
 // {"owner": {"kind": "<kind>", "index": <n>}, "field": "<name>", "value": <JSON>}. Owner is
 // what the field edits: the beat by its id for a beat field, the clip with index 0 for
-// frame.width and frame.fps, and the camera move or caption by its index in the storyboard's
-// camera or captions list, from 0, for a camera or caption field. Value is typed per field:
+// frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width and frame.fps, and
+// the camera move or caption by its index in the storyboard's camera or captions list, from 0,
+// for a camera or caption field. Value is typed per field:
 //   - duration, hold, zoom.in, zoom.out: a whole number of milliseconds (1850);
 //   - cut: true or false;
 //   - zoom.factor: a number, 0 for auto, fitted to the target (1.8);
-//   - frame.width, frame.fps: a whole number;
+//   - frame.padding, frame.scale, frame.width, frame.fps: a whole number;
+//   - frame.font_size, frame.line_height: a number above 0, the font size in [6, 72];
 //   - zoom.target, and zoom when it adds one: a target, {"text": "ok", "nth": 2, "area":
 //     "list"}, its nth a whole number from 1 or "last" and left out for the first match, its
 //     area left out for the whole screen — the target a pick answers;
@@ -91,12 +93,18 @@ const (
 	FieldZoomOut    = "zoom.out"
 	FieldFrameWidth = "frame.width"
 	FieldFrameFPS   = "frame.fps"
+
+	FieldFramePadding    = "frame.padding"
+	FieldFrameFontSize   = "frame.font_size"
+	FieldFrameLineHeight = "frame.line_height"
+	FieldFrameScale      = "frame.scale"
 )
 
 // editFields lists every field Apply takes, as the unknown-field error offers them.
 var editFields = []string{
 	FieldDuration, FieldHold, FieldCut, FieldZoom, FieldZoomTarget, FieldZoomFactor, FieldZoomIn,
-	FieldZoomOut, FieldFrameWidth, FieldFrameFPS, FieldCameraAt, FieldCameraOver, FieldCameraEase,
+	FieldZoomOut, FieldFrameWidth, FieldFrameFPS, FieldFramePadding, FieldFrameFontSize,
+	FieldFrameLineHeight, FieldFrameScale, FieldCameraAt, FieldCameraOver, FieldCameraEase,
 	FieldCameraTo, FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionShift,
 	FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCameraInsert, FieldCameraRemove,
 	FieldCameraMove, FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove, FieldCaptionFontSize,
@@ -208,7 +216,7 @@ func editName(edit Edit) string {
 // camera field, a caption for a caption field and a beat for every other.
 func ownerKindOf(field string) OwnerKind {
 	switch {
-	case field == FieldFrameWidth || field == FieldFrameFPS:
+	case strings.HasPrefix(field, frameFieldPrefix):
 		return OwnerClip
 	case isCameraField(field):
 		return OwnerCamera

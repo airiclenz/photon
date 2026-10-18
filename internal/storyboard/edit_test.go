@@ -93,6 +93,10 @@ func TestApply_Edit_ChangesOnlyTheEditedText(t *testing.T) {
 			"    zoom: {target: {text: 'beta', nth: 2}, factor: 2}\n", ""},
 		{"frame width in a flow frame", frameEdit(FieldFrameWidth, 640), "width: 600", "width: 640"},
 		{"frame fps in a flow frame", frameEdit(FieldFrameFPS, 30), "fps: 24", "fps: 30"},
+		{"frame padding in a flow frame", frameEdit(FieldFramePadding, 0), "padding: 16", "padding: 0"},
+		{"frame font size in a flow frame", frameEdit(FieldFrameFontSize, 18), "font_size: 14", "font_size: 18"},
+		{"frame line height in a flow frame", frameEdit(FieldFrameLineHeight, 1.35), "line_height: 1.2", "line_height: 1.35"},
+		{"frame scale in a flow frame", frameEdit(FieldFrameScale, 3), "scale: 2", "scale: 3"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -104,6 +108,39 @@ func TestApply_Edit_ChangesOnlyTheEditedText(t *testing.T) {
 			want := strings.Replace(string(src), tc.old, tc.new, 1)
 
 			got, _, err := Apply(src, boardPath, tc.edit)
+
+			if err != nil {
+				t.Fatalf("Apply(%+v): %v", tc.edit, err)
+			}
+			if string(got) != want {
+				t.Errorf("Apply(%+v) =\n%s\nwant\n%s", tc.edit, got, want)
+			}
+		})
+	}
+}
+
+func TestApply_FrameEdit_InABlockFrame_ChangesOnlyTheEditedLine(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		edit     Edit
+		old, new string
+	}{
+		{"padding", frameEdit(FieldFramePadding, 8), "  padding: 16\n", "  padding: 8\n"},
+		{"font size", frameEdit(FieldFrameFontSize, 12.5), "  font_size: 14\n", "  font_size: 12.5\n"},
+		{"line height", frameEdit(FieldFrameLineHeight, 1.4), "  line_height: 1.2\n", "  line_height: 1.4\n"},
+		{"scale", frameEdit(FieldFrameScale, 1), "  scale: 2\n", "  scale: 1\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src, _ := readEveryForm(t)
+			if count := strings.Count(string(src), tc.old); count != 1 {
+				t.Fatalf("the fixture holds %q %d times, want once", tc.old, count)
+			}
+			want := strings.Replace(string(src), tc.old, tc.new, 1)
+
+			got, _, err := Apply(src, everyFormPath, tc.edit)
 
 			if err != nil {
 				t.Fatalf("Apply(%+v): %v", tc.edit, err)
@@ -168,6 +205,9 @@ func TestApply_InvalidResult_IsRefusedWithTheValidationError(t *testing.T) {
 		{"a factor beyond the range", beatEdit(2, FieldZoomFactor, 3.5)},
 		{"a target with no text", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"area": "list"}`))},
 		{"a zero frame width", frameEdit(FieldFrameWidth, 0)},
+		{"a frame font size below the caption range", frameEdit(FieldFrameFontSize, 5)},
+		{"a frame font size beyond the caption range", frameEdit(FieldFrameFontSize, 73)},
+		{"a zero frame scale", frameEdit(FieldFrameScale, 0)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -251,6 +291,12 @@ func TestApply_WireSpellings(t *testing.T) {
 		{"a frame decimal", frameEdit(FieldFrameWidth, 6.5), false},
 		{"a frame integer as a string", frameEdit(FieldFrameFPS, "30"), false},
 		{"a negative frame integer", frameEdit(FieldFrameFPS, -30), false},
+		{"a negative frame padding", frameEdit(FieldFramePadding, -1), false},
+		{"a decimal frame scale", frameEdit(FieldFrameScale, 1.5), false},
+		{"a decimal frame font size", frameEdit(FieldFrameFontSize, 14.5), true},
+		{"a whole frame line height", frameEdit(FieldFrameLineHeight, 2), true},
+		{"a zero frame line height", frameEdit(FieldFrameLineHeight, 0), false},
+		{"a frame font size as a string", frameEdit(FieldFrameFontSize, "14"), false},
 		{"a target", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": "ok", "area": "list", "nth": 2}`)), true},
 		{"a target with nth last", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": "ok", "nth": "last"}`)), true},
 		{"a target with nth 0", beatEdit(2, FieldZoomTarget, json.RawMessage(`{"text": "ok", "nth": 0}`)), false},

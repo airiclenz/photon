@@ -374,7 +374,7 @@ beats:
 | `frame` | The terminal size and the GIF's shape. Every field except `padding` is required. |
 | `frame.cols`, `frame.rows` | The pty's size in cells, ≥1. `render` refuses a take recorded at another size. |
 | `frame.padding` | Pixels of background around the grid, ≥0. |
-| `frame.font_size` | The font size in points, >0. A column is the width of Source Code Pro's `M`. A row is `font_size` × `line_height`. |
+| `frame.font_size` | The font size in points, 6..72, the range a caption's `font.size` takes. A column is the width of Source Code Pro's `M`. A row is `font_size` × `line_height`. |
 | `frame.line_height` | Row height as a multiple of the font size, >0. |
 | `frame.scale` | Frames are drawn at this scale, then downscaled to `width`, ≥1. |
 | `frame.width` | The GIF's width in pixels, ≥1. The height keeps the aspect ratio. |

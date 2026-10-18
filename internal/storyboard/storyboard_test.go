@@ -579,6 +579,8 @@ func TestLoadRejects(t *testing.T) {
 		{"frame fps", "fps: 24", "fps: 0", "frame.fps: want ≥1, got 0", false},
 		{"frame padding", "padding: 16", "padding: -1", "frame.padding: want ≥0, got -1", false},
 		{"frame font size", "font_size: 14", "font_size: 0", "frame.font_size: want >0, got 0", false},
+		{"frame font size below the caption range", "font_size: 14", "font_size: 5", "frame.font_size: want in [6, 72], got 5", false},
+		{"frame font size beyond the caption range", "font_size: 14", "font_size: 73", "frame.font_size: want in [6, 72], got 73", false},
 		{"frame line height", "line_height: 1.2", "line_height: -1", "frame.line_height: want >0, got -1", false},
 		{"frame max colors", "max_colors: 128", "max_colors: 300", "frame.max_colors: want 2..256, got 300", false},
 		{"no beats", beatsSection, "beats: []\n", "beats: none declared", false},

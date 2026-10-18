@@ -60,7 +60,8 @@ const (
 // indexes, defaults to null, and a pan's camera.path, which has no key either, to the path the
 // pan follows. A caption's caption.shift, which has no key either, defaults to 0, the shift that
 // changes nothing. An editable field's Name is the field an [Edit] names; a read-only field is
-// one of the frame's keys photon tune shows but does not edit, named by that key alone.
+// one of the frame's keys photon tune shows but does not edit — cols, rows or max_colors — named
+// by that key alone.
 type Field struct {
 	Owner      Owner           `json:"owner"`
 	Name       string          `json:"name"`
@@ -102,7 +103,10 @@ var (
 // storyboard order, the camera's and the captions' insert after their entries', owned by index 0,
 // whether or not the list holds an entry. A beat lists its zoom's fields only when it zooms, a
 // camera move's camera.to is a decimal on a zoom move and a point on a pan, and a pan lists its
-// camera.path, a via pan its waypoint fields too.
+// camera.path, a via pan its waypoint fields too. The frame's cols and rows are read-only because
+// they size the terminal the take was recorded in, so a change needs a new `photon record`, and
+// its max_colors because the page draws its preview before the palette is quantized, so the
+// preview could not show a change.
 func Fields(board *Storyboard) []Field {
 	fields := clipFields()
 	for _, beat := range board.Beats {
@@ -140,7 +144,8 @@ func listEntryFields(owner Owner, remove, move string) []Field {
 }
 
 // clipFields describes the frame's fields in its field order, each keyed as its yaml tag names it:
-// frame.width and frame.fps, which an [Edit] names, and the rest read-only under their bare key.
+// frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width and frame.fps,
+// which an [Edit] names, and the rest read-only under their bare key.
 // A floating-point field is a decimal and every other a count; each defaults to zero.
 func clipFields() []Field {
 	frame := reflect.TypeFor[Frame]()
