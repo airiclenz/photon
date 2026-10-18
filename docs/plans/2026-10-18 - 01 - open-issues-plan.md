@@ -208,7 +208,13 @@ internal/tune/server.go — pageFiles, pageDir; go.mod — require blocks
 - `go build ./cmd/photon`
 **Commit:** `test(tune): parse every page script with goja`
 
-## 6. Drive the page in a DOM stub; test "Set as pan target"
+## 6. Drive the page in a DOM stub; test "Set as pan target" — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): the harness declares index.html's elements by id with their tags (regex over index.html) before the scripts run, so #frame is an img and the inputs/selects are their own classes; any other id is still made on demand as a div. The response's JSON/blob shaping lives in dom.js's fetch over a Go testHost.serve bridge (which calls serveRequest and decodes a PNG's size), and the harness also fails on console.error/warn and on unhandled promise rejections.
+
+NOTES (2026-10-18): internal/tune/testdata/dom.js is 572 lines, past the ~400-line file guide; the plan names it as the one stub file, so it was not split.
+
+NOTES (2026-10-18): mutation-checked: changing setAsPanTarget's owner index or its report text in picker.js fails TestPageJS_SetAsPanTarget_SendsTheProposal (both restored).
 
 **What:** Depends on item 5.
 **Regression guard.** The stub also gives what the scripts call while loading: `querySelectorAll`
