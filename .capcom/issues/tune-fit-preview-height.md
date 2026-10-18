@@ -1,11 +1,13 @@
 ---
 title: Shrink the tune preview to fit a short window
-status: open
+status: done
 type: task
 priority: 2
 labels: [tune]
 plan: 2026-10-18 - 02 - tune-polish-plan
 created: 2026-10-18T14:21:41Z
+closed: 2026-10-18T16:38:39Z
+reason: Resolved by plan 2026-10-18 - 02 - tune-polish-plan (1cba598)
 ---
 
 The `photon tune` page lays out the preview, the inspector, then the transport bar and timeline

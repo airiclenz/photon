@@ -1,11 +1,13 @@
 ---
 title: Drag camera moves and captions on the tune timeline
-status: open
+status: done
 type: task
 priority: 2
 labels: [tune]
 plan: 2026-10-18 - 02 - tune-polish-plan
 created: 2026-10-18T14:21:41Z
+closed: 2026-10-18T16:38:38Z
+reason: Resolved by plan 2026-10-18 - 02 - tune-polish-plan (1cba598)
 ---
 
 A camera move's or caption's bar on the `photon tune` timeline can be clicked to select it, but not

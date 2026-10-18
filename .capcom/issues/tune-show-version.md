@@ -1,11 +1,13 @@
 ---
 title: Show photon's version and commit in photon tune
-status: open
+status: done
 type: task
 priority: 3
 labels: [tune]
 plan: 2026-10-18 - 02 - tune-polish-plan
 created: 2026-10-18T14:21:41Z
+closed: 2026-10-18T16:38:39Z
+reason: Resolved by plan 2026-10-18 - 02 - tune-polish-plan (1cba598)
 ---
 
 `photon tune` doesn't show which build is serving the page. VERSION reads the same for every

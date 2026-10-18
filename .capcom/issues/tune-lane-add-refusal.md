@@ -1,11 +1,13 @@
 ---
 title: Show a refused lane add in photon tune
-status: open
+status: done
 type: bug
 priority: 3
 labels: [tune]
 plan: 2026-10-18 - 02 - tune-polish-plan
 created: 2026-10-18T12:32:57Z
+closed: 2026-10-18T16:38:38Z
+reason: Resolved by plan 2026-10-18 - 02 - tune-polish-plan (1cba598)
 ---
 
 A refused lane add (for example an overlap) is shown only as `app.js`'s refusal on the entry

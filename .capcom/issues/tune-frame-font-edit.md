@@ -1,11 +1,13 @@
 ---
 title: Edit the terminal font size in photon tune
-status: open
+status: done
 type: task
 priority: 2
 labels: [tune]
 plan: 2026-10-18 - 02 - tune-polish-plan
 created: 2026-10-18T14:38:11Z
+closed: 2026-10-18T16:38:39Z
+reason: Resolved by plan 2026-10-18 - 02 - tune-polish-plan (1cba598)
 ---
 
 The `photon tune` inspector's "Clip frame" panel lets you edit only `width` and `fps`. The terminal's

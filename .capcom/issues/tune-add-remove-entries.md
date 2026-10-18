@@ -1,12 +1,14 @@
 ---
 title: Add, remove and reorder camera moves and captions in photon tune
-status: open
+status: done
 type: feature
 priority: 3
 labels: [tune]
 deps: [camera-moves, clip-captions, typed-storyboard-edits]
 plan: 2026-10-18 - 02 - tune-polish-plan
 created: 2026-10-17T20:17:38Z
+closed: 2026-10-18T16:38:38Z
+reason: Resolved by plan 2026-10-18 - 02 - tune-polish-plan (1cba598)
 ---
 
 `photon tune` shows camera moves and captions and edits their fields (plan
