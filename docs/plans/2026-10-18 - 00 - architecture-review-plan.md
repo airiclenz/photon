@@ -449,7 +449,13 @@ internal/tune/edit_test.go — TestApply_Edit_ChangesOnlyTheEditedText, TestAppl
 - `GOMEMLIMIT=2GiB go test ./internal/tune/`
 **Commit:** `feat(tune): send typed beat and frame edits`
 
-## 19. Typed edit wire for camera moves
+## 19. Typed edit wire for camera moves — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): re-derived from the assumption that the structured target input lives in controls.js and the camera panel in app.js: item 18 left targetInputs/nthText/targetOf in panels.js and cameraPanel/aimRow live in entries.js, so those target helpers (with their nth/placeholder constants) moved to controls.js, beside a new momentField and targetRows, and panels.js now takes them from window.tunePage.
+NOTES (2026-10-18): camera.at requires both "beat" and "offset_ms" and refuses a negative beat or a negative clip time at decode; it is written as `150ms`, `{beat: 1}` or `{beat: 1, offset: 300ms}` (momentFlow). camera.to on a pan refuses a target and a cell at once; a zoom move's factor range is left to storyboard validation.
+NOTES (2026-10-18): a cell pan edits through x and y number inputs (entries.js cellRow); turning a cell pan into a target pan, or back, is done by a pick (which now sends the proposal's typed target, not the zoom snippet text) or in the storyboard.
+NOTES (2026-10-18): value.go lost parseDecimal, parsePoint, parseFlowMapping and the decimal regex; parseMilliseconds and parseMoment stay for the caption fields until item 20.
+NOTES (2026-10-18): re-derived from the assumption that editCamera decodes its own value: item 18's editEntry in internal/tune/edit.go decoded every camera value as text first, so it now hands camera edits their raw value, and Apply's wire doc comment is rewritten to match.
 
 Depends on item 18.
 

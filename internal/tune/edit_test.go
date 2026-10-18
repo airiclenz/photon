@@ -305,8 +305,8 @@ const cameraEditBoard = sessionStoryboard + `camera:
   - zoom: {to: 1.2, over: 50ms}
 `
 
-// cameraEdit is an Edit of the camera move at index, its text value sent as a JSON string.
-func cameraEdit(index int, field, value string) Edit {
+// cameraEdit is an Edit of the camera move at index, its value typed as value encodes.
+func cameraEdit(index int, field string, value any) Edit {
 	owner := storyboard.Owner{Kind: storyboard.OwnerCamera, Index: index}
 	return Edit{Owner: owner, Field: field, Value: typedValue(value)}
 }
@@ -318,30 +318,34 @@ func TestApply_CameraEdit_ChangesOnlyTheEditedText(t *testing.T) {
 		edit     Edit
 		old, new string
 	}{
-		{"a block beat at becomes a clip time", cameraEdit(0, fieldCameraAt, "150ms"),
+		{"a block beat at becomes a clip time", cameraEdit(0, fieldCameraAt, MomentState{Beat: 0, OffsetMS: 150}),
 			"at:\n        beat: 1\n        offset: 100ms\n", "at: 150ms\n"},
-		{"a block clip time becomes a beat moment", cameraEdit(1, fieldCameraAt, "{beat: 1, offset: 300ms}"),
+		{"a clip time becomes a beat start", cameraEdit(1, fieldCameraAt, MomentState{Beat: 1, OffsetMS: 0}),
+			"at: 200ms # after the zoom starts", "at: {beat: 1} # after the zoom starts"},
+		{"a block clip time becomes a beat moment", cameraEdit(1, fieldCameraAt, MomentState{Beat: 1, OffsetMS: 300}),
 			"at: 200ms # after the zoom starts", "at: {beat: 1, offset: 300ms} # after the zoom starts"},
-		{"a flow beat at becomes a clip time", cameraEdit(3, fieldCameraAt, "600ms"),
+		{"a flow beat at becomes a clip time", cameraEdit(3, fieldCameraAt, MomentState{Beat: 0, OffsetMS: 600}),
 			"at: {beat: 1, offset: 500ms}", "at: 600ms"},
-		{"a flow clip time becomes a beat moment", cameraEdit(2, fieldCameraAt, " {beat: 1, offset: 850ms} "),
+		{"a flow clip time becomes a beat moment", cameraEdit(2, fieldCameraAt, MomentState{Beat: 1, OffsetMS: 850}),
 			"at: 900ms", "at: {beat: 1, offset: 850ms}"},
-		{"an absent at is inserted after to", cameraEdit(4, fieldCameraAt, "50ms"),
+		{"an absent at is inserted after to", cameraEdit(4, fieldCameraAt, MomentState{Beat: 0, OffsetMS: 50}),
 			"{to: 1.2, over: 50ms}", "{to: 1.2, at: 50ms, over: 50ms}"},
-		{"a block over keeps its unit", cameraEdit(0, fieldCameraOver, "250"), "over: 300ms", "over: 250ms"},
-		{"a flow over keeps its unit", cameraEdit(3, fieldCameraOver, "350"), "over: 400ms", "over: 350ms"},
+		{"a block over keeps its unit", cameraEdit(0, fieldCameraOver, 250), "over: 300ms", "over: 250ms"},
+		{"a flow over keeps its unit", cameraEdit(3, fieldCameraOver, 350), "over: 400ms", "over: 350ms"},
 		{"smooth deletes a block ease", cameraEdit(0, fieldCameraEase, "smooth"), "      ease: linear\n", ""},
 		{"smooth deletes a flow ease", cameraEdit(3, fieldCameraEase, "smooth"), ", ease: linear}", "}"},
 		{"linear goes after a block over", cameraEdit(1, fieldCameraEase, "linear"),
 			"      over: 600ms\n", "      over: 600ms\n      ease: linear\n"},
 		{"linear goes last in a flow move", cameraEdit(2, fieldCameraEase, "linear"),
 			"over: 100ms}", "over: 100ms, ease: linear}"},
-		{"a block zoom's factor", cameraEdit(0, fieldCameraTo, "2.5"), "to: 1.5", "to: 2.5"},
-		{"a flow zoom's factor", cameraEdit(3, fieldCameraTo, "1.25"), "to: 2,", "to: 1.25,"},
-		{"a block pan target becomes a cell", cameraEdit(1, fieldCameraTo, "{cell: {x: 1, y: 1}}"),
+		{"a block zoom's factor", cameraEdit(0, fieldCameraTo, 2.5), "to: 1.5", "to: 2.5"},
+		{"a flow zoom's factor", cameraEdit(3, fieldCameraTo, 1.25), "to: 2,", "to: 1.25,"},
+		{"a block pan target becomes a cell", cameraEdit(1, fieldCameraTo, json.RawMessage(`{"cell": {"x": 1, "y": 1}}`)),
 			"to:\n        text: 'failing'\n", "to: {cell: {x: 1, y: 1}}\n"},
-		{"a flow pan cell becomes a target", cameraEdit(2, fieldCameraTo, "{text: 'tests', nth: last}"),
+		{"a flow pan cell becomes a target", cameraEdit(2, fieldCameraTo, json.RawMessage(`{"text": "tests", "nth": "last"}`)),
 			"to: {cell: {x: 3, y: 2}}", "to: {text: 'tests', nth: last}"},
+		{"a block pan target becomes another", cameraEdit(1, fieldCameraTo, json.RawMessage(`{"text": "ok", "nth": 2, "area": "list"}`)),
+			"to:\n        text: 'failing'\n", "to: {text: 'ok', nth: 2, area: 'list'}\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -369,7 +373,7 @@ func TestApply_CameraEditToWhatAnAbsentKeyMeans_LeavesTheSourceAsItIs(t *testing
 		name string
 		edit Edit
 	}{
-		{"a clip start on a move without at", cameraEdit(4, fieldCameraAt, "0ms")},
+		{"a clip start on a move without at", cameraEdit(4, fieldCameraAt, MomentState{Beat: 0, OffsetMS: 0})},
 		{"smooth on a move without ease", cameraEdit(1, fieldCameraEase, "smooth")},
 	}
 	for _, tc := range cases {
@@ -391,7 +395,7 @@ func TestApply_CameraEditToWhatAnAbsentKeyMeans_LeavesTheSourceAsItIs(t *testing
 func TestApply_CameraEditMakingZoomsOverlap_IsRefusedNamingBoth(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := apply([]byte(cameraEditBoard), cameraEditPath, cameraEdit(0, fieldCameraAt, "450ms"))
+	_, _, err := apply([]byte(cameraEditBoard), cameraEditPath, cameraEdit(0, fieldCameraAt, MomentState{Beat: 0, OffsetMS: 450}))
 
 	var invalid *storyboard.ValidationError
 	if !errors.As(err, &invalid) {
@@ -412,14 +416,18 @@ func TestApply_CameraEditOnWhatIsNotThere_IsRefused(t *testing.T) {
 		edit    Edit
 		message string
 	}{
-		{"an index past the last move", cameraEditBoard, cameraEdit(9, fieldCameraOver, "100"),
+		{"an index past the last move", cameraEditBoard, cameraEdit(9, fieldCameraOver, 100),
 			"camera[9]: camera.over: the storyboard has no camera move at index 9"},
-		{"a negative index", cameraEditBoard, cameraEdit(-1, fieldCameraOver, "100"),
+		{"a negative index", cameraEditBoard, cameraEdit(-1, fieldCameraOver, 100),
 			"camera[-1]: camera.over: the storyboard has no camera move at index -1"},
 		{"a storyboard without a camera", sessionStoryboard, cameraEdit(0, fieldCameraEase, "linear"),
 			"camera[0]: camera.ease: the storyboard has no camera move at index 0"},
-		{"the destination of a via pan", cameraCaptionsStoryboard, cameraEdit(1, fieldCameraTo, "{text: 'x'}"),
+		{"the destination of a via pan", cameraCaptionsStoryboard, cameraEdit(1, fieldCameraTo, json.RawMessage(`{"text": "x"}`)),
 			"camera[1]: camera.to: the pan follows a via path"},
+		{"a null at", cameraEditBoard, cameraEdit(1, fieldCameraAt, nil), "camera[1]: camera.at: want a value, got null"},
+		{"a null over", cameraEditBoard, cameraEdit(1, fieldCameraOver, nil), "camera[1]: camera.over: want a value, got null"},
+		{"a null ease", cameraEditBoard, cameraEdit(1, fieldCameraEase, nil), "camera[1]: camera.ease: want a value, got null"},
+		{"a null to", cameraEditBoard, cameraEdit(1, fieldCameraTo, nil), "camera[1]: camera.to: want a value, got null"},
 		{"an unknown camera field", cameraEditBoard, cameraEdit(0, "camera.via", "x"),
 			"camera[0]: camera.via: unknown field"},
 	}
@@ -443,30 +451,38 @@ func TestApply_CameraWireSpellings(t *testing.T) {
 		edit       Edit
 		isAccepted bool
 	}{
-		{"a beat moment", cameraEdit(1, fieldCameraAt, "{beat: 1, offset: 300ms}"), true},
-		{"a beat moment without an offset", cameraEdit(1, fieldCameraAt, "{beat: 1}"), true},
-		{"a clip time", cameraEdit(1, fieldCameraAt, "150ms"), true},
-		{"a quoted clip time", cameraEdit(1, fieldCameraAt, "'150ms'"), true},
-		{"a moment as a block mapping", cameraEdit(1, fieldCameraAt, "beat: 1"), false},
-		{"a moment with an unknown key", cameraEdit(1, fieldCameraAt, "{beat: 1, bogus: 2}"), false},
-		{"a moment at beat 0", cameraEdit(1, fieldCameraAt, "{beat: 0}"), false},
-		{"a moment as words", cameraEdit(1, fieldCameraAt, "soon"), false},
-		{"a moment with a comment", cameraEdit(1, fieldCameraAt, "150ms # soon"), false},
-		{"a moment as a sequence", cameraEdit(1, fieldCameraAt, "[150ms]"), false},
-		{"a moment over two lines", cameraEdit(1, fieldCameraAt, "{beat: 1,\noffset: 0s}"), false},
-		{"milliseconds of over", cameraEdit(0, fieldCameraOver, "250"), true},
+		{"a beat moment", cameraEdit(1, fieldCameraAt, json.RawMessage(`{"beat": 1, "offset_ms": 300}`)), true},
+		{"a beat start", cameraEdit(1, fieldCameraAt, json.RawMessage(`{"beat": 1, "offset_ms": 0}`)), true},
+		{"a clip time", cameraEdit(1, fieldCameraAt, json.RawMessage(`{"beat": 0, "offset_ms": 150}`)), true},
+		{"a moment without an offset", cameraEdit(1, fieldCameraAt, json.RawMessage(`{"beat": 1}`)), false},
+		{"a moment without a beat", cameraEdit(1, fieldCameraAt, json.RawMessage(`{"offset_ms": 150}`)), false},
+		{"a moment with an unknown key", cameraEdit(1, fieldCameraAt, json.RawMessage(`{"beat": 1, "offset_ms": 0, "bogus": 2}`)), false},
+		{"a moment at a negative beat", cameraEdit(1, fieldCameraAt, json.RawMessage(`{"beat": -1, "offset_ms": 0}`)), false},
+		{"a negative clip time", cameraEdit(1, fieldCameraAt, json.RawMessage(`{"beat": 0, "offset_ms": -5}`)), false},
+		{"a fractional offset", cameraEdit(1, fieldCameraAt, json.RawMessage(`{"beat": 0, "offset_ms": 1.5}`)), false},
+		{"a moment as YAML text", cameraEdit(1, fieldCameraAt, "{beat: 1, offset: 300ms}"), false},
+		{"a clip time as text", cameraEdit(1, fieldCameraAt, "150ms"), false},
+		{"milliseconds of over", cameraEdit(0, fieldCameraOver, 250), true},
+		{"an over as a string", cameraEdit(0, fieldCameraOver, "250"), false},
 		{"an over with a unit", cameraEdit(0, fieldCameraOver, "250ms"), false},
+		{"a negative over", cameraEdit(0, fieldCameraOver, -5), false},
 		{"linear", cameraEdit(1, fieldCameraEase, "linear"), true},
+		{"smooth", cameraEdit(0, fieldCameraEase, "smooth"), true},
 		{"an ease as another word", cameraEdit(1, fieldCameraEase, "fast"), false},
 		{"an empty ease", cameraEdit(1, fieldCameraEase, ""), false},
-		{"a zoom factor", cameraEdit(0, fieldCameraTo, "2.5"), true},
-		{"a zoom factor as words", cameraEdit(0, fieldCameraTo, "big"), false},
+		{"an ease as a number", cameraEdit(1, fieldCameraEase, 1), false},
+		{"a zoom factor", cameraEdit(0, fieldCameraTo, 2.5), true},
+		{"a whole zoom factor", cameraEdit(0, fieldCameraTo, 2), true},
+		{"a zoom factor as a string", cameraEdit(0, fieldCameraTo, "2.5"), false},
 		{"a zoom factor of auto", cameraEdit(0, fieldCameraTo, "auto"), false},
-		{"a pan target", cameraEdit(2, fieldCameraTo, "{text: 'tests'}"), true},
-		{"a pan cell", cameraEdit(1, fieldCameraTo, "{cell: {x: 1, y: 1}}"), true},
-		{"a pan cell with an unknown key", cameraEdit(1, fieldCameraTo, "{cell: {x: 1, z: 1}}"), false},
-		{"a pan point as a sequence", cameraEdit(1, fieldCameraTo, "[1, 2]"), false},
-		{"a pan point as a block mapping", cameraEdit(1, fieldCameraTo, "text: x"), false},
+		{"a pan target", cameraEdit(2, fieldCameraTo, json.RawMessage(`{"text": "tests"}`)), true},
+		{"a pan target with nth last", cameraEdit(2, fieldCameraTo, json.RawMessage(`{"text": "tests", "nth": "last"}`)), true},
+		{"a pan target with nth 0", cameraEdit(2, fieldCameraTo, json.RawMessage(`{"text": "tests", "nth": 0}`)), false},
+		{"a pan cell", cameraEdit(1, fieldCameraTo, json.RawMessage(`{"cell": {"x": 1, "y": 1}}`)), true},
+		{"a pan cell with an unknown key", cameraEdit(1, fieldCameraTo, json.RawMessage(`{"cell": {"x": 1, "z": 1}}`)), false},
+		{"a pan target and cell at once", cameraEdit(1, fieldCameraTo, json.RawMessage(`{"text": "tests", "cell": {"x": 1, "y": 1}}`)), false},
+		{"a pan point as a sequence", cameraEdit(1, fieldCameraTo, []int{1, 2}), false},
+		{"a pan point as YAML flow text", cameraEdit(1, fieldCameraTo, "{text: 'tests'}"), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

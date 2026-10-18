@@ -17,13 +17,16 @@
     fieldRow,
     readOnlyRow,
     millisecondsField,
+    momentField,
     textField,
     choiceField,
     errorRows,
     momentText,
-    flowTarget,
+    numberOf,
+    targetInputs,
+    targetRows,
+    targetOf,
     MOMENT_PLACEHOLDER,
-    TARGET_PLACEHOLDER,
   } = page;
   const KIND_ZOOM = "zoom";
   const EASES = ["smooth", "linear"];
@@ -43,31 +46,48 @@
     const owner = { kind: ENTRY_CAMERA, index: move.index };
     return [
       element("h2", {}, "camera " + move.index + " " + move.kind),
-      textField("at", owner, "camera.at", momentText(move.at), MOMENT_PLACEHOLDER),
+      momentField("at", owner, "camera.at", move.at),
       millisecondsField("over", owner, "camera.over", move.over_ms),
       choiceField("ease", owner, "camera.ease", EASES, move.ease),
-      aimRow(owner, move),
+      ...aimRows(owner, move),
       readOnlyRow("plays", formatTime(move.start_ms) + " – " + formatTime(move.end_ms)),
       ...errorRows(owner),
     ];
   }
 
-  // aimRow edits where a camera move goes: a zoom's factor, or a pan's target or cell; the
-  // points of a pan's path show read-only.
-  function aimRow(owner, move) {
+  // aimRows edit where a camera move goes, each sending a typed camera.to: a zoom's factor, or
+  // a pan's target or cell, which a pick replaces with a target; the points of a pan's path
+  // show read-only.
+  function aimRows(owner, move) {
     if (move.kind === KIND_ZOOM) {
       const input = element("input", { type: "number", step: "0.1", value: String(move.factor) });
-      input.addEventListener("change", () => applyEdit(owner, "camera.to", input.value.trim()));
-      return fieldRow("to (×)", input);
+      input.addEventListener("change", () => applyEdit(owner, "camera.to", numberOf(input.value)));
+      return [fieldRow("to (×)", input)];
     }
     if (move.target) {
-      return textField("to", owner, "camera.to", flowTarget(move.target), TARGET_PLACEHOLDER);
+      const inputs = targetInputs(move.target);
+      for (const input of Object.values(inputs)) {
+        input.addEventListener("change", () => applyEdit(owner, "camera.to", targetOf(inputs)));
+      }
+      return targetRows("to", inputs);
     }
     if (move.cell) {
-      const cell = "{cell: {x: " + move.cell.x + ", y: " + move.cell.y + "}}";
-      return textField("to", owner, "camera.to", cell, TARGET_PLACEHOLDER);
+      return [cellRow(owner, move.cell)];
     }
-    return readOnlyRow("via", move.via_count + " points");
+    return [readOnlyRow("via", move.via_count + " points")];
+  }
+
+  // cellRow edits the cell a pan goes to, its column x and row y from 0.
+  function cellRow(owner, cell) {
+    const input = (value) =>
+      element("input", { type: "number", min: "0", step: "1", value: String(value) });
+    const x = input(cell.x);
+    const y = input(cell.y);
+    const send = () =>
+      applyEdit(owner, "camera.to", { cell: { x: numberOf(x.value), y: numberOf(y.value) } });
+    x.addEventListener("change", send);
+    y.addEventListener("change", send);
+    return fieldRow("to (x, y)", element("span", { className: "inline" }, x, y));
   }
 
   // captionPanel edits a caption's text, timing and placement, and shows when it is on the

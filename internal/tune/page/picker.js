@@ -6,7 +6,8 @@
 // on, onState(fn) to offer that only while a pan exists, and edit(edit) to set either. Nothing
 // here maps pixels to cells or resolves a target: the drag's two corners go to /api/pick in
 // output-frame pixels, and the server answers the resolver-checked proposal: its target as a
-// zoom edit takes it, its box in output-frame pixels and the YAML snippets that write it.
+// zoom or camera.to edit takes it, its box in output-frame pixels and the YAML snippets that
+// write it.
 "use strict";
 
 (() => {
@@ -221,7 +222,7 @@
     const change = {
       owner: { kind: ENTRY_CAMERA, index: move.index },
       field: FIELD_CAMERA_TO,
-      value: proposal.snippets[SNIPPET_ZOOM],
+      value: proposal.target,
     };
     tune.edit(change).then(
       () => report("Pan target set on camera " + move.index, false),

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
+	"github.com/airiclenz/photon/internal/storyboard"
 )
 
 // testAddr is the listen address the handler tests build the handler for.
@@ -203,6 +204,28 @@ func TestHandler_EditsAsThePageSendsThem_AreApplied(t *testing.T) {
 	}
 	if zoom := state.Beats[0].Zoom; zoom == nil || zoom.Target != (TargetState{Text: "unique"}) {
 		t.Errorf("beat 1's zoom after the picked target: want unique, got %+v", zoom)
+	}
+}
+
+func TestHandler_CameraEditsAsThePageSendsThem_AreApplied(t *testing.T) {
+	t.Parallel()
+	handler := newHandler(newSessionFixtureOf(t, cameraCaptionsStoryboard).session, testAddr)
+	moved := `{"owner":{"kind":"camera","index":0},"field":"camera.at","value":{"beat":1,"offset_ms":150}}`
+	aimed := `{"owner":{"kind":"camera","index":3},"field":"camera.to","value":{"text":"tests","nth":"last"}}`
+
+	movedResponse := post(t, handler, "/api/edit", moved)
+	aimedResponse := post(t, handler, "/api/edit", aimed)
+
+	assertStatus(t, movedResponse, http.StatusOK)
+	assertStatus(t, aimedResponse, http.StatusOK)
+	var state State
+	decodeResponse(t, aimedResponse, &state)
+	if move := state.Camera[0]; move.At != (MomentState{Beat: 1, OffsetMS: 150}) {
+		t.Errorf("camera 0 after the moment: want at beat 1 + 150ms, got %+v", move.At)
+	}
+	wantTarget := TargetState{Text: "tests", Nth: int(storyboard.NthLast)}
+	if move := state.Camera[3]; move.Cell != nil || move.Target == nil || *move.Target != wantTarget {
+		t.Errorf("camera 3 after the picked target: want %+v and no cell, got %+v", wantTarget, move)
 	}
 }
 

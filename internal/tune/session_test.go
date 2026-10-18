@@ -678,7 +678,7 @@ func TestSession_CameraEdit_MovesTheMoveAndUndoes(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
 
-	f.apply(t, cameraEdit(0, fieldCameraAt, "{beat: 1, offset: 150ms}"))
+	f.apply(t, cameraEdit(0, fieldCameraAt, json.RawMessage(`{"beat":1,"offset_ms":150}`)))
 	edited := f.session.State()
 	undoErr := f.session.Undo()
 	undone := f.session.State()

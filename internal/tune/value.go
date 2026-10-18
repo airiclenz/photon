@@ -3,6 +3,7 @@ package tune
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -24,8 +25,6 @@ const millisecondsPerSecond = int64(time.Second / time.Millisecond)
 var (
 	// wholeNumber is the spelling of milliseconds and of a frame integer.
 	wholeNumber = regexp.MustCompile(`^[0-9]+$`)
-	// decimal is the spelling of a zoom factor.
-	decimal = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?$`)
 	// secondsForm is a duration written as plain seconds (`2s`, `2.35s`), which an edit keeps.
 	secondsForm = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?s$`)
 )
@@ -103,6 +102,60 @@ func decodeTarget(value json.RawMessage) (storyboard.Target, error) {
 	return wire.target(), nil
 }
 
+// wireMoment is a moment as an edit types it, {"beat": 3, "offset_ms": 200}: beat 0 is a clip
+// time, offset_ms after the clip's first frame; a beat id from 1 is that beat's start plus
+// offset_ms, which may be negative. Both keys are required.
+type wireMoment struct {
+	Beat     *int   `json:"beat"`
+	OffsetMS *int64 `json:"offset_ms"`
+}
+
+// decodeMoment reads a moment typed as {"beat", "offset_ms"}, refusing any other key, a missing
+// one, a negative beat, a negative clip time and an offset no time.Duration holds.
+func decodeMoment(value json.RawMessage) (storyboard.Moment, error) {
+	decoder := json.NewDecoder(bytes.NewReader(value))
+	decoder.DisallowUnknownFields()
+	var wire wireMoment
+	err := decoder.Decode(&wire)
+	isWhole := err == nil && wire.Beat != nil && wire.OffsetMS != nil
+	if !isWhole || *wire.Beat < 0 || (*wire.Beat == 0 && *wire.OffsetMS < 0) ||
+		*wire.OffsetMS > maxMilliseconds || *wire.OffsetMS < -maxMilliseconds {
+		return storyboard.Moment{}, fmt.Errorf(
+			`want a moment such as {"beat": 3, "offset_ms": 200}, or beat 0 for a clip time from 0, got %s`, value)
+	}
+	offset := time.Duration(*wire.OffsetMS) * time.Millisecond
+	return storyboard.Moment{Beat: *wire.Beat, Offset: offset}, nil
+}
+
+// wirePoint is a pan's destination as an edit types it: a target as a pick answers it,
+// {"text", "nth", "area"}, or a cell, {"cell": {"x": 3, "y": 4}} — one of the two.
+type wirePoint struct {
+	pickTarget
+	Cell *CellState `json:"cell"`
+}
+
+// decodePoint reads a pan's target or cell, refusing any other key and both at once, and spells
+// it as the YAML flow mapping a camera.to writes: a target as [targetFlow] does, a cell as
+// {cell: {x: 3, y: 4}}.
+func decodePoint(value json.RawMessage) (string, error) {
+	decoder := json.NewDecoder(bytes.NewReader(value))
+	decoder.DisallowUnknownFields()
+	var wire wirePoint
+	err := decoder.Decode(&wire)
+	if err == nil && wire.Cell != nil && wire.pickTarget != (pickTarget{}) {
+		err = errors.New("a target and a cell at once")
+	}
+	if err != nil {
+		return "", fmt.Errorf(`want a target such as {"text": "ok", "nth": 2, "area": "list"} `+
+			`or a cell such as {"cell": {"x": 3, "y": 4}}, got %s: %w`, value, err)
+	}
+	if wire.Cell != nil {
+		cell := "{x: " + strconv.Itoa(wire.Cell.X) + ", y: " + strconv.Itoa(wire.Cell.Y) + "}"
+		return "{cell: " + cell + "}", nil
+	}
+	return targetFlow(wire.target()), nil
+}
+
 // decodeText reads a camera or caption field's text, typed as a JSON string.
 func decodeText(value json.RawMessage) (string, error) {
 	var text string
@@ -110,49 +163,6 @@ func decodeText(value json.RawMessage) (string, error) {
 		return "", fmt.Errorf("want the field's text as a JSON string, got %s", value)
 	}
 	return text, nil
-}
-
-// parseDecimal reads a camera zoom move's factor spelled as a decimal.
-func parseDecimal(value string) (float64, error) {
-	spellingError := fmt.Errorf("want a decimal such as 1.8, got %q", value)
-	if !decimal.MatchString(value) {
-		return 0, spellingError
-	}
-	factor, err := strconv.ParseFloat(value, 64)
-	if err != nil {
-		return 0, spellingError
-	}
-	return factor, nil
-}
-
-// parsePoint checks that value is a pan's point as one line of YAML flow text — a target's flow
-// mapping or a cell's, {cell: {x: 3, y: 4}}, with no comment — and returns it trimmed.
-func parsePoint(value string) (string, error) {
-	var point storyboard.Point
-	return parseFlowMapping(value, &point, "a target or a cell as YAML flow text such as {text: 'ok'} or {cell: {x: 3, y: 4}}")
-}
-
-// parseFlowMapping checks that value is one line of YAML flow text holding a flow mapping with
-// no comment, decodes it strictly into into, and returns it trimmed. Its error says it wants
-// want.
-func parseFlowMapping(value string, into any, want string) (string, error) {
-	trimmed := strings.TrimSpace(value)
-	spellingError := fmt.Errorf("want %s, got %q", want, value)
-	isBraced := strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")
-	if !isBraced {
-		return "", spellingError
-	}
-	node, isOneLine := oneLineNode(trimmed)
-	if !isOneLine || node.Kind != yaml.MappingNode || node.Style&yaml.FlowStyle == 0 {
-		return "", spellingError
-	}
-
-	decoder := yaml.NewDecoder(strings.NewReader(trimmed))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(into); err != nil {
-		return "", fmt.Errorf("%w: %v", spellingError, err)
-	}
-	return trimmed, nil
 }
 
 // parseMoment checks that value is a moment as one line of YAML — a {beat, offset} flow mapping
