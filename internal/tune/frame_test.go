@@ -13,6 +13,7 @@ import (
 
 	"github.com/airiclenz/photon/internal/clip"
 	"github.com/airiclenz/photon/internal/render"
+	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 )
 
@@ -74,10 +75,10 @@ func TestSession_Frame_AfterEditMatchesTheRenderOfTheSavedFile(t *testing.T) {
 		// out is an output time whose frame the edit changes.
 		out time.Duration
 	}{
-		{"duration", beatEdit(1, fieldDuration, 2000), 500 * time.Millisecond},
-		{"hold", beatEdit(1, fieldHold, 600), 500 * time.Millisecond},
-		{"cut", beatEdit(1, fieldCut, true), 500 * time.Millisecond},
-		{"zoom ramp", beatEdit(2, fieldZoomIn, 200), 1200 * time.Millisecond},
+		{"duration", beatEdit(1, storyboard.FieldDuration, 2000), 500 * time.Millisecond},
+		{"hold", beatEdit(1, storyboard.FieldHold, 600), 500 * time.Millisecond},
+		{"cut", beatEdit(1, storyboard.FieldCut, true), 500 * time.Millisecond},
+		{"zoom ramp", beatEdit(2, storyboard.FieldZoomIn, 200), 1200 * time.Millisecond},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -153,7 +154,7 @@ func TestSession_FrameAndApply_RunInParallel(t *testing.T) {
 		defer wait.Done()
 		durations := []int{1200, 1000}
 		for index := range rounds {
-			edit := beatEdit(1, fieldDuration, durations[index%2])
+			edit := beatEdit(1, storyboard.FieldDuration, durations[index%2])
 			if err := fixture.session.Apply(edit); err != nil {
 				t.Errorf("Apply(%+v): %v", edit, err)
 			}

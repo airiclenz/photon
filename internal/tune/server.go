@@ -102,9 +102,8 @@ type pickResponse struct {
 	Snippets map[string]string `json:"snippets"`
 }
 
-// pickTarget is a target on the wire, as a pick proposes it and a zoom or zoom.target [Edit]
-// takes it: nth is left out when it is the first match, and area when the target searches the
-// whole screen.
+// pickTarget is a target on the wire, as a pick proposes it: nth is left out when it is the
+// first match, and area when the target searches the whole screen.
 type pickTarget struct {
 	Text string  `json:"text"`
 	Nth  wireNth `json:"nth,omitempty"`
@@ -145,11 +144,6 @@ func pickTargetOf(target storyboard.Target) pickTarget {
 		wire.Nth = wireNth(target.Nth)
 	}
 	return wire
-}
-
-// target is the storyboard target t spells.
-func (t pickTarget) target() storyboard.Target {
-	return storyboard.Target{Text: t.Text, Nth: storyboard.Nth(t.Nth), Area: t.Area}
 }
 
 // pixelRect is a rectangle on the output frame, in pixels.

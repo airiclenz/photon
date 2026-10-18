@@ -129,15 +129,15 @@ func NewSession(loaded *clip.Clip, takePath string) (*Session, error) {
 }
 
 // Apply splices edit into the current storyboard and rebuilds the pipeline on the result. An
-// edit [apply] refuses — misspelled, aimed at a missing beat, or leaving the storyboard invalid —
-// changes nothing and is returned. An accepted edit is kept in the history even when the
+// edit [storyboard.Apply] refuses — misspelled, aimed at a missing beat, camera move or caption,
+// or leaving the storyboard invalid — changes nothing and is returned. An accepted edit is kept in the history even when the
 // rebuild fails: the error then stands on its beat or the clip until an edit, undo or revert
 // clears it, and the preview keeps the last good pipeline.
 func (s *Session) Apply(edit Edit) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	edited, _, err := apply(s.history.current(), s.path, edit)
+	edited, _, err := storyboard.Apply(s.history.current(), s.path, edit)
 	if err != nil {
 		return err
 	}

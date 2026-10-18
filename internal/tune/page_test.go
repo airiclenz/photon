@@ -314,19 +314,20 @@ func TestPage_Picker_CallsPickAndClipboard(t *testing.T) {
 
 func TestPage_EntryFields_AreEditFields(t *testing.T) {
 	t.Parallel()
+	fields := storyboard.EditFields()
 	sent := map[string]bool{}
 
 	for _, name := range pageScripts(t) {
 		for _, match := range entryFieldName.FindAllSubmatch(readPageFile(t, name), -1) {
 			field := string(match[1])
 			sent[field] = true
-			if !slices.Contains(editFields, field) {
+			if !slices.Contains(fields, field) {
 				t.Errorf("%s sends the field %s, which an edit does not accept", name, field)
 			}
 		}
 	}
 
-	for _, field := range editFields {
+	for _, field := range fields {
 		isEntryField := strings.HasPrefix(field, "camera.") || strings.HasPrefix(field, "caption.")
 		if isEntryField && !sent[field] {
 			t.Errorf("the page sends no %s edit", field)

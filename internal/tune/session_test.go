@@ -200,7 +200,7 @@ func TestSession_History_MovesThroughVersions(t *testing.T) {
 		wantNothingToUndo bool
 	}{
 		{"undo with no history", f.session.Undo, beatOneMS, false, false, false, true},
-		{"apply", func() error { return f.session.Apply(beatEdit(1, fieldDuration, 1200)) }, 1200, true, true, false, false},
+		{"apply", func() error { return f.session.Apply(beatEdit(1, storyboard.FieldDuration, 1200)) }, 1200, true, true, false, false},
 		{"undo", f.session.Undo, beatOneMS, false, false, true, false},
 		{"redo", f.session.Redo, 1200, true, true, false, false},
 		{"revert", func() error { f.session.Revert(); return nil }, beatOneMS, false, true, false, false},
@@ -307,7 +307,7 @@ func TestSession_State_CaptionTimesFollowABeatDuration(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
 
-	f.apply(t, beatEdit(1, fieldDuration, 1200))
+	f.apply(t, beatEdit(1, storyboard.FieldDuration, 1200))
 
 	caption := f.session.State().Captions[1]
 	if caption.StartMS != 1200 || caption.StopMS != 2400 {
@@ -389,7 +389,7 @@ func TestSession_TooFastSection_Warns(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixture(t)
 
-	f.apply(t, beatEdit(1, fieldDuration, 300))
+	f.apply(t, beatEdit(1, storyboard.FieldDuration, 300))
 
 	warnings := f.session.State().Warnings
 	if len(warnings) != 1 || !strings.HasPrefix(warnings[0], "beat 1 plays at 6.7×") {
@@ -402,7 +402,7 @@ func TestSession_RefusedEdit_ChangesNothing(t *testing.T) {
 	f := newSessionFixture(t)
 	before := f.session.State()
 
-	err := f.session.Apply(beatEdit(1, fieldHold, 5000))
+	err := f.session.Apply(beatEdit(1, storyboard.FieldHold, 5000))
 
 	if err == nil {
 		t.Fatal("Apply of a hold past the duration: want an error")
@@ -418,7 +418,7 @@ func TestSession_ZoomTargetNotOnScreen_KeepsTheLastGoodPipelineAndBlocksSave(t *
 	good := f.session.good.frames
 	beatTwo := storyboard.Owner{Kind: storyboard.OwnerBeat, Index: 2}
 
-	f.apply(t, beatEdit(2, fieldZoomTarget, json.RawMessage(`{"text": "nowhere"}`)))
+	f.apply(t, beatEdit(2, storyboard.FieldZoomTarget, json.RawMessage(`{"text": "nowhere"}`)))
 
 	state := f.session.State()
 	if len(state.Errors) != 1 || state.Errors[0].Owner != beatTwo || !strings.Contains(state.Errors[0].Message, "nowhere") {
@@ -450,10 +450,10 @@ func TestSession_EveryEditsBuild_ReusesTheGoodPipeline(t *testing.T) {
 		return render.Build(loaded, takePath, recorded, options)
 	}
 	edits := []Edit{
-		beatEdit(1, fieldDuration, 1100),
-		beatEdit(2, fieldZoomTarget, json.RawMessage(`{"text": "nowhere"}`)),
-		beatEdit(1, fieldDuration, 1200),
-		frameEdit(fieldFrameWidth, 120),
+		beatEdit(1, storyboard.FieldDuration, 1100),
+		beatEdit(2, storyboard.FieldZoomTarget, json.RawMessage(`{"text": "nowhere"}`)),
+		beatEdit(1, storyboard.FieldDuration, 1200),
+		frameEdit(storyboard.FieldFrameWidth, 120),
 	}
 
 	for _, edit := range edits {
@@ -469,7 +469,7 @@ func TestSession_EveryEditsBuild_ReusesTheGoodPipeline(t *testing.T) {
 func TestSession_Save_WritesInPlaceKeepingTheMode(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixture(t)
-	f.apply(t, beatEdit(1, fieldDuration, 1200))
+	f.apply(t, beatEdit(1, storyboard.FieldDuration, 1200))
 
 	err := f.session.Save()
 
@@ -512,7 +512,7 @@ func TestSession_Refresh_AfterOutsideWrite(t *testing.T) {
 			t.Parallel()
 			f := newSessionFixture(t)
 			if tc.isDirty {
-				f.apply(t, beatEdit(2, fieldDuration, 1600))
+				f.apply(t, beatEdit(2, storyboard.FieldDuration, 1600))
 			}
 			f.writeOutside(t)
 
@@ -538,7 +538,7 @@ func TestSession_Refresh_AfterOutsideWrite(t *testing.T) {
 func TestSession_SaveAfterOutsideWrite_IsStale(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixture(t)
-	f.apply(t, beatEdit(1, fieldDuration, 1200))
+	f.apply(t, beatEdit(1, storyboard.FieldDuration, 1200))
 	f.writeOutside(t)
 
 	err := f.session.Save()
@@ -557,7 +557,7 @@ func TestSession_SaveAfterOutsideWrite_IsStale(t *testing.T) {
 func TestSession_SaveThenRefresh_KeepsTheVersionAndUndo(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixture(t)
-	f.apply(t, beatEdit(1, fieldDuration, 1200))
+	f.apply(t, beatEdit(1, storyboard.FieldDuration, 1200))
 	if err := f.session.Save(); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -576,7 +576,7 @@ func TestSession_SaveThenRefresh_KeepsTheVersionAndUndo(t *testing.T) {
 func TestSession_ReloadAfterOutsideWrite_ClearsStaleAndSaves(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixture(t)
-	f.apply(t, beatEdit(2, fieldDuration, 1600))
+	f.apply(t, beatEdit(2, storyboard.FieldDuration, 1600))
 	f.writeOutside(t)
 	if err := f.session.Refresh(); err != nil {
 		t.Fatalf("Refresh: %v", err)
@@ -591,7 +591,7 @@ func TestSession_ReloadAfterOutsideWrite_ClearsStaleAndSaves(t *testing.T) {
 	if state.IsStale || state.IsDirty || state.CanUndo || beatDuration(t, state, 1) != outsideMS {
 		t.Errorf("after reload: %+v", state)
 	}
-	f.apply(t, beatEdit(2, fieldDuration, 1600))
+	f.apply(t, beatEdit(2, storyboard.FieldDuration, 1600))
 	if err := f.session.Save(); err != nil {
 		t.Fatalf("Save after reload: %v", err)
 	}
@@ -649,7 +649,7 @@ func TestSession_ApplyAndState_RunInParallel(t *testing.T) {
 		go func() {
 			defer group.Done()
 			for _, duration := range durations {
-				errs <- f.session.Apply(beatEdit(1, fieldDuration, duration))
+				errs <- f.session.Apply(beatEdit(1, storyboard.FieldDuration, duration))
 			}
 		}()
 		go func() {
@@ -678,7 +678,7 @@ func TestSession_CameraEdit_MovesTheMoveAndUndoes(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
 
-	f.apply(t, cameraEdit(0, fieldCameraAt, json.RawMessage(`{"beat":1,"offset_ms":150}`)))
+	f.apply(t, cameraEdit(0, storyboard.FieldCameraAt, json.RawMessage(`{"beat":1,"offset_ms":150}`)))
 	edited := f.session.State()
 	undoErr := f.session.Undo()
 	undone := f.session.State()

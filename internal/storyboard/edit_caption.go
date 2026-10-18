@@ -1,26 +1,26 @@
-package tune
+package storyboard
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/yamledit"
 )
 
-// The caption fields an Edit names; each edits the caption its owner's index names.
+// The caption fields an [Edit] names; each edits the caption its owner's index names.
 const (
-	fieldCaptionAt    = "caption.at"
-	fieldCaptionFor   = "caption.for"
-	fieldCaptionUntil = "caption.until"
-	fieldCaptionText  = "caption.text"
-	fieldCaptionPlace = "caption.place"
-	fieldCaptionAlign = "caption.align"
+	FieldCaptionAt    = "caption.at"
+	FieldCaptionFor   = "caption.for"
+	FieldCaptionUntil = "caption.until"
+	FieldCaptionText  = "caption.text"
+	FieldCaptionPlace = "caption.place"
+	FieldCaptionAlign = "caption.align"
 )
 
 // captionFieldPrefix starts the name of every caption field.
@@ -38,14 +38,12 @@ const (
 
 // captionKeyOrder is a caption's keys in its struct field order: a new key goes after whichever
 // of the keys before it the caption holds.
-var captionKeyOrder = []string{
-	"text", "at", "for", "until", "font", "place", "align", "offset", "position", "color", "box", "fade",
-}
+var captionKeyOrder = keyOrder(reflect.TypeFor[Caption]())
 
 // The spellings of a caption's place and align, as their errors offer them.
 var (
-	placeSpellings = []string{string(storyboard.PlaceTop), string(storyboard.PlaceMiddle), string(storyboard.PlaceBottom)}
-	alignSpellings = []string{string(storyboard.AlignLeft), string(storyboard.AlignMiddle), string(storyboard.AlignRight)}
+	placeSpellings = []string{string(PlaceTop), string(PlaceMiddle), string(PlaceBottom)}
+	alignSpellings = []string{string(AlignLeft), string(AlignMiddle), string(AlignRight)}
 )
 
 // isCaptionField reports whether field edits a caption rather than a beat, the frame or a
@@ -56,30 +54,25 @@ func isCaptionField(field string) bool {
 
 // editCaption sets field, typed as value, on the caption at index in board, the storyboard s.doc
 // holds.
-func (s *splicer) editCaption(
-	board *storyboard.Storyboard,
-	index int,
-	field string,
-	value json.RawMessage,
-) error {
+func (s *splicer) editCaption(board *Storyboard, index int, field string, value json.RawMessage) error {
 	if index < 0 || index >= len(board.Captions) {
 		return fmt.Errorf("the storyboard has no caption at index %d", index)
 	}
 	caption := yamledit.Path{keyCaptions, strconv.Itoa(index)}
 
 	switch field {
-	case fieldCaptionAt:
+	case FieldCaptionAt:
 		return s.setMoment(caption, captionKeyOrder, value)
-	case fieldCaptionFor:
+	case FieldCaptionFor:
 		return s.setCaptionFor(caption, value)
-	case fieldCaptionUntil:
+	case FieldCaptionUntil:
 		return s.setCaptionUntil(caption, board.Captions[index], value)
-	case fieldCaptionText:
+	case FieldCaptionText:
 		return s.setCaptionText(caption, value)
-	case fieldCaptionPlace:
-		return s.setPlacement(caption, keyPlace, value, placeSpellings, string(storyboard.PlaceBottom))
+	case FieldCaptionPlace:
+		return s.setPlacement(caption, keyPlace, value, placeSpellings, string(PlaceBottom))
 	default:
-		return s.setPlacement(caption, keyAlign, value, alignSpellings, string(storyboard.AlignMiddle))
+		return s.setPlacement(caption, keyAlign, value, alignSpellings, string(AlignMiddle))
 	}
 }
 
@@ -108,7 +101,7 @@ func (s *splicer) writeCaptionFor(caption yamledit.Path, length time.Duration) e
 // types, and deletes its for, since a caption ends by exactly one of the two. A null clears the
 // until: the caption then ends after a for of the length it shows now, the same stretch; a
 // caption without an until is left as it is.
-func (s *splicer) setCaptionUntil(caption yamledit.Path, shown storyboard.Caption, value json.RawMessage) error {
+func (s *splicer) setCaptionUntil(caption yamledit.Path, shown Caption, value json.RawMessage) error {
 	if isNull(value) {
 		if shown.Until == nil {
 			return nil
@@ -154,4 +147,13 @@ func (s *splicer) setPlacement(
 		return s.doc.DeleteIfPresent(under(caption, key))
 	}
 	return s.doc.Upsert(caption, key, spelling, captionKeyOrder)
+}
+
+// decodeText reads a caption's text, typed as a JSON string.
+func decodeText(value json.RawMessage) (string, error) {
+	var text string
+	if err := json.Unmarshal(value, &text); err != nil {
+		return "", fmt.Errorf("want the field's text as a JSON string, got %s", value)
+	}
+	return text, nil
 }

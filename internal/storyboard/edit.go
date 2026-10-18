@@ -18,8 +18,9 @@ import (
 
 // Edit is one typed change to a storyboard field, as photon tune's page sends it:
 // {"owner": {"kind": "<kind>", "index": <n>}, "field": "<name>", "value": <JSON>}. Owner is
-// what the field edits: the beat by its id for a beat field, and the clip with index 0 for
-// frame.width and frame.fps. Value is typed per field:
+// what the field edits: the beat by its id for a beat field, the clip with index 0 for
+// frame.width and frame.fps, and the camera move or caption by its index in the storyboard's
+// camera or captions list, from 0, for a camera or caption field. Value is typed per field:
 //   - duration, hold, zoom.in, zoom.out: a whole number of milliseconds (1850);
 //   - cut: true or false;
 //   - zoom.factor: a number, 0 for auto, fitted to the target (1.8);
@@ -27,17 +28,31 @@ import (
 //   - zoom.target, and zoom when it adds one: a target, {"text": "ok", "nth": 2, "area":
 //     "list"}, its nth a whole number from 1 or "last" and left out for the first match, its
 //     area left out for the whole screen — the target a pick answers;
-//   - zoom as null removes the beat's zoom.
+//   - zoom as null removes the beat's zoom;
+//   - camera.at: a moment, {"beat": 3, "offset_ms": 200}, beat 0 for a clip time offset_ms
+//     after the clip's first frame, which replaces the move's whole at;
+//   - camera.over: a whole number of milliseconds;
+//   - camera.ease: "smooth", which removes the key, or "linear";
+//   - camera.to: a number, the factor, for a zoom move; for a pan, a target as zoom.target
+//     takes it or a cell, {"cell": {"x": 3, "y": 4}}, refused on a pan along a via path;
+//   - caption.at: a moment as camera.at takes it, which replaces the caption's whole at;
+//   - caption.for: a whole number of milliseconds above 0, which removes the caption's until;
+//   - caption.until: a moment, which removes the caption's for; null clears the until, the
+//     caption then ending after a for of the length it shows now;
+//   - caption.text: a string, its lines separated by \n;
+//   - caption.place: "top", "middle" or "bottom", which removes the key;
+//   - caption.align: "left", "middle", which removes the key, or "right".
 //
-// A value of another JSON type or spelling, a null or absent value but zoom's, and an owner of
-// another kind than the field's are refused with an error naming the field.
+// A value of another JSON type or spelling, a null or absent value but zoom's and
+// caption.until's, and an owner of another kind than the field's are refused with an error
+// naming the field.
 type Edit struct {
 	Owner Owner           `json:"owner"`
 	Field string          `json:"field"`
 	Value json.RawMessage `json:"value"`
 }
 
-// The fields an [Edit] names for [Apply].
+// The beat and frame fields an [Edit] names for [Apply].
 const (
 	FieldDuration   = "duration"
 	FieldHold       = "hold"
@@ -54,7 +69,14 @@ const (
 // editFields lists every field Apply takes, as the unknown-field error offers them.
 var editFields = []string{
 	FieldDuration, FieldHold, FieldCut, FieldZoom, FieldZoomTarget, FieldZoomFactor, FieldZoomIn,
-	FieldZoomOut, FieldFrameWidth, FieldFrameFPS,
+	FieldZoomOut, FieldFrameWidth, FieldFrameFPS, FieldCameraAt, FieldCameraOver, FieldCameraEase,
+	FieldCameraTo, FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionText,
+	FieldCaptionPlace, FieldCaptionAlign,
+}
+
+// EditFields returns every field an [Edit] names for [Apply], in a new slice.
+func EditFields() []string {
+	return slices.Clone(editFields)
 }
 
 // maxMilliseconds is the longest duration in milliseconds a time.Duration holds.
@@ -84,12 +106,19 @@ const (
 // ms, one in plain seconds in seconds with the fewest decimals, any other or new value as
 // time.Duration.String(). A new key goes after the keys that precede it in the storyboard's
 // field order, its yaml struct tags; a value equal to the default of a key that is absent writes
-// nothing; cut false and zoom.factor 0 (auto) delete their key. A target is written as the flow
-// mapping [Target.YAMLFlow] spells, and a zoom.target on a zoom holding nothing but its target
-// rewrites that zoom as a flow mapping. The edit is refused with an error led by the beat and
-// field, or the frame field, when its value is of the wrong JSON type or misspelled, when its
-// owner is of another kind than the field's, when it names a beat or zoom that is not there, or
-// when the result fails validation; the last wraps the *[ValidationError].
+// nothing; cut false, zoom.factor 0 (auto), camera.ease smooth, caption.place bottom and
+// caption.align middle delete their key. A target is written as the flow mapping
+// [Target.YAMLFlow] spells, and a zoom.target on a zoom holding nothing but its target rewrites
+// that zoom as a flow mapping. A camera.at, caption.at or caption.until is written as a clip time
+// in ms or a {beat: 3, offset: 200ms} flow mapping, and a pan's cell as {cell: {x: 3, y: 4}}; a
+// camera.at, a caption.at or caption.until, or a pan's camera.to replaces its whole node with the
+// value's flow text, and a caption.text replaces its whole node, a block scalar too, with one
+// double-quoted line; a caption.for deletes the caption's until and a caption.until its for, or,
+// as null, writes the for that keeps the caption's stretch in place of its until. The edit is
+// refused with an error led by its owner and field — the beat, camera move or caption, or
+// nothing for a frame field — when its value is of the wrong JSON type or misspelled, when its
+// owner is of another kind than the field's, when it names a beat, zoom, camera move or caption
+// that is not there, or when the result fails validation; the last wraps the *[ValidationError].
 func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 	board, err := Parse(src, path)
 	if err != nil {
@@ -113,7 +142,7 @@ func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 }
 
 // editName names what edit changes, as its errors lead with it: `beat 2: hold`, `frame.fps`,
-// `camera[1]: duration`, `captions[0]: hold`.
+// `camera[1]: camera.at`, `captions[0]: caption.text`.
 func editName(edit Edit) string {
 	switch edit.Owner.Kind {
 	case OwnerBeat:
@@ -127,13 +156,19 @@ func editName(edit Edit) string {
 	}
 }
 
-// ownerKindOf is the kind of owner field edits: the clip for a frame field and a beat for every
-// other.
+// ownerKindOf is the kind of owner field edits: the clip for a frame field, a camera move for a
+// camera field, a caption for a caption field and a beat for every other.
 func ownerKindOf(field string) OwnerKind {
-	if field == FieldFrameWidth || field == FieldFrameFPS {
+	switch {
+	case field == FieldFrameWidth || field == FieldFrameFPS:
 		return OwnerClip
+	case isCameraField(field):
+		return OwnerCamera
+	case isCaptionField(field):
+		return OwnerCaption
+	default:
+		return OwnerBeat
 	}
-	return OwnerBeat
 }
 
 // splicer applies one edit to doc, which says what keys are present and how the old values are
@@ -142,7 +177,7 @@ type splicer struct {
 	doc *yamledit.Document
 }
 
-// apply routes edit to the frame or to its beat in board, the storyboard doc holds, once its
+// apply routes edit to the frame or to its beat, camera move or caption in board, the storyboard doc holds, once its
 // field, its owner's kind and the presence of its value check out.
 func (s *splicer) apply(board *Storyboard, edit Edit) error {
 	if !slices.Contains(editFields, edit.Field) {
@@ -154,12 +189,17 @@ func (s *splicer) apply(board *Storyboard, edit Edit) error {
 	if len(edit.Value) == 0 {
 		return errors.New("want a value, got none")
 	}
-	if isNull(edit.Value) && edit.Field != FieldZoom {
+	if isNull(edit.Value) && edit.Field != FieldZoom && edit.Field != FieldCaptionUntil {
 		return errors.New("want a value, got null")
 	}
 
-	if edit.Owner.Kind == OwnerClip {
+	switch edit.Owner.Kind {
+	case OwnerClip:
 		return s.editFrame(edit)
+	case OwnerCamera:
+		return s.editCamera(board, edit.Owner.Index, edit.Field, edit.Value)
+	case OwnerCaption:
+		return s.editCaption(board, edit.Owner.Index, edit.Field, edit.Value)
 	}
 	index := slices.IndexFunc(board.Beats, func(beat Beat) bool { return beat.ID == edit.Owner.Index })
 	if index < 0 {
@@ -189,6 +229,46 @@ func (s *splicer) writeDuration(
 	return s.doc.Upsert(mapping, key, formatDuration(length, old), order)
 }
 
+// replaceOrInsert puts text, a value's one line of YAML, in place of the whole node at key in
+// mapping, whatever its form, a block scalar too, or inserts `key: text` after the keys that
+// precede it in order when the key is absent. Upsert serves only the absent case: its Set
+// refuses a present block scalar.
+func (s *splicer) replaceOrInsert(mapping yamledit.Path, key, text string, order []string) error {
+	path := under(mapping, key)
+	if s.doc.Has(path) {
+		return s.doc.Replace(path, text)
+	}
+	return s.doc.Upsert(mapping, key, text, order)
+}
+
+// setMoment replaces the whole at of mapping, a camera move or a caption, whatever its form,
+// with the moment value types, spelled as [momentFlow] does. A clip start on a mapping without at
+// writes nothing: an absent at already starts it there.
+func (s *splicer) setMoment(mapping yamledit.Path, order []string, value json.RawMessage) error {
+	moment, err := decodeMoment(value)
+	if err != nil {
+		return err
+	}
+	if moment == (Moment{}) && !s.doc.Has(under(mapping, keyAt)) {
+		return nil
+	}
+	return s.replaceOrInsert(mapping, keyAt, momentFlow(moment), order)
+}
+
+// momentFlow spells moment as the storyboard writes one: a clip time in milliseconds (4500ms),
+// or a beat's {beat: 3, offset: 200ms} with an offset of 0 left out.
+func momentFlow(moment Moment) string {
+	offset := strconv.FormatInt(moment.Offset.Milliseconds(), 10) + "ms"
+	if moment.Beat == 0 {
+		return offset
+	}
+	beat := "beat: " + strconv.Itoa(moment.Beat)
+	if moment.Offset == 0 {
+		return "{" + beat + "}"
+	}
+	return "{" + beat + ", offset: " + offset + "}"
+}
+
 // under returns path extended by key, never sharing path's backing array.
 func under(path yamledit.Path, key string) yamledit.Path {
 	return append(append(yamledit.Path{}, path...), key)
@@ -196,12 +276,15 @@ func under(path yamledit.Path, key string) yamledit.Path {
 
 // keyOrder is the YAML keys of the struct type of, in its field order, as its yaml tags name
 // them: an edit inserts a new key after whichever of the keys before it the mapping holds. A
-// field the decoder skips (`yaml:"-"`) or folds into its parent (`yaml:",inline"`) has no key of
-// its own and is left out; a field with no tag name is keyed by its lowercased name, as the
-// decoder keys it.
+// field the decoder skips — unexported, or tagged `yaml:"-"` — or folds into its parent
+// (`yaml:",inline"`) has no key of its own and is left out; a field with no tag name is keyed by
+// its lowercased name, as the decoder keys it.
 func keyOrder(of reflect.Type) []string {
 	keys := make([]string, 0, of.NumField())
 	for field := range of.Fields() {
+		if !field.IsExported() {
+			continue
+		}
 		name, options, _ := strings.Cut(field.Tag.Get(yamlTag), tagSeparator)
 		if name == yamlSkipped || slices.Contains(strings.Split(options, tagSeparator), yamlInline) {
 			continue
@@ -227,6 +310,31 @@ func decodeMilliseconds(value json.RawMessage) (time.Duration, error) {
 		return 0, fmt.Errorf("want a whole number of milliseconds such as 1850, got %s", value)
 	}
 	return time.Duration(count) * time.Millisecond, nil
+}
+
+// wireMoment is a moment as an [Edit] types it, {"beat": 3, "offset_ms": 200}: beat 0 is a clip
+// time, offset_ms after the clip's first frame; a beat id from 1 is that beat's start plus
+// offset_ms, which may be negative. Both keys are required.
+type wireMoment struct {
+	Beat     *int   `json:"beat"`
+	OffsetMS *int64 `json:"offset_ms"`
+}
+
+// decodeMoment reads a moment typed as {"beat", "offset_ms"}, refusing any other key, a missing
+// one, a negative beat, a negative clip time and an offset no time.Duration holds.
+func decodeMoment(value json.RawMessage) (Moment, error) {
+	decoder := json.NewDecoder(bytes.NewReader(value))
+	decoder.DisallowUnknownFields()
+	var wire wireMoment
+	err := decoder.Decode(&wire)
+	isWhole := err == nil && wire.Beat != nil && wire.OffsetMS != nil
+	if !isWhole || *wire.Beat < 0 || (*wire.Beat == 0 && *wire.OffsetMS < 0) ||
+		*wire.OffsetMS > maxMilliseconds || *wire.OffsetMS < -maxMilliseconds {
+		return Moment{}, fmt.Errorf(
+			`want a moment such as {"beat": 3, "offset_ms": 200}, or beat 0 for a clip time from 0, got %s`, value)
+	}
+	offset := time.Duration(*wire.OffsetMS) * time.Millisecond
+	return Moment{Beat: *wire.Beat, Offset: offset}, nil
 }
 
 // formatDuration spells length in the unit old, the value it replaces, is written in.

@@ -270,7 +270,7 @@ func TestSession_Pick_ProposedTargetIsAZoomTargetEdit(t *testing.T) {
 		t.Fatalf("Pick: %v", err)
 	}
 
-	err = session.Apply(beatEdit(1, fieldZoomTarget, responseOf(proposal).Target))
+	err = session.Apply(beatEdit(1, storyboard.FieldZoomTarget, responseOf(proposal).Target))
 
 	if err != nil {
 		t.Fatalf("Apply the proposed target: %v", err)
@@ -292,7 +292,7 @@ func TestSession_LastMatchTarget_RoundTripsThroughTheProposalAndItsApply(t *test
 	response := responseOf(Proposal{Target: last, Snippets: snippetsOf(last)})
 
 	encoded, encodeErr := json.Marshal(response.Target)
-	applyErr := session.Apply(beatEdit(1, fieldZoomTarget, json.RawMessage(encoded)))
+	applyErr := session.Apply(beatEdit(1, storyboard.FieldZoomTarget, json.RawMessage(encoded)))
 
 	if encodeErr != nil {
 		t.Fatalf("encode the proposed target: %v", encodeErr)

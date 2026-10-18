@@ -10,8 +10,9 @@
 // render's CheckCaptions, which `photon lint` runs), and the take-bound tier resolves the zoom and
 // pan targets on a take's screens (package compose's New).
 //
-// [Apply] changes one field by a typed [Edit] — a beat's duration, hold, cut or zoom, or the
-// clip's frame.width or frame.fps — splicing the new value into the source so only the edited
+// [Apply] changes one field by a typed [Edit] — a beat's duration, hold, cut or zoom, the clip's
+// frame.width or frame.fps, a camera move's start, length, ease or destination, or a caption's
+// start, end, text, place or align — splicing the new value into the source so only the edited
 // key's text changes, a new key placed by the order of the storyboard's yaml struct tags, and
 // refuses an edit whose result fails Parse.
 //
@@ -28,8 +29,10 @@
 //   - storyboard.go: the [Storyboard] and its [Frame], [Load], [Parse] and [ValidationError].
 //   - beat.go: a [Beat], its [Zoom], [Action] forms, [Target] and [Nth], and [Expect].
 //   - camera.go: a [CameraMove] — a [ZoomMove] or [PanMove] — its [Point], [Cell] and [Ease], and their rules.
-//   - edit.go: an [Edit], [Apply] and the splicing every edit shares: field and owner checks, durations, key order from yaml tags.
+//   - edit.go: an [Edit], [Apply] and the splicing every edit shares: field and owner checks, durations, moments, key order from yaml tags.
 //   - edit_beat.go: the beat and frame edits — duration, hold, cut, zoom and its fields, frame.width and frame.fps — and [Target.YAMLFlow].
+//   - edit_camera.go: the camera move edits — camera.at, camera.over, camera.ease and camera.to.
+//   - edit_caption.go: the caption edits — caption.at, caption.for, caption.until, caption.text, caption.place and caption.align.
 //   - clock.go: the clip's [OutputClock], from [Storyboard.Clock]: section starts, moments and length.
 //   - caption.go: a [Caption], its [CaptionFont] and [Weight], [Place], [Align], [Pixels], [CaptionBox], [Fade] and [RGB], and their rules.
 //   - located.go: a problem's [Owner] and [OwnerKind], the [LocatedError] that carries one, [AtBeat], [AtCamera], [AtCaption] and [OwnerOf].

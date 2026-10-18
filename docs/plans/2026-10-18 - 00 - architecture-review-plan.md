@@ -524,7 +524,14 @@ Depends on item 20.
 - `! grep -rnE 'beatKeyOrder|zoomKeyOrder|frameKeyOrder' internal/tune/`
 **Commit:** `refactor(storyboard): own typed beat and frame edits`
 
-## 22. Storyboard applies typed camera and caption edits
+## 22. Storyboard applies typed camera and caption edits — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): re-derived from the assumption that tune keeps an edit router: with every field in storyboard, tune's `apply` had nothing left to route, so it is gone and Session.Apply (internal/tune/session.go) calls storyboard.Apply directly; tune/edit.go holds only the `Edit` alias.
+NOTES (2026-10-18): storyboard exports `EditFields()` (a copy of the field list) for TestPage_EntryFields_AreEditFields, and the camera and caption field names as `FieldCameraAt` … `FieldCaptionAlign`; tune tests use storyboard's field constants directly and the `field*` aliases in tune/edit_test.go are gone.
+NOTES (2026-10-18): keyOrder now skips unexported fields (the decoder skips them too): ZoomMove, PanMove and Caption carry resolved times and colours that would otherwise trail their key orders; TestKeyOrder gains the zoom move, pan move and caption cases, matching the old hand-written tables exactly.
+NOTES (2026-10-18): the moment helpers (wireMoment, decodeMoment, momentFlow, setMoment) and replaceOrInsert, shared by camera and caption edits, live in storyboard/edit.go; decodePoint uses its own wireTarget-based wirePoint and a json-tagged wireCell in place of tune's pickTarget and CellState. The via-pan refusal text is kept byte-identical.
+NOTES (2026-10-18): consequential edit — .capcom/knowledge/package-layout.md: made necessary by moving the camera and caption edits out of tune (tune's row said it spliced them itself).
+NOTES (2026-10-18): consequential edit — internal/tune/server.go: made necessary by moving edit decoding to storyboard (its own wireTarget), which left pickTarget.target with no caller; the method is deleted and pickTarget's doc comment no longer says a zoom edit takes it.
 
 Depends on item 21.
 
