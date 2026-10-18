@@ -260,6 +260,3 @@ func snippetsOf(proposed storyboard.Target) map[string]string {
 		snippetDragTo:   "to: " + flow,
 	}
 }
-
-// nthLast spells the last match's nth on the wire.
-const nthLast = "last"

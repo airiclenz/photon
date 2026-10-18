@@ -123,7 +123,7 @@ type wireCell struct {
 // wirePoint is a pan's destination as an [Edit] types it: a target as a zoom.target takes it,
 // {"text", "nth", "area"}, or a cell, {"cell": {"x": 3, "y": 4}} — one of the two.
 type wirePoint struct {
-	wireTarget
+	Target
 	Cell *wireCell `json:"cell"`
 }
 
@@ -135,7 +135,7 @@ func decodePoint(value json.RawMessage) (string, error) {
 	decoder.DisallowUnknownFields()
 	var wire wirePoint
 	err := decoder.Decode(&wire)
-	if err == nil && wire.Cell != nil && wire.wireTarget != (wireTarget{}) {
+	if err == nil && wire.Cell != nil && wire.Target != (Target{}) {
 		err = errors.New("a target and a cell at once")
 	}
 	if err != nil {
@@ -146,6 +146,5 @@ func decodePoint(value json.RawMessage) (string, error) {
 		cell := "{x: " + strconv.Itoa(wire.Cell.X) + ", y: " + strconv.Itoa(wire.Cell.Y) + "}"
 		return "{cell: " + cell + "}", nil
 	}
-	target := Target{Text: wire.Text, Nth: Nth(wire.Nth), Area: wire.Area}
-	return target.YAMLFlow(), nil
+	return wire.Target.YAMLFlow(), nil
 }

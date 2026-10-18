@@ -177,44 +177,17 @@ func (t Target) YAMLFlow() string {
 	return "{" + strings.Join(fields, ", ") + "}"
 }
 
-// wireTarget is a target as an [Edit] types it, {"text", "nth", "area"}: nth is left out for the
-// first match, and area for the whole screen.
-type wireTarget struct {
-	Text string  `json:"text"`
-	Nth  wireNth `json:"nth"`
-	Area string  `json:"area"`
-}
-
-// wireNth is a target's nth as an [Edit] types it: a whole number from 1, or "last" for the last
-// match; its zero value, left out, is the first match.
-type wireNth Nth
-
-// UnmarshalJSON reads a whole number from 1 or "last", and refuses anything else.
-func (n *wireNth) UnmarshalJSON(data []byte) error {
-	var count int
-	if err := json.Unmarshal(data, &count); err == nil && count >= int(NthFirst) {
-		*n = wireNth(count)
-		return nil
-	}
-	var word string
-	if err := json.Unmarshal(data, &word); err == nil && word == nthLastWord {
-		*n = wireNth(NthLast)
-		return nil
-	}
-	return fmt.Errorf("nth: want a whole number from 1 or %q, got %s", nthLastWord, data)
-}
-
 // decodeTarget reads a target typed as a pick answers it, {"text", "nth", "area"}, refusing any
 // other key.
 func decodeTarget(value json.RawMessage) (Target, error) {
 	decoder := json.NewDecoder(bytes.NewReader(value))
 	decoder.DisallowUnknownFields()
-	var wire wireTarget
-	if err := decoder.Decode(&wire); err != nil {
+	var target Target
+	if err := decoder.Decode(&target); err != nil {
 		return Target{}, fmt.Errorf(
 			`want a target such as {"text": "ok", "nth": 2, "area": "list"}, got %s: %w`, value, err)
 	}
-	return Target{Text: wire.Text, Nth: Nth(wire.Nth), Area: wire.Area}, nil
+	return target, nil
 }
 
 // decodeCount reads a frame field typed as a whole JSON number.

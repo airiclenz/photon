@@ -280,6 +280,74 @@ func TestApply_WireSpellings(t *testing.T) {
 	}
 }
 
+func TestNth_JSON_RoundTripsAndRefusesOtherSpellings(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		wire      string
+		want      Nth
+		isRefused bool
+	}{
+		{name: "the first match by number", wire: `1`, want: NthFirst},
+		{name: "a later match", wire: `2`, want: 2},
+		{name: "the last match", wire: `"last"`, want: NthLast},
+		{name: "zero", wire: `0`, isRefused: true},
+		{name: "a negative number", wire: `-1`, isRefused: true},
+		{name: "the word first", wire: `"first"`, isRefused: true},
+		{name: "a decimal", wire: `1.5`, isRefused: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			var decoded Nth
+
+			decodeErr := json.Unmarshal([]byte(test.wire), &decoded)
+			encoded, encodeErr := json.Marshal(decoded)
+
+			if test.isRefused {
+				if decodeErr == nil || !strings.Contains(decodeErr.Error(), `want a whole number from 1 or "last"`) {
+					t.Errorf("decode %s: want the nth refused, got %v and %d", test.wire, decodeErr, decoded)
+				}
+				return
+			}
+			if decodeErr != nil || decoded != test.want {
+				t.Fatalf("decode %s: want %d, got %d and %v", test.wire, test.want, decoded, decodeErr)
+			}
+			if encodeErr != nil || string(encoded) != test.wire {
+				t.Errorf("encode %d: want %s, got %s and %v", decoded, test.wire, encoded, encodeErr)
+			}
+		})
+	}
+}
+
+func TestTarget_JSON_LeavesTheFirstMatchAndTheWholeScreenOut(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		target Target
+		want   string
+	}{
+		{Target{Text: "ok"}, `{"text":"ok"}`},
+		{Target{Text: "ok", Area: "list"}, `{"text":"ok","area":"list"}`},
+		{Target{Text: "ok", Nth: 2}, `{"text":"ok","nth":2}`},
+		{Target{Text: "ok", Nth: NthLast, Area: "list"}, `{"text":"ok","nth":"last","area":"list"}`},
+	}
+	for _, test := range tests {
+		t.Run(test.want, func(t *testing.T) {
+			t.Parallel()
+
+			encoded, err := json.Marshal(test.target)
+
+			if err != nil || string(encoded) != test.want {
+				t.Fatalf("encode %+v: want %s, got %s and %v", test.target, test.want, encoded, err)
+			}
+			var decoded Target
+			if err := json.Unmarshal(encoded, &decoded); err != nil || decoded != test.target {
+				t.Errorf("decode %s: want %+v, got %+v and %v", encoded, test.target, decoded, err)
+			}
+		})
+	}
+}
+
 func TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

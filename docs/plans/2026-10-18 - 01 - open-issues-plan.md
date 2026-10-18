@@ -141,7 +141,11 @@ internal/render/render.go — captionLoads, loadCaptionFaces; internal/render/re
 **Closes:** pipeline-reuse-invalidation-test
 **Commit:** `test(render): rebuild rasters and caption faces when fonts or theme change`
 
-## 4. One wire codec for a target's nth
+## 4. One wire codec for a target's nth — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): took the plan's second option. The exported wire struct is `storyboard.Target` itself, which only carries Text, Nth and Area, with `json:"text"`, `json:"nth,omitempty"` and `json:"area,omitempty"` tags. `storyboard.Nth` gains MarshalJSON and UnmarshalJSON with the existing error text kept. storyboard's private `wireTarget` and `wireNth` are deleted: `decodeTarget` decodes into Target and `wirePoint` embeds Target. tune's `pickTarget`, `wireNth` and `nthLast` are deleted: `pickResponse.Target` is a `storyboard.Target`, and `pickTargetOf` still turns nth 1 into the zero nth, which the wire leaves out.
+
+NOTES (2026-10-18): the new tune table test (TestSession_PickProposal_AppliesAsAZoomTargetAndAPanDestination) applies each proposal through `storyboard.Apply` and uses a separate pan-only board (`pickPanStoryboard`), because validation refuses a camera pan that overlaps beat 1's zoom section. Real `Session.Pick` produces three rows: first match, first match in an area, and nth 2 in an area. The other rows are built by hand, as the guard requires: nth 2 with no area, last, last in an area, and an nth of 1 that must be folded.
 
 **What:**
 **Regression guard.** The exported wire struct carries `json:"nth,omitempty"` and

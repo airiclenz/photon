@@ -1,6 +1,7 @@
 package storyboard
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -126,11 +127,13 @@ type PauseAction struct {
 
 // Target is an on-screen place a click, drag or zoom resolves on the current screen: Text is a
 // regex over the screen's rows, Nth picks which match counts and Area limits the rows searched to
-// an area the config declares (empty or [AreaAny] means the whole screen).
+// an area the config declares (empty or [AreaAny] means the whole screen). It is also a target on
+// the JSON wire, {"text", "nth", "area"}, as a zoom.target or camera.to [Edit] types it and photon
+// tune's pick proposes it: a zero Nth and an empty Area are left out.
 type Target struct {
-	Text string `yaml:"text"`
-	Nth  Nth    `yaml:"nth"`
-	Area string `yaml:"area"`
+	Text string `yaml:"text" json:"text"`
+	Nth  Nth    `yaml:"nth" json:"nth,omitempty"`
+	Area string `yaml:"area" json:"area,omitempty"`
 }
 
 // AreaAny is the area spelling that searches the whole screen, as an empty area does.
@@ -166,6 +169,30 @@ func (n *Nth) UnmarshalYAML(value *yaml.Node) error {
 	}
 	*n = Nth(parsed)
 	return nil
+}
+
+// MarshalJSON writes NthLast as "last" and any other nth as its number.
+func (n Nth) MarshalJSON() ([]byte, error) {
+	if n == NthLast {
+		return json.Marshal(nthLastWord)
+	}
+	return json.Marshal(int(n))
+}
+
+// UnmarshalJSON reads a whole number from 1 or "last", and refuses anything else: the first match
+// travels as an absent nth, never as "first" or 0.
+func (n *Nth) UnmarshalJSON(data []byte) error {
+	var count int
+	if err := json.Unmarshal(data, &count); err == nil && count >= int(NthFirst) {
+		*n = Nth(count)
+		return nil
+	}
+	var word string
+	if err := json.Unmarshal(data, &word); err == nil && word == nthLastWord {
+		*n = NthLast
+		return nil
+	}
+	return fmt.Errorf("nth: want a whole number from 1 or %q, got %s", nthLastWord, data)
 }
 
 // nodeKindName spells a yaml.Node kind for an error message.

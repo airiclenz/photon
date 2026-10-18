@@ -4,7 +4,6 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"image"
 	"io/fs"
 	"mime"
@@ -96,54 +95,19 @@ type pixelPoint struct {
 // pickResponse is a pick's answer: the target, the cell box it resolves to, that box in
 // output-frame pixels, and the snippets keyed by place.
 type pickResponse struct {
-	Target   pickTarget        `json:"target"`
+	Target   storyboard.Target `json:"target"`
 	Box      take.Box          `json:"box"`
 	Rect     pixelRect         `json:"rect"`
 	Snippets map[string]string `json:"snippets"`
 }
 
-// pickTarget is a target on the wire, as a pick proposes it: nth is left out when it is the
-// first match, and area when the target searches the whole screen.
-type pickTarget struct {
-	Text string  `json:"text"`
-	Nth  wireNth `json:"nth,omitempty"`
-	Area string  `json:"area,omitempty"`
-}
-
-// wireNth is a target's nth on the wire: a whole number from 1, or "last" for the last match;
-// its zero value, left out, is the first match.
-type wireNth int
-
-// MarshalJSON writes the last match as "last" and any other nth as its number.
-func (n wireNth) MarshalJSON() ([]byte, error) {
-	if storyboard.Nth(n) == storyboard.NthLast {
-		return json.Marshal(nthLast)
+// pickTargetOf is target as a pick proposes it on the wire: an nth of first becomes the zero nth,
+// which the wire leaves out.
+func pickTargetOf(target storyboard.Target) storyboard.Target {
+	if target.Nth == storyboard.NthFirst {
+		target.Nth = 0
 	}
-	return json.Marshal(int(n))
-}
-
-// UnmarshalJSON reads a whole number from 1 or "last", and refuses anything else.
-func (n *wireNth) UnmarshalJSON(data []byte) error {
-	var count int
-	if err := json.Unmarshal(data, &count); err == nil && count >= int(storyboard.NthFirst) {
-		*n = wireNth(count)
-		return nil
-	}
-	var word string
-	if err := json.Unmarshal(data, &word); err == nil && word == nthLast {
-		*n = wireNth(storyboard.NthLast)
-		return nil
-	}
-	return fmt.Errorf("nth: want a whole number from 1 or %q, got %s", nthLast, data)
-}
-
-// pickTargetOf is target on the wire, its nth left out when it is the first match.
-func pickTargetOf(target storyboard.Target) pickTarget {
-	wire := pickTarget{Text: target.Text, Area: target.Area}
-	if target.Nth > storyboard.NthFirst || target.Nth == storyboard.NthLast {
-		wire.Nth = wireNth(target.Nth)
-	}
-	return wire
+	return target
 }
 
 // pixelRect is a rectangle on the output frame, in pixels.

@@ -363,7 +363,7 @@ func TestHandler_Pick_ReturnsTheProposal(t *testing.T) {
 	assertStatus(t, response, http.StatusOK)
 	var proposal pickResponse
 	decodeResponse(t, response, &proposal)
-	if proposal.Target != (pickTarget{Text: "unique"}) {
+	if proposal.Target != (storyboard.Target{Text: "unique"}) {
 		t.Errorf("target: want unique, got %+v", proposal.Target)
 	}
 	if proposal.Box.X != 0 || proposal.Box.Y != 5 || proposal.Box.W < 6 || proposal.Box.H != 1 {

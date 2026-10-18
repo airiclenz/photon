@@ -311,3 +311,81 @@ func TestSession_LastMatchTarget_RoundTripsThroughTheProposalAndItsApply(t *test
 		t.Errorf("beat 1's zoom: want the target %+v, got %+v", want, zoom)
 	}
 }
+
+// pickPanStoryboard is pickStoryboard's beat without its zoom, under one pan to a cell, which a
+// pick's target replaces.
+const pickPanStoryboard = `clip: picked
+ship: out/picked.gif
+frame: {cols: 30, rows: 9, padding: 4, font_size: 10, line_height: 1.2, scale: 2, width: 600, fps: 10, max_colors: 16}
+beats:
+  - id: 1
+    title: list
+    duration: 2s
+camera:
+  - pan: {to: {cell: {x: 1, y: 1}}, at: 200ms, over: 600ms}
+`
+
+func TestSession_PickProposal_AppliesAsAZoomTargetAndAPanDestination(t *testing.T) {
+	t.Parallel()
+	session := newPickSession(t)
+	picked := func(row, fromCol, toCol int) func(*testing.T) Proposal {
+		return func(t *testing.T) Proposal {
+			t.Helper()
+			proposal, err := session.Pick(0, cellPixel(t, session, fromCol, row), cellPixel(t, session, toCol, row))
+			if err != nil {
+				t.Fatalf("Pick: %v", err)
+			}
+			return proposal
+		}
+	}
+	// built is a proposal of a shape the pick screen cannot yield, as the proposer would hand it.
+	built := func(target storyboard.Target) func(*testing.T) Proposal {
+		return func(*testing.T) Proposal {
+			return Proposal{Target: target, Snippets: snippetsOf(target)}
+		}
+	}
+	tests := []struct {
+		name     string
+		proposal func(*testing.T) Proposal
+		want     storyboard.Target
+	}{
+		{name: "first match", proposal: picked(5, 0, 5),
+			want: storyboard.Target{Text: "unique"}},
+		{name: "first match in an area", proposal: picked(4, 8, 11),
+			want: storyboard.Target{Text: "here", Area: "status"}},
+		{name: "first match spelled as nth 1", proposal: built(storyboard.Target{Text: "unique", Nth: storyboard.NthFirst}),
+			want: storyboard.Target{Text: "unique"}},
+		{name: "nth 2", proposal: built(storyboard.Target{Text: "beta", Nth: 2}),
+			want: storyboard.Target{Text: "beta", Nth: 2}},
+		{name: "nth 2 in an area", proposal: picked(2, 7, 10),
+			want: storyboard.Target{Text: "beta", Nth: 2, Area: "list"}},
+		{name: "last match", proposal: built(storyboard.Target{Text: "beta", Nth: storyboard.NthLast}),
+			want: storyboard.Target{Text: "beta", Nth: storyboard.NthLast}},
+		{name: "last match in an area", proposal: built(storyboard.Target{Text: "beta", Nth: storyboard.NthLast, Area: "list"}),
+			want: storyboard.Target{Text: "beta", Nth: storyboard.NthLast, Area: "list"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			proposed := responseOf(test.proposal(t)).Target
+			zoomTarget := beatEdit(1, storyboard.FieldZoomTarget, proposed)
+			panTo := cameraEdit(0, storyboard.FieldCameraTo, proposed)
+
+			_, zoomed, zoomErr := storyboard.Apply([]byte(pickStoryboard), "picked.yaml", zoomTarget)
+			_, panned, panErr := storyboard.Apply([]byte(pickPanStoryboard), "picked.yaml", panTo)
+
+			if zoomErr != nil {
+				t.Fatalf("apply %+v as zoom.target: %v", proposed, zoomErr)
+			}
+			if got := zoomed.Beats[0].Zoom.Target; got != test.want {
+				t.Errorf("zoom.target: want %+v, got %+v", test.want, got)
+			}
+			if panErr != nil {
+				t.Fatalf("apply %+v as camera.to: %v", proposed, panErr)
+			}
+			if got := panned.Camera[0].Pan.To; got.Cell != nil || got.Target != test.want {
+				t.Errorf("camera.to: want %+v, got %+v", test.want, got)
+			}
+		})
+	}
+}
