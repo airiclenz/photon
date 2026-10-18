@@ -134,7 +134,8 @@ func readHeader(dec *json.Decoder) (*Take, error) {
 		return nil, fmt.Errorf("%w: read the header: %w", ErrFormat, err)
 	}
 	if head.Cols <= 0 || head.Rows <= 0 {
-		return nil, fmt.Errorf("%w: the header gives a %dx%d terminal", ErrFormat, head.Cols, head.Rows)
+		return nil, fmt.Errorf("%w: the header gives a %dx%d terminal",
+			ErrFormat, head.Cols, head.Rows)
 	}
 	return &Take{Cols: head.Cols, Rows: head.Rows, FPS: head.FPS, Started: head.Started}, nil
 }
@@ -157,7 +158,8 @@ func readLines(dec *json.Decoder, t *Take) error {
 		case next.Event != nil && next.Snapshot == nil:
 			t.Events = append(t.Events, *next.Event)
 		default:
-			return fmt.Errorf("%w: line %d is neither one snapshot nor one event", ErrFormat, number)
+			return fmt.Errorf("%w: line %d is neither one snapshot nor one event",
+				ErrFormat, number)
 		}
 	}
 }

@@ -231,7 +231,9 @@ func child(node *yaml.Node, step string) (located, error) {
 		if index < 0 {
 			return located{}, fmt.Errorf("key %q: %w", step, ErrNotFound)
 		}
-		return located{node: node.Content[index+1], parent: node, key: node.Content[index], keyIndex: index}, nil
+		return located{
+			node: node.Content[index+1], parent: node, key: node.Content[index], keyIndex: index,
+		}, nil
 	case yaml.SequenceNode:
 		index, err := strconv.Atoi(step)
 		if err != nil || index < 0 || index >= len(node.Content) {

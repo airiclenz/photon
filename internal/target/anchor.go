@@ -41,7 +41,8 @@ func (a area) rows(screen []screenRow) (top, end int, err error) {
 		}
 	}
 	if top > bottom {
-		return 0, 0, fmt.Errorf("top row %d is below bottom row %d, so the area is %w", top, bottom, ErrNotOnScreen)
+		return 0, 0, fmt.Errorf("top row %d is below bottom row %d, so the area is %w",
+			top, bottom, ErrNotOnScreen)
 	}
 	return top, bottom + 1, nil
 }
@@ -75,7 +76,10 @@ func compileAnchor(path string, spec *config.Anchor) (*anchor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &anchor{path: path, pattern: pattern, pick: spec.Pick, above: above, below: below, offset: spec.Offset}, nil
+	return &anchor{
+		path: path, pattern: pattern, pick: spec.Pick,
+		above: above, below: below, offset: spec.Offset,
+	}, nil
 }
 
 // row picks the anchor's row on screen: the first row whose text the pattern finds, or the last
@@ -112,7 +116,8 @@ func (a *anchor) row(screen []screenRow) (int, error) {
 	}
 	moved := found + a.offset
 	if moved < 0 || moved >= len(screen) {
-		return 0, fmt.Errorf("%s anchor /%s/: row %d offset by %d is %w", a.path, a.pattern, found, a.offset, ErrNotOnScreen)
+		return 0, fmt.Errorf("%s anchor /%s/: row %d offset by %d is %w",
+			a.path, a.pattern, found, a.offset, ErrNotOnScreen)
 	}
 	return moved, nil
 }

@@ -113,7 +113,8 @@ func pickMatch(matches []take.Box, target storyboard.Target) (take.Box, error) {
 	}
 	switch {
 	case len(matches) == 0:
-		return take.Box{}, fmt.Errorf("target /%s/ (area %s): %w", target.Text, where, ErrNotOnScreen)
+		return take.Box{}, fmt.Errorf("target /%s/ (area %s): %w",
+			target.Text, where, ErrNotOnScreen)
 	case target.Nth == storyboard.NthLast:
 		return matches[len(matches)-1], nil
 	case target.Nth <= storyboard.NthFirst:

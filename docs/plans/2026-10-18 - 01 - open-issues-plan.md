@@ -734,7 +734,10 @@ internal/storyboard/camera.go — validateForm; internal/testkit/docmap.go — n
 - `GOMEMLIMIT=2GiB go test ./internal/storyboard/`
 **Commit:** `style(storyboard): wrap at 100 columns`
 
-## 22. Wrap internal/{take,target,terminal,testkit,yamledit} to 100 columns
+## 22. Wrap internal/{take,target,terminal,testkit,yamledit} to 100 columns — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): a few over-long lines were wrapped by moving a subexpression into a local (`cell` out of the `if` header in screenDrawnLocked, `owner` in the tty-owner scan, `isComment` in the yamledit scalar-end scan); none changes behaviour. The launchProbe.String format and the CheckDocMap message are split with `+` and stay byte-identical; terminal's doc-map items for terminal.go and lifecycle.go wrap onto 5-space continuation lines, the shape the doc-map test parses.
+NOTES (2026-10-18): besides `LLL`, the full config was run on the five packages (0 issues); no Windows-only file in them had a finding (terminal_windows.go is within 100 columns).
 
 **What:** Depends on items 7 and 17. As item 19, for these packages.
 **Files:** non-test .go files in internal/take, internal/target, internal/terminal,

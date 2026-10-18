@@ -56,7 +56,8 @@ func ttyOwners(tty *os.File) ([]string, error) {
 		}
 		held++
 		if len(owners) < maxListedOwners {
-			owners = append(owners, fmt.Sprintf("pid %s (%s) session %d", entry.Name(), comm, session))
+			owner := fmt.Sprintf("pid %s (%s) session %d", entry.Name(), comm, session)
+			owners = append(owners, owner)
 		}
 	}
 	if held > len(owners) {

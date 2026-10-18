@@ -79,7 +79,8 @@ type Options struct {
 // validate reports an Options no terminal can be started with.
 func (o Options) validate() error {
 	if o.Cols <= 0 || o.Rows <= 0 || o.Cols > maxSize || o.Rows > maxSize {
-		return fmt.Errorf("a terminal needs a size within 1..%d, got %dx%d", maxSize, o.Cols, o.Rows)
+		return fmt.Errorf("a terminal needs a size within 1..%d, got %dx%d",
+			maxSize, o.Cols, o.Rows)
 	}
 	if o.FPS <= 0 {
 		return fmt.Errorf("a terminal needs a positive fps, got %d", o.FPS)
@@ -158,7 +159,9 @@ func Start(name string, args []string, opts Options) (*Terminal, error) {
 		samplerDone:   make(chan struct{}),
 	}
 	// The callback runs inside emulator.Write, which only ever runs with mu held.
-	emulator.SetCallbacks(vt.Callbacks{CursorVisibility: func(visible bool) { t.cursorVisible = visible }})
+	emulator.SetCallbacks(vt.Callbacks{
+		CursorVisibility: func(visible bool) { t.cursorVisible = visible },
+	})
 
 	cmd, master, err := startRetryingEPERM(func() launch { return startUnderPTY(name, args, opts) },
 		probeReport, startAttempts, startRetryGap)
@@ -168,7 +171,9 @@ func Start(name string, args []string, opts Options) (*Terminal, error) {
 	t.cmd, t.master = cmd, master
 	t.start = time.Now()
 	t.lastOutput = t.start
-	t.take = &take.Take{Cols: opts.Cols, Rows: opts.Rows, FPS: opts.FPS, Started: t.start.UTC().Round(0)}
+	t.take = &take.Take{
+		Cols: opts.Cols, Rows: opts.Rows, FPS: opts.FPS, Started: t.start.UTC().Round(0),
+	}
 	if !opts.FromFirstPaint {
 		t.mu.Lock()
 		t.sampleLocked(0)
@@ -222,7 +227,8 @@ func pollable(master *os.File) (*os.File, error) {
 		return master, fmt.Errorf("duplicate the pty master: %w", err)
 	}
 	if err := unix.SetNonblock(fd, true); err != nil {
-		return master, errors.Join(fmt.Errorf("make the pty master non-blocking: %w", err), unix.Close(fd))
+		return master, errors.Join(
+			fmt.Errorf("make the pty master non-blocking: %w", err), unix.Close(fd))
 	}
 	duplicate := os.NewFile(uintptr(fd), master.Name())
 	if err := master.Close(); err != nil {

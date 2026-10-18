@@ -153,6 +153,7 @@ func (p launchProbe) String() string {
 	case len(p.owners) > 0:
 		owners = strings.Join(p.owners, ", ")
 	}
-	return fmt.Sprintf("probe on %s: true %s, true+setsid %s, true+setsid+setctty %s; controlling tty of: %s",
+	return fmt.Sprintf("probe on %s: true %s, true+setsid %s, true+setsid+setctty %s; "+
+		"controlling tty of: %s",
 		p.tty, outcome(p.plain), outcome(p.setsid), outcome(p.setctty), owners)
 }

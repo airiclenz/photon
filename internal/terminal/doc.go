@@ -25,11 +25,13 @@
 //
 // The file map:
 //   - doc.go: this package comment and file map.
-//   - terminal.go: the [Terminal] and its [Options]: [Start], input, events, the pumps, [Terminal.Close].
+//   - terminal.go: the [Terminal] and its [Options]: [Start], input, events, the pumps,
+//     [Terminal.Close].
 //   - sample.go: the sampler, snapshots of the emulator and the collapse of identical grids.
 //   - cell.go: an emulator cell and colour as a [take.Cell] and [take.Color]; a whole grid.
 //   - margins.go: the scroll-margin clamp that keeps x/vt's line operations inside its buffer.
-//   - lifecycle.go: first paint, [Terminal.Painted], [Terminal.Settle], [Terminal.Quit], [Terminal.Freeze].
+//   - lifecycle.go: first paint, [Terminal.Painted], [Terminal.Settle], [Terminal.Quit],
+//     [Terminal.Freeze].
 //   - probe.go: the EPERM retry of a launch and the probe its last refusal reports.
 //   - ttyowner_linux.go: the processes holding a pty as their controlling terminal, from /proc.
 //   - ttyowner_other.go: the same off Linux, where the owner is unknown.

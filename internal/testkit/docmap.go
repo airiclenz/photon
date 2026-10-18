@@ -31,7 +31,8 @@ func CheckDocMap(t *testing.T) {
 		t.Fatalf("check the doc map: %v", err)
 	}
 	for _, name := range missing {
-		t.Errorf("%s is not named in %s: add the line saying what it holds to the package's file map",
+		t.Errorf("%s is not named in %s: "+
+			"add the line saying what it holds to the package's file map",
 			name, filepath.Join(filepath.Base(dir), docFile))
 	}
 }

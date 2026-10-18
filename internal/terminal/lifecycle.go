@@ -88,7 +88,8 @@ func (t *Terminal) Quit(keys [][]byte, gap, timeout time.Duration) bool {
 func (t *Terminal) screenDrawnLocked() bool {
 	for y := range t.emulator.Height() {
 		for x := range t.emulator.Width() {
-			if cell := t.emulator.CellAt(x, y); cell != nil && cell.Content != "" && cell.Content != blankGrapheme {
+			cell := t.emulator.CellAt(x, y)
+			if cell != nil && cell.Content != "" && cell.Content != blankGrapheme {
 				return true
 			}
 		}

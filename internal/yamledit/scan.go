@@ -156,7 +156,8 @@ func scanPlain(src []byte, start int, isInFlow bool) int {
 		char := src[index]
 		isAfterBlank := index > start && (src[index-1] == ' ' || src[index-1] == '\t')
 		isFlowIndicator := char == ',' || char == '}' || char == ']'
-		if char == '\n' || char == '\r' || (char == '#' && isAfterBlank) || (isInFlow && isFlowIndicator) {
+		isComment := char == '#' && isAfterBlank
+		if char == '\n' || char == '\r' || isComment || (isInFlow && isFlowIndicator) {
 			break
 		}
 		if char != ' ' && char != '\t' {

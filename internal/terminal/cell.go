@@ -62,5 +62,8 @@ func colorOf(c color.Color) take.Color {
 		return take.Color{Kind: take.ColorPalette, Index: uint8(value)}
 	}
 	r, g, b, _ := c.RGBA()
-	return take.Color{Kind: take.ColorRGB, R: uint8(r >> rgbShift), G: uint8(g >> rgbShift), B: uint8(b >> rgbShift)}
+	return take.Color{
+		Kind: take.ColorRGB,
+		R:    uint8(r >> rgbShift), G: uint8(g >> rgbShift), B: uint8(b >> rgbShift),
+	}
 }
