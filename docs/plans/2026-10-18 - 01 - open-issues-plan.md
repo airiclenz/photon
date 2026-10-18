@@ -275,7 +275,15 @@ block-mapping item and a `|` scalar item.
 - `GOMEMLIMIT=2GiB go test ./internal/yamledit/`
 **Commit:** `feat(yamledit): insert, delete and move sequence items`
 
-## 8. Storyboard edits that add, remove and reorder camera moves and captions
+## 8. Storyboard edits that add, remove and reorder camera moves and captions — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): Fields describes each list's insert once, owned by index 0 (present even when the list is empty), and a remove and move on every entry (owner = that entry; move's Default is its own index, remove's null); two new FieldKinds back them: `entry` (insert, Choices zoom/pan or caption, Default `{"kind":<first>,"at":clip start}`) and `removal` (null); a move is `count`.
+
+NOTES (2026-10-18): every-form.yaml has no 600ms gap on either camera track, so `{camera[0], camera.insert}` is listed in defaultRefusals with a nil sample (the Default is refused as an overlap); successful inserts are covered in edit_list_test.go on fixtures with room.
+
+NOTES (2026-10-18): a new entry starting at the clip's first frame is written without an `at` key, as setMoment already does for an absent at; an insert into a list the storyboard lacks or holds as `[]` writes the whole key through Upsert as a one-item flow list.
+
+NOTES (2026-10-18): no CHANGELOG entry — the page sends none of these edits until item 9, which carries the user-visible entry.
 
 **What:** Depends on item 7.
 **Regression guard.** Item 8 creates a `pendingPageFields` set in internal/tune/page_test.go naming its six new fields; the set exempts its names only from the "the page sends no X edit" half of TestPage_EntryFields_AreEditFields, never from the "sends a field the storyboard does not describe" half; add internal/tune/page_test.go to Files and `GOMEMLIMIT=2GiB go test ./internal/tune/ -run TestPage_EntryFields_AreEditFields` to Acceptance.

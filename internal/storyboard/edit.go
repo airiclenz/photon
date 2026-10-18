@@ -41,10 +41,16 @@ import (
 //     caption then ending after a for of the length it shows now;
 //   - caption.text: a string, its lines separated by \n;
 //   - caption.place: "top", "middle" or "bottom", which removes the key;
-//   - caption.align: "left", "middle", which removes the key, or "right".
+//   - caption.align: "left", "middle", which removes the key, or "right";
+//   - camera.insert, caption.insert: a new entry, {"kind": "zoom", "at": {"beat": 0,
+//     "offset_ms": 1200}}, its kind zoom or pan for the camera and caption for the captions and
+//     its at a moment, added so that it is the entry at the owner's index, 0 through the list's
+//     length;
+//   - camera.remove, caption.remove: null, which removes the owner's entry;
+//   - camera.move, caption.move: a whole number, the index the owner's entry moves to.
 //
-// A value of another JSON type or spelling, a null or absent value but zoom's and
-// caption.until's, and an owner of another kind than the field's are refused with an error
+// A value of another JSON type or spelling, a null or absent value but zoom's, caption.until's
+// and a remove's, and an owner of another kind than the field's are refused with an error
 // naming the field.
 type Edit struct {
 	Owner Owner           `json:"owner"`
@@ -71,7 +77,8 @@ var editFields = []string{
 	FieldDuration, FieldHold, FieldCut, FieldZoom, FieldZoomTarget, FieldZoomFactor, FieldZoomIn,
 	FieldZoomOut, FieldFrameWidth, FieldFrameFPS, FieldCameraAt, FieldCameraOver, FieldCameraEase,
 	FieldCameraTo, FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionText,
-	FieldCaptionPlace, FieldCaptionAlign,
+	FieldCaptionPlace, FieldCaptionAlign, FieldCameraInsert, FieldCameraRemove, FieldCameraMove,
+	FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove,
 }
 
 // EditFields returns every field an [Edit] names for [Apply], in a new slice.
@@ -114,11 +121,17 @@ const (
 // camera.at, a caption.at or caption.until, or a pan's camera.to replaces its whole node with the
 // value's flow text, and a caption.text replaces its whole node, a block scalar too, with one
 // double-quoted line; a caption.for deletes the caption's until and a caption.until its for, or,
-// as null, writes the for that keeps the caption's stretch in place of its until. The edit is
+// as null, writes the for that keeps the caption's stretch in place of its until. An insert writes
+// its entry as one flow line from presets — a zoom to 1.5 or a pan to the frame's centre cell,
+// over 600ms, or a caption "Caption" for 2s — and creates a camera or captions key the storyboard
+// lacks as a flow list after the keys that precede it; a remove or move splices only its list's
+// items, and removing a list's only entry deletes its key. The edit is
 // refused with an error led by its owner and field — the beat, camera move or caption, or
 // nothing for a frame field — when its value is of the wrong JSON type or misspelled, when its
 // owner is of another kind than the field's, when it names a beat, zoom, camera move or caption
-// that is not there, or when the result fails validation; the last wraps the *[ValidationError].
+// that is not there, an insert index past the list's length among them, or when the result fails
+// validation, an inserted move overlapping another on its track among them; the last wraps the
+// *[ValidationError].
 func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 	board, err := Parse(src, path)
 	if err != nil {
@@ -189,7 +202,8 @@ func (s *splicer) apply(board *Storyboard, edit Edit) error {
 	if len(edit.Value) == 0 {
 		return errors.New("want a value, got none")
 	}
-	if isNull(edit.Value) && edit.Field != FieldZoom && edit.Field != FieldCaptionUntil {
+	isNullTaken := edit.Field == FieldZoom || edit.Field == FieldCaptionUntil || isRemoveField(edit.Field)
+	if isNull(edit.Value) && !isNullTaken {
 		return errors.New("want a value, got null")
 	}
 

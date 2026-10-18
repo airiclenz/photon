@@ -31,13 +31,20 @@ const (
 	KindTarget FieldKind = "target"
 	// KindPoint is a target or a cell of the terminal grid, {"cell": {"x": 3, "y": 4}}.
 	KindPoint FieldKind = "point"
+	// KindEntry is a new camera move or caption, {"kind": "zoom", "at": {"beat": 0,
+	// "offset_ms": 0}}, its kind one of the field's Choices.
+	KindEntry FieldKind = "entry"
+	// KindRemoval is null, which removes the owner.
+	KindRemoval FieldKind = "removal"
 )
 
 // Field describes one field of a storyboard's owner — the clip, a beat, a camera move or a
 // caption — as photon tune's page shows it: its Name, the kind of value it holds, the Choices of
 // an enum, and its Default, the value it holds when the storyboard leaves its key out (the zero
 // value, or what [Load] fills in), typed as an [Edit] types it; null is a field an absent key
-// leaves unset. An editable field's Name is the field an [Edit] names; a read-only field is one of
+// leaves unset. A list field, which adds, removes or reorders an entry and has no key, defaults to
+// a value it takes: an insert's entry of its first choice at the clip's start, a remove's null,
+// a move's own index. An editable field's Name is the field an [Edit] names; a read-only field is one of
 // the frame's keys photon tune shows but does not edit, named by that key alone.
 type Field struct {
 	Owner      Owner           `json:"owner"`
@@ -61,6 +68,11 @@ const (
 	defaultClipStart = `{"beat":0,"offset_ms":0}`
 )
 
+// newEntryDefault is the default of a list's insert: an entry of kind at the clip's start.
+func newEntryDefault(kind string) json.RawMessage {
+	return raw(`{"kind":` + strconv.Quote(kind) + `,"at":` + defaultClipStart + `}`)
+}
+
 // The choices of the enum fields, in the order the page offers them.
 var (
 	easeChoices  = []string{string(EaseSmooth), string(EaseLinear)}
@@ -70,8 +82,9 @@ var (
 
 // Fields describes every field of board's owners, the editable and the read-only: the clip's
 // frame fields in the frame's key order, then each beat's, camera move's and caption's in
-// storyboard order. A beat lists its zoom's fields only when it zooms, and a camera move's
-// camera.to is a decimal on a zoom move and a point on a pan.
+// storyboard order, the camera's and the captions' insert after their entries', owned by index 0,
+// whether or not the list holds an entry. A beat lists its zoom's fields only when it zooms, and
+// a camera move's camera.to is a decimal on a zoom move and a point on a pan.
 func Fields(board *Storyboard) []Field {
 	fields := clipFields()
 	for _, beat := range board.Beats {
@@ -80,10 +93,32 @@ func Fields(board *Storyboard) []Field {
 	for index, move := range board.Camera {
 		fields = append(fields, cameraFields(index, move)...)
 	}
+	fields = append(fields, insertField(OwnerCamera, FieldCameraInsert, cameraEntryKinds))
 	for index := range board.Captions {
 		fields = append(fields, captionFields(index)...)
 	}
-	return fields
+	return append(fields, insertField(OwnerCaption, FieldCaptionInsert, captionEntryKinds))
+}
+
+// insertField describes a list's insert, name, owned by the list's first index, its choices
+// kinds.
+func insertField(kind OwnerKind, name string, kinds []string) Field {
+	return Field{
+		Owner:   Owner{Kind: kind},
+		Name:    name,
+		Kind:    KindEntry,
+		Choices: slices.Clone(kinds),
+		Default: newEntryDefault(kinds[0]),
+	}
+}
+
+// listEntryFields describes the remove and move of the entry at index of owner's kind, named
+// remove and move.
+func listEntryFields(owner Owner, remove, move string) []Field {
+	return []Field{
+		{Owner: owner, Name: remove, Kind: KindRemoval, Default: raw(jsonNull)},
+		{Owner: owner, Name: move, Kind: KindCount, Default: raw(strconv.Itoa(owner.Index))},
+	}
 }
 
 // clipFields describes the frame's fields in its field order, each keyed as its yaml tag names it:
@@ -130,27 +165,28 @@ func beatFields(beat Beat) []Field {
 }
 
 // cameraFields describes the fields of move, the camera move at index: its start, length and
-// ease, and its destination — a zoom move's factor, or a pan's target or cell, which a via path
-// has none of.
+// ease, its destination — a zoom move's factor, or a pan's target or cell, which a via path has
+// none of — and its remove and move.
 func cameraFields(index int, move CameraMove) []Field {
 	owner := Owner{Kind: OwnerCamera, Index: index}
 	to := Field{Owner: owner, Name: FieldCameraTo, Kind: KindDecimal, Default: raw(defaultZero)}
 	if move.Pan != nil {
 		to.Kind, to.Default = KindPoint, raw(jsonNull)
 	}
-	return []Field{
+	fields := []Field{
 		{Owner: owner, Name: FieldCameraAt, Kind: KindMoment, Default: raw(defaultClipStart)},
 		{Owner: owner, Name: FieldCameraOver, Kind: KindDuration, Default: raw(defaultZero)},
 		{Owner: owner, Name: FieldCameraEase, Kind: KindEnum, Choices: slices.Clone(easeChoices), Default: quoted(string(EaseSmooth))},
 		to,
 	}
+	return append(fields, listEntryFields(owner, FieldCameraRemove, FieldCameraMove)...)
 }
 
 // captionFields describes the fields of the caption at index: its start, its end — a for or an
-// until — its text, and where it sits.
+// until — its text, where it sits, and its remove and move.
 func captionFields(index int) []Field {
 	owner := Owner{Kind: OwnerCaption, Index: index}
-	return []Field{
+	fields := []Field{
 		{Owner: owner, Name: FieldCaptionAt, Kind: KindMoment, Default: raw(defaultClipStart)},
 		{Owner: owner, Name: FieldCaptionFor, Kind: KindDuration, Default: raw(defaultZero)},
 		{Owner: owner, Name: FieldCaptionUntil, Kind: KindMoment, Default: raw(jsonNull)},
@@ -158,6 +194,7 @@ func captionFields(index int) []Field {
 		{Owner: owner, Name: FieldCaptionPlace, Kind: KindEnum, Choices: slices.Clone(placeChoices), Default: quoted(string(PlaceBottom))},
 		{Owner: owner, Name: FieldCaptionAlign, Kind: KindEnum, Choices: slices.Clone(alignChoices), Default: quoted(string(AlignMiddle))},
 	}
+	return append(fields, listEntryFields(owner, FieldCaptionRemove, FieldCaptionMove)...)
 }
 
 // raw is text, a JSON value, in bytes of its own, so no two fields share a Default.

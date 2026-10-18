@@ -53,8 +53,11 @@ func isCaptionField(field string) bool {
 }
 
 // editCaption sets field, typed as value, on the caption at index in board, the storyboard s.doc
-// holds.
+// holds, or adds, removes or reorders a caption for a list field.
 func (s *splicer) editCaption(board *Storyboard, index int, field string, value json.RawMessage) error {
+	if isListField(field) {
+		return s.editList(board, captionList(board), index, field, value)
+	}
 	if index < 0 || index >= len(board.Captions) {
 		return fmt.Errorf("the storyboard has no caption at index %d", index)
 	}

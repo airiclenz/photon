@@ -47,8 +47,11 @@ func isCameraField(field string) bool {
 }
 
 // editCamera sets field, typed as value, on the move at index in board, the storyboard s.doc
-// holds.
+// holds, or adds, removes or reorders a move for a list field.
 func (s *splicer) editCamera(board *Storyboard, index int, field string, value json.RawMessage) error {
+	if isListField(field) {
+		return s.editList(board, cameraList(board), index, field, value)
+	}
 	if index < 0 || index >= len(board.Camera) {
 		return fmt.Errorf("the storyboard has no camera move at index %d", index)
 	}
