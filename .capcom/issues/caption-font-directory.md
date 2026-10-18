@@ -4,6 +4,7 @@ status: open
 type: bug
 priority: 3
 labels: [config]
+plan: 2026-10-18 - 01 - open-issues-plan
 created: 2026-10-17T22:00:32Z
 ---
 

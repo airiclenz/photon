@@ -4,6 +4,7 @@ status: open
 type: task
 priority: 3
 labels: [tune]
+plan: 2026-10-18 - 01 - open-issues-plan
 created: 2026-10-17T22:00:33Z
 ---
 

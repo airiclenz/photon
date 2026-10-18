@@ -5,6 +5,7 @@ type: feature
 priority: 3
 labels: [tune]
 deps: [camera-moves, typed-storyboard-edits]
+plan: 2026-10-18 - 01 - open-issues-plan
 created: 2026-10-17T20:17:38Z
 ---
 

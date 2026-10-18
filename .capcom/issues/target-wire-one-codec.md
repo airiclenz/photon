@@ -4,6 +4,7 @@ status: open
 type: task
 priority: 3
 labels: [tune, storyboard]
+plan: 2026-10-18 - 01 - open-issues-plan
 created: 2026-10-18T09:15:40Z
 ---
 
