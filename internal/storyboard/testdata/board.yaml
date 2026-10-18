@@ -17,9 +17,6 @@ beats:
       - type: {text: 'hello'}
     duration: 2s
     hold: 500ms
-    zoom:
-      target: {text: 'hello', area: status}
-      factor: 1.5
     expect:
       - seen: 'hello'
 
@@ -30,9 +27,8 @@ beats:
       - key: {name: enter}
 
   - id: 4
-    title: flow zoom
+    title: long
     duration: 1m30s
-    zoom: {target: {text: 'beta', nth: 2}, factor: 2}
 
   - id: 5
     title: plain
@@ -41,8 +37,5 @@ beats:
       - pause: {for: 1s}
 
   - id: 6
-    title: target only
+    title: closing
     duration: 2s
-    zoom:
-      target:
-        text: 'gamma'

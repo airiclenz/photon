@@ -25,11 +25,10 @@ beats:
     title: open
     duration: 3s
     hold: 1s
-    zoom: {target: {text: 'Item', nth: 1, area: list}, factor: 2, in: 1s, out: 1s}
     do:
       - type: {text: 'hi'}
       - key: {name: enter, repeat: 1}
-      - click: {target: {text: 'Item', area: list}, times: 1}
+      - click: {target: {text: 'Item', nth: 1, area: list}, times: 1}
       - wait: {screen: 'Ready', timeout: 5s}
       - pause: {for: 1s}
       - drag: {from: {text: 'Grip'}, to: {offset: {x: 4}}, steps: 2}
@@ -82,10 +81,6 @@ func TestLoadEveryForm(t *testing.T) {
 	if pick.Hold != time.Second {
 		t.Errorf("beat 2 hold: want 1s, got %s", pick.Hold)
 	}
-	wantZoom := Zoom{Target: Target{Text: `Item \d`, Nth: NthLast, Area: "list"}, Factor: 1.5, In: DefaultZoomRamp, Out: DefaultZoomRamp}
-	if pick.Zoom == nil || *pick.Zoom != wantZoom {
-		t.Errorf("beat 2 zoom: want %+v with default ramps, got %+v", wantZoom, pick.Zoom)
-	}
 	wantClicks := []ClickAction{
 		{Target: Target{Text: "Item 2", Nth: NthFirst, Area: "list"}, Times: 2},
 		{Target: Target{Text: "Item", Nth: 3, Area: AreaAny}},
@@ -117,9 +112,6 @@ func TestLoadEveryForm(t *testing.T) {
 		t.Errorf("beat 2 expects: want %+v, got %+v", wantPickExpects, pick.Expect)
 	}
 
-	if note.Zoom == nil || note.Zoom.Factor != 0 || note.Zoom.In != 500*time.Millisecond || note.Zoom.Out != 250*time.Millisecond {
-		t.Errorf("beat 3 zoom: want an auto-fit zoom with 500ms and 250ms ramps, got %+v", note.Zoom)
-	}
 	actions := note.Do
 	if typed := actions[0].Type; typed == nil || typed.Text != "hello there" || !typed.IsHumanized() {
 		t.Errorf("beat 3 do[0]: want humanized typing by default, got %+v", actions[0])
@@ -143,7 +135,7 @@ func TestLoadEveryForm(t *testing.T) {
 		t.Errorf("beat 3 expects: want a seen in any area, got %+v", note.Expect)
 	}
 
-	if !quit.Cut || quit.Duration != 0 || quit.Zoom != nil {
+	if !quit.Cut || quit.Duration != 0 {
 		t.Errorf("beat 4: want a cut beat without a duration, got %+v", quit)
 	}
 
@@ -205,9 +197,9 @@ func TestLoadEveryForm(t *testing.T) {
 	}
 }
 
-// cameraBase is validBase with a camera that breaks no rule: beat 1's zoom holds both tracks over
-// [0s, 3s) of the 5s clip, so every move sits in beat 2's [3s, 5s). Each row of
-// TestLoadRejects_Camera swaps one fragment of it, which must occur in it exactly once.
+// cameraBase is validBase with a camera that breaks no rule: every move sits in beat 2's [3s, 5s)
+// of the 5s clip. Each row of TestLoadRejects_Camera swaps one fragment of it, which must occur in
+// it exactly once.
 const cameraBase = validBase + `camera:
   - zoom: {to: 2, at: {beat: 2, offset: 100ms}, over: 500ms, ease: linear}
   - pan: {to: {cell: {x: 40, y: 12}}, at: 3s, over: 400ms}
@@ -258,10 +250,6 @@ func TestLoadRejects_Camera(t *testing.T) {
 			"camera[1]: zoom: overlaps camera[0] on the zoom track ([3.1s, 3.6s) and [3s, 3.4s))", false},
 		{"two pans overlap", "at: 4s, over: 1s", "at: 3200ms, over: 1s",
 			"camera[2]: pan: overlaps camera[1] on the pan track ([3s, 3.4s) and [3.2s, 4.2s))", false},
-		{"pan in a beat's zoom", "at: 3s", "at: 2500ms",
-			"camera[1]: pan: overlaps beat 1's zoom section [0s, 3s), which holds both tracks", false},
-		{"zoom in a beat's zoom", "offset: 100ms", "offset: -100ms",
-			"camera[0]: zoom: overlaps beat 1's zoom section [0s, 3s), which holds both tracks", false},
 		{"zoom with a target", "to: 2,", "to: 2, target: {text: 'Grip'},",
 			"camera[0]: zoom: target: removed; aim with a pan move over the same stretch", false},
 	}
@@ -597,10 +585,8 @@ func TestLoadRejects(t *testing.T) {
 		{"hold negative", "hold: 1s", "hold: -1s", "beat 1: hold: want ≥0, got -1s", false},
 		{"duration missing", "    duration: 2s\n", "", "beat 2: duration: want >0, got 0s", false},
 		{"hold not under duration", "hold: 1s", "hold: 3s", "beat 1: hold: want less than duration 3s, got 3s", false},
-		{"zoom factor", "factor: 2", "factor: 4", "beat 1: zoom.factor: want in [1, 3], got 4", false},
-		{"zoom in negative", "in: 1s, out: 1s", "in: -1s, out: 1s", "beat 1: zoom.in: want ≥0, got -1s", false},
-		{"zoom out negative", "in: 1s, out: 1s", "in: 1s, out: -1s", "beat 1: zoom.out: want ≥0, got -1s", false},
-		{"zoom target regex", "text: 'Item', nth: 1", "text: '(', nth: 1", "beat 1: zoom.target.text: error parsing regexp", false},
+		{"beat zoom", "hold: 1s\n", "hold: 1s\n    zoom: {target: {text: 'Item'}, factor: 2}\n",
+			"beat 1: zoom: removed; use a camera zoom move and a pan move", false},
 		{"two action forms", "      - pause: {for: 1s}", "      - pause: {for: 1s}\n        type: {text: x}",
 			"beat 1: do[4]: want exactly one of type, key, click, drag, wait or pause", false},
 		{"no action form", "      - pause: {for: 1s}", "      - {}",
@@ -611,8 +597,8 @@ func TestLoadRejects(t *testing.T) {
 			`beat 1: do[1]: key.name: unknown key "return", want one of enter, esc,`, false},
 		{"key repeat negative", "repeat: 1", "repeat: -1", "beat 1: do[1]: key.repeat: want ≥0, got -1", false},
 		{"click times negative", "times: 1", "times: -1", "beat 1: do[2]: click.times: want ≥0, got -1", false},
-		{"target text missing", "{text: 'Item', area: list}", "{area: list}", "beat 1: do[2]: click.target.text: missing", false},
-		{"target area", "{text: 'Item', area: list}", "{text: 'Item', area: 'the list'}",
+		{"target text missing", "{text: 'Item', nth: 1, area: list}", "{nth: 1, area: list}", "beat 1: do[2]: click.target.text: missing", false},
+		{"target area", "{text: 'Item', nth: 1, area: list}", "{text: 'Item', nth: 1, area: 'the list'}",
 			`beat 1: do[2]: click.target.area: want an area name or any, got "the list"`, false},
 		{"wait screen missing", "screen: 'Ready', ", "", "beat 1: do[3]: wait.screen: missing", false},
 		{"wait timeout zero", "timeout: 5s", "timeout: 0s", "beat 1: do[3]: wait.timeout: want in (0, 3m0s], got 0s", false},
@@ -787,7 +773,7 @@ func TestParseMatchesLoad(t *testing.T) {
 		{"valid", string(everyForm), true},
 		{"unknown key", strings.Replace(validBase, "clip: base", "clip: base\ntape: old.tape", 1), false},
 		{"empty", "", false},
-		{"invalid zoom", strings.Replace(validBase, "factor: 2", "factor: 4", 1), false},
+		{"invalid hold", strings.Replace(validBase, "hold: 1s", "hold: 3s", 1), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -473,7 +473,12 @@ message under `camera[i]`; drop the old target rows and the clip_test zoom-targe
 
 **Commit:** `feat(storyboard)!: refuse a target on a camera zoom`
 
-## 10. Refuse a beat zoom on load
+## 10. Refuse a beat zoom on load — ✅ DONE (2026-10-18)
+
+NOTES (2026-10-18): TestKeyOrder's beat row keeps "zoom": the presence-only `RemovedZoom` field (a `removedKey`, as item 9's zoom-move `target`) still carries the `yaml:"zoom"` tag.
+NOTES (2026-10-18): board.yaml's beats 4 and 6 are retitled "long" and "closing" (were "flow zoom" and "target only"), since their zooms are gone; no test reads those titles.
+NOTES (2026-10-18): consequential edit — internal/storyboard/fields_test.go: made necessary by dropping the beat zoom sections; the defaultRefusals comment now says the default insert's 600ms zoom at the clip's start overlaps camera[0] on the zoom track.
+NOTES (2026-10-18): Target's doc comment in beat.go now names a click, drag or pan, not a zoom, as what resolves a target.
 
 **What:**
 Closes `beat-zoom-removal` with item 11. Depends on items 5, 7, 8 and 9.

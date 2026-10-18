@@ -1,4 +1,4 @@
-# Names four areas photon.yaml does not declare (sidebar twice, footer and trash once) and two it
+# Names three areas photon.yaml does not declare (sidebar, footer and trash once each) and two it
 # does (status twice).
 clip: demo
 ship: out/demo.gif
@@ -10,8 +10,6 @@ beats:
   - id: 1
     title: pick an item
     duration: 4s
-    zoom:
-      target: {text: 'Item 2', area: sidebar}
     do:
       - click: {target: {text: 'Item 2', area: sidebar}}
       - drag: {from: {text: 'Item 2', area: status}, to: {text: 'Bin', area: trash}}

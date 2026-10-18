@@ -10,34 +10,22 @@ import (
 )
 
 // Beat is one step of a storyboard: the actions photon performs, the section's Duration in the
-// clip (Hold is its leading stretch shown at 1×; a beat with no hold has hold 0), an optional Zoom
-// onto an on-screen target, and what a keeper take shows. A Cut beat is recorded but dropped from
-// the clip, so its Duration and Hold are not required.
+// clip (Hold is its leading stretch shown at 1×; a beat with no hold has hold 0) and what a keeper
+// take shows. A Cut beat is recorded but dropped from the clip, so its Duration and Hold are not
+// required. A beat does not zoom: the camera's zoom and pan moves do. RemovedZoom marks a `zoom`
+// key, which a beat no longer takes; validation refuses it.
 type Beat struct {
-	ID       int           `yaml:"id"`
-	Title    string        `yaml:"title"`
-	Why      string        `yaml:"why"`
-	Notes    string        `yaml:"notes"`
-	Do       []Action      `yaml:"do"`
-	Duration time.Duration `yaml:"duration"`
-	Hold     time.Duration `yaml:"hold"`
-	Cut      bool          `yaml:"cut"`
-	Zoom     *Zoom         `yaml:"zoom"`
-	Expect   []Expect      `yaml:"expect"`
+	ID          int           `yaml:"id"`
+	Title       string        `yaml:"title"`
+	Why         string        `yaml:"why"`
+	Notes       string        `yaml:"notes"`
+	Do          []Action      `yaml:"do"`
+	Duration    time.Duration `yaml:"duration"`
+	Hold        time.Duration `yaml:"hold"`
+	Cut         bool          `yaml:"cut"`
+	RemovedZoom removedKey    `yaml:"zoom"`
+	Expect      []Expect      `yaml:"expect"`
 }
-
-// Zoom is a push into an on-screen target: Factor is the magnification — absent (0), the
-// compositor fits it to the target — and In and Out the ramps, which [Load] sets to
-// [DefaultZoomRamp] when the storyboard leaves them out.
-type Zoom struct {
-	Target Target        `yaml:"target"`
-	Factor float64       `yaml:"factor"`
-	In     time.Duration `yaml:"in"`
-	Out    time.Duration `yaml:"out"`
-}
-
-// DefaultZoomRamp is how long a zoom's in or out ramp runs when the storyboard gives none.
-const DefaultZoomRamp = 1000 * time.Millisecond
 
 // Action is one thing a beat does. Exactly one of its forms is set.
 type Action struct {
@@ -125,7 +113,7 @@ type PauseAction struct {
 	For time.Duration `yaml:"for"`
 }
 
-// Target is an on-screen place a click, drag or zoom resolves on the current screen: Text is a
+// Target is an on-screen place a click, drag or pan resolves on the current screen: Text is a
 // regex over the screen's rows, Nth picks which match counts and Area limits the rows searched to
 // an area the config declares (empty or [AreaAny] means the whole screen). It is also a target on
 // the JSON wire, {"text", "nth", "area"}, as a pan's camera.to [Edit] types it and photon tune's

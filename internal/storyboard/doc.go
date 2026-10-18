@@ -1,5 +1,5 @@
 // Package storyboard holds a clip's Storyboard — the YAML file that says what photon performs,
-// how long each beat plays in the clip, where it zooms, how its camera moves, which captions it
+// how long each beat plays in the clip, how its camera zooms and pans, which captions it
 // shows, and what a keeper take must show — and the strict loaders that are the only ways to get
 // one. [Load] reads a file and [Parse] takes its bytes; both refuse an unknown field and report
 // every rule the file breaks at once, in a [ValidationError]. A problem that belongs to one beat,
@@ -7,8 +7,8 @@
 //
 // Parse is the static tier of the three a storyboard is checked in: every rule the file decides
 // on its own. The font-bound tier lays the captions out with the clip's real fonts (package
-// render's CheckCaptions, which `photon lint` runs), and the take-bound tier resolves the zoom and
-// pan targets on a take's screens (package compose's New).
+// render's CheckCaptions, which `photon lint` runs), and the take-bound tier resolves the pan
+// targets on a take's screens (package compose's New).
 //
 // [Apply] changes one field by a typed [Edit] — a beat's duration, hold or cut, the clip's
 // frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width or frame.fps, a
@@ -32,7 +32,7 @@
 // The file map:
 //   - doc.go: this package comment and file map.
 //   - storyboard.go: the [Storyboard] and its [Frame], [Load], [Parse] and [ValidationError].
-//   - beat.go: a [Beat], its [Zoom], [Action] forms, [Target] and [Nth], and [Expect].
+//   - beat.go: a [Beat], its [Action] forms, [Target] and [Nth], and [Expect].
 //   - camera.go: a [CameraMove] — a [ZoomMove] or [PanMove] — its [Point], [Cell] and [Ease], and
 //     their rules.
 //   - edit.go: an [Edit], [Apply] and the splicing every edit shares: field and owner checks,

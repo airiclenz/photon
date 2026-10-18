@@ -164,9 +164,6 @@ func namedAreas(board *storyboard.Storyboard) []namedArea {
 	}
 	for _, beat := range board.Beats {
 		owner := storyboard.Owner{Kind: storyboard.OwnerBeat, Index: beat.ID}
-		if beat.Zoom != nil {
-			named = append(named, namedArea{owner, "zoom.target.area", beat.Zoom.Target.Area})
-		}
 		for index, action := range beat.Do {
 			if action.Click != nil {
 				field := fmt.Sprintf("do[%d]: click.target.area", index)

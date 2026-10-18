@@ -9,8 +9,6 @@ beats:
   - id: 1
     title: pick an item
     duration: 4s
-    zoom:
-      target: {text: 'Item 2', area: list}
     do:
       - click: {target: {text: 'Item 2', area: list}}
       - click: {target: {text: 'Save', area: any}}

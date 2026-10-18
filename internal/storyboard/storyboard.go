@@ -14,14 +14,14 @@ import (
 
 // Storyboard is one clip's storyboard: the single source of a clip. The header names the clip,
 // where its GIF ships and the terminal frame; each beat says what photon does (Do), how long the
-// beat plays in the clip (Duration, Hold, Cut, Zoom) and what a keeper take must show (Expect).
+// beat plays in the clip (Duration, Hold, Cut) and what a keeper take must show (Expect).
 // Expect at the top level holds what the take as a whole must show, Camera the camera moves
 // placed on the clip's output clock, and Captions the text drawn over the composed frame on that
 // clock.
 //
 // [Load] and [Parse] are the only ways to get one: a Storyboard in hand has passed validation,
-// its Ship is resolved against the file's directory, its zoom ramps, camera eases and captions
-// carry their defaults, and its camera moves and captions carry their resolved places on the
+// its Ship is resolved against the file's directory, its camera eases and captions carry their
+// defaults, and its camera moves and captions carry their resolved places on the
 // output clock and, for a caption, its colours.
 type Storyboard struct {
 	// Path is the storyboard file Load read or Parse was handed, as the caller named it.
@@ -99,9 +99,8 @@ func (s *Storyboard) BeatIDs() []int {
 	return ids
 }
 
-// applyDefaults fills what a valid storyboard may leave out: a zoom ramp left at zero runs
-// [DefaultZoomRamp], a camera move without an ease eases [EaseSmooth], and a caption takes the
-// defaults [Caption] lists.
+// applyDefaults fills what a valid storyboard may leave out: a camera move without an ease eases
+// [EaseSmooth], and a caption takes the defaults [Caption] lists.
 func (s *Storyboard) applyDefaults() {
 	for index := range s.Captions {
 		s.Captions[index].applyDefaults(s.Frame.FontSize)
@@ -112,18 +111,6 @@ func (s *Storyboard) applyDefaults() {
 			move.Zoom.Ease = EaseSmooth
 		case move.Pan != nil && move.Pan.Ease == "":
 			move.Pan.Ease = EaseSmooth
-		}
-	}
-	for index := range s.Beats {
-		zoom := s.Beats[index].Zoom
-		if zoom == nil {
-			continue
-		}
-		if zoom.In == 0 {
-			zoom.In = DefaultZoomRamp
-		}
-		if zoom.Out == 0 {
-			zoom.Out = DefaultZoomRamp
 		}
 	}
 }

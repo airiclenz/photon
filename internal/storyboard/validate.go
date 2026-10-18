@@ -138,8 +138,8 @@ func (s *Storyboard) validateIDs(collect collector) {
 	}
 }
 
-// validate applies the per-beat rules: the title, the section timing, the zoom, the actions and
-// the expects.
+// validate applies the per-beat rules: the title, the section timing, the removed zoom, the
+// actions and the expects.
 func (b Beat) validate(report reporter) {
 	if b.Title == "" {
 		report("title: missing")
@@ -155,29 +155,14 @@ func (b Beat) validate(report reporter) {
 			report("hold: want less than duration %s, got %s", b.Duration, b.Hold)
 		}
 	}
-	if b.Zoom != nil {
-		b.Zoom.validate(prefixed(report, "zoom."))
+	if b.RemovedZoom {
+		report("zoom: removed; use a camera %s move and a %s move", trackZoom, trackPan)
 	}
 	for index, action := range b.Do {
 		action.validate(prefixed(report, fmt.Sprintf("do[%d]: ", index)))
 	}
 	for index, expect := range b.Expect {
 		expect.validate(prefixed(report, fmt.Sprintf("expect[%d]: ", index)))
-	}
-}
-
-// validate checks the zoom's target, factor and ramps.
-func (z Zoom) validate(report reporter) {
-	z.Target.validate(prefixed(report, "target."))
-	// An absent factor is auto-fit by the compositor.
-	if z.Factor != 0 && (z.Factor < minZoomFactor || z.Factor > maxZoomFactor) {
-		report("factor: want in [%d, %d], got %g", minZoomFactor, maxZoomFactor, z.Factor)
-	}
-	if z.In < 0 {
-		report("in: want ≥0, got %s", z.In)
-	}
-	if z.Out < 0 {
-		report("out: want ≥0, got %s", z.Out)
 	}
 }
 

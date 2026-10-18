@@ -114,7 +114,6 @@ func TestLoad_UndeclaredAreaFailsNamingIt(t *testing.T) {
 	storyboardPath := filepath.Join("testdata", "undeclared", "demo.yaml")
 	want := []string{
 		`expect[0]: area: "footer" is not declared`,
-		`beat 1: zoom.target.area: "sidebar" is not declared`,
 		`beat 1: do[0]: click.target.area: "sidebar" is not declared`,
 		`beat 1: do[1]: drag.to.area: "trash" is not declared`,
 	}
@@ -262,7 +261,7 @@ func TestWithStoryboard_UndeclaredCameraAreaFailsNamingIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read the storyboard: %v", err)
 	}
-	// Beat 1 zooms over the whole of its section, so the pans sit in a second beat.
+	// A second beat lengthens the clip to hold the moves, which start at 4s.
 	withCamera := string(raw) + `  - id: 2
     title: look around
     duration: 4s

@@ -10,8 +10,7 @@ import (
 // CameraMove is one move of the clip's camera, placed on the clip's output clock. Exactly one of
 // Zoom and Pan is set. The camera has two tracks: a zoom move runs on the zoom track and a pan
 // move on the pan track, so a zoom and a pan may overlap, while two moves on one track may not.
-// A kept beat's [Zoom] holds both tracks for the whole of its section. A move whose `at` is
-// absent starts at the clip's first frame.
+// A move whose `at` is absent starts at the clip's first frame.
 //
 // A move's authored At stays as written; [Load] also resolves it onto the output clock, which
 // [ZoomMove.Start] and [PanMove.Start] report. A move built as a struct literal rather than loaded
@@ -123,12 +122,11 @@ type moveTiming struct {
 }
 
 // validateCamera checks every camera move's form and its place on the clip's clock, keeping the
-// start it resolves, then that no two moves holding one track overlap and that no move overlaps a
-// kept beat's zoom section. Problems are filed under camera[i], an overlap under the later move.
+// start it resolves, then that no two moves holding one track overlap. Problems are filed under
+// camera[i], an overlap under the later move.
 func (s *Storyboard) validateCamera(collect collector) {
 	held := map[string][]span{trackZoom: nil, trackPan: nil}
 	clock := s.Clock()
-	beatZooms := s.beatZoomSpans(clock)
 	for index, move := range s.Camera {
 		holder := fmt.Sprintf("camera[%d]", index)
 		moveReport := collect.at(Owner{Kind: OwnerCamera, Index: index})
@@ -151,12 +149,6 @@ func (s *Storyboard) validateCamera(collect collector) {
 			}
 			held[heldTrack] = append(held[heldTrack], placed)
 		}
-		for _, zoom := range beatZooms {
-			if placed.overlaps(zoom) {
-				moveReport("%s: overlaps %s section %s, which holds both tracks",
-					track, zoom.holder, zoom)
-			}
-		}
 	}
 }
 
@@ -167,21 +159,6 @@ func (m CameraMove) tracks() []string {
 		return []string{trackPan}
 	}
 	return []string{trackZoom}
-}
-
-// beatZoomSpans returns the section of every kept beat that zooms, on clock. A beat's section is
-// read by its place in the storyboard, not its id, so a duplicated id still finds its own beat.
-func (s *Storyboard) beatZoomSpans(clock OutputClock) []span {
-	var spans []span
-	for index, beat := range s.Beats {
-		if beat.Cut || beat.Zoom == nil {
-			continue
-		}
-		start := clock.sections[index].start
-		holder := fmt.Sprintf("beat %d's zoom", beat.ID)
-		spans = append(spans, span{holder, start, start + beat.Duration})
-	}
-	return spans
 }
 
 // validateForm checks that exactly one move form is set and that its fields fit it, refusing a

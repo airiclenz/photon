@@ -352,7 +352,6 @@ func TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder(t *testing.T) {
 	}{
 		{"a beat", reflect.TypeFor[Beat](),
 			[]string{"id", "title", "why", "notes", "do", "duration", "hold", "cut", "zoom", "expect"}},
-		{"a zoom", reflect.TypeFor[Zoom](), []string{"target", "factor", "in", "out"}},
 		{"the frame", reflect.TypeFor[Frame](),
 			[]string{"cols", "rows", "padding", "font_size", "line_height", "scale", "width", "fps", "max_colors"}},
 		{"a storyboard skips its path", reflect.TypeFor[Storyboard](),
@@ -378,7 +377,7 @@ func TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder(t *testing.T) {
 }
 
 // editBaseBoard is the storyboard the camera and caption edit tests build on: beat 1 lasts 1s and
-// beat 2, which zooms, 1.5s.
+// beat 2 1.5s.
 const editBaseBoard = `# A storyboard the camera and caption edits start from.
 clip: tuned
 ship: out/tuned.gif
@@ -392,7 +391,6 @@ beats:
     do:
       - pause: {for: 400ms}
     duration: 1500ms # kept in ms
-    zoom: {target: {text: 'PASS'}}
 `
 
 // cameraCaptionsBoard is editBaseBoard with a camera of one zoom and three pans — a via path and
