@@ -3,6 +3,7 @@ title: Scrub can leave the tune preview stuck on draft frames
 status: open
 type: bug
 priority: 3
+plan: 2026-10-18 - 04 - open-issues-plan
 created: 2026-10-18T18:40:19Z
 ---
 
