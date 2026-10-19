@@ -172,7 +172,16 @@ frame response is smaller than its draft. The two "draft differs from exact" tes
 `capcom check`
 **Commit:** `perf(tune): encode draft frames uncompressed`
 
-## 3. Benchmark the draft path cold and in parallel, and log the numbers
+## 3. Benchmark the draft path cold and in parallel, and log the numbers — ✅ DONE (2026-10-19)
+
+NOTES (2026-10-19): the draftBenchSnapshots const became a function: it builds a one-snapshot pipeline with render.Build and a probe rasterCache as DraftCache, draws one DraftAt and sizes the take at ceil(2×draftCacheBytes / raster bytes) — 139 snapshots of 3,881,296-byte rasters (~69 kept) on this host; draftBenchStoryboard and draftBenchTake now take that count, and the beat lasts count×draftBenchStep.
+
+NOTES (2026-10-19): draftBenchTake adds one closing screen after the requested snapshots, so the take ends at count×draftBenchStep and the last requested snapshot shows itself rather than freezing on the one before (a cache hit once per cycle); the row prefix widened to %03d for counts past 99.
+
+NOTES (2026-10-19): serveDraftFrame's check moved into requestDraftFrame, which returns an error, so the 4 playing goroutines (sync.WaitGroup.Go over a shared atomic counter) report with b.Error and return; serveDraftFrame still b.Fatal's on the benchmark goroutine.
+
+NOTES (2026-10-19): measured on the Pi 5 at 11fc1af — cold 63.3 ms/op (20x), playing 43.95 frames/s (80x); logged on tune-preview-playback-speed, which stays open.
+
 
 **What:** test-only, plus a log line on the issue. `BenchmarkHandler_DraftFrame` must stay on the
 cold path: with rasters at the shipped size, the 256 MiB draft cache holds about 64 of them. So

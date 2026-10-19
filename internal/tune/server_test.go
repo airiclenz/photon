@@ -20,10 +20,12 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
+	"github.com/airiclenz/photon/internal/render"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 )
@@ -667,85 +669,159 @@ func pickBody(t *testing.T, ms int64, from, to image.Point) string {
 	return string(encoded)
 }
 
-// The draft frame benchmark's take: the 135×44 terminal the preview's playback speed was measured
-// on, holding more distinct snapshots than the draft raster cache keeps (about 16 at this
-// geometry), one every draftBenchStep.
+// The draft frame benchmarks' take: the 135×44 terminal the preview's playback speed was measured
+// on, one distinct snapshot every draftBenchStep. Drawn at the shipped frame's size, a draft
+// raster holds about 3.7 MiB, so the 256 MiB draft raster cache keeps about 69 of them; the take
+// holds draftBenchCacheMultiple times as many snapshots as the cache keeps, the count measured
+// from the draft raster itself (draftBenchSnapshots), so requests cycling through them miss the
+// cache every time.
 const (
-	draftBenchCols      = 135
-	draftBenchRows      = 44
-	draftBenchSnapshots = 64
-	draftBenchStep      = 100 * time.Millisecond
+	draftBenchCols = 135
+	draftBenchRows = 44
+	draftBenchStep = 100 * time.Millisecond
+	// draftBenchCacheMultiple is how many times the draft cache's capacity the take's snapshots
+	// fill when rasterized.
+	draftBenchCacheMultiple = 2
+	// draftBenchInFlight is how many draft frames a playing preview keeps requested at once.
+	draftBenchInFlight = 4
 )
 
-// draftBenchStoryboard frames the benchmark take as the measured clip: font_size 30, scale 2,
-// width 1250. Its one beat outlasts the take, so it plays 1× and output time is take time.
-const draftBenchStoryboard = `clip: tuned
+// draftBenchStoryboard frames a benchmark take of snapshots requested snapshots as the measured
+// clip: font_size 30, scale 2, width 1250. Its one beat lasts as long as those snapshots play, so
+// it plays 1× and output time is take time.
+func draftBenchStoryboard(snapshots int) string {
+	return fmt.Sprintf(`clip: tuned
 ship: out/tuned.gif
 frame: {cols: 135, rows: 44, padding: 4, font_size: 30, line_height: 1.2, scale: 2, width: 1250, fps: 24, max_colors: 256}
 beats:
   - id: 1
     title: playing
-    duration: 6500ms
-`
+    duration: %dms
+`, (time.Duration(snapshots) * draftBenchStep).Milliseconds())
+}
 
 // BenchmarkHandler_DraftFrame measures GET /api/frame?draft=1 on the cold path a playing preview
 // pays: each request lands on a snapshot the draft raster cache no longer holds, since the
 // requests cycle through more snapshots than it keeps.
 func BenchmarkHandler_DraftFrame(b *testing.B) {
-	handler := newDraftBenchHandler(b)
+	handler, snapshots := newDraftBenchHandler(b)
 	serveDraftFrame(b, handler, 0)
 	b.ResetTimer()
 
 	for i := range b.N {
-		serveDraftFrame(b, handler, (i+1)%draftBenchSnapshots)
+		serveDraftFrame(b, handler, (i+1)%snapshots)
 	}
 }
 
-// newDraftBenchHandler writes the config, draftBenchStoryboard and a take of draftBenchSnapshots
-// distinct full screens into a fresh project dir and serves a session on them.
-func newDraftBenchHandler(b *testing.B) http.Handler {
+// BenchmarkHandler_DraftFramePlaying measures cold draft frames served the way a playing preview
+// asks for them: draftBenchInFlight requests at once, each on a snapshot the draft raster cache
+// no longer holds. It reports the frames served per second.
+func BenchmarkHandler_DraftFramePlaying(b *testing.B) {
+	handler, snapshots := newDraftBenchHandler(b)
+	serveDraftFrame(b, handler, 0)
+	var next atomic.Int64
+	var group sync.WaitGroup
+	b.ResetTimer()
+
+	for range draftBenchInFlight {
+		group.Go(func() {
+			for {
+				i := next.Add(1)
+				if i > int64(b.N) {
+					return
+				}
+				if err := requestDraftFrame(handler, int(i)%snapshots); err != nil {
+					b.Error(err)
+					return
+				}
+			}
+		})
+	}
+	group.Wait()
+
+	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "frames/s")
+}
+
+// newDraftBenchHandler serves a session on a benchmark take of draftBenchSnapshots distinct
+// snapshots, and returns it with that count.
+func newDraftBenchHandler(b *testing.B) (http.Handler, int) {
+	b.Helper()
+	snapshots := draftBenchSnapshots(b)
+	loaded, takePath, _ := writeDraftBench(b, snapshots)
+	session, err := NewSession(loaded, takePath)
+	if err != nil {
+		b.Fatalf("NewSession: %v", err)
+	}
+	return newHandler(session, testAddr), snapshots
+}
+
+// draftBenchSnapshots is how many distinct snapshots the benchmark take needs to fill
+// draftBenchCacheMultiple times the draft raster cache's capacity: one snapshot is drawn into a
+// probe draft cache and its raster's bytes measured.
+func draftBenchSnapshots(b *testing.B) int {
+	b.Helper()
+	loaded, takePath, recorded := writeDraftBench(b, 1)
+	probe := newRasterCache(draftCacheBytes)
+	pipeline, err := render.Build(loaded, takePath, recorded, render.BuildOptions{
+		Cache:      newRasterCache(rasterCacheBytes),
+		DraftCache: probe,
+	})
+	if err != nil {
+		b.Fatalf("render.Build: %v", err)
+	}
+	if _, err := pipeline.DraftAt(draftBenchStep / 2); err != nil {
+		b.Fatalf("DraftAt: %v", err)
+	}
+	if probe.used == 0 {
+		b.Fatal("the draft raster was not kept in the draft cache")
+	}
+	return (draftBenchCacheMultiple*draftCacheBytes + probe.used - 1) / probe.used
+}
+
+// writeDraftBench writes the config, draftBenchStoryboard and a benchmark take of snapshots
+// requested snapshots into a fresh project dir, and returns the loaded clip, the take's path and
+// the take.
+func writeDraftBench(b *testing.B, snapshots int) (*clip.Clip, string, *take.Take) {
 	b.Helper()
 	project := b.TempDir()
 	boardPath := filepath.Join(project, "tuned.yaml")
 	takePath := filepath.Join(project, "tuned.take")
 	for path, content := range map[string]string{
 		filepath.Join(project, "photon.yaml"): sessionConfig,
-		boardPath:                             draftBenchStoryboard,
+		boardPath:                             draftBenchStoryboard(snapshots),
 	} {
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			b.Fatalf("write %s: %v", path, err)
 		}
 	}
-	if err := take.Save(takePath, draftBenchTake()); err != nil {
+	recorded := draftBenchTake(snapshots)
+	if err := take.Save(takePath, recorded); err != nil {
 		b.Fatalf("take.Save: %v", err)
 	}
 	loaded, err := clip.Load(boardPath, "", b.TempDir())
 	if err != nil {
 		b.Fatalf("clip.Load: %v", err)
 	}
-	session, err := NewSession(loaded, takePath)
-	if err != nil {
-		b.Fatalf("NewSession: %v", err)
-	}
-	return newHandler(session, testAddr)
+	return loaded, takePath, recorded
 }
 
-// draftBenchTake is a take of draftBenchSnapshots full screens, each row of each one numbered so
-// that no two snapshots rasterize alike.
-func draftBenchTake() *take.Take {
+// draftBenchTake is a take of snapshots requested full screens, each row of each one numbered so
+// that no two snapshots rasterize alike, and one more screen at the take's end so that the last
+// requested snapshot plays for its whole step.
+func draftBenchTake(snapshots int) *take.Take {
 	filler := strings.Repeat("the quick brown fox jumps over the lazy dog ", draftBenchCols)
-	snapshots := make([]take.Snapshot, 0, draftBenchSnapshots)
-	for index := range draftBenchSnapshots {
+	screens := make([]take.Snapshot, 0, snapshots+1)
+	for index := range snapshots + 1 {
 		lines := make([]string, 0, draftBenchRows)
 		for row := range draftBenchRows {
-			prefix := fmt.Sprintf("snapshot %02d row %02d ", index, row)
+			prefix := fmt.Sprintf("snapshot %03d row %02d ", index, row)
 			lines = append(lines, (prefix + filler)[:draftBenchCols])
 		}
-		snapshots = append(snapshots, lineSnapshot(time.Duration(index)*draftBenchStep, lines...))
+		screens = append(screens, lineSnapshot(time.Duration(index)*draftBenchStep, lines...))
 	}
 	return &take.Take{
 		Cols: draftBenchCols, Rows: draftBenchRows, FPS: 10,
-		Snapshots: snapshots,
+		Snapshots: screens,
 		Events:    []take.Event{{At: 0, Kind: take.EventBeatStart, Beat: 1}},
 	}
 }
@@ -754,6 +830,14 @@ func draftBenchTake() *take.Take {
 // unless it is a PNG.
 func serveDraftFrame(b *testing.B, handler http.Handler, index int) {
 	b.Helper()
+	if err := requestDraftFrame(handler, index); err != nil {
+		b.Fatal(err)
+	}
+}
+
+// requestDraftFrame requests the draft frame halfway through snapshot index and reports an error
+// unless it is a PNG. It is safe to call from several goroutines at once.
+func requestDraftFrame(handler http.Handler, index int) error {
 	out := time.Duration(index)*draftBenchStep + draftBenchStep/2
 	target := fmt.Sprintf("/api/frame?t=%d&draft=1", out.Milliseconds())
 	request := httptest.NewRequest(http.MethodGet, target, nil)
@@ -763,7 +847,8 @@ func serveDraftFrame(b *testing.B, handler http.Handler, index int) {
 	handler.ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK || recorder.Header().Get(headerContentType) != mediaPNG {
-		b.Fatalf("GET %s: status %d, type %q: %s", target, recorder.Code,
+		return fmt.Errorf("GET %s: status %d, type %q: %s", target, recorder.Code,
 			recorder.Header().Get(headerContentType), recorder.Body.String())
 	}
+	return nil
 }
