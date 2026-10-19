@@ -1,11 +1,13 @@
 ---
 title: Check the tune page scripts run
-status: open
+status: done
 type: task
 priority: 2
 labels: [tune]
 plan: 2026-10-19 - 02 - tune-panel-problems-plan
 created: 2026-10-18T09:15:40Z
+closed: 2026-10-19T18:31:38Z
+reason: "Resolved by plan 2026-10-19 - 02 - tune-panel-problems-plan (0529867): goja harness runs every page script; TestPageJS_EditProblem_ShowsOnItsOwningPanel checks each edit's problem on its owning panel"
 ---
 
 Plan `2026-10-18 - 00 - architecture-review-plan` split `internal/tune/page/app.js` into five
