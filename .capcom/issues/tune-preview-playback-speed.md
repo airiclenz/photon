@@ -4,7 +4,7 @@ status: open
 type: bug
 priority: 1
 labels: [tune]
-plan: 2026-10-18 - 03 - tune-playback-plan
+plan: 2026-10-19 - 00 - draft-frame-speed-plan
 created: 2026-10-18T17:04:06Z
 ---
 
