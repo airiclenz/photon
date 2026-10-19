@@ -362,6 +362,21 @@ func (p *pageHarness) isDisabled(within, name string) bool {
 // value, fires the input's change and settles the page.
 func (p *pageHarness) setField(label, property string, value any) {
 	p.t.Helper()
+	p.setControl("input", label, property, value)
+}
+
+// setTextArea sets the value of the textarea in the inspector's one field row labelled label to
+// text, fires its change and settles the page.
+func (p *pageHarness) setTextArea(label, text string) {
+	p.t.Helper()
+	p.setControl("textarea", label, "value", text)
+}
+
+// setControl sets property of the first tag element in the inspector's one field row labelled
+// label to value, fires its change and settles the page. tag is one element name: the DOM stub
+// takes no selector list.
+func (p *pageHarness) setControl(tag, label, property string, value any) {
+	p.t.Helper()
 	encoded, err := json.Marshal(value)
 	if err != nil {
 		p.t.Fatalf("encode %v: %v", value, err)
@@ -369,17 +384,29 @@ func (p *pageHarness) setField(label, property string, value any) {
 	found := p.eval(fmt.Sprintf(`{
 		const rows = document.getElementById(%q).querySelectorAll("label")
 			.filter((row) => row.children.length > 0 && row.children[0].textContent === %q);
-		const input = rows.length === 1 ? rows[0].querySelectorAll("input")[0] : undefined;
+		const input = rows.length === 1 ? rows[0].querySelectorAll(%q)[0] : undefined;
 		if (input && !input.disabled) {
 			input[%q] = %s;
 			input.dispatchEvent(new Event("change"));
 		}
 		Boolean(input && !input.disabled);
-	}`, elementInspector, label, property, encoded)).ToBoolean()
+	}`, elementInspector, label, tag, property, encoded)).ToBoolean()
 	if !found {
-		p.t.Fatalf("no one enabled input in a field row labelled %q under #%s", label, elementInspector)
+		p.t.Fatalf("no one enabled %s in a field row labelled %q under #%s", tag, label, elementInspector)
 	}
 	p.settle()
+}
+
+// errorRows are the texts of the error rows the inspector shows.
+func (p *pageHarness) errorRows() []string {
+	p.t.Helper()
+	var rows []string
+	encoded := p.eval(fmt.Sprintf(`JSON.stringify(document.getElementById(%q).querySelectorAll("p.error")
+		.map((row) => row.textContent))`, elementInspector)).String()
+	if err := json.Unmarshal([]byte(encoded), &rows); err != nil {
+		p.t.Fatalf("decode the inspector's error rows %s: %v", encoded, err)
+	}
+	return rows
 }
 
 // isRequestedAfter says the page sent a request whose path starts with prefix after its last
@@ -1055,6 +1082,103 @@ func TestPageJS_CaptionPosition_SeedsTheLaidOutCorner(t *testing.T) {
 	if got := session.State().Captions[styledCaption].Position; got != nil {
 		t.Errorf("the caption's position after the uncheck: want none, got %+v", *got)
 	}
+}
+
+// clipFrameEntry is the beat select's value for the Clip frame panel.
+const clipFrameEntry = ""
+
+// The problem edits' values: a beat's hold past its 1s duration, a frame rate under one, a pan
+// target the take never shows, and a caption text wider than the session frame.
+const (
+	holdPastDuration = "5000"
+	fpsUnderOne      = "0"
+	targetOffScreen  = "nowhere"
+)
+
+var captionTooWide = strings.Repeat("too wide ", 20)
+
+func TestPageJS_EditProblem_ShowsOnItsOwningPanel(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		board string
+		// owner is the beat select's value for the panel the edit is sent from, and elsewhere
+		// another owner's, which must not show the problem.
+		owner, elsewhere string
+		edit             func(page *pageHarness)
+		// status is the edit's answer: a refusal, or 200 with the problem standing on the owner.
+		status int
+		want   string
+	}{
+		{
+			name:      "beat",
+			board:     sessionStoryboard,
+			owner:     "1",
+			elsewhere: clipFrameEntry,
+			edit:      func(page *pageHarness) { page.setField("hold (ms)", "value", holdPastDuration) },
+			status:    http.StatusUnprocessableEntity,
+			want:      "want less than duration",
+		},
+		{
+			name:      "clip frame",
+			board:     sessionStoryboard,
+			owner:     clipFrameEntry,
+			elsewhere: "1",
+			edit:      func(page *pageHarness) { page.setField("fps", "value", fpsUnderOne) },
+			status:    http.StatusUnprocessableEntity,
+			want:      storyboard.FieldFrameFPS,
+		},
+		{
+			name:      "camera move",
+			board:     aimedStoryboard,
+			owner:     entryValueOf(storyboard.OwnerCamera, aimedPan),
+			elsewhere: clipFrameEntry,
+			edit:      func(page *pageHarness) { page.setField("to", "value", targetOffScreen) },
+			status:    http.StatusOK,
+			want:      fmt.Sprintf("camera[%d]", aimedPan),
+		},
+		{
+			name:      "caption",
+			board:     cameraCaptionsStoryboard,
+			owner:     entryValueOf(storyboard.OwnerCaption, styledCaption),
+			elsewhere: clipFrameEntry,
+			edit:      func(page *pageHarness) { page.setTextArea("text", captionTooWide) },
+			status:    http.StatusOK,
+			want:      fmt.Sprintf("captions[%d]", styledCaption),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			page := loadPage(t, newSessionFixtureOf(t, tc.board).session)
+			page.selectValue(elementBeatSelect, tc.owner)
+
+			tc.edit(page)
+
+			if got := page.lastRequest("/api/edit"); got.status != tc.status {
+				t.Fatalf("the edit: want %d, got %d: %s", tc.status, got.status, got.answer)
+			}
+			if !containsRow(page.errorRows(), tc.want) {
+				t.Errorf("the %s's panel: want an error row containing %q, got %q", tc.name, tc.want, page.errorRows())
+			}
+			page.selectValue(elementBeatSelect, tc.elsewhere)
+			page.settle()
+			if containsRow(page.errorRows(), tc.want) {
+				t.Errorf("the panel of %q: want no error row containing %q, got %q", tc.elsewhere, tc.want, page.errorRows())
+			}
+		})
+	}
+}
+
+// containsRow says one of rows contains want.
+func containsRow(rows []string, want string) bool {
+	for _, row := range rows {
+		if strings.Contains(row, want) {
+			return true
+		}
+	}
+	return false
 }
 
 // The via path overlay's elements and the class that shows it.

@@ -20,6 +20,7 @@ broken inspector, and the suite would still pass.
 - Every script under `internal/tune/page/` has been parsed by a JavaScript engine (for example
   `node --check`), either in CI or in a test that skips with a clear message when none is
   installed.
-- A manual `photon tune` session on a sample storyboard has edited a beat, a frame field, a camera
-  move and a caption, and each edit's problem showed on its owning panel. Its outcome is logged on
-  this issue.
+- The goja page test `TestPageJS_EditProblem_ShowsOnItsOwningPanel` (`internal/tune/pagejs_test.go`)
+  sends an edit through the inspector that leaves a problem on a beat, the clip's frame, a camera
+  move and a caption, and passes: each problem shows as an error row on its owning panel and not
+  on another owner's panel. No manual `photon tune` session is needed.

@@ -35,7 +35,11 @@ running them, not by a manual session.
 - Changing page scripts or server behaviour; this plan adds tests and amends one issue file.
 - A Node or other JavaScript engine in CI.
 
-## 1. Edit problems show on their owning panel
+## 1. Edit problems show on their owning panel — ✅ DONE (2026-10-19)
+
+NOTES (2026-10-19): setField now delegates to a new setControl(tag, ...) shared with the new setTextArea (query "textarea"), so the caption's text row is reached without a selector list; setField's behaviour and callers are unchanged and dom.js is untouched.
+NOTES (2026-10-19): the four cases are one table-driven test, TestPageJS_EditProblem_ShowsOnItsOwningPanel, with subtests beat, clip frame, camera move and caption; it also asserts each edit's answer (422 for the refused beat and frame edits, 200 for the standing camera and caption problems). A mutation emptying controls.js errorRows turns all four subtests red.
+NOTES (2026-10-19): no `capcom log` line was added to the issue; the implementer protocol forbids commenting on a ticket, and the item asks for a Log line only if one is added via capcom.
 
 **What:**
 **Goal:** `internal/tune/pagejs_test.go` holds goja tests that, for each of a beat, the clip's
