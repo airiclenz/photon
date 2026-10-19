@@ -1,11 +1,13 @@
 ---
 title: Make the tune preview play smoothly
-status: open
+status: done
 type: bug
 priority: 1
 labels: [tune]
 plan: 2026-10-19 - 00 - draft-frame-speed-plan
 created: 2026-10-18T17:04:06Z
+closed: 2026-10-19T19:03:47Z
+reason: Draft frames now answer in about 60-70 ms and the preview plays at the clip's fps on desktop-class hardware; fixed by plans 2026-10-19 - 00 - draft-frame-speed-plan and 2026-10-19 - 01 - draft-reuse-shared-stage-plan.
 ---
 
 `photon tune`'s preview plays far below the clip's fps and stutters: every frame the page shows
