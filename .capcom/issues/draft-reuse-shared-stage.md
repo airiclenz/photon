@@ -4,6 +4,7 @@ status: open
 type: bug
 priority: 3
 labels: [render]
+plan: 2026-10-19 - 01 - draft-reuse-shared-stage-plan
 created: 2026-10-19T15:04:27Z
 ---
 
