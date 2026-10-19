@@ -49,7 +49,15 @@ take's load time; the page's prefetch depth and cache size; any wire format othe
 - 3: guard folded (storyboard length from the snapshot count, exactly 4 goroutines, no
   `b.Fatalf` off the benchmark goroutine).
 
-## 1. Rasterize draft frames at the shipped size
+## 1. Rasterize draft frames at the shipped size — ✅ DONE (2026-10-19)
+
+NOTES (2026-10-19): `draftGeometry(loaded, faces, exact)` replaces `draftScale`/`draftGeometry(frame)`; it builds trial rasterizers to measure the rounded cell width, and in a frame too narrow for any font size (after `draftFitAttempts` = 8 shrinks) falls back to the raster geometry, so the draft stage is then the exact stage rather than failing the build.
+
+NOTES (2026-10-19): `draftGeometryFrom` reuses the previous pipeline's draft geometry when the exact rasterizer was taken over and frame.width is unchanged, so a full-reuse rebuild still loads no terminal font; `drawsAlike` lost its geometry parameter (each caller compares its own geometry).
+
+NOTES (2026-10-19): `TestBuild_Reuse_KeepsTheDraftRastersWhileTheDraftGeometryHolds` adapted: "scale 2 to 1" now rebuilds the draft stage (it becomes the exact one), "scale 2 to 3" still keeps it, and "the same clip" / "another width" cases were added; it now asserts the kept rasterizer and cache rather than put counts alone.
+
+NOTES (2026-10-19): no CHANGELOG entry from this item — the Unreleased scale-1 draft entry, and the scale-1 wording in README.md, internal/tune/frame.go, internal/tune/doc.go and the glossary Note, belong to item 2, which rewrites them.
 
 **What:**
 **Goal:** a pipeline built with a draft cache draws a draft frame from a raster whose width is at

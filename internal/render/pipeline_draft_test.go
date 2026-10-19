@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
+	"github.com/airiclenz/photon/internal/raster"
 )
 
 // countingCache is a RasterCache that keeps every raster it is given and counts the puts, so a
@@ -147,16 +148,104 @@ func TestBuild_WithoutADraftCache_HoldsNoDraftRasterizer(t *testing.T) {
 	}
 }
 
+// benchmarkFrameStoryboard is renderStoryboard at the draft benchmark's frame: 135×44 cells at
+// font size 30 and scale 2, shipped 1250 pixels wide.
+var benchmarkFrameStoryboard = strings.Replace(renderStoryboard,
+	"{cols: 20, rows: 4, padding: 4, font_size: 10, line_height: 1.2, scale: 2, width: 160,",
+	"{cols: 135, rows: 44, padding: 4, font_size: 30, line_height: 1.2, scale: 2, width: 1250,", 1)
+
+// narrowedStoryboard is renderStoryboard shipped 128 pixels wide: its draft geometry is
+// rescaledStoryboard(1)'s raster geometry, while its own raster geometry is at scale 2.
+var narrowedStoryboard = strings.Replace(renderStoryboard, "width: 160", "width: 128", 1)
+
+func TestDraftGeometry_ScaledToTheFrameWidth_FitsIt(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		storyboard  string
+		wantAtLeast int
+	}{
+		{name: "the benchmark frame", storyboard: benchmarkFrameStoryboard, wantAtLeast: 1200},
+		// renderStoryboard's raster scaled by width alone, rounded, is 170 pixels wide.
+		{name: "an overshooting cell width", storyboard: renderStoryboard, wantAtLeast: 144},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			loaded := loadRenderClipOf(t, tc.storyboard)
+			faces, err := loadTerminalFaces(loaded)
+			if err != nil {
+				t.Fatalf("loadTerminalFaces: %v", err)
+			}
+			exact, err := newRasterizer(loaded)
+			if err != nil {
+				t.Fatalf("newRasterizer: %v", err)
+			}
+
+			geometry, err := draftGeometry(loaded, faces, exact)
+
+			if err != nil {
+				t.Fatalf("draftGeometry: %v", err)
+			}
+			draft, err := raster.New(faces, loaded.Config.Theme, geometry)
+			if err != nil {
+				t.Fatalf("raster.New: %v", err)
+			}
+			width := loaded.Storyboard.Frame.Width
+			if got := draft.Size().X; got > width || got < tc.wantAtLeast {
+				t.Errorf("the draft raster is %d pixels wide, want %d to %d", got, tc.wantAtLeast, width)
+			}
+		})
+	}
+}
+
+func TestBuild_DraftStage_IsTheExactStageOnlyWhenTheExactRasterFits(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name          string
+		storyboard    string
+		wantsExactOne bool
+	}{
+		{name: "scale 1 within the width", storyboard: rescaledStoryboard(1), wantsExactOne: true},
+		{name: "scale 2 wider than the width", storyboard: renderStoryboard},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			takePath, recorded := loadRenderTake(t, 20)
+			exact, draft := newCountingCache(), newCountingCache()
+
+			built, err := Build(loadRenderClipOf(t, tc.storyboard), takePath, recorded, BuildOptions{Cache: exact, DraftCache: draft})
+
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			isExactStage := built.draftRasterizer == built.rasterizer && built.draftCache == RasterCache(exact)
+			isOwnStage := built.draftRasterizer != built.rasterizer && built.draftCache == RasterCache(draft)
+			if tc.wantsExactOne && !isExactStage {
+				t.Error("want the exact rasterizer and its cache as the draft stage")
+			}
+			if !tc.wantsExactOne && !isOwnStage {
+				t.Error("want a draft rasterizer of its own over the draft cache it was given")
+			}
+		})
+	}
+}
+
 func TestBuild_Reuse_KeepsTheDraftRastersWhileTheDraftGeometryHolds(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name         string
-		storyboard   string
-		wantsRedraws bool
+		name       string
+		storyboard string
+		wantsKept  bool
 	}{
-		{name: "scale 2 to 3", storyboard: rescaledStoryboard(3)},
+		{name: "the same clip", storyboard: renderStoryboard, wantsKept: true},
+		// At scale 3 the exact raster is 384 pixels wide; scaled to 160 its draft geometry is
+		// scale 2's.
+		{name: "scale 2 to 3", storyboard: rescaledStoryboard(3), wantsKept: true},
 		{name: "scale 2 to 1", storyboard: rescaledStoryboard(1)},
-		{name: "another font size", storyboard: resizedStoryboard, wantsRedraws: true},
+		{name: "another width", storyboard: rewidthedStoryboard},
+		{name: "another font size", storyboard: resizedStoryboard},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -173,40 +262,64 @@ func TestBuild_Reuse_KeepsTheDraftRastersWhileTheDraftGeometryHolds(t *testing.T
 			if drawn == 0 {
 				t.Fatal("the first pipeline drew no draft raster")
 			}
-			second := newCountingCache()
 			loaded := loadRenderClipOf(t, tc.storyboard)
-			built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster(), DraftCache: second, Reuse: previous})
+			built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster(), DraftCache: newCountingCache(), Reuse: previous})
 			if err != nil {
 				t.Fatalf("Build: %v", err)
 			}
 
 			drawEveryDraft(t, built, loaded)
 
-			hasRedrawn := first.puts != drawn || second.puts != 0
-			if hasRedrawn != tc.wantsRedraws {
-				t.Errorf("redrew draft rasters: %v (first cache %d → %d puts, second %d), want %v",
-					hasRedrawn, drawn, first.puts, second.puts, tc.wantsRedraws)
+			isKept := built.draftRasterizer == previous.draftRasterizer && built.draftCache == RasterCache(first)
+			if isKept != tc.wantsKept {
+				t.Errorf("kept the draft rasterizer and its cache: %v, want %v", isKept, tc.wantsKept)
+			}
+			if tc.wantsKept && first.puts != drawn {
+				t.Errorf("redrew %d kept draft rasters, want none", first.puts-drawn)
 			}
 		})
 	}
 }
 
-func TestBuild_Reuse_TheDraftStageNeverTakesTheExactRasters(t *testing.T) {
+func TestBuild_Reuse_ASharedDraftStage_CarriesOverOnlyWithItsExactStage(t *testing.T) {
 	t.Parallel()
-	takePath, recorded := loadRenderTake(t, 20)
-	exact := newCountingCache()
-	previous, err := Build(loadRenderClipOf(t, rescaledStoryboard(1)), takePath, recorded, BuildOptions{Cache: exact})
-	if err != nil {
-		t.Fatalf("Build: %v", err)
+	cases := []struct {
+		name       string
+		storyboard string
+		wantsKept  bool
+	}{
+		{name: "the same exact stage", storyboard: rescaledStoryboard(1), wantsKept: true},
+		{name: "another exact geometry", storyboard: narrowedStoryboard},
 	}
-	draft := newCountingCache()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			takePath, recorded := loadRenderTake(t, 20)
+			exact := newCountingCache()
+			previous, err := Build(loadRenderClipOf(t, rescaledStoryboard(1)), takePath, recorded, BuildOptions{Cache: exact, DraftCache: newCountingCache()})
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			if previous.draftRasterizer != previous.rasterizer {
+				t.Fatal("want the previous pipeline's draft stage to be its exact stage")
+			}
+			draft := newCountingCache()
 
-	built, err := Build(loadRenderClipOf(t, rescaledStoryboard(1)), takePath, recorded, BuildOptions{Cache: newLastRaster(), DraftCache: draft, Reuse: previous})
+			built, err := Build(loadRenderClipOf(t, tc.storyboard), takePath, recorded, BuildOptions{Cache: newLastRaster(), DraftCache: draft, Reuse: previous})
 
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-	if built.draftRasterizer == previous.rasterizer || built.draftCache != RasterCache(draft) {
-		t.Error("want a draft rasterizer of its own over the draft cache it was given")
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			if built.draftGeometry != previous.draftGeometry {
+				t.Fatalf("draft geometry %+v, want the previous one %+v", built.draftGeometry, previous.draftGeometry)
+			}
+			isKept := built.draftRasterizer == previous.rasterizer && built.draftCache == RasterCache(exact)
+			if isKept != tc.wantsKept {
+				t.Errorf("kept the previous exact rasterizer and cache as the draft stage: %v, want %v", isKept, tc.wantsKept)
+			}
+			if !tc.wantsKept && built.draftCache != RasterCache(draft) {
+				t.Error("want a draft rasterizer of its own over the draft cache it was given")
+			}
+		})
 	}
 }

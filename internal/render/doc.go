@@ -22,14 +22,16 @@
 // pipeline answers the frame, the screen, a cell or a cell box's pixels by output time,
 // rasterized snapshots kept in the [RasterCache] it is given (a render keeps the last one).
 // Given a draft cache too, the pipeline answers draft frames ([Pipeline.DraftAt]): snapshots
-// rasterized at scale 1, padding and font size unscaled, kept in the draft cache and scaled to the
-// shipped frame by a fast interpolator; a render passes no draft cache and draws none.
-// [BuildOptions] may name an earlier pipeline to reuse: its draft rasterizer and draft cache carry
-// over while the take, the draft geometry, the terminal fonts and the theme match, so a change of
-// frame.scale alone keeps them; its rasterizer and raster cache while the take, the raster
-// geometry, the terminal fonts and the theme match — at frame.scale 1 the exact stage may take
-// the draft rasterizer and draft cache, never the reverse; and its caption faces while the
-// caption font files do, so a rebuild after an edit loads no caption font again.
+// rasterized at the shipped frame's size — padding and font size scaled by frame.width over the
+// exact raster's width, never up, the raster at most frame.width wide — kept in the draft cache
+// and scaled to the shipped frame by a fast interpolator; when the exact raster is no wider than
+// frame.width the draft stage is the exact stage, its rasterizer and raster cache. A render passes
+// no draft cache and draws none. [BuildOptions] may name an earlier pipeline to reuse: its
+// rasterizer and raster cache while the take, the raster geometry, the terminal fonts and the
+// theme match; its draft rasterizer and draft cache while the take, the draft geometry, the
+// terminal fonts and the theme match, and a draft stage that was the exact stage only along with
+// that exact stage; and its caption faces while the caption font files do, so a rebuild after an
+// edit loads no caption font again.
 //
 // A storyboard is checked in three tiers. The static tier is [storyboard.Parse]: every rule the
 // file alone decides. The font-bound tier is [CheckCaptions]: the captions laid out with the

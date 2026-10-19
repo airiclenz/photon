@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -232,14 +233,44 @@ func rasterGeometry(frame storyboard.Frame) raster.Geometry {
 	}
 }
 
-// draftScale is the scale draft frames are rasterized at: padding and font size unscaled.
-const draftScale = 1
+// draftFitAttempts bounds how often [draftGeometry] shrinks the font size of a draft raster wider
+// than frame.width: the cell width rounds, so one shrink by the overshoot almost always fits.
+const draftFitAttempts = 8
 
-// draftGeometry is the geometry draft frames are rasterized at: frame's [rasterGeometry] at scale
-// 1, whatever frame.scale says, so a change of frame.scale alone keeps the draft rasters.
-func draftGeometry(frame storyboard.Frame) raster.Geometry {
-	frame.Scale = draftScale
-	return rasterGeometry(frame)
+// draftGeometry is the geometry draft frames are rasterized at, so a draft raster is about the
+// shipped frame's size: loaded's [rasterGeometry] with its font size and its padding (rounded)
+// scaled by frame.width over the width of exact's frames, and never up. The cell width rounds, so
+// a raster at that font size may come out wider than frame.width; the font size is then shrunk by
+// the overshoot until it fits. exact must be built at loaded's [rasterGeometry], over faces. When
+// exact's frames are no wider than frame.width — or, in a frame too narrow for any font size,
+// after [draftFitAttempts] shrinks — it is the raster geometry itself, and the draft stage is the
+// exact one. It fails when a trial rasterizer cannot be built over faces.
+func draftGeometry(
+	loaded *clip.Clip,
+	faces fonts.Set,
+	exact *raster.Rasterizer,
+) (raster.Geometry, error) {
+	frame := loaded.Storyboard.Frame
+	geometry := rasterGeometry(frame)
+	width := float64(frame.Width)
+	ratio := width / float64(exact.Size().X)
+	if ratio >= 1 {
+		return geometry, nil
+	}
+	geometry.FontSize *= ratio
+	geometry.Padding = int(math.Round(float64(geometry.Padding) * ratio))
+	for range draftFitAttempts {
+		trial, err := newRasterizerAt(loaded, faces, geometry)
+		if err != nil {
+			return raster.Geometry{}, err
+		}
+		drawn := trial.Size().X
+		if drawn <= frame.Width {
+			return geometry, nil
+		}
+		geometry.FontSize *= width / float64(drawn)
+	}
+	return rasterGeometry(frame), nil
 }
 
 // captionLoads counts the caption-font loads [loadCaptionFaces] made in this process, so a test

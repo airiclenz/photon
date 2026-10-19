@@ -36,8 +36,10 @@ type RasterCache interface {
 // output time onto the snapshot it shows, the rasterizer draws that snapshot at frame.scale and
 // the compositor lays the camera, the cursor and the captions over it at frame.width. Every frame
 // `photon render` encodes comes from [Pipeline.FrameAt]. Built with a draft cache, it also
-// draws draft frames ([Pipeline.DraftAt]) from a second rasterizer drawing at scale 1, padding
-// and font size unscaled, its rasters kept in the draft cache; `photon render` draws none.
+// draws draft frames ([Pipeline.DraftAt]) from a draft rasterizer drawing at about the shipped
+// frame's size, at most frame.width wide, its rasters kept in the draft cache; when the exact
+// rasters are no wider than frame.width the draft stage is the exact one. `photon render` draws
+// none.
 //
 // A pipeline [Build] could not finish holds its schedule and the error that stopped it: its
 // frame methods return that error, [Pipeline.Cell] reports no cell, [Pipeline.Rect] the empty
@@ -54,10 +56,12 @@ type Pipeline struct {
 	cache        RasterCache
 	captionFaces fonts.CaptionSet
 
-	// draftRasterizer draws the snapshots of draft frames at scale 1 into draftCache, and is nil
-	// without a draft cache. At frame.scale 1 rasterizer and cache may be these same two.
+	// draftRasterizer draws the snapshots of draft frames at draftGeometry into draftCache, and
+	// is nil without a draft cache. When draftGeometry is the raster geometry these two are
+	// rasterizer and cache.
 	draftRasterizer *raster.Rasterizer
 	draftCache      RasterCache
+	draftGeometry   raster.Geometry
 
 	// err is the stage error that left the pipeline without a rasterizer or compositor.
 	err error
@@ -65,19 +69,19 @@ type Pipeline struct {
 
 // BuildOptions is what [Build] is given beside the clip and its take. Cache keeps the rasterized
 // snapshots of a pipeline that builds its own rasterizer; it must not be nil. DraftCache keeps
-// the snapshots its draft rasterizer draws at scale 1; when nil the pipeline builds no draft
-// rasterizer and [Pipeline.DraftAt] returns the exact frame.
+// the snapshots its draft rasterizer draws at the shipped frame's size; when nil the pipeline
+// builds no draft rasterizer and [Pipeline.DraftAt] returns the exact frame. When the exact
+// rasters are no wider than frame.width, the draft geometry is the exact one and the draft stage
+// is the exact stage, its rasterizer and Cache, so DraftCache is left unused.
 //
 // Reuse, when not nil, is an earlier pipeline whose parts the new one takes over where they come
-// out the same. Its draft rasterizer and draft cache come first, while the take, the frame's
-// draft geometry, the config's terminal fonts and its theme match — a change of frame.scale alone
-// keeps them — and only when the new pipeline has a draft cache. Its rasterizer and its raster
-// cache come next, while the take, the frame's raster geometry, the terminal fonts and the theme
-// match; failing that, at frame.scale 1 the new pipeline's exact stage takes its own draft
-// rasterizer and draft cache, whose rasters are then exact, while the draft stage never takes an
-// exact rasterizer or its cache. Its caption faces carry over while the config's caption fonts
-// match. A reused cache is then shared by both pipelines, so it must be safe for both to use at
-// once when they are.
+// out the same. Its rasterizer and its raster cache come first, while the take, the frame's raster
+// geometry, the config's terminal fonts and its theme match. Its draft rasterizer and draft cache
+// come next, only when the new pipeline has a draft cache, while the take, the draft geometry, the
+// terminal fonts and the theme match, and — when its draft stage was its exact stage — only along
+// with that exact stage, so a draft stage never binds an exact cache the new exact stage does not
+// share. Its caption faces carry over while the config's caption fonts match. A reused cache is
+// then shared by both pipelines, so it must be safe for both to use at once when they are.
 type BuildOptions struct {
 	Cache      RasterCache
 	DraftCache RasterCache
@@ -89,8 +93,9 @@ type BuildOptions struct {
 // rasterized at frame.scale — padding and font size multiplied through — so a zoom has pixels to
 // draw on, and composed at frame.width, with pan targets resolved through the config's
 // areas. Rasterized snapshots are kept in options.Cache, or in the reused pipeline's cache along
-// with its rasterizer; with options.DraftCache set, a draft rasterizer draws at scale 1 into it,
-// or the reused pipeline's draft rasterizer and draft cache are taken over; the caption fonts are
+// with its rasterizer; with options.DraftCache set, a draft rasterizer draws at the shipped
+// frame's size into it, the exact stage stands in when it already draws at that size, or the
+// reused pipeline's draft rasterizer and draft cache are taken over; the caption fonts are
 // loaded only when options.Reuse holds none that match (see [BuildOptions]).
 //
 // It fails with a nil pipeline when the frame sizes differ or the take does not schedule. When a
@@ -120,16 +125,21 @@ func Build(
 	return built, nil
 }
 
-// buildFrames builds the draft rasterizer, the rasterizer, the caption faces, the target
+// buildFrames builds the rasterizer, the draft rasterizer from it, the caption faces, the target
 // resolver and the compositor over the pipeline's clip, taking from previous what it can reuse,
 // and keeps every stage or none. The two rasterizers share one load of the terminal fonts.
 func (p *Pipeline) buildFrames(previous *Pipeline) error {
 	faces := sync.OnceValues(func() (fonts.Set, error) { return loadTerminalFaces(p.loaded) })
-	draftRasterizer, draftCache, err := p.draftRastersFrom(previous, faces)
+	rasterizer, cache, err := p.rastersFrom(previous, faces)
 	if err != nil {
 		return err
 	}
-	rasterizer, cache, err := p.rastersFrom(previous, faces, draftRasterizer, draftCache)
+	draftAt, err := p.draftGeometryFrom(previous, faces, rasterizer)
+	if err != nil {
+		return err
+	}
+	draftRasterizer, draftCache, err := p.draftRastersFrom(
+		previous, faces, draftAt, rasterizer, cache)
 	if err != nil {
 		return err
 	}
@@ -147,50 +157,20 @@ func (p *Pipeline) buildFrames(previous *Pipeline) error {
 		return err
 	}
 	p.rasterizer, p.cache = rasterizer, cache
-	p.draftRasterizer, p.draftCache = draftRasterizer, draftCache
+	p.draftRasterizer, p.draftCache, p.draftGeometry = draftRasterizer, draftCache, draftAt
 	p.captionFaces, p.compositor = captionFaces, compositor
 	return nil
 }
 
-// draftRastersFrom returns the draft rasterizer and the cache its rasters are kept in: none
-// without a draft cache, previous's while they hold for p, and otherwise a rasterizer of its own
-// over the faces faces loads, with p's draft cache.
-func (p *Pipeline) draftRastersFrom(
-	previous *Pipeline,
-	faces func() (fonts.Set, error),
-) (*raster.Rasterizer, RasterCache, error) {
-	if p.draftCache == nil {
-		return nil, nil, nil
-	}
-	if p.canReuseDraftRasters(previous) {
-		return previous.draftRasterizer, previous.draftCache, nil
-	}
-	set, err := faces()
-	if err != nil {
-		return nil, nil, err
-	}
-	rasterizer, err := newRasterizerAt(p.loaded, set, draftGeometry(p.loaded.Storyboard.Frame))
-	if err != nil {
-		return nil, nil, err
-	}
-	return rasterizer, p.draftCache, nil
-}
-
 // rastersFrom returns the exact rasterizer and the cache its rasters are kept in: previous's
-// while they hold for p; at frame.scale 1 the draft rasterizer and draft cache when p has them,
-// since a draft is then drawn at the exact geometry; and otherwise a rasterizer of its own over
-// the faces faces loads, with p's cache.
+// while they hold for p, and otherwise a rasterizer of its own over the faces faces loads, with
+// p's cache.
 func (p *Pipeline) rastersFrom(
 	previous *Pipeline,
 	faces func() (fonts.Set, error),
-	draftRasterizer *raster.Rasterizer,
-	draftCache RasterCache,
 ) (*raster.Rasterizer, RasterCache, error) {
 	if p.canReuseRasters(previous) {
 		return previous.rasterizer, previous.cache, nil
-	}
-	if draftRasterizer != nil && p.loaded.Storyboard.Frame.Scale == draftScale {
-		return draftRasterizer, draftCache, nil
 	}
 	set, err := faces()
 	if err != nil {
@@ -203,33 +183,100 @@ func (p *Pipeline) rastersFrom(
 	return rasterizer, p.cache, nil
 }
 
+// draftGeometryFrom returns the geometry p's drafts are rasterized at, as [draftGeometry] derives
+// it from p's exact rasterizer, and the zero geometry without a draft cache. When p took over
+// previous's exact rasterizer and ships at previous's frame.width, it is previous's draft
+// geometry, so such a rebuild loads no terminal font.
+func (p *Pipeline) draftGeometryFrom(
+	previous *Pipeline,
+	faces func() (fonts.Set, error),
+	rasterizer *raster.Rasterizer,
+) (raster.Geometry, error) {
+	if p.draftCache == nil {
+		return raster.Geometry{}, nil
+	}
+	isUnchanged := previous != nil && previous.draftRasterizer != nil &&
+		previous.rasterizer == rasterizer &&
+		previous.loaded.Storyboard.Frame.Width == p.loaded.Storyboard.Frame.Width
+	if isUnchanged {
+		return previous.draftGeometry, nil
+	}
+	set, err := faces()
+	if err != nil {
+		return raster.Geometry{}, err
+	}
+	return draftGeometry(p.loaded, set, rasterizer)
+}
+
+// draftRastersFrom returns the draft rasterizer and the cache its rasters are kept in: none
+// without a draft cache; previous's while they hold for p at geometry; p's exact rasterizer and
+// cache when geometry is the raster geometry; and otherwise a rasterizer of its own at geometry
+// over the faces faces loads, with p's draft cache.
+func (p *Pipeline) draftRastersFrom(
+	previous *Pipeline,
+	faces func() (fonts.Set, error),
+	geometry raster.Geometry,
+	rasterizer *raster.Rasterizer,
+	cache RasterCache,
+) (*raster.Rasterizer, RasterCache, error) {
+	if p.draftCache == nil {
+		return nil, nil, nil
+	}
+	if p.canReuseDraftRasters(previous, geometry, rasterizer) {
+		return previous.draftRasterizer, previous.draftCache, nil
+	}
+	if geometry == rasterGeometry(p.loaded.Storyboard.Frame) {
+		return rasterizer, cache, nil
+	}
+	set, err := faces()
+	if err != nil {
+		return nil, nil, err
+	}
+	draftRasterizer, err := newRasterizerAt(p.loaded, set, geometry)
+	if err != nil {
+		return nil, nil, err
+	}
+	return draftRasterizer, p.draftCache, nil
+}
+
 // canReuseRasters says previous built in full over the same take with a rasterizer p's clip
 // would build alike — the same raster geometry, terminal fonts and theme — so its rasterizer
 // draws p's snapshots as p's own would and the rasters in its cache hold for p.
 func (p *Pipeline) canReuseRasters(previous *Pipeline) bool {
-	return p.drawsAlike(previous, rasterGeometry)
+	if !p.drawsAlike(previous) {
+		return false
+	}
+	return rasterGeometry(previous.loaded.Storyboard.Frame) ==
+		rasterGeometry(p.loaded.Storyboard.Frame)
 }
 
-// canReuseDraftRasters says previous holds a draft rasterizer p's clip would build alike — over
-// the same take, draft geometry, terminal fonts and theme — so the rasters in its draft cache
-// hold for p's drafts.
-func (p *Pipeline) canReuseDraftRasters(previous *Pipeline) bool {
-	return previous != nil && previous.draftRasterizer != nil &&
-		p.drawsAlike(previous, draftGeometry)
-}
-
-// drawsAlike says previous built in full over p's take, and a rasterizer built over p's clip at
-// geometry draws as one built over previous's would: the same geometry, terminal fonts and theme.
-func (p *Pipeline) drawsAlike(
+// canReuseDraftRasters says previous holds a draft rasterizer p would build alike at geometry —
+// over the same take, draft geometry, terminal fonts and theme — so the rasters in its draft
+// cache hold for p's drafts. A draft stage that was previous's exact stage is reused only along
+// with that exact stage, as p's rasterizer, so p never keeps drafts in an exact cache its own
+// exact stage does not use.
+func (p *Pipeline) canReuseDraftRasters(
 	previous *Pipeline,
-	geometry func(storyboard.Frame) raster.Geometry,
+	geometry raster.Geometry,
+	rasterizer *raster.Rasterizer,
 ) bool {
+	if previous == nil || previous.draftRasterizer == nil || !p.drawsAlike(previous) {
+		return false
+	}
+	isSharedStage := previous.draftRasterizer == previous.rasterizer
+	return previous.draftGeometry == geometry &&
+		(!isSharedStage || previous.rasterizer == rasterizer)
+}
+
+// drawsAlike says previous built in full over p's take, and a rasterizer built over p's clip
+// draws as one built over previous's would at the same geometry: the same terminal fonts and
+// theme.
+func (p *Pipeline) drawsAlike(previous *Pipeline) bool {
 	if previous == nil || previous.compositor == nil || previous.recorded != p.recorded {
 		return false
 	}
 	was, is := previous.loaded, p.loaded
-	return geometry(was.Storyboard.Frame) == geometry(is.Storyboard.Frame) &&
-		was.Config.Fonts == is.Config.Fonts &&
+	return was.Config.Fonts == is.Config.Fonts &&
 		was.Config.Theme.FG == is.Config.Theme.FG &&
 		was.Config.Theme.BG == is.Config.Theme.BG &&
 		slices.Equal(was.Config.Theme.ANSI, is.Config.Theme.ANSI)
@@ -275,8 +322,9 @@ func (p *Pipeline) FrameAt(out time.Duration) (*image.RGBA, error) {
 }
 
 // DraftAt returns a draft of the frame at output time out, of [Pipeline.Size] and with the same
-// cursor and captions as [Pipeline.FrameAt]'s: the snapshot on screen then, rasterized at scale 1
-// or taken from the draft cache, composed at out by [compose.Compositor.ComposeDraft]. Built
+// cursor and captions as [Pipeline.FrameAt]'s: the snapshot on screen then, rasterized at the
+// draft geometry or taken from the draft cache, composed at out by
+// [compose.Compositor.ComposeDraft]. Built
 // without a draft cache it returns [Pipeline.FrameAt]'s frame. It fails as [Pipeline.FrameAt]
 // does.
 func (p *Pipeline) DraftAt(out time.Duration) (*image.RGBA, error) {

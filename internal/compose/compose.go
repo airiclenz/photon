@@ -179,9 +179,9 @@ func (c *Compositor) Compose(t time.Duration, src *image.RGBA) *image.RGBA {
 // ComposeDraft builds a draft of the shipped frame at output time t: the frame
 // [Compositor.Compose] builds, at exactly [Compositor.Size] and with the same cursor and captions,
 // but with the camera's crop scaled from src by the fast [draw.ApproxBiLinear]. src may be of any
-// size — typically the snapshot rasterized at scale 1 — and the crop is mapped onto it by its size
-// against the layout's per axis, so its terminal text may sit a pixel or so off the exact frame's.
-// src is only read.
+// size — typically the snapshot rasterized at about the shipped frame's size — and the crop is
+// mapped onto it by its size against the layout's per axis, so its terminal text may sit a pixel
+// or so off the exact frame's. src is only read.
 func (c *Compositor) ComposeDraft(t time.Duration, src *image.RGBA) *image.RGBA {
 	return c.compose(t, src, draw.ApproxBiLinear)
 }
