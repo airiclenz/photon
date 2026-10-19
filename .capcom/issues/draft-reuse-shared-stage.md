@@ -1,11 +1,13 @@
 ---
 title: Share the exact stage on a draft-reusing rebuild
-status: open
+status: done
 type: bug
 priority: 3
 labels: [render]
 plan: 2026-10-19 - 01 - draft-reuse-shared-stage-plan
 created: 2026-10-19T15:04:27Z
+closed: 2026-10-19T17:47:22Z
+reason: Resolved by plan 2026-10-19 - 01 - draft-reuse-shared-stage-plan (archived e22cd88)
 ---
 
 Deferred from plan `2026-10-19 - 00 - draft-frame-speed-plan` (item 1).
