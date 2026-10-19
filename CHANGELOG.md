@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `photon tune`: after an edit that makes the exact frame no wider than the shipped width, such as lowering `frame.scale`, the preview's draft frames come from the exact frame's rasters again instead of each snapshot being rasterized a second time.
 - `photon tune`'s page no longer aims zooms: the pick's "Set as zoom target" button, the beat's zoom panel, the timeline's zoom lane and a camera zoom's target rows are gone; aim a camera zoom with a pan move.
 - A camera `zoom` move no longer takes a `target`, and it holds only the zoom track. A storyboard whose camera zoom has a `target` is refused on load under that move, `camera[i]: zoom: target: removed; aim with a pan move over the same stretch`. To aim the camera, add a pan move over the same stretch.
 - Breaking for storyboards written for v0.1.0: a beat no longer takes a `zoom`. A storyboard with a `zoom` on a beat is refused on load under that beat, `beat <id>: zoom: removed; use a camera zoom move and a pan move`. To zoom into a beat, add a camera `zoom` move over its stretch, and a `pan` move to aim it.
