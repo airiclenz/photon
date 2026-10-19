@@ -4,6 +4,7 @@ status: open
 type: task
 priority: 2
 labels: [tune]
+plan: 2026-10-19 - 02 - tune-panel-problems-plan
 created: 2026-10-18T09:15:40Z
 ---
 
