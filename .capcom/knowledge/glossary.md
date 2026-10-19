@@ -21,6 +21,6 @@ The terms code, flags, messages and docs use. One meaning each.
 - **Expect**: what a keeper take must show, judged PASS or FAIL by `check`.
 - **Section**: a beat's stretch of the rendered clip; its `duration` sets the playback speed.
 - **Render**: a take turned into the shipped GIF.
-- **Draft frame**: a frame `photon tune` shows while playing or scrubbing: drawn from a scale-1
-  raster with a fast scaler, at the exact frame's pixel size with its cursor and captions; once
-  stopped the preview settles on the exact frame `photon render` composes, which never draws one.
+- **Draft frame**: a frame `photon tune` shows while playing or scrubbing: drawn from a raster at
+  the shipped size with a fast scaler, at the exact frame's pixel size with its cursor and
+  captions; once stopped the preview settles on the exact frame `photon render` composes, which never draws one.

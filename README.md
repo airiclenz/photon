@@ -163,8 +163,8 @@ take, each service's log (`<work>/<service>.log`), and the clip's palette
 
 **Tuning** with `photon tune` prints the page's address, such as
 `photon tune: http://127.0.0.1:41234/`, and never opens a browser. The page previews the take:
-while it plays or scrubs it shows draft frames, drawn from a scale-1 raster with a fast scaler,
-and once stopped it settles on the exact frame `photon render` composes. Its timeline edits
+while it plays or scrubs it shows draft frames, drawn from a raster at the shipped size with a
+fast scaler, and once stopped it settles on the exact frame `photon render` composes. Its timeline edits
 each beat's `duration`, `hold` and `cut`, and its inspector the clip's `frame.width`,
 `fps`, `font_size`, `line_height`, `padding` and `scale`; `cols`, `rows` and `max_colors` show read-only. The
 storyboard's `camera` moves and `captions` show as bars on lanes of their own under the beats,

@@ -11,7 +11,7 @@ import (
 const rasterCacheBytes = 1 << 30
 
 // draftCacheBytes caps a session's draft raster cache: up to 256 MiB of snapshots rasterized at
-// scale 1 for draft frames stay kept, the least recently shown dropped first.
+// the shipped size for draft frames stay kept, the least recently shown dropped first.
 const draftCacheBytes = 256 << 20
 
 // rasterCache is the [render.RasterCache] of a session's pipelines: it keeps rasterized snapshots

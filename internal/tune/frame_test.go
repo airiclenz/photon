@@ -159,8 +159,8 @@ func TestSession_DraftFrame_IsTheExactFramesSizeWithOtherPixels(t *testing.T) {
 	}
 
 	assertSameSize(t, draft, exact)
-	if bytes.Equal(draft, exact) {
-		t.Error("the draft frame is the exact frame on a scale-2 clip")
+	if bytes.Equal(decodedFrame(t, draft).Pix, decodedFrame(t, exact).Pix) {
+		t.Error("the draft frame shows the exact frame's pixels on a scale-2 clip")
 	}
 }
 
@@ -176,6 +176,19 @@ func TestSession_DraftFrame_OutsideTheClip_IsRefused(t *testing.T) {
 			t.Errorf("DraftFrame(%s) error = %v, want ErrOutsideClip", out, err)
 		}
 	}
+}
+
+// decodedFrame returns the PNG encoded decoded into an RGBA frame, so two frames compare by their
+// pixels whatever their encoding.
+func decodedFrame(t *testing.T, encoded []byte) *image.RGBA {
+	t.Helper()
+	decoded, err := png.Decode(bytes.NewReader(encoded))
+	if err != nil {
+		t.Fatalf("decode the frame: %v", err)
+	}
+	frame := image.NewRGBA(decoded.Bounds())
+	draw.Draw(frame, frame.Bounds(), decoded, decoded.Bounds().Min, draw.Src)
+	return frame
 }
 
 // assertSameSize fails the test unless the PNGs got and want decode to frames of one size.

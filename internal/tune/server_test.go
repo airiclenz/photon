@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -156,9 +157,56 @@ func TestHandler_Frame_Draft_IsADraftOfTheExactFramesSize(t *testing.T) {
 	draft := frameOf(t, handler, "500&draft=1")
 
 	assertSameSize(t, draft, exact)
-	if bytes.Equal(draft, exact) {
-		t.Error("the served draft frame is the exact frame on a scale-2 clip")
+	if bytes.Equal(decodedFrame(t, draft).Pix, decodedFrame(t, exact).Pix) {
+		t.Error("the served draft frame shows the exact frame's pixels on a scale-2 clip")
 	}
+}
+
+func TestHandler_Frame_Draft_IsAnUncompressedPNG(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixture(t)
+	handler := newHandler(fixture.session, testAddr)
+	exact := frameOf(t, handler, "500")
+
+	draft := frameOf(t, handler, "500&draft=1")
+
+	assertSameSize(t, draft, exact)
+	// Go writes the same zlib level bits for no compression and for best speed, so the first
+	// deflate block's type tells them apart: 00 is a stored, uncompressed block.
+	stream := idatData(t, draft)
+	if len(stream) < zlibHeaderBytes+1 {
+		t.Fatalf("draft IDAT data: %d bytes, want a zlib header and a deflate block", len(stream))
+	}
+	if blockType := (stream[zlibHeaderBytes] >> 1) & 0b11; blockType != 0 {
+		t.Errorf("draft's first deflate block type = %02b, want 00 (stored)", blockType)
+	}
+	if len(exact) >= len(draft) {
+		t.Errorf("exact frame %d bytes, want fewer than its draft's %d", len(exact), len(draft))
+	}
+}
+
+// zlibHeaderBytes is the length of the zlib header before a PNG's deflate stream.
+const zlibHeaderBytes = 2
+
+// idatData returns the PNG encoded's image data: its IDAT chunks' data joined in order.
+func idatData(t *testing.T, encoded []byte) []byte {
+	t.Helper()
+	const signatureBytes, lengthBytes, typeBytes, crcBytes = 8, 4, 4, 4
+	var data []byte
+	rest := encoded[signatureBytes:]
+	for len(rest) >= lengthBytes+typeBytes+crcBytes {
+		length := int(binary.BigEndian.Uint32(rest))
+		chunkType := string(rest[lengthBytes : lengthBytes+typeBytes])
+		body := rest[lengthBytes+typeBytes:]
+		if len(body) < length+crcBytes {
+			t.Fatalf("PNG chunk %s: %d bytes, want %d", chunkType, len(body), length+crcBytes)
+		}
+		if chunkType == "IDAT" {
+			data = append(data, body[:length]...)
+		}
+		rest = body[length+crcBytes:]
+	}
+	return data
 }
 
 func TestHandler_Frame_DraftOff_IsTheExactFrame(t *testing.T) {

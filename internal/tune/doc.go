@@ -27,12 +27,13 @@
 // the exact frame `photon render` composes at an output time, from the last good pipeline, its
 // rasterized snapshots kept in a cache bounded at 1 GiB that a new take or raster geometry starts
 // afresh; [Session.DraftFrame] the PNG of the draft frame the page shows while it plays or scrubs,
-// drawn from a scale-1 raster with a fast scaler, its scale-1 rasters kept in a draft cache bounded
-// at 256 MiB that carries across rebuilds as the exact one does; once stopped the page settles on
-// the exact frame. [Session.Pick] turns cells picked on that frame into a [Proposal]: the picked
-// text, escaped, as a target the resolver resolves back onto them, with its area and nth, and its
-// YAML for a pan's destination, a click, a seen expect and either end of a drag. [Session.Path]
-// maps a via pan's points onto that frame, through its camera's crop at the output time.
+// drawn from a raster at the shipped size with a fast scaler and sent uncompressed, its draft
+// rasters kept in a draft cache bounded at 256 MiB that carries across rebuilds as the exact one
+// does; once stopped the page settles on the exact frame. [Session.Pick] turns cells picked on that
+// frame into a [Proposal]: the picked text, escaped, as a target the resolver resolves back onto
+// them, with its area and nth, and its YAML for a pan's destination, a click, a seen expect and
+// either end of a drag. [Session.Path] maps a via pan's points onto that frame, through its
+// camera's crop at the output time.
 //
 // [Run] serves a session to a browser on this machine: it listens on 127.0.0.1 only, prints the
 // page's address, and serves the embedded page under page/ and a JSON API over the session —

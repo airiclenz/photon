@@ -1,9 +1,9 @@
 // photon tune's preview frames: which frames the preview asks the server for around the playhead,
 // the frames it holds at hand, and putting one on screen. While the preview moves — playing, or a
 // scrub's pointer down — it asks for draft frames (/api/frame?t=<ms>&draft=1), which the server
-// draws fast from a scale-1 raster; once the playhead settles it asks for the exact frame
-// `photon render` composes, showing a draft first unless the exact frame is already at hand. An
-// exact frame shown is never replaced by a draft of the same state version and time.
+// draws fast from a raster at the shipped size; once the playhead settles it asks for the exact
+// frame `photon render` composes, showing a draft first unless the exact frame is already at hand.
+// An exact frame shown is never replaced by a draft of the same state version and time.
 //
 // While playing it keeps up to PREFETCH_REQUESTS requests in flight for the frames on the clip's
 // fps grid from the playhead's on, and the frames that arrive wait in a cache of at most

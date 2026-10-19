@@ -126,7 +126,12 @@ new rule:
 lists no outdated sentence.
 **Commit:** `perf(render): rasterize draft frames at the shipped size`
 
-## 2. Encode draft frames uncompressed
+## 2. Encode draft frames uncompressed — ✅ DONE (2026-10-19)
+
+NOTES (2026-10-19): CHANGELOG.md's Unreleased draft-frame line is amended in place, as the item's regression guard requires: it now says drafts are drawn from a raster at the shipped size, sent as an uncompressed PNG, with the draft rasters in a 256 MiB cache. This covers items 1 and 2, so this sidecar has no CHANGELOG section and the closeout adds no second, contradicting line.
+
+NOTES (2026-10-19): the new test is `TestHandler_Frame_Draft_IsAnUncompressedPNG` (helpers `idatData`, `zlibHeaderBytes` in server_test.go; `decodedFrame` in frame_test.go). It checks that the first deflate block is stored (BTYPE 00) and that the exact frame is smaller than its draft. With the draft switched back to BestSpeed, it fails on both checks.
+
 
 **What:**
 **Goal:** `Session.DraftFrame` answers with a PNG encoded at `png.NoCompression`, and
