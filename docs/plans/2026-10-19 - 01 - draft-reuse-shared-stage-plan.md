@@ -29,7 +29,7 @@ exact rasterizer and raster cache as its draft stage, whatever draft stage the r
 **Out of scope:** the draft geometry calculation; exact-stage reuse (`canReuseRasters`); the tune
 page and server; the manual checks named above.
 
-## 1. Share the new exact stage before reusing a previous draft stage
+## 1. Share the new exact stage before reusing a previous draft stage — ✅ DONE (2026-10-19)
 
 **What:** Fixes the defect filed as `draft-reuse-shared-stage` (deferred from plan
 `2026-10-19 - 00 - draft-frame-speed-plan` item 1): a pipeline with its own draft stage, rebuilt

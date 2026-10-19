@@ -323,3 +323,34 @@ func TestBuild_Reuse_ASharedDraftStage_CarriesOverOnlyWithItsExactStage(t *testi
 		})
 	}
 }
+
+func TestBuild_Reuse_AnOwnDraftStage_GivesWayToTheNewExactStage(t *testing.T) {
+	t.Parallel()
+	takePath, recorded := loadRenderTake(t, 20)
+	previousDraft := newCountingCache()
+	previous, err := Build(loadRenderClipOf(t, narrowedStoryboard), takePath, recorded, BuildOptions{Cache: newLastRaster(), DraftCache: previousDraft})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if previous.draftRasterizer == previous.rasterizer || previous.draftCache != RasterCache(previousDraft) {
+		t.Fatal("want the previous pipeline's draft stage to be its own, not its exact stage")
+	}
+	loaded := loadRenderClipOf(t, rescaledStoryboard(1))
+	if previous.draftGeometry != rasterGeometry(loaded.Storyboard.Frame) {
+		t.Fatalf("previous draft geometry %+v, want the new raster geometry %+v", previous.draftGeometry, rasterGeometry(loaded.Storyboard.Frame))
+	}
+	exact, draft := newCountingCache(), newCountingCache()
+
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: exact, DraftCache: draft, Reuse: previous})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	drawEveryDraft(t, built, loaded)
+
+	if built.draftRasterizer != built.rasterizer || built.draftCache != RasterCache(exact) {
+		t.Error("want the new exact rasterizer and its cache as the draft stage")
+	}
+	if draft.puts != 0 || previousDraft.puts != 0 {
+		t.Errorf("drew %d drafts into the draft cache given and %d into the previous one, want none", draft.puts, previousDraft.puts)
+	}
+}

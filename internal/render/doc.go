@@ -28,10 +28,10 @@
 // frame.width the draft stage is the exact stage, its rasterizer and raster cache. A render passes
 // no draft cache and draws none. [BuildOptions] may name an earlier pipeline to reuse: its
 // rasterizer and raster cache while the take, the raster geometry, the terminal fonts and the
-// theme match; its draft rasterizer and draft cache while the take, the draft geometry, the
-// terminal fonts and the theme match, and a draft stage that was the exact stage only along with
-// that exact stage; and its caption faces while the caption font files do, so a rebuild after an
-// edit loads no caption font again.
+// theme match; its draft rasterizer and draft cache, when the new draft stage is not the new
+// exact stage, while the take, the draft geometry, the terminal fonts and the theme match, and a
+// draft stage that was the exact stage only along with that exact stage; and its caption faces
+// while the caption font files do, so a rebuild after an edit loads no caption font again.
 //
 // A storyboard is checked in three tiers. The static tier is [storyboard.Parse]: every rule the
 // file alone decides. The font-bound tier is [CheckCaptions]: the captions laid out with the
