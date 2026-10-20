@@ -362,9 +362,11 @@ beats:
     do:
       - pause: {for: 2s}
 
-camera:                         # zoom in on beta while panning to it
-  - zoom: {to: 1.5, at: {beat: 1}, over: 800ms}
-  - pan: {to: {text: 'beta', area: list}, at: {beat: 1}, over: 800ms}
+camera:                         # push in on beta
+  positions:                    # where the camera aims
+    - {text: 'beta', area: list, at: {beat: 1, offset: 1500ms}, hold: 1s}
+  zooms:                        # how far it magnifies
+    - {to: 1.5, at: {beat: 1, offset: 1500ms}, over: 800ms}
 ```
 
 ### Header
@@ -384,7 +386,7 @@ camera:                         # zoom in on beta while panning to it
 | `frame.max_colors` | The palette size, 2..256. The palette is built per clip, without dithering. |
 | `expect` | Take-level expects, checked on every screen of the take. See [Expects](#expects). |
 | `beats` | The beats, at least one. |
-| `camera` | Camera moves on the clip's clock: each is a `zoom` (`to` a factor) or a `pan` (`to` a target or a `cell`, or `via` waypoints), with `at` (a clip time, or a `beat` and an `offset`), `over` and `ease`. See [Camera](#camera). |
+| `camera` | The camera on the clip's clock, as two lists. `camera.positions` says where it aims: each position is a `cell` or a target (`text`, `nth`, `area`), with `at` (a clip time, or a `beat` and an `offset`), `hold` and `ease`; the gap between two positions is a transition. `camera.zooms` says how far it magnifies: each zoom has `to` (a factor), `at`, `over` and `ease`. See [Camera](#camera). |
 | `captions` | Text drawn over the composed frame on the clip's clock: each has `text`, `at`, and `for` or `until`; a `font` (`size`, `weight`); a `place` and `align` with an `offset`, or a `position`; a `color`, a `box` (`color`, `opacity`) and a `fade` (`in`, `out`). See [Captions](#captions). |
 
 ### Beats
@@ -432,6 +434,82 @@ sends the reports a terminal would. A drag also needs button-event (`1002`) or a
 tracking, the modes in which a terminal reports moves while a button is held.
 
 ### Camera
+
+`camera` aims and magnifies the camera on the clip's own clock, the timeline of the shipped GIF,
+not the take's. It is a mapping with two lists, both optional: `camera.positions` says where the
+camera aims and `camera.zooms` how far it magnifies. Either list may be written in any order:
+photon places each entry by its start.
+
+#### Positions
+
+A **position** is one place the camera aims at, from its `at` for its `hold`:
+
+| Field | Meaning |
+| --- | --- |
+| `at` | When the position starts. A bare time such as `4500ms` is that long after the clip's first frame. `{beat: N, offset: D}` is where beat N's section starts in the clip, plus `D`. `D` may be negative and defaults to 0. Leave `at` out to start at the clip's first frame. |
+| `hold` | How long the camera rests there, ≥0. Leave it out, or set 0, and the position is a point in time. It must end by the clip's end. |
+| `cell` | `{x, y}`: one cell of the grid, blank or not. `x` is the column and `y` the row, both counted from 0. The camera aims at the cell's centre. A cell takes no `nth` or `area`. |
+| `text`, `nth`, `area` | A [target](#targets-and-areas). The camera aims at the centre of its box on the screen shown when the position starts, and stays on that spot for the whole hold: it does not follow the text. `photon render` fails, naming the position, if that screen does not show it. |
+| `ease` | The ease of the transition into this position. See [Eases](#eases). |
+
+Set exactly one of `cell` and `text`. Before the first position the camera holds the first one,
+and after the last it holds the last one. With no positions it aims at the frame's centre.
+
+#### Transitions
+
+A **transition** is the gap between one position's end and the next one's start. It is not
+written down: the two positions around it make it. Across it the camera glides from the centre
+of the view shown as the earlier position ends to the centre of the view shown as the later one
+starts, each taken at that moment's zoom, and paced by the later position's `ease`. A gap of 0 is
+a hard cut. Positions may not overlap, and two that start at the same time overlap.
+
+#### Zooms
+
+A **zoom** eases the magnification to `to` and holds it there until the next zoom. At rest the
+camera is at 1×. A zoom aims nowhere: it pushes in on wherever the positions aim at that moment,
+so it may overlap positions and transitions freely. Two zooms may not overlap.
+
+| Field | Meaning |
+| --- | --- |
+| `to` | The factor, from 1 to 3. `to: 1` zooms back out. |
+| `at` | When the zoom starts, in the same two forms as a position's `at`. |
+| `over` | How long the zoom runs, >0. It must end by the clip's end. |
+| `ease` | How the zoom runs over its length. See [Eases](#eases). |
+
+#### Eases
+
+An `ease` sets the pace of a transition or a zoom. It takes one of four values:
+
+- `smooth`, the default, starts and ends gently.
+- `linear` runs at a steady pace.
+- `ease-in` starts slow and speeds up to the end.
+- `ease-out` starts fast and slows down to settle.
+
+```yaml
+camera:
+  positions:
+    - {cell: {x: 10, y: 4}, hold: 2s}                   # rests on a cell from the first frame
+    - {text: 'beta', area: list, at: 3s, hold: 1500ms}  # glides there from 2s to 3s
+    - {text: 'Saved', at: 4500ms, hold: 2s}             # a gap of 0: a hard cut
+    - {cell: {x: 80, y: 4}, at: 8s, ease: ease-out}     # glides from 6500ms, settling at 8s
+  zooms:
+    - {to: 2, at: 1s, over: 600ms}
+    - {to: 1, at: 9s, over: 800ms, ease: ease-in}
+```
+
+The crop never leaves the frame. When the camera aims near an edge, the crop stops at that edge,
+so the aimed point sits off-centre rather than showing empty space. At 1× the whole frame is in
+view, so a position shows only while the camera is zoomed in.
+
+`photon lint` reports a position with both or neither of `text` and `cell`, a cell outside the
+grid, an `nth` or `area` on a cell, a negative `hold`, a zoom's `to` outside 1-3, an `over` that is
+not >0, an `ease` other than the four above, an `at` that names a missing or cut beat, a position
+or zoom that starts outside the clip or ends after it, and two positions or two zooms that
+overlap.
+
+#### The list form
+
+`camera` may also be a list of moves, the shape positions and zooms replace.
 
 The top-level `camera` list moves the camera on the clip's own clock, the timeline of the
 shipped GIF, not the take's. The camera has two tracks: a **zoom** track (the magnification, at
@@ -564,7 +642,7 @@ the frame.
 
 ## Targets and areas
 
-A **target** is a place on screen that a `click`, `drag` or `pan` aims at:
+A **target** is a place on screen that a `click`, `drag`, camera position or `pan` aims at:
 
 | Field | Meaning |
 | --- | --- |
@@ -604,8 +682,8 @@ areas:
 If an anchor finds no row, or the top lands below the bottom, the area is not on screen. A
 `click` or `drag` there fails, and a `seen` expect does not match. Area names start with a letter
 and use letters, digits, `-` and `_`. `any` is reserved for the whole screen. A storyboard may
-only use areas its config declares, and `photon lint` checks this. Clicks, drags, pans and
-`seen` expects all use the same area logic, so they always agree.
+only use areas its config declares, and `photon lint` checks this. Clicks, drags, camera
+positions, pans and `seen` expects all use the same area logic, so they always agree.
 
 ## Expects
 

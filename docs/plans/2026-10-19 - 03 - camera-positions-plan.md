@@ -227,7 +227,10 @@ and a row with `Ease` "" easing as smooth.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/compose`
 **Commit:** `feat(compose): add the position track and the ease-in and ease-out curves`
 
-## 6. README storyboard reference and glossary describe positions and zooms
+## 6. README storyboard reference and glossary describe positions and zooms — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): per the regression guard, README keeps the old zoom/pan/via move text verbatim under a new `#### The list form` subheading at the end of `### Camera` (its own stale "`smooth` or `linear`" ease lines included); the new Positions, Transitions, Zooms and Eases subsections come first, and the storyboard example and header `camera` row now show only the new shape.
+NOTES (2026-10-20): left for later items: README's Features bullet (line 45, "Zoom in and pan"), the `## Sections and cursor` camera paragraph (names `pan` moves and the beat `zoom` load error) and the `photon tune` rows still describe camera moves; Targets and areas now names camera positions alongside pans, since `pan` stays loadable until item 7.
 
 Depends on item 4.
 
