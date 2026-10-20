@@ -16,6 +16,7 @@
   --stage: #111111;
   --lane-block: #e4ebf7;
   --lane-hold: #d9d9d4;
+  --lane-zoom: #cfe3d4;
   --lane-caption: #f6e4c8;
   --lane-hatch: #9a9a94;
   --pick-box: #f2b705;
@@ -42,6 +43,7 @@
     --stage: #000000;
     --lane-block: #263449;
     --lane-hold: #34342f;
+    --lane-zoom: #23392a;
     --lane-caption: #43361f;
     --lane-hatch: #6b6b66;
     --pick-box: #ffd24d;
@@ -448,6 +450,10 @@ textarea {
 .block.stretch {
   background: transparent;
   color: var(--muted);
+}
+
+.block.zoom {
+  background: var(--lane-zoom);
 }
 
 .block.caption {

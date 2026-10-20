@@ -28,7 +28,8 @@ var pageAssetNames = []string{"style.css"}
 // splitScripts are app.js, the scripts split from it, the timeline's pointer drag and the
 // preview fit, each kept under maxScriptLines.
 var splitScripts = []string{
-	"app.js", "frames.js", "transport.js", "controls.js", "panels.js", "entries.js", "drag.js", "fit.js",
+	"app.js", "kinds.js", "frames.js", "transport.js", "controls.js", "panels.js", "entries.js", "drag.js",
+	"fit.js",
 }
 
 // maxScriptLines is the file-size guide of Note coding-conventions a split script stays below.
@@ -51,17 +52,19 @@ var registeredLanes = []struct {
 	name     string
 	barClass string
 }{
+	{"zoom", "zoom"},
 	{"captions", "caption"},
 }
 
 // entryReaders are the variables the page reads state entries through, each with the state type
-// whose json keys it may name: state.<key>, caption.<key>, moment.<key>, problem.<key>,
-// owner.<key> and field.<key>.
+// whose json keys it may name: state.<key>, zoom.<key>, caption.<key>, moment.<key>,
+// problem.<key>, owner.<key> and field.<key>.
 var entryReaders = []struct {
 	variable string
 	of       any
 }{
 	{"state", State{}},
+	{"zoom", ZoomState{}},
 	{"caption", CaptionState{}},
 	{"moment", MomentState{}},
 	{"problem", Problem{}},

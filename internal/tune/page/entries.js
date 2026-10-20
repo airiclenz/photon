@@ -1,6 +1,7 @@
-// photon tune's caption panel: what the inspector shows for a selected entry — a caption's text,
-// timing, placement and style, when it is on the output clock and the errors standing on it — and
-// the buttons that move it up or down its list or remove it.
+// photon tune's zoom and caption panels: what the inspector shows for a selected entry — a camera
+// zoom's timing, ease and factor, or a caption's text, timing, placement and style, when it is on
+// the output clock and the errors standing on it — and the buttons that move a caption up or down
+// its list, or remove the entry.
 //
 // It loads after controls.js and adds entryPanel to window.tunePage, the page's internal
 // namespace, where app.js's inspector draws it; every field is a control from controls.js.
@@ -9,6 +10,7 @@
 (() => {
   const page = window.tunePage;
   const {
+    ENTRY_ZOOM,
     ENTRY_CAPTION,
     applyEdit,
     element,
@@ -28,16 +30,37 @@
   const CAPTION_TEXT_ROWS = 3;
   // The step a caption's font size is typed in, in the unit of the frame's font size.
   const FONT_SIZE_STEP = "0.5";
-  // The list fields that move an entry within its list, or remove it, by list.
+  // The step a zoom's factor is typed in.
+  const ZOOM_FACTOR_STEP = "0.1";
+  // The list fields that move an entry within its list, or remove it, by list: a zoom is never
+  // moved, since render places the zooms by their starts.
   const CAPTION_LIST = Object.freeze({ move: "caption.move", remove: "caption.remove" });
+  const ZOOM_REMOVE = "zoom.remove";
 
   // The panel of each entry kind the inspector shows.
-  const PANELS = Object.freeze({ [ENTRY_CAPTION]: captionPanel });
+  const PANELS = Object.freeze({ [ENTRY_ZOOM]: zoomPanel, [ENTRY_CAPTION]: captionPanel });
 
   // entryPanel is the fields of an entry of kind; what the page does not edit shows read-only,
   // and the YAML edits it.
   function entryPanel(kind, entry) {
     return PANELS[kind](entry);
+  }
+
+  // zoomPanel edits a camera zoom's start, its length, its ease and the factor it reaches, and
+  // shows when it plays on the output clock and the errors standing on it. The panel ends with
+  // its remove button.
+  function zoomPanel(zoom) {
+    const owner = { kind: ENTRY_ZOOM, index: zoom.index };
+    return [
+      element("h2", {}, "zoom " + zoom.index),
+      momentField("at", owner, "zoom.at", zoom.at),
+      millisecondsField("over", owner, "zoom.over", zoom.over_ms),
+      choiceField("ease", owner, "zoom.ease", zoom.ease),
+      decimalField("to (×)", owner, "zoom.to", zoom.factor, ZOOM_FACTOR_STEP),
+      readOnlyRow("plays", formatTime(zoom.start_ms) + " – " + formatTime(zoom.end_ms)),
+      ...errorRows(owner),
+      element("div", { className: "entry-actions" }, removeButton(owner, ZOOM_REMOVE)),
+    ];
   }
 
   // captionPanel edits a caption's text, timing, placement and style, and shows when it is on
@@ -106,24 +129,29 @@
   }
 
   // listRow is the buttons that move owner's entry up or down its list of length entries, the
-  // selection following it, or remove it, leaving nothing selected; fields are the list's move
-  // and remove fields. app.js keeps a refused edit as the refusal standing on the entry, which
-  // this panel shows, so a rejection is only caught here.
+  // selection following it, or remove it; fields are the list's move and remove fields.
   function listRow(owner, fields, length) {
-    const remove = element("button", { type: "button" }, "Remove");
-    remove.addEventListener("click", () =>
-      window.tune.edit({ owner, field: fields.remove, value: null }).then(
-        () => window.tune.select(null),
-        () => {},
-      ),
-    );
     return element(
       "div",
       { className: "entry-actions" },
       moveButton("Move up", owner, fields.move, owner.index - 1, length),
       moveButton("Move down", owner, fields.move, owner.index + 1, length),
-      remove,
+      removeButton(owner, fields.remove),
     );
+  }
+
+  // removeButton removes owner's entry through the remove field, leaving nothing selected. app.js
+  // keeps a refused edit as the refusal standing on the entry, which its panel shows, so a
+  // rejection is only caught here.
+  function removeButton(owner, field) {
+    const remove = element("button", { type: "button" }, "Remove");
+    remove.addEventListener("click", () =>
+      window.tune.edit({ owner, field, value: null }).then(
+        () => window.tune.select(null),
+        () => {},
+      ),
+    );
+    return remove;
   }
 
   // moveButton moves owner's entry to destination in its list of length entries and selects it

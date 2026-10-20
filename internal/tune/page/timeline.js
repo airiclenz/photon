@@ -1,14 +1,14 @@
 // photon tune's timeline: lanes on the clip's output-time axis under the transport bar.
 // It builds on app.js's window.tune: state() and onState(fn) for what to draw, time() for the
 // playhead, selected() and select(id) for the beat the inspector shows, selectedEntry() and
-// selectEntry(entry) for the caption it shows instead, seek(ms) for the axis, and
+// selectEntry(entry) for the zoom or caption it shows instead, seek(ms) for the axis, and
 // edit(edit) for a lane's add, which the server applies, validates and schedules; a drag sends
 // its edit through window.tuneDrag. From the page's internal window.tunePage it takes
 // reportStatus, to show a refused add or bar drag in the transport bar, and beginScrub and
 // endScrub, to tell the transport a scrub's pointer went down or up. A scrub starts on a press on
 // the axis and ends on a pointer release or cancel anywhere in the window, so a redraw that
 // replaces the axis mid-drag does not leave it running. Nothing here computes timing: every
-// position comes from the state's sections, beats and captions.
+// position comes from the state's sections, beats, zooms and captions.
 //
 // The timeline is two lists of lanes, drawn top to bottom. Its own lanes follow the beats: such a
 // lane is {name, draw(section, state), handles(section, state)}, where draw returns the nodes it
@@ -18,8 +18,8 @@
 // label, title, entry}, each placed from its from to its to and selecting its entry, {kind,
 // index}, on a click, and add, {title, edit(state, ms)}, is a button beside the lane's name that
 // sends edit(state, playhead) and selects the entry the edit's owner names. Dragging such a bar
-// shifts its entry's start and keeps its length: one shift edit for a caption. Another lane is
-// one more entry in either list.
+// shifts its entry's start and keeps its length: one shift edit for a caption, one at edit keeping
+// its beat for a zoom. Another lane is one more entry in either list.
 //
 // A handle is {beat, field, anchor, sign, value, min, max}: the edit's beat and field, the value
 // it holds now in milliseconds, the bounds a drag keeps it in, and where its edge sits on the
@@ -41,6 +41,8 @@
   const TOO_FAST_GLYPH = "⚠";
   const OWNER_BEAT = "beat";
   const FIELD_CAPTION_SHIFT = "caption.shift";
+  const FIELD_ZOOM_AT = "zoom.at";
+  const ENTRY_ZOOM = "zoom";
   const ADD_GLYPH = "+";
 
   const root = document.getElementById("timeline");
@@ -230,8 +232,13 @@
   }
 
   // shiftEdit is the edit that starts entry, {kind, index}, delta milliseconds later: a caption's
-  // shift moves its at and its until together.
+  // shift moves its at and its until together, and a zoom's at keeps its beat and moves its offset.
   function shiftEdit(entry, delta) {
+    if (entry.kind === ENTRY_ZOOM) {
+      const zoom = tune.state().zooms.find((candidate) => candidate.index === entry.index);
+      const at = { beat: zoom.at.beat, offset_ms: zoom.at.offset_ms + delta };
+      return { owner: entry, field: FIELD_ZOOM_AT, value: at };
+    }
     return { owner: entry, field: FIELD_CAPTION_SHIFT, value: delta };
   }
 

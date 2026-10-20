@@ -484,7 +484,13 @@ cell and Rect differ from the crop mapping.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune`
 **Commit:** `feat(tune): serve the camera view and full-view frames`
 
-## 14. Tune page: zoom lane and inspector
+## 14. Tune page: zoom lane and inspector — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): the regression guard's split was needed (the zoom kind took app.js to 402 lines in place), so the entry-kind table (ENTRY_KINDS, one row per kind: its state list and its beat-select name) and the lookups entryValue, entryOfValue, isEntryKind, entryOf and entryOptions moved to the new split script internal/tune/page/kinds.js. It is loaded right after app.js (before controls.js, which destructures entryValue when it loads) and is listed in page_test.go's splitScripts. app.js's ownerKey, takeState's selection drop, renderBeatSelect, renderInspector and selectValue all read that one table. app.js is now 369 lines.
+NOTES (2026-10-20): re-derived from the Read-first anchor TestPageJS_RefusedBarDrag_RedrawsInPlaceAndShowsTheRefusal, which item 1 deleted. Its shape (and its barLeft helper) comes back as TestPageJS_RefusedZoomDrag_RedrawsInPlaceAndShowsTheRefusal on a new zoomedStoryboard fixture.
+NOTES (2026-10-20): consequential edit — internal/tune/doc.go: made necessary by the new page/kinds.js (file map entry) and by entries.js now holding the zoom panel too.
+NOTES (2026-10-20): consequential edit — internal/tune/page/controls.js: made necessary by the zoom entry kind and kinds.js (comments only: load order, and owners can now be zooms as well as captions).
+NOTES (2026-10-20): page_test.go also gains {"zoom", ZoomState{}} in entryReaders, so every zoom.<key> the page reads is checked against /api/state's keys. The zoom panel shows a read-only "plays" row and a Remove-only action row; zooms have no move buttons because render places zooms by their start times. listRow's remove button became removeButton, which both the caption and the zoom panels use.
 
 Depends on item 11.
 

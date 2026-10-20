@@ -2,7 +2,7 @@
 // edit through app.js's applyEdit, the rows of errors and of a refused edit standing on what a
 // panel shows, and the typed moment, target, colour, fraction and pixel inputs.
 //
-// It loads after app.js and adds its functions to window.tunePage, the page's internal namespace,
+// It loads after app.js and kinds.js and adds its functions to window.tunePage, the page's internal namespace,
 // where panels.js and entries.js build with them and app.js marks the beat select's errors.
 "use strict";
 
@@ -26,7 +26,7 @@
   const FRACTION_MIN = "0";
   const FRACTION_MAX = "1";
   const FRACTION_STEP = "0.05";
-  // The kinds of a problem's owner besides a caption's, as /api/state sends them.
+  // The kinds of a problem's owner besides a zoom's or a caption's, as /api/state sends them.
   const OWNER_CLIP = "clip";
   const OWNER_BEAT = "beat";
 
@@ -137,8 +137,8 @@
     return trimmed !== "" && Number.isFinite(number) ? number : trimmed;
   }
 
-  // errorRows are the errors standing on owner — a beat id, 0 for the clip, or a caption's
-  // {kind, index} entry — and a refused edit of it.
+  // errorRows are the errors standing on owner — a beat id, 0 for the clip, or a zoom's or
+  // caption's {kind, index} entry — and a refused edit of it.
   function errorRows(owner) {
     const messages = problemsOn(owner).map((problem) => problem.message);
     const key = isEntry(owner) ? entryValue(owner.kind, owner.index) : String(owner);
@@ -172,7 +172,7 @@
   }
 
   // problemOwner spells owner as a problem's or an edit's {kind, index}: the clip, a beat by its
-  // id, or the caption's entry, whose kind a problem's owner spells the same.
+  // id, or the zoom's or caption's entry, whose kind a problem's owner spells the same.
   function problemOwner(owner) {
     if (isEntry(owner)) {
       return owner;

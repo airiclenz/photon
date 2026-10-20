@@ -43,6 +43,7 @@ const (
 	elementTimeline   = "timeline"
 	elementTime       = "time"
 	elementBuild      = "build"
+	elementStatus     = "status"
 	elementDocument   = "document"
 )
 
@@ -690,6 +691,204 @@ func TestPageJS_MoveButtons_DisabledAtTheListEnds(t *testing.T) {
 	}
 }
 
+// zoomedStoryboard is sessionStoryboard under two camera zooms: one from 100ms to 400ms by clip
+// time, one from 1.4s to 1.7s, 400ms into beat 2.
+const zoomedStoryboard = sessionStoryboard + `camera:
+  zooms:
+    - {to: 2, at: 100ms, over: 300ms}
+    - {to: 3, at: {beat: 2, offset: 400ms}, over: 300ms}
+`
+
+// The zooms of zoomedStoryboard the zoom tests edit, add around and drag, on a lane laid out one
+// pixel per millisecond: a zoom added at addZoomAtMS becomes index addedZoom, after the zoom at
+// 100ms; the zoom in beat 2, from 1.4s, grabbed at beatZoomGrabMS and let go at
+// beatZoomReleaseMS, snaps to a shift of beatZoomShiftMS; and the first zoom, grabbed at
+// firstZoomGrabMS and let go at firstZoomReleaseMS, lands over the zoom in beat 2.
+const (
+	firstZoom          = 0
+	beatZoom           = 1
+	addZoomAtMS        = 700
+	addedZoom          = 1
+	beatZoomOffsetMS   = 400
+	beatZoomStartMS    = 1400
+	beatZoomGrabMS     = 1500
+	beatZoomReleaseMS  = 1290
+	beatZoomShiftMS    = -200
+	firstZoomGrabMS    = 200
+	firstZoomReleaseMS = 1400
+)
+
+// laneZoom is the name of the timeline's zoom lane.
+const laneZoom = "zoom"
+
+func TestPageJS_AddZoomAtThePlayhead(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, zoomedStoryboard).session
+	page := loadPage(t, session)
+	page.eval(fmt.Sprintf("window.tune.seek(%d)", addZoomAtMS))
+	page.settle()
+
+	page.click(elementTimeline, "Add a zoom at the playhead")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
+		`"value":{"at":{"beat":0,"offset_ms":%d}}}`,
+		storyboard.OwnerZoom, addedZoom, storyboard.FieldZoomInsert, addZoomAtMS))
+	if added := session.State().Zooms[addedZoom]; added.StartMS != addZoomAtMS {
+		t.Errorf("the added zoom: want it from %dms, got %+v", addZoomAtMS, added)
+	}
+	want := fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerZoom, addedZoom)
+	if got := page.selectedEntry(); got != want {
+		t.Errorf("the selection after the add: want %s, got %s", want, got)
+	}
+}
+
+func TestPageJS_DragAZoomBar_SendsOneZoomAtEditKeepingItsBeat(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, zoomedStoryboard).session
+	page := loadPage(t, session)
+
+	page.dragBar(laneZoom, storyboard.OwnerZoom, beatZoom, beatZoomGrabMS, beatZoomReleaseMS)
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
+		`"value":{"beat":2,"offset_ms":%d}}`,
+		storyboard.OwnerZoom, beatZoom, storyboard.FieldZoomAt, beatZoomOffsetMS+beatZoomShiftMS))
+	if got := page.editCount(); got != 1 {
+		t.Errorf("the edits the drag sent: want 1, got %d", got)
+	}
+	if got := session.State().Zooms[beatZoom].StartMS; got != beatZoomStartMS+beatZoomShiftMS {
+		t.Errorf("the dragged zoom's start: want %dms, got %dms", beatZoomStartMS+beatZoomShiftMS, got)
+	}
+	want := fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerZoom, beatZoom)
+	if got := page.selectedEntry(); got != want {
+		t.Errorf("the selection after the drag: want %s, got %s", want, got)
+	}
+}
+
+// barLeft is the left of the timeline's bar for the entry of kind and index, as drawn now.
+func (p *pageHarness) barLeft(kind storyboard.OwnerKind, index int) string {
+	p.t.Helper()
+	return p.eval(fmt.Sprintf(`document.getElementById(%q).querySelectorAll(".block")
+		.find((node) => node.dataset.entry === %q).style.left`,
+		elementTimeline, entryValueOf(kind, index))).String()
+}
+
+func TestPageJS_RefusedZoomDrag_RedrawsInPlaceAndShowsTheRefusal(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, zoomedStoryboard).session
+	page := loadPage(t, session)
+	before := page.barLeft(storyboard.OwnerZoom, firstZoom)
+
+	page.dragBar(laneZoom, storyboard.OwnerZoom, firstZoom, firstZoomGrabMS, firstZoomReleaseMS)
+
+	refused := page.lastRequest("/api/edit")
+	if refused.status == http.StatusOK {
+		t.Fatalf("the zoom dragged onto another zoom: want it refused, got 200: %s", refused.answer)
+	}
+	if got := page.barLeft(storyboard.OwnerZoom, firstZoom); got != before {
+		t.Errorf("the refused bar's left: want %s, got %s", before, got)
+	}
+	if status := page.text(elementStatus); !strings.Contains(status, "overlaps") {
+		t.Errorf("the status after the refused drag: want it containing %q, got %q", "overlaps", status)
+	}
+}
+
+// choices are the values of the options of the select in the inspector's one field row labelled
+// label.
+func (p *pageHarness) choices(label string) []string {
+	p.t.Helper()
+	var values []string
+	encoded := p.eval(fmt.Sprintf(`JSON.stringify(document.getElementById(%q).querySelectorAll("label")
+		.filter((row) => row.children.length > 0 && row.children[0].textContent === %q)
+		.flatMap((row) => row.querySelectorAll("option").map((option) => option.value)))`,
+		elementInspector, label)).String()
+	if err := json.Unmarshal([]byte(encoded), &values); err != nil {
+		p.t.Fatalf("decode the choices of %q %s: %v", label, encoded, err)
+	}
+	return values
+}
+
+func TestPageJS_ZoomPanel_OffersTheFourEases(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixtureOf(t, zoomedStoryboard).session)
+	want := []string{
+		string(storyboard.EaseSmooth), string(storyboard.EaseLinear),
+		string(storyboard.EaseIn), string(storyboard.EaseOut),
+	}
+
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerZoom, firstZoom))
+
+	if got := page.choices("ease"); !reflect.DeepEqual(got, want) {
+		t.Errorf("the zoom's ease choices: want %q, got %q", want, got)
+	}
+}
+
+func TestPageJS_ZoomPanel_SendsEachFieldsEdit(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		edit  func(page *pageHarness)
+		field string
+		value string
+	}{
+		{
+			name:  "at",
+			edit:  func(page *pageHarness) { page.setField("at (ms)", "value", "150") },
+			field: storyboard.FieldZoomAt,
+			value: `{"beat":0,"offset_ms":150}`,
+		},
+		{
+			name:  "over",
+			edit:  func(page *pageHarness) { page.setField("over (ms)", "value", "500") },
+			field: storyboard.FieldZoomOver,
+			value: "500",
+		},
+		{
+			name:  "ease",
+			edit:  func(page *pageHarness) { page.chooseField("ease", string(storyboard.EaseIn)) },
+			field: storyboard.FieldZoomEase,
+			value: fmt.Sprintf("%q", storyboard.EaseIn),
+		},
+		{
+			name:  "to",
+			edit:  func(page *pageHarness) { page.setField("to (×)", "value", "2.5") },
+			field: storyboard.FieldZoomTo,
+			value: "2.5",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			page := loadPage(t, newSessionFixtureOf(t, zoomedStoryboard).session)
+			page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerZoom, firstZoom))
+
+			tc.edit(page)
+
+			page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%s}`,
+				storyboard.OwnerZoom, firstZoom, tc.field, tc.value))
+		})
+	}
+}
+
+func TestPageJS_RemoveAZoom(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, zoomedStoryboard).session
+	page := loadPage(t, session)
+	zooms := len(session.State().Zooms)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerZoom, firstZoom))
+
+	page.click(elementInspector, "Remove")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":null}`,
+		storyboard.OwnerZoom, firstZoom, storyboard.FieldZoomRemove))
+	if got := len(session.State().Zooms); got != zooms-1 {
+		t.Errorf("the zooms after the remove: want %d, got %d", zooms-1, got)
+	}
+	if got := page.selectedEntry(); got != "null" {
+		t.Errorf("the selection after the remove: want none, got %s", got)
+	}
+}
+
 func TestPageJS_CaptionColour_SendsTheEditAndReloadsTheFrame(t *testing.T) {
 	t.Parallel()
 	const color = "#ff8800"
@@ -824,11 +1023,12 @@ func TestPageJS_CaptionPosition_SeedsTheLaidOutCorner(t *testing.T) {
 // clipFrameEntry is the beat select's value for the Clip frame panel.
 const clipFrameEntry = ""
 
-// The problem edits' values: a beat's hold past its 1s duration, a frame rate under one, and a
-// caption text wider than the session frame.
+// The problem edits' values: a beat's hold past its 1s duration, a frame rate under one, a zoom
+// factor past the largest a zoom takes, and a caption text wider than the session frame.
 const (
 	holdPastDuration = "5000"
 	fpsUnderOne      = "0"
+	zoomPastLargest  = "9"
 )
 
 var captionTooWide = strings.Repeat("too wide ", 20)
@@ -863,6 +1063,15 @@ func TestPageJS_EditProblem_ShowsOnItsOwningPanel(t *testing.T) {
 			edit:      func(page *pageHarness) { page.setField("fps", "value", fpsUnderOne) },
 			status:    http.StatusUnprocessableEntity,
 			want:      storyboard.FieldFrameFPS,
+		},
+		{
+			name:      "zoom",
+			board:     zoomedStoryboard,
+			owner:     entryValueOf(storyboard.OwnerZoom, firstZoom),
+			elsewhere: clipFrameEntry,
+			edit:      func(page *pageHarness) { page.setField("to (×)", "value", zoomPastLargest) },
+			status:    http.StatusUnprocessableEntity,
+			want:      "to: want in",
 		},
 		{
 			name:      "caption",
