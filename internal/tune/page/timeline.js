@@ -1,14 +1,14 @@
 // photon tune's timeline: lanes on the clip's output-time axis under the transport bar.
 // It builds on app.js's window.tune: state() and onState(fn) for what to draw, time() for the
 // playhead, selected() and select(id) for the beat the inspector shows, selectedEntry() and
-// selectEntry(entry) for the zoom or caption it shows instead, seek(ms) for the axis, and
-// edit(edit) for a lane's add, which the server applies, validates and schedules; a drag sends
-// its edit through window.tuneDrag. From the page's internal window.tunePage it takes
+// selectEntry(entry) for the position, transition, zoom or caption it shows instead, seek(ms)
+// for the axis, and edit(edit) for a lane's add, which the server applies, validates and
+// schedules; a drag sends its edit through window.tuneDrag. From the page's internal window.tunePage it takes
 // reportStatus, to show a refused add or bar drag in the transport bar, and beginScrub and
 // endScrub, to tell the transport a scrub's pointer went down or up. A scrub starts on a press on
 // the axis and ends on a pointer release or cancel anywhere in the window, so a redraw that
 // replaces the axis mid-drag does not leave it running. Nothing here computes timing: every
-// position comes from the state's sections, beats, zooms and captions.
+// position comes from the state's sections, beats, positions, zooms and captions.
 //
 // The timeline is two lists of lanes, drawn top to bottom. Its own lanes follow the beats: such a
 // lane is {name, draw(section, state), handles(section, state)}, where draw returns the nodes it
@@ -17,9 +17,10 @@
 // lane is {name, draw(state), add}, where draw returns its bars as data, {from, to, className,
 // label, title, entry}, each placed from its from to its to and selecting its entry, {kind,
 // index}, on a click, and add, {title, edit(state, ms)}, is a button beside the lane's name that
-// sends edit(state, playhead) and selects the entry the edit's owner names. Dragging such a bar
-// shifts its entry's start and keeps its length: one shift edit for a caption, one at edit keeping
-// its beat for a zoom. Another lane is one more entry in either list.
+// sends edit(state, playhead) and selects the entry the edit's owner names; a lane without add has
+// no button. Dragging such a bar shifts its entry's start and keeps its length: one shift edit for
+// a caption, one at edit keeping its beat for a zoom; a bar flagged draggable: false does not
+// drag. Another lane is one more entry in either list.
 //
 // A handle is {beat, field, anchor, sign, value, min, max}: the edit's beat and field, the value
 // it holds now in milliseconds, the bounds a drag keeps it in, and where its edge sits on the
@@ -174,11 +175,12 @@
   }
 
   // clipLaneRow is a registered lane: its bars over the whole clip, each selecting its entry,
-  // and its add button.
+  // and its add button when it has one.
   function clipLaneRow(lane, state) {
     const track = element("div", { className: "lane-track" });
     track.append(...lane.draw(state).map((bar) => barNode(bar, track)));
-    return laneElement(lane.name, track, addButton(lane.add));
+    const controls = lane.add ? [addButton(lane.add)] : [];
+    return laneElement(lane.name, track, ...controls);
   }
 
   // addButton sends add's edit for the playhead and selects the new entry. A refused add stands
@@ -197,15 +199,25 @@
     return button;
   }
 
-  // barNode places a registered lane's bar on track, selecting the bar's entry on a click. It is
-  // dragged through window.tuneDrag by a delta in milliseconds that keeps the whole bar on the
-  // clip: a drag selects the entry and sends the shiftEdit of its delta; a refusal goes to the
-  // transport bar's status.
+  // barNode places a registered lane's bar on track, selecting the bar's entry on a click. Unless
+  // the bar is flagged draggable: false, it is dragged through window.tuneDrag by a delta in
+  // milliseconds that keeps the whole bar on the clip: a drag selects the entry and sends the
+  // shiftEdit of its delta; a refusal goes to the transport bar's status.
   function barNode(bar, track) {
-    const node = span(bar.from, bar.to, "block draggable " + bar.className, bar.label);
+    const isDraggable = bar.draggable !== false;
+    const className = (isDraggable ? "block draggable " : "block ") + bar.className;
+    const node = span(bar.from, bar.to, className, bar.label);
     node.title = bar.title;
     node.dataset.entry = entryKey(bar.entry);
     node.addEventListener("click", () => tune.selectEntry(bar.entry));
+    if (isDraggable) {
+      attachShift(bar, node, track);
+    }
+    return node;
+  }
+
+  // attachShift drags node, bar's node on track, to shift bar's entry.
+  function attachShift(bar, node, track) {
     dragging.attach({
       node,
       track,
@@ -220,7 +232,6 @@
       redraw: () => render(tune.state()),
       refused: (message) => page.reportStatus(message, true),
     });
-    return node;
   }
 
   // barExtent draws bar shifted by delta: its left edge, and a ghost over its new stretch

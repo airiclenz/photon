@@ -514,7 +514,16 @@ problem on its panel and not the Clip frame's (restores the camera subtest of
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune -run 'TestPage'`
 **Commit:** `feat(tune): add the zoom lane`
 
-## 15. Tune page: position lane with transition bars and inspectors
+## 15. Tune page: position lane with transition bars and inspectors — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): re-derived from the assumption that the transitions are derived in lanes.js: the derivation (transitions, with byStart and aimText) lives in kinds.js, which loads before lanes.js, because the transition entry kind's lookups (entryOf, the selection drop in takeState, the beat select's options) need it as well; lanes.js reads it through window.tunePage. Each transition mirrors the storyboard's positionBefore: it runs from the end of the latest position starting strictly earlier (the first listed among ties) to its into-position's start.
+NOTES (2026-10-20): ENTRY_KINDS rows now carry entries(state) in place of a state list name, so the transition kind can list derived entries; the beat select offers positions and transitions ahead of zooms and captions. The selection kind "transition" carries the into-position's index, and every transition-panel edit (position.transition, position.ease) is owned by that position, so its refusals and problems show there.
+NOTES (2026-10-20): the position lane has no add button (item 17 adds `+`), so timeline.js's clipLaneRow draws an add button only for a lane that has add; barNode honours a bar's draggable: false (no window.tuneDrag attach, no "draggable" class) until item 16.
+NOTES (2026-10-20): the transition panel's start field moves the whole transition keeping its length, and its length field keeps its start; both send {start_ms, end_ms}. A position's cell edits through controls.js's pixelsField ({x, y}); its text target sends the whole target from targetInputs/targetOf whenever text, nth or area changes.
+NOTES (2026-10-20): EditProblem gains a "position" subtest (a refused hold past the next position's start shows on that position's panel and not on another position's).
+NOTES (2026-10-20): consequential edit — internal/tune/page/controls.js: made necessary by the position panels (comments only: pixelsField now also edits a grid cell, and owners can be positions).
+NOTES (2026-10-20): consequential edit — internal/tune/doc.go: made necessary by kinds.js and entries.js now holding positions and transitions (file map lines).
+NOTES (2026-10-20): page_test.go's registeredLanes and entryReaders do not list the position lane or a position reader (page_test.go is outside this item's Files, and jsonKeys does not follow PositionState's embedded PointState); timeline.js is 468 lines, over the ~400-line guide it already passed before this item.
 
 Depends on item 14.
 

@@ -16,6 +16,8 @@
   --stage: #111111;
   --lane-block: #e4ebf7;
   --lane-hold: #d9d9d4;
+  --lane-position: #dcd6f2;
+  --lane-transition: #c7e6ef;
   --lane-zoom: #cfe3d4;
   --lane-caption: #f6e4c8;
   --lane-hatch: #9a9a94;
@@ -23,6 +25,7 @@
   --lane-name-width: 104px;
   --lane-height: 26px;
   --cut-marker-width: 10px;
+  --point-width: 10px;
   --gap: 12px;
   --radius: 6px;
   font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -43,6 +46,8 @@
     --stage: #000000;
     --lane-block: #263449;
     --lane-hold: #34342f;
+    --lane-position: #312a4d;
+    --lane-transition: #1f3c45;
     --lane-zoom: #23392a;
     --lane-caption: #43361f;
     --lane-hatch: #6b6b66;
@@ -450,6 +455,24 @@ textarea {
 .block.stretch {
   background: transparent;
   color: var(--muted);
+}
+
+.block.position {
+  background: var(--lane-position);
+}
+
+/* A transition meets the positions on both sides of it, so its ends are square. */
+.block.transition {
+  border-radius: 0;
+  background: var(--lane-transition);
+  color: var(--muted);
+}
+
+/* A point in time, a position that holds for 0 or a hard cut, is a marker centred on its moment. */
+.block.point {
+  min-width: var(--point-width);
+  padding: 0;
+  transform: translateX(-50%);
 }
 
 .block.zoom {

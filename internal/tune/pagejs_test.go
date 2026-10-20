@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -889,6 +890,310 @@ func TestPageJS_RemoveAZoom(t *testing.T) {
 	}
 }
 
+// positionedStoryboard is sessionStoryboard with three camera positions listed out of start
+// order: a text target held over the first 500ms of beat 2, a cell held for 300ms from 200ms into
+// beat 1, and a cell point at 700ms by clip time.
+const positionedStoryboard = sessionStoryboard + `camera:
+  positions:
+    - {text: tests, at: {beat: 2}, hold: 500ms}
+    - {cell: {x: 3, y: 1}, at: {beat: 1, offset: 200ms}, hold: 300ms}
+    - {cell: {x: 0, y: 0}, at: 700ms}
+`
+
+// The positions of positionedStoryboard, by their index in camera.positions: by start the held
+// cell comes first, the point second and the held text target last.
+const (
+	textPosition  = 0
+	firstPosition = 1
+	pointPosition = 2
+)
+
+// entryTransition is the page's selection kind for a camera transition, its index the position
+// it leads into's; the storyboard owns a transition's edits through that position.
+const entryTransition storyboard.OwnerKind = "transition"
+
+// lanePosition is the name of the timeline's position lane.
+const lanePosition = "position"
+
+// laneBar is one bar of a timeline lane as drawn: the entry it selects, whether it is drawn as a
+// point, and the output times it spans, read back from its left and width.
+type laneBar struct {
+	Entry   string `json:"entry"`
+	IsPoint bool   `json:"point"`
+	FromMS  int64  `json:"from"`
+	ToMS    int64  `json:"to"`
+}
+
+// laneBars are the bars of the timeline's lane named lane, sorted by the entry each selects.
+func (p *pageHarness) laneBars(lane string) []laneBar {
+	p.t.Helper()
+	encoded := p.eval(fmt.Sprintf(`{
+		const length = window.tune.state().length_ms;
+		const ms = (percent) => Math.round(percent * length / 100);
+		const row = document.getElementById(%q).querySelectorAll(".lane")
+			.find((candidate) => candidate.querySelectorAll(".lane-name")[0].textContent.startsWith(%q));
+		JSON.stringify(row.querySelectorAll(".lane-track")[0].children.map((node) => ({
+			entry: node.dataset.entry,
+			point: node.classList.contains("point"),
+			from: ms(parseFloat(node.style.left)),
+			to: ms(parseFloat(node.style.left) + parseFloat(node.style.width)),
+		})));
+	}`, elementTimeline, lane)).String()
+	var bars []laneBar
+	if err := json.Unmarshal([]byte(encoded), &bars); err != nil {
+		p.t.Fatalf("decode the %s lane's bars %s: %v", lane, encoded, err)
+	}
+	slices.SortFunc(bars, func(a, b laneBar) int { return strings.Compare(a.Entry, b.Entry) })
+	return bars
+}
+
+// clickBar clicks the timeline's bar for the entry of kind and index and settles the page.
+func (p *pageHarness) clickBar(kind storyboard.OwnerKind, index int) {
+	p.t.Helper()
+	found := p.eval(fmt.Sprintf(`{
+		const bar = document.getElementById(%q).querySelectorAll(".block")
+			.find((node) => node.dataset.entry === %q);
+		if (bar) {
+			bar.dispatchEvent(new Event("click"));
+		}
+		Boolean(bar);
+	}`, elementTimeline, entryValueOf(kind, index))).ToBoolean()
+	if !found {
+		p.t.Fatalf("the timeline has no bar for %s", entryValueOf(kind, index))
+	}
+	p.settle()
+}
+
+// heading is the text of the inspector's heading.
+func (p *pageHarness) heading() string {
+	p.t.Helper()
+	return p.eval(fmt.Sprintf(`document.getElementById(%q).querySelectorAll("h2")[0].textContent`,
+		elementInspector)).String()
+}
+
+func TestPageJS_PositionLane_DrawsPositionsPointsAndTransitionsByStart(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, positionedStoryboard).session
+	positions := session.State().Positions
+	first, point, text := positions[firstPosition], positions[pointPosition], positions[textPosition]
+	want := []laneBar{
+		{entryValueOf(storyboard.OwnerPosition, textPosition), false, text.StartMS, text.EndMS},
+		{entryValueOf(storyboard.OwnerPosition, firstPosition), false, first.StartMS, first.EndMS},
+		{entryValueOf(storyboard.OwnerPosition, pointPosition), true, point.StartMS, point.StartMS},
+		{entryValueOf(entryTransition, textPosition), false, point.EndMS, text.StartMS},
+		{entryValueOf(entryTransition, pointPosition), false, first.EndMS, point.StartMS},
+	}
+
+	page := loadPage(t, session)
+
+	if got := page.laneBars(lanePosition); !reflect.DeepEqual(got, want) {
+		t.Errorf("the position lane's bars: want %+v, got %+v", want, got)
+	}
+}
+
+func TestPageJS_PositionLane_SelectsEachBarsEntry(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		kind    storyboard.OwnerKind
+		index   int
+		heading string
+	}{
+		{storyboard.OwnerPosition, firstPosition, "position 1"},
+		{storyboard.OwnerPosition, pointPosition, "position 2"},
+		{entryTransition, pointPosition, "transition into position 2"},
+		{entryTransition, textPosition, "transition into position 0"},
+	}
+	page := loadPage(t, newSessionFixtureOf(t, positionedStoryboard).session)
+
+	for _, tc := range cases {
+		page.clickBar(tc.kind, tc.index)
+
+		if got, want := page.selectedEntry(), fmt.Sprintf(`{"kind":%q,"index":%d}`, tc.kind, tc.index); got != want {
+			t.Errorf("the selection after clicking %s %d: want %s, got %s", tc.kind, tc.index, want, got)
+		}
+		if got := page.heading(); got != tc.heading {
+			t.Errorf("the inspector after clicking %s %d: want %q, got %q", tc.kind, tc.index, tc.heading, got)
+		}
+	}
+}
+
+func TestPageJS_PositionPanels_SendEachFieldsEdit(t *testing.T) {
+	t.Parallel()
+	positions := newSessionFixtureOf(t, positionedStoryboard).session.State().Positions
+	start, end := positions[pointPosition].EndMS, positions[textPosition].StartMS
+	const shiftMS, lengthMS = 100, 200
+	cases := []struct {
+		name  string
+		entry string
+		edit  func(page *pageHarness)
+		index int
+		field string
+		value string
+	}{
+		{
+			name:  "at",
+			entry: entryValueOf(storyboard.OwnerPosition, firstPosition),
+			edit:  func(page *pageHarness) { page.setField("at (ms)", "value", "250") },
+			index: firstPosition,
+			field: storyboard.FieldPositionAt,
+			value: `{"beat":1,"offset_ms":250}`,
+		},
+		{
+			name:  "hold",
+			entry: entryValueOf(storyboard.OwnerPosition, firstPosition),
+			edit:  func(page *pageHarness) { page.setField("hold (ms)", "value", "100") },
+			index: firstPosition,
+			field: storyboard.FieldPositionHold,
+			value: "100",
+		},
+		{
+			name:  "cell",
+			entry: entryValueOf(storyboard.OwnerPosition, firstPosition),
+			edit:  func(page *pageHarness) { page.setField("cell (x, y)", "value", "5") },
+			index: firstPosition,
+			field: storyboard.FieldPositionCell,
+			value: `{"x":5,"y":1}`,
+		},
+		{
+			name:  "text",
+			entry: entryValueOf(storyboard.OwnerPosition, textPosition),
+			edit:  func(page *pageHarness) { page.setField("text", "value", "failing") },
+			index: textPosition,
+			field: storyboard.FieldPositionTarget,
+			value: `{"text":"failing"}`,
+		},
+		{
+			name:  "nth",
+			entry: entryValueOf(storyboard.OwnerPosition, textPosition),
+			edit:  func(page *pageHarness) { page.setField("nth", "value", "last") },
+			index: textPosition,
+			field: storyboard.FieldPositionTarget,
+			value: `{"text":"tests","nth":"last"}`,
+		},
+		{
+			name:  "transition start",
+			entry: entryValueOf(entryTransition, textPosition),
+			edit: func(page *pageHarness) {
+				page.setField("start (ms)", "value", strconv.FormatInt(start-shiftMS, 10))
+			},
+			index: textPosition,
+			field: storyboard.FieldPositionTransition,
+			value: fmt.Sprintf(`{"start_ms":%d,"end_ms":%d}`, start-shiftMS, end-shiftMS),
+		},
+		{
+			name:  "transition length",
+			entry: entryValueOf(entryTransition, textPosition),
+			edit:  func(page *pageHarness) { page.setField("length (ms)", "value", strconv.Itoa(lengthMS)) },
+			index: textPosition,
+			field: storyboard.FieldPositionTransition,
+			value: fmt.Sprintf(`{"start_ms":%d,"end_ms":%d}`, start, start+lengthMS),
+		},
+		{
+			name:  "transition ease",
+			entry: entryValueOf(entryTransition, textPosition),
+			edit:  func(page *pageHarness) { page.chooseField("ease", string(storyboard.EaseIn)) },
+			index: textPosition,
+			field: storyboard.FieldPositionEase,
+			value: fmt.Sprintf("%q", storyboard.EaseIn),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			page := loadPage(t, newSessionFixtureOf(t, positionedStoryboard).session)
+			page.selectValue(elementBeatSelect, tc.entry)
+
+			tc.edit(page)
+
+			page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%s}`,
+				storyboard.OwnerPosition, tc.index, tc.field, tc.value))
+			if got := page.editCount(); got != 1 {
+				t.Errorf("the edits sent: want 1, got %d", got)
+			}
+		})
+	}
+}
+
+func TestPageJS_TransitionPanel_OffersTheFourEases(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixtureOf(t, positionedStoryboard).session)
+	want := []string{
+		string(storyboard.EaseSmooth), string(storyboard.EaseLinear),
+		string(storyboard.EaseIn), string(storyboard.EaseOut),
+	}
+
+	page.selectValue(elementBeatSelect, entryValueOf(entryTransition, textPosition))
+
+	if got := page.choices("ease"); !reflect.DeepEqual(got, want) {
+		t.Errorf("the transition's ease choices: want %q, got %q", want, got)
+	}
+}
+
+func TestPageJS_RefusedTransitionLength_ShowsOnTheTransitionPanel(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, positionedStoryboard).session
+	positions := session.State().Positions
+	pastTheEnd := positions[textPosition].EndMS - positions[pointPosition].EndMS + 100
+	page := loadPage(t, session)
+	transition := entryValueOf(entryTransition, textPosition)
+	page.selectValue(elementBeatSelect, transition)
+
+	page.setField("length (ms)", "value", strconv.FormatInt(pastTheEnd, 10))
+
+	if refused := page.lastRequest("/api/edit"); refused.status == http.StatusOK {
+		t.Fatalf("a transition past its position's end: want it refused, got 200: %s", refused.answer)
+	}
+	if got, want := page.selectedEntry(), fmt.Sprintf(`{"kind":%q,"index":%d}`, entryTransition, textPosition); got != want {
+		t.Errorf("the selection after the refusal: want %s, got %s", want, got)
+	}
+	if !containsRow(page.errorRows(), "no later than") {
+		t.Errorf("the transition's panel: want the refusal, got %q", page.errorRows())
+	}
+}
+
+func TestPageJS_RemoveAPosition(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, positionedStoryboard).session
+	page := loadPage(t, session)
+	positions := len(session.State().Positions)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerPosition, pointPosition))
+
+	page.click(elementInspector, "Remove")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":null}`,
+		storyboard.OwnerPosition, pointPosition, storyboard.FieldPositionRemove))
+	if got := len(session.State().Positions); got != positions-1 {
+		t.Errorf("the positions after the remove: want %d, got %d", positions-1, got)
+	}
+}
+
+func TestPageJS_DragAPositionOrTransitionBar_SendsNoEdit(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		kind  storyboard.OwnerKind
+		index int
+	}{
+		{storyboard.OwnerPosition, firstPosition},
+		{entryTransition, textPosition},
+	}
+
+	for _, tc := range cases {
+		t.Run(string(tc.kind), func(t *testing.T) {
+			t.Parallel()
+			session := newSessionFixtureOf(t, positionedStoryboard).session
+			page := loadPage(t, session)
+			bar := session.State().Positions[tc.index]
+
+			page.dragBar(lanePosition, tc.kind, tc.index, int(bar.StartMS), int(bar.StartMS)+300)
+
+			if got := page.editCount(); got != 0 {
+				t.Errorf("the edits the drag sent: want 0, got %d", got)
+			}
+		})
+	}
+}
+
 func TestPageJS_CaptionColour_SendsTheEditAndReloadsTheFrame(t *testing.T) {
 	t.Parallel()
 	const color = "#ff8800"
@@ -1024,11 +1329,13 @@ func TestPageJS_CaptionPosition_SeedsTheLaidOutCorner(t *testing.T) {
 const clipFrameEntry = ""
 
 // The problem edits' values: a beat's hold past its 1s duration, a frame rate under one, a zoom
-// factor past the largest a zoom takes, and a caption text wider than the session frame.
+// factor past the largest a zoom takes, a position's hold past the start of the next one, and a
+// caption text wider than the session frame.
 const (
 	holdPastDuration = "5000"
 	fpsUnderOne      = "0"
 	zoomPastLargest  = "9"
+	holdPastNext     = "5000"
 )
 
 var captionTooWide = strings.Repeat("too wide ", 20)
@@ -1072,6 +1379,15 @@ func TestPageJS_EditProblem_ShowsOnItsOwningPanel(t *testing.T) {
 			edit:      func(page *pageHarness) { page.setField("to (×)", "value", zoomPastLargest) },
 			status:    http.StatusUnprocessableEntity,
 			want:      "to: want in",
+		},
+		{
+			name:      "position",
+			board:     positionedStoryboard,
+			owner:     entryValueOf(storyboard.OwnerPosition, firstPosition),
+			elsewhere: entryValueOf(storyboard.OwnerPosition, pointPosition),
+			edit:      func(page *pageHarness) { page.setField("hold (ms)", "value", holdPastNext) },
+			status:    http.StatusUnprocessableEntity,
+			want:      fmt.Sprintf("positions[%d]", firstPosition),
 		},
 		{
 			name:      "caption",

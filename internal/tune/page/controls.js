@@ -26,7 +26,8 @@
   const FRACTION_MIN = "0";
   const FRACTION_MAX = "1";
   const FRACTION_STEP = "0.05";
-  // The kinds of a problem's owner besides a zoom's or a caption's, as /api/state sends them.
+  // The kinds of a problem's owner besides a position's, a zoom's or a caption's, as /api/state
+  // sends them.
   const OWNER_CLIP = "clip";
   const OWNER_BEAT = "beat";
 
@@ -111,7 +112,8 @@
     return fieldRow(label, element("span", { className: "inline" }, input, shown));
   }
 
-  // pixelsField edits owner's field as whole design pixels, {x, y}: x to the right and y down.
+  // pixelsField edits owner's field as a pair of whole numbers, {x, y}, x to the right and y down:
+  // design pixels for a caption, a grid cell for a camera position.
   function pixelsField(label, owner, field, pixels) {
     const input = (value) => element("input", { type: "number", step: "1", value: String(value) });
     const x = input(pixels.x);
@@ -137,8 +139,8 @@
     return trimmed !== "" && Number.isFinite(number) ? number : trimmed;
   }
 
-  // errorRows are the errors standing on owner — a beat id, 0 for the clip, or a zoom's or
-  // caption's {kind, index} entry — and a refused edit of it.
+  // errorRows are the errors standing on owner — a beat id, 0 for the clip, or a position's,
+  // zoom's or caption's {kind, index} entry — and a refused edit of it.
   function errorRows(owner) {
     const messages = problemsOn(owner).map((problem) => problem.message);
     const key = isEntry(owner) ? entryValue(owner.kind, owner.index) : String(owner);
@@ -172,7 +174,7 @@
   }
 
   // problemOwner spells owner as a problem's or an edit's {kind, index}: the clip, a beat by its
-  // id, or the zoom's or caption's entry, whose kind a problem's owner spells the same.
+  // id, or the position's, zoom's or caption's entry, whose kind a problem's owner spells the same.
   function problemOwner(owner) {
     if (isEntry(owner)) {
       return owner;
