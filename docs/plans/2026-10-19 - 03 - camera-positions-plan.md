@@ -132,7 +132,7 @@ NOTES (2026-10-20): consequential edit — internal/storyboard/beat.go: made nec
 NOTES (2026-10-20): consequential edit — internal/tune/pick.go: made necessary by deleting camera.to (the Proposal comment no longer names the text a pan's camera.to edit writes)
 NOTES (2026-10-20): editName drops its camera-owner branch along with ownerKindOf's, so a camera owner on a beat or caption field is now named by the field alone; edit_test.go asserts that and that camera.at is an unknown field. KindPoint is kept: exported and named by no camera field in its comment, left for the position edits.
 NOTES (2026-10-20): the camera-only overlap insert test became TestApply_InsertEndingPastTheClip_IsRefusedNamingIt, the same ValidationError path on a caption; cameraEditBoard stays for the "captions after the camera" row.
-NOTES (2026-10-20): `make lint` reports one issue, an ineffassign at internal/tune/pagejs_test.go:1068, which predates this run (2d20645, an ancestor of base c096441); the storyboard package lints clean.
+NOTES (2026-10-20): `make lint` reports one issue, an ineffassign at internal/tune/pagejs_test.go:1068, left behind when item 1 (da397bc) removed the via-path `wantPath` check that read `height`; FU1 fixes it. The storyboard package lints clean.
 
 Depends on item 2.
 

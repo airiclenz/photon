@@ -1967,7 +1967,7 @@ func TestPageJS_FitPreview_KeepsThePickBoxOnTheShrunkFrame(t *testing.T) {
 			width, height := float64(naturalWidth)/float64(step.divisor), float64(naturalHeight)/float64(step.divisor)
 			page.layOut(elementFrame, 0, int(width), int(height))
 			// The layout above is whole pixels; the ratio the page draws by is the one it sees.
-			width, height = float64(int(width)), float64(int(height))
+			width = float64(int(width))
 
 			step.shrink(page)
 
