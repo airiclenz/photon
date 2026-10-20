@@ -51,6 +51,10 @@ var ErrUnknownProfile = errors.New("unknown profile")
 // service that exited or ran out of time before it was ready.
 var ErrNotReady = errors.New("not ready")
 
+// errOutlivesKill is what [Set.Stop] returns, wrapped with the service's name, when a process of
+// a killed service's group is still running stopTimeout later.
+var errOutlivesKill = errors.New("a process outlives the kill")
+
 // Set is the running services of one take, in the order they started. A nil Set has no services.
 type Set struct {
 	services []*running
@@ -298,7 +302,8 @@ func (r *running) reap(logFile *os.File) {
 }
 
 // stop asks the service's group to exit and kills it once it has not within stopTimeout, then
-// releases the group.
+// releases the group. A kill is waited out for the whole group, not the shell alone: Windows
+// ends a job's processes asynchronously, so a child can outlive the shell's exit.
 func (r *running) stop() error {
 	if err := r.group.terminate(); err == nil && r.awaitGone(stopTimeout) {
 		return r.releaseGroup()
@@ -307,6 +312,9 @@ func (r *running) stop() error {
 		return errors.Join(fmt.Errorf("kill service %s: %w", r.name, err), r.releaseGroup())
 	}
 	<-r.exited
+	if !r.awaitGone(stopTimeout) {
+		return errors.Join(fmt.Errorf("service %s: %w", r.name, errOutlivesKill), r.releaseGroup())
+	}
 	return r.releaseGroup()
 }
 
