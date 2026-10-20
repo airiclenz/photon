@@ -2584,3 +2584,92 @@ func TestPageJS_PickOnTheFullView_SendsTheFullView(t *testing.T) {
 		t.Error("the pick box is hidden on the full view it was picked on")
 	}
 }
+
+// The picker's set-target button, and its title while no position is selected.
+const (
+	elementSetTarget = "pick-set-target"
+	noPositionTitle  = "Select a position to set its target"
+)
+
+// appRow, appFirstCol and appLastCol are where "app" sits on cameraStoryboard's screen while its
+// cell position holds.
+const (
+	appRow      = 0
+	appFirstCol = 2
+	appLastCol  = 4
+)
+
+// setTargetButton says whether the picker's set-target button is disabled, and gives its title.
+func (p *pageHarness) setTargetButton() (bool, string) {
+	p.t.Helper()
+	button := p.eval(fmt.Sprintf("document.getElementById(%q)", elementSetTarget)).ToObject(p.vm)
+	return button.Get("disabled").ToBoolean(), button.Get("title").String()
+}
+
+func TestPageJS_SetAsPositionTarget_SendsOneTargetEditToTheSelectedPosition(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraStoryboard).session
+	page := loadPage(t, session)
+	page.selectPosition(cameraCellPosition)
+	page.dispatch(elementPick, "click", nil)
+	page.dispatch(elementStage, "pointerdown", pointerAt(fullViewCellPixel(t, session, appFirstCol, appRow)))
+	page.dispatch(elementStage, "pointerup", pointerAt(fullViewCellPixel(t, session, appLastCol, appRow)))
+	page.settle()
+	edits := page.editCount()
+
+	page.dispatch(elementSetTarget, "click", nil)
+	page.settle()
+
+	if got := page.editCount() - edits; got != 1 {
+		t.Fatalf("the edits the button sent: want 1, got %d", got)
+	}
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":{"text":"app"}}`,
+		storyboard.OwnerPosition, cameraCellPosition, storyboard.FieldPositionTarget))
+	state := session.State()
+	at := slices.IndexFunc(state.Positions, func(position PositionState) bool {
+		return position.Index == cameraCellPosition
+	})
+	if at < 0 {
+		t.Fatalf("no position %d in the state", cameraCellPosition)
+	}
+	want := TargetState{Text: "app"}
+	if position := state.Positions[at]; position.Cell != nil || position.Target == nil || *position.Target != want {
+		t.Errorf("position %d: want the target %+v, got %+v", cameraCellPosition, want, position.PointState)
+	}
+	if len(state.Errors) != 0 {
+		t.Errorf("errors after the edit: %+v", state.Errors)
+	}
+}
+
+func TestPageJS_SetAsPositionTarget_DisabledUntilAPositionIsSelected(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraStoryboard).session
+	page := loadPage(t, session)
+	page.pickAcross(session, appRow, appFirstCol, appLastCol)
+	edits := page.editCount()
+
+	isDisabled, title := page.setTargetButton()
+	page.dispatch(elementSetTarget, "click", nil)
+	page.settle()
+
+	if !isDisabled || title != noPositionTitle {
+		t.Errorf("with no position selected: want disabled, titled %q; got disabled %v, titled %q",
+			noPositionTitle, isDisabled, title)
+	}
+	if got := page.editCount() - edits; got != 0 {
+		t.Errorf("the edits a click with no position selected sent: want none, got %d", got)
+	}
+
+	page.selectPosition(cameraTextPosition)
+
+	if isDisabled, title := page.setTargetButton(); isDisabled || title == noPositionTitle {
+		t.Errorf("with a position selected: want enabled, got disabled %v, titled %q", isDisabled, title)
+	}
+
+	page.clickBar(storyboard.OwnerZoom, cameraZoom)
+
+	if isDisabled, title := page.setTargetButton(); !isDisabled || title != noPositionTitle {
+		t.Errorf("with a zoom selected: want disabled, titled %q; got disabled %v, titled %q",
+			noPositionTitle, isDisabled, title)
+	}
+}

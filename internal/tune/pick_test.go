@@ -1,6 +1,7 @@
 package tune
 
 import (
+	"encoding/json"
 	"errors"
 	"image"
 	"path/filepath"
@@ -73,6 +74,30 @@ const zoomedPickStoryboard = pickStoryboard + `camera:
 
 // zoomedPickTime is an output time zoomedPickStoryboard's zoom covers.
 const zoomedPickTime = time.Second
+
+// positionedPickStoryboard is pickStoryboard under zoomedPickStoryboard's zoom with position
+// pickedPosition, aimed at a cell, whose target a pick's proposal sets.
+const positionedPickStoryboard = pickStoryboard + `camera:
+  positions:
+    - {cell: {x: 1, y: 1}, at: 0ms, hold: 500ms}
+  zooms:
+    - {to: 2, at: 0ms, over: 100ms}
+`
+
+// pickedPosition is the index of positionedPickStoryboard's position.
+const pickedPosition = 0
+
+// positionTargetEdit is the edit that sets pickedPosition's target to target, as the picker
+// sends it: the proposal's target on the wire.
+func positionTargetEdit(t *testing.T, target storyboard.Target) Edit {
+	t.Helper()
+	encoded, err := json.Marshal(responseOf(Proposal{Target: target}).Target)
+	if err != nil {
+		t.Fatalf("encode the proposed target %+v: %v", target, err)
+	}
+	owner := storyboard.Owner{Kind: storyboard.OwnerPosition, Index: pickedPosition}
+	return Edit{Owner: owner, Field: storyboard.FieldPositionTarget, Value: encoded}
+}
 
 // newPickSession starts a session on pickConfig, pickStoryboard and a take showing pickScreen.
 func newPickSession(t *testing.T) *Session {
@@ -310,5 +335,85 @@ func TestSession_Pick_FullView_MapsThroughTheWholeFrame(t *testing.T) {
 	}
 	if col, row, _ := frames.Cell(zoomedPickTime, from); col == 0 && row == 5 {
 		t.Errorf("the crop maps %v onto cell 0,5 too; the fixture does not tell the views apart", from)
+	}
+}
+
+func TestSession_PickProposal_AppliesAsAPositionTarget(t *testing.T) {
+	t.Parallel()
+	session := newPickSessionOf(t, positionedPickStoryboard)
+	// pickedFull is the proposal for a pick on the full view under the zoom.
+	pickedFull := func(row, fromCol, toCol int) func(*testing.T) storyboard.Target {
+		return func(t *testing.T) storyboard.Target {
+			t.Helper()
+			from := fullViewCellPixel(t, session, fromCol, row)
+			to := fullViewCellPixel(t, session, toCol, row)
+			proposal, err := session.Pick(zoomedPickTime, ViewFull, from, to)
+			if err != nil {
+				t.Fatalf("Pick: %v", err)
+			}
+			return proposal.Target
+		}
+	}
+	// built is a proposed target of a shape the pick screen cannot yield.
+	built := func(target storyboard.Target) func(*testing.T) storyboard.Target {
+		return func(*testing.T) storyboard.Target { return target }
+	}
+	tests := []struct {
+		name     string
+		proposed func(*testing.T) storyboard.Target
+		want     storyboard.Target
+	}{
+		{name: "first match picked on the full view", proposed: pickedFull(5, 0, 5),
+			want: storyboard.Target{Text: "unique"}},
+		{name: "nth 2 in an area picked on the full view", proposed: pickedFull(2, 7, 10),
+			want: storyboard.Target{Text: "beta", Nth: 2, Area: "list"}},
+		{name: "first match spelled as nth 1", proposed: built(storyboard.Target{Text: "unique", Nth: storyboard.NthFirst}),
+			want: storyboard.Target{Text: "unique"}},
+		{name: "last match", proposed: built(storyboard.Target{Text: "beta", Nth: storyboard.NthLast}),
+			want: storyboard.Target{Text: "beta", Nth: storyboard.NthLast}},
+		{name: "last match in an area", proposed: built(storyboard.Target{Text: "beta", Nth: storyboard.NthLast, Area: "list"}),
+			want: storyboard.Target{Text: "beta", Nth: storyboard.NthLast, Area: "list"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			edit := positionTargetEdit(t, test.proposed(t))
+
+			_, edited, err := storyboard.Apply([]byte(positionedPickStoryboard), "picked.yaml", edit)
+
+			if err != nil {
+				t.Fatalf("apply %s as position.target: %v", edit.Value, err)
+			}
+			if got := edited.Camera.Positions[pickedPosition].Point; got.Cell != nil || got.Target != test.want {
+				t.Errorf("position %d: want the target %+v, got %+v", pickedPosition, test.want, got)
+			}
+		})
+	}
+}
+
+func TestSession_LastMatchTarget_RoundTripsThroughTheProposalAndItsApply(t *testing.T) {
+	t.Parallel()
+	session := newPickSessionOf(t, positionedPickStoryboard)
+	last := storyboard.Target{Text: "beta", Nth: storyboard.NthLast}
+	edit := positionTargetEdit(t, last)
+
+	err := session.Apply(edit)
+
+	if want := `{"text":"beta","nth":"last"}`; string(edit.Value) != want {
+		t.Errorf("the proposed target on the wire: want %s, got %s", want, edit.Value)
+	}
+	if want := "{text: 'beta', nth: last}"; snippetsOf(last)[snippetZoom] != want {
+		t.Errorf("the bare target snippet: want %q, got %q", want, snippetsOf(last)[snippetZoom])
+	}
+	if err != nil {
+		t.Fatalf("Apply the proposed target: %v", err)
+	}
+	state := session.State()
+	want := TargetState{Text: "beta", Nth: int(storyboard.NthLast)}
+	if position := state.Positions[pickedPosition]; position.Cell != nil || position.Target == nil || *position.Target != want {
+		t.Errorf("position %d: want the target %+v, got %+v", pickedPosition, want, position.PointState)
+	}
+	if len(state.Errors) != 0 {
+		t.Errorf("errors after the edit: %+v", state.Errors)
 	}
 }

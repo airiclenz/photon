@@ -1,13 +1,15 @@
 // photon tune's target picker: ⌖ arms pick mode on the paused preview, and a drag across the
 // cells of one row asks the server for the target that names them.
 // It builds on app.js's window.tune: frame for the preview <img>, pause() to hold the frame
-// still and frameTime() for the output time of the frame the <img> shows, and frames.js's
-// frameView() from window.tunePage, the page's internal namespace, for the view it shows. It adds
+// still, frameTime() for the output time of the frame the <img> shows, selectedEntry() for the
+// selected position and edit(edit) to set its target, and frames.js's frameView() from
+// window.tunePage, the page's internal namespace, for the view it shows. It adds
 // pickProposal() and reportPick(message, isFailure) to that namespace, for the page's scripts that
 // read the standing proposal's target. Nothing here maps pixels to cells or resolves a target: the
 // drag's two corners go to /api/pick in the shown frame's pixels, with view full while it shows
 // the full view, and the server answers the resolver-checked proposal: its target as an edit takes
-// it, its box in that frame's pixels and the YAML snippets that write it.
+// it, its box in that frame's pixels and the YAML snippets that write it. Set as position target
+// sends that target as the selected position's position.target edit.
 "use strict";
 
 (() => {
@@ -17,6 +19,9 @@
   const SNIPPET_ZOOM = "zoom";
   const ESCAPE_KEY = "Escape";
   const ARMED_HINT = "Drag across the cells of one row on the preview; Esc cancels.";
+  const FIELD_POSITION_TARGET = "position.target";
+  const SET_TARGET_TITLE = "Aim the selected position at the picked target";
+  const NO_POSITION_TITLE = "Select a position to set its target";
 
   const frameImage = tune.frame;
   const view = {
@@ -27,6 +32,7 @@
     box: document.getElementById("pick-box"),
     result: document.getElementById("pick-result"),
     target: document.getElementById("pick-target"),
+    setTarget: document.getElementById("pick-set-target"),
     copies: document.querySelectorAll("#pick-result [data-snippet]"),
   };
 
@@ -35,6 +41,9 @@
   let proposal = null;
   let proposalMs = null;
   let proposalView = null;
+  // shownPosition is the selected position's index the set-target button was last enabled for,
+  // null while it is disabled, or undefined before it is first set.
+  let shownPosition;
 
   // --- pick mode ---
 
@@ -207,6 +216,39 @@
     );
   }
 
+  // --- the selected position's target ---
+
+  // selectedPosition is the index of the selected position, or null.
+  function selectedPosition() {
+    const entry = tune.selectedEntry();
+    return entry && entry.kind === page.ENTRY_POSITION ? entry.index : null;
+  }
+
+  // followPosition enables the set-target button while a position is selected, every animation
+  // frame: selecting fires no listener.
+  function followPosition() {
+    const index = selectedPosition();
+    if (index !== shownPosition) {
+      shownPosition = index;
+      view.setTarget.disabled = index === null;
+      view.setTarget.title = index === null ? NO_POSITION_TITLE : SET_TARGET_TITLE;
+    }
+    requestAnimationFrame(followPosition);
+  }
+
+  // setPositionTarget sends the standing proposal's target as the selected position's target.
+  function setPositionTarget() {
+    const index = selectedPosition();
+    if (!proposal || index === null) {
+      return;
+    }
+    const owner = { kind: page.ENTRY_POSITION, index };
+    tune.edit({ owner, field: FIELD_POSITION_TARGET, value: proposal.target }).then(
+      () => report("The position aims at the picked target", false),
+      (error) => report(error.message, true),
+    );
+  }
+
   // --- helpers ---
 
   // place puts node over the <img> at left, top with width and height, all in displayed pixels.
@@ -246,6 +288,8 @@
     for (const button of view.copies) {
       button.addEventListener("click", () => copySnippet(button.dataset.snippet));
     }
+    view.setTarget.addEventListener("click", setPositionTarget);
+    followPosition();
   }
 
   // pickProposal is the standing proposal's target, as an edit takes it, or null while none

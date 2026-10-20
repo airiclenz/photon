@@ -640,7 +640,11 @@ draft-first frame with a position selected, the overlay is hidden.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune -run 'TestPage'`
 **Commit:** `feat(tune): aim a position by dragging its cell on the preview`
 
-## 19. Tune picker sets a position's text target
+## 19. Tune picker sets a position's text target — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): re-derived from the Read-first anchor `TestSession_LastMatchTarget_RoundTripsThroughTheProposalAndItsApply` in internal/tune/pick_test.go, which item 2 removed with the pan edit; it is recreated against a `position.target` edit on a new `positionedPickStoryboard` fixture, beside a new table test `TestSession_PickProposal_AppliesAsAPositionTarget` whose picked rows are taken on the full view under a zoom.
+NOTES (2026-10-20): the button follows the selection with its own requestAnimationFrame loop in picker.js (as timeline.js follow() does), so a selection made after an edit resolves (a lane add, a move) also enables or disables it; enabled it is titled "Aim the selected position at the picked target", disabled "Select a position to set its target". An accepted set reports "The position aims at the picked target" in the picker's status; a refused one reports the server's reason there.
+NOTES (2026-10-20): the README's tune paragraph still says a pick is "ready to use as the selected pan's `to` or one of its `via` waypoints"; item 20 (docs) owns that sentence, so it is left unchanged here.
 
 Depends on item 15.
 **Closes:** tune-picker-position
