@@ -16,6 +16,7 @@
 <script src="/assets/lanes.js" defer></script>
 <script src="/assets/drag.js" defer></script>
 <script src="/assets/timeline.js" defer></script>
+<script src="/assets/marker.js" defer></script>
 <script src="/assets/picker.js" defer></script>
 </head>
 <body>
@@ -29,6 +30,8 @@
       <img id="frame" alt="The composed frame at the playhead" draggable="false">
       <div id="pick-drag" class="pick-drag" hidden></div>
       <div id="pick-box" class="pick-box" hidden></div>
+      <div id="camera-crop" class="camera-crop" hidden></div>
+      <div id="camera-marker" class="camera-marker" title="Drag to aim the position at another cell" hidden></div>
     </div>
     <p id="frame-message" class="frame-message" hidden></p>
     <div class="picker">

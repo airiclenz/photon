@@ -19,17 +19,20 @@
 //   edit(edit)   apply {owner: {kind, index}, field, value}: owner a beat by its id, the clip
 //                with index 0, or a position, zoom or caption by its index, value typed per
 //                field; a Promise of the new state, rejected when refused
-//   camera(ms)   the camera at ms, whole output milliseconds, as /api/camera?t=<ms> answers
-//                it: a Promise of {centre, crop, grid}, centre the cell it centres on, rejected
-//                with the server's message when refused; the position lane's add asks it
+//   camera(ms, position)  the camera at ms, whole output milliseconds, as
+//                /api/camera?t=<ms>[&position=<index>] answers it: a Promise of {centre, crop,
+//                grid} and, with the index of a position in state().positions, its aim, centre
+//                and aim each a cell, rejected with the server's message when refused; the
+//                position lane's add and the preview's position marker ask it
 //   onState(fn)  call fn(state) with every new state
 //   frame        the preview <img> element
 //
 // This file holds the session's API, the selection and the wiring. The page's own scripts that
 // load after it — kinds.js (the entry kinds and their lookups), frames.js (the preview's draft
 // and exact frames), transport.js (the frame clock, the transport and its status), controls.js
-// (the inspector's field controls and error rows), panels.js (the beat and frame panels) and
-// entries.js (the position, transition, zoom and caption panels) — share its state through window.tunePage, an internal
+// (the inspector's field controls and error rows), panels.js (the beat and frame panels),
+// entries.js (the position, transition, zoom and caption panels) and marker.js (the preview's
+// position marker, which adds followSelection and wantsFullView) — share its state through window.tunePage, an internal
 // namespace no part of the contract: app.js puts in it the state they read and the helpers they build with, and each of them adds what it does. Of
 // the other scripts picker.js adds the standing pick's proposal, and timeline.js marks a scrub
 // through transport.js's beginScrub and endScrub and reports a refused or failed lane add or a
@@ -48,8 +51,10 @@
     save: "/api/save",
     camera: "/api/camera",
   };
-  // TIME_QUERY starts the query naming a route's output time in whole milliseconds.
+  // TIME_QUERY starts the query naming a route's output time in whole milliseconds, and
+  // POSITION_QUERY goes on to name a camera position by its index.
   const TIME_QUERY = "?t=";
+  const POSITION_QUERY = "&position=";
   const POLL_INTERVAL_MS = 1000;
   const MILLISECONDS_PER_SECOND = 1000;
   const MILLISECONDS_PER_MINUTE = 60000;
@@ -336,6 +341,13 @@
       renderBeatSelect();
       renderInspector();
     }
+    page.followSelection();
+  }
+
+  // camera asks where the camera looks at ms and, with a position's index, where it aims.
+  function camera(ms, position) {
+    const query = TIME_QUERY + ms + (position === undefined ? "" : POSITION_QUERY + position);
+    return request(API.camera + query);
   }
 
   // --- wiring ---
@@ -367,7 +379,7 @@
     seek: (ms) => page.seek(ms),
     pause: () => page.pause(),
     edit: edit,
-    camera: (ms) => request(API.camera + TIME_QUERY + ms),
+    camera: camera,
     onState: (listener) => {
       listeners.push(listener);
     },

@@ -72,4 +72,5 @@
 //   - page/lanes.js, page/timeline.js, page/picker.js: the timeline, its lanes and the target
 //     picker.
 //   - page/drag.js: the timeline's pointer drag, snapped, sending one edit when let go.
+//   - page/marker.js: the selected position's full view, crop and aim marker, dragged to aim it.
 package tune

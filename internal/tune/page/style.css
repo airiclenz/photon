@@ -178,8 +178,31 @@ textarea {
   border-radius: 2px;
 }
 
+/* The camera's crop on the full view, and the selected position's aim cell, dragged to aim it. */
+.camera-crop {
+  position: absolute;
+  pointer-events: none;
+  border: 2px dashed var(--accent);
+  border-radius: 2px;
+}
+
+.camera-marker {
+  position: absolute;
+  border: 2px solid var(--pick-box);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--pick-box) 35%, transparent);
+  cursor: grab;
+  touch-action: none;
+}
+
+.stage.picking .camera-marker {
+  pointer-events: none;
+}
+
 .pick-drag[hidden],
-.pick-box[hidden] {
+.pick-box[hidden],
+.camera-crop[hidden],
+.camera-marker[hidden] {
   display: none;
 }
 

@@ -1,16 +1,18 @@
 // photon tune's target picker: ⌖ arms pick mode on the paused preview, and a drag across the
 // cells of one row asks the server for the target that names them.
 // It builds on app.js's window.tune: frame for the preview <img>, pause() to hold the frame
-// still and frameTime() for the output time of the frame the <img> shows. It adds pickProposal()
-// and reportPick(message, isFailure) to window.tunePage, the page's internal namespace, for the
-// page's scripts that read the standing proposal's target. Nothing here maps pixels to cells or
-// resolves a target: the drag's two corners go to /api/pick in output-frame pixels, and the
-// server answers the resolver-checked proposal: its target as an edit takes it, its box in
-// output-frame pixels and the YAML snippets that write it.
+// still and frameTime() for the output time of the frame the <img> shows, and frames.js's
+// frameView() from window.tunePage, the page's internal namespace, for the view it shows. It adds
+// pickProposal() and reportPick(message, isFailure) to that namespace, for the page's scripts that
+// read the standing proposal's target. Nothing here maps pixels to cells or resolves a target: the
+// drag's two corners go to /api/pick in the shown frame's pixels, with view full while it shows
+// the full view, and the server answers the resolver-checked proposal: its target as an edit takes
+// it, its box in that frame's pixels and the YAML snippets that write it.
 "use strict";
 
 (() => {
   const tune = window.tune;
+  const page = window.tunePage;
   const PICK_URL = "/api/pick";
   const SNIPPET_ZOOM = "zoom";
   const ESCAPE_KEY = "Escape";
@@ -32,6 +34,7 @@
   let drag = null;
   let proposal = null;
   let proposalMs = null;
+  let proposalView = null;
 
   // --- pick mode ---
 
@@ -113,16 +116,21 @@
 
   // --- the pick ---
 
-  // pick posts the drag's corners in output-frame pixels, converted from displayed pixels by the
-  // <img>'s natural/displayed size ratio, with the output time of the frame it shows.
+  // pick posts the drag's corners in the shown frame's pixels, converted from displayed pixels by
+  // the <img>'s natural/displayed size ratio, with the output time of the frame it shows and, on
+  // the full view, its view.
   async function pick(picked) {
     const ms = tune.frameTime();
+    const frameView = page.frameView();
     const ratio = naturalPerDisplayed();
     if (ms === null || ratio === null) {
       report("No frame is shown to pick from.", true);
       return;
     }
     const body = { t: ms, from: outputPoint(picked.from, ratio), to: outputPoint(picked.to, ratio) };
+    if (frameView === page.VIEW_FULL) {
+      body.view = page.VIEW_FULL;
+    }
     report("Picking…", false);
     try {
       const response = await fetch(PICK_URL, {
@@ -134,7 +142,7 @@
       if (!response.ok) {
         throw new Error(answer.error || response.statusText);
       }
-      showProposal(answer, ms);
+      showProposal(answer, ms, frameView);
       report("", false);
     } catch (error) {
       clearProposal();
@@ -142,8 +150,8 @@
     }
   }
 
-  // naturalPerDisplayed is how many output-frame pixels one displayed pixel of the <img> spans,
-  // or null while it shows nothing.
+  // naturalPerDisplayed is how many of the shown frame's pixels one displayed pixel of the <img>
+  // spans, or null while it shows nothing.
   function naturalPerDisplayed() {
     const displayed = frameImage.getBoundingClientRect().width;
     if (displayed <= 0 || frameImage.naturalWidth <= 0) {
@@ -158,9 +166,10 @@
 
   // --- the proposal ---
 
-  function showProposal(answer, ms) {
+  function showProposal(answer, ms, frameView) {
     proposal = answer;
     proposalMs = ms;
+    proposalView = frameView;
     view.target.textContent = answer.snippets[SNIPPET_ZOOM];
     view.result.hidden = false;
     drawBox();
@@ -169,15 +178,18 @@
   function clearProposal() {
     proposal = null;
     proposalMs = null;
+    proposalView = null;
     view.result.hidden = true;
     view.box.hidden = true;
   }
 
-  // drawBox draws the proposal's rect, in output-frame pixels, scaled to the displayed <img> by
-  // its displayed/natural size ratio; it is hidden once the preview shows another frame.
+  // drawBox draws the proposal's rect, in the picked frame's pixels, scaled to the displayed <img>
+  // by its displayed/natural size ratio; it is hidden once the preview shows another frame or
+  // view.
   function drawBox() {
     const ratio = naturalPerDisplayed();
-    if (!proposal || ratio === null || tune.frameTime() !== proposalMs) {
+    const isPickedFrame = tune.frameTime() === proposalMs && page.frameView() === proposalView;
+    if (!proposal || ratio === null || !isPickedFrame) {
       view.box.hidden = true;
       return;
     }
@@ -242,6 +254,6 @@
     return proposal ? proposal.target : null;
   }
 
-  Object.assign(window.tunePage, { pickProposal, reportPick: report });
+  Object.assign(page, { pickProposal, reportPick: report });
   wire();
 })();

@@ -605,7 +605,13 @@ in the status.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune -run 'TestPage'`
 **Commit:** `feat(tune): add a camera position at the playhead`
 
-## 18. Tune page: drag a position's cell on the preview
+## 18. Tune page: drag a position's cell on the preview — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): re-derived from the Read-first anchor `internal/tune/page/path.js` (wantedPath, requestPath, place, queueRender), which item 1 removed with the via path; marker.js keeps its own camera-answer request, keyed version:ms:index, and draws with a local `place`/`naturalPerDisplayed` like picker.js's.
+NOTES (2026-10-20): the view switch is shared through window.tunePage: marker.js adds `wantsFullView` (read by frames.js at request time) and `followSelection` (called by app.js's renderSelection on every select/selectEntry); frames.js adds `frameView()` and `VIEW_FULL`, and its frame key is now version:view:quality:ms. window.tune's `camera(ms)` became `camera(ms, position)`, appending `&position=<index>` when given; app.js's contract header says so.
+NOTES (2026-10-20): selecting a position seeks to its start on every selection, so a position bar drag, which selects at its start, also seeks to the position's start before it moves. A refused drop puts the marker back on its aim and shows the reason in the transport bar's status, as a refused bar drag does; a drop on the aimed cell sends no edit.
+NOTES (2026-10-20): picker.js's proposal box now also hides once the preview shows another view than the one picked on, since the pick's rect is in that view's pixels.
+NOTES (2026-10-20): consequential edit — internal/tune/doc.go: made necessary by the new page/marker.js, which the package's file map enumerates.
 
 Depends on items 13, 16.
 **Closes:** tune-position-marker

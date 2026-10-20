@@ -3,11 +3,14 @@
 // scrub's pointer down — it asks for draft frames (/api/frame?t=<ms>&draft=1), which the server
 // draws fast from a raster at the shipped size; once the playhead settles it asks for the exact
 // frame `photon render` composes, showing a draft first unless the exact frame is already at hand.
-// An exact frame shown is never replaced by a draft of the same state version and time.
+// An exact frame shown is never replaced by a draft of the same state version and time. While a
+// camera position is selected the settled frame is the full view's exact frame
+// (/api/frame?t=<ms>&view=full), the whole frame whatever the camera's zoom and aim; the full view
+// has no draft, so the drafts, a settle's draft first among them, are always the camera's frame.
 //
 // While playing it keeps up to PREFETCH_REQUESTS requests in flight for the frames on the clip's
 // fps grid from the playhead's on, and the frames that arrive wait in a cache of at most
-// CACHE_ENTRIES, keyed version:quality:ms, until the clock reaches them; a frame the playhead has
+// CACHE_ENTRIES, keyed version:view:quality:ms, until the clock reaches them; a frame the playhead has
 // passed is dropped, and an answer that arrives for one is ignored. Otherwise one request is in
 // flight at a time, counting only those sent while not playing: while one loads the playhead moves
 // on, and the frames it passed are dropped. A frame at hand is shown without a request. The cache
@@ -15,17 +18,24 @@
 // the state version changes, unless the preview shows that URL or is loading it; the preview
 // revokes the URL it replaces once no cache entry holds it.
 //
-// It loads after app.js and before transport.js, and adds pumpFrames, settleFrames and frameTime
-// to window.tunePage, the page's internal namespace, where app.js's takeState and window.tune
-// contract and transport.js's clock reach them. The clock is transport.js's: it reads the
-// playhead, frameCount, frameIndexAt, frameStartMs, isPlaying and isScrubbing from the namespace
-// when a request goes out, never at load, since transport.js adds them after this file runs.
+// It loads after app.js and before transport.js, and adds pumpFrames, settleFrames, frameTime and
+// frameView to window.tunePage, the page's internal namespace, where app.js's takeState and
+// window.tune contract, transport.js's clock, marker.js and picker.js reach them. The clock is
+// transport.js's: it reads the playhead, frameCount, frameIndexAt, frameStartMs, isPlaying and
+// isScrubbing from the namespace when a request goes out, never at load, since transport.js adds
+// them after this file runs; it reads marker.js's wantsFullView alike. A caller that changes what
+// wantsFullView says while the preview stands still calls settleFrames to fetch the frame it asks.
 "use strict";
 
 (() => {
   const page = window.tunePage;
   const FRAME_API = "/api/frame?t=";
   const DRAFT_QUERY = "&draft=1";
+  const VIEW_QUERY = "&view=";
+  // VIEW_CAMERA is the camera's frame and VIEW_FULL the full view, as frameView() names them;
+  // the frame route takes VIEW_FULL as its view and asks the camera's frame without one.
+  const VIEW_CAMERA = "camera";
+  const VIEW_FULL = "full";
   const QUALITY_DRAFT = "draft";
   const QUALITY_EXACT = "exact";
   const KEY_SEPARATOR = ":";
@@ -40,7 +50,7 @@
   const frameImage = page.frame;
 
   // cache holds the frames at hand of cacheVersion by key, least recently used first, each as
-  // {key, ms, url}.
+  // {key, view, ms, url}.
   const cache = new Map();
   let cacheVersion = null;
   // inFlight are the keys of the frame requests whose answers have not arrived.
@@ -56,12 +66,19 @@
   let pendingURL = "";
   let shownURL = "";
   let shownFrameMs = null;
+  let shownView = null;
   // isDraftFirst asks the next settled request to show a draft before the exact frame.
   let isDraftFirst = false;
 
-  // frameKey names the frame of quality at output time ms of the current state.
-  function frameKey(quality, ms) {
-    return page.state().version + KEY_SEPARATOR + quality + KEY_SEPARATOR + ms;
+  // frameKey names the frame of quality at output time ms of the current state, in view, the
+  // camera's frame unless named.
+  function frameKey(quality, ms, view = VIEW_CAMERA) {
+    return [page.state().version, view, quality, ms].join(KEY_SEPARATOR);
+  }
+
+  // stillView is the view the settled preview shows: the full view while marker.js asks it.
+  function stillView() {
+    return page.wantsFullView() ? VIEW_FULL : VIEW_CAMERA;
   }
 
   // isMoving says the playhead is moving: playing, or a scrub's pointer is down.
@@ -108,9 +125,9 @@
     cacheVersion = version;
   }
 
-  // cached is the frame of quality at ms at hand, marked as just used, or undefined.
-  function cached(quality, ms) {
-    const key = frameKey(quality, ms);
+  // cached is the frame of quality at ms in view at hand, marked as just used, or undefined.
+  function cached(quality, ms, view) {
+    const key = frameKey(quality, ms, view);
     const entry = cache.get(key);
     if (entry) {
       cache.delete(key);
@@ -119,10 +136,10 @@
     return entry;
   }
 
-  // store puts the frame blob of key at ms at hand, evicting the least recently used past the
-  // bound.
-  function store(key, ms, blob) {
-    const entry = { key, ms, url: URL.createObjectURL(blob) };
+  // store puts the frame blob of key in view at ms at hand, evicting the least recently used past
+  // the bound.
+  function store(key, view, ms, blob) {
+    const entry = { key, view, ms, url: URL.createObjectURL(blob) };
     cache.set(key, entry);
     while (cache.size > CACHE_ENTRIES) {
       evict(cache.keys().next().value);
@@ -139,7 +156,7 @@
     }
   }
 
-  // isAtHand says a frame at ms of either quality is shown, cached, asked for or failed.
+  // isAtHand says a camera frame at ms of either quality is shown, cached, asked for or failed.
   function isAtHand(ms) {
     return [QUALITY_DRAFT, QUALITY_EXACT].some((quality) => {
       const key = frameKey(quality, ms);
@@ -199,18 +216,20 @@
     }
   }
 
-  // pumpStill settles the preview on the exact frame at ms, showing a draft first when asked.
+  // pumpStill settles the preview on the exact frame at ms of the still view, showing the camera's
+  // draft first when asked.
   function pumpStill(ms) {
     if (stillRequests > 0) {
       return;
     }
     const isDraftFirstAsked = isDraftFirst;
     isDraftFirst = false;
-    const exactKey = frameKey(QUALITY_EXACT, ms);
+    const view = stillView();
+    const exactKey = frameKey(QUALITY_EXACT, ms, view);
     if (displayedKey === exactKey || failedKeys.has(exactKey)) {
       return;
     }
-    const exact = cached(QUALITY_EXACT, ms);
+    const exact = cached(QUALITY_EXACT, ms, view);
     if (exact) {
       show(exact);
       return;
@@ -225,7 +244,7 @@
         return;
       }
     }
-    request(QUALITY_EXACT, ms, false);
+    request(QUALITY_EXACT, ms, false, view);
   }
 
   // settleFrames settles the preview on the exact frame at the playhead, showing a draft first
@@ -238,18 +257,18 @@
 
   // --- fetching and showing ---
 
-  // request fetches the frame of quality at ms. Its answer is ignored once the state version has
+  // request fetches the frame of quality at ms in view, the camera's frame unless named. Its answer is ignored once the state version has
   // moved on, and a prefetched one too once the playhead has passed its frame; a frame asked for
   // while not playing is shown when it arrives, a prefetched one when the clock reaches it.
-  async function request(quality, ms, isPrefetch) {
-    const key = frameKey(quality, ms);
+  async function request(quality, ms, isPrefetch, view = VIEW_CAMERA) {
+    const key = frameKey(quality, ms, view);
     const version = page.state().version;
     inFlight.add(key);
     stillRequests += isPrefetch ? 0 : 1;
     let blob = null;
     let failure = null;
     try {
-      blob = await fetchFrame(quality, ms);
+      blob = await fetchFrame(quality, ms, view);
     } catch (error) {
       failure = error;
     }
@@ -261,7 +280,7 @@
       failedKeys.add(key);
       reportMissing(ms, failure);
     } else if (isCurrent) {
-      const entry = store(key, ms, blob);
+      const entry = store(key, view, ms, blob);
       if (!isPrefetch) {
         show(entry);
       }
@@ -269,9 +288,11 @@
     pumpFrames();
   }
 
-  // fetchFrame resolves to the PNG blob of the frame of quality at ms.
-  async function fetchFrame(quality, ms) {
-    const response = await fetch(FRAME_API + ms + (quality === QUALITY_DRAFT ? DRAFT_QUERY : ""));
+  // fetchFrame resolves to the PNG blob of the frame of quality at ms in view.
+  async function fetchFrame(quality, ms, view) {
+    const qualityQuery = quality === QUALITY_DRAFT ? DRAFT_QUERY : "";
+    const viewQuery = view === VIEW_FULL ? VIEW_QUERY + VIEW_FULL : "";
+    const response = await fetch(FRAME_API + ms + qualityQuery + viewQuery);
     if (!response.ok) {
       const answer = await response.json();
       throw new Error(answer.error || response.statusText);
@@ -284,7 +305,8 @@
     view.frameMessage.hidden = false;
   }
 
-  // show puts the cached frame entry in the preview; frameTime() names it once it has loaded.
+  // show puts the cached frame entry in the preview; frameTime() and frameView() name it once it
+  // has loaded.
   function show(entry) {
     const replaced = pendingURL;
     pendingURL = entry.url;
@@ -295,6 +317,7 @@
       shownURL = entry.url;
       pendingURL = "";
       shownFrameMs = entry.ms;
+      shownView = entry.view;
       releaseURL(previous);
       view.frameMessage.hidden = true;
     };
@@ -310,7 +333,9 @@
   }
 
   Object.assign(page, {
+    VIEW_FULL,
     frameTime: () => shownFrameMs,
+    frameView: () => shownView,
     pumpFrames,
     settleFrames,
   });

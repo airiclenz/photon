@@ -2312,3 +2312,275 @@ func TestPageJS_StepBackWhilePaused_ShowsTheCachedFrame(t *testing.T) {
 		t.Errorf("the frame message after the step back: want hidden, got %q", page.text(elementFrameMessage))
 	}
 }
+
+// The preview's position overlay: the camera's crop and the selected position's marker.
+const (
+	elementCameraCrop   = "camera-crop"
+	elementCameraMarker = "camera-marker"
+)
+
+// The entries of cameraStoryboard the marker tests select, by index: its text target, held from
+// beat 2's start, where "tests" sits on testsRow from testsFirstCol to testsLastCol; its cell,
+// held from 200ms into beat 1; and its zoom. markerDropCell is a blank cell of its 20x4 grid,
+// lastCell its bottom-right one, and offGrid a displayed point past it.
+const (
+	cameraTextPosition = 0
+	cameraCellPosition = 1
+	cameraZoom         = 0
+	testsRow           = 0
+	testsFirstCol      = 2
+	testsLastCol       = 6
+)
+
+var (
+	markerDropCell = image.Point{X: 15, Y: 3}
+	lastCell       = image.Point{X: 19, Y: 3}
+	offGrid        = image.Point{X: 100000, Y: 100000}
+)
+
+// viewFullQuery is the frame route's and the pick's view of the full view.
+const viewFullQuery = "&view=" + viewFull
+
+// fullFrame is the path of the request for the full view's exact frame at ms.
+func fullFrame(ms int) string {
+	return exactFrame(ms) + viewFullQuery
+}
+
+// frameView is the view of the frame the preview shows, as frames.js names it.
+func (p *pageHarness) frameView() string {
+	p.t.Helper()
+	return p.eval("window.tunePage.frameView()").String()
+}
+
+// selectPosition selects the position at index by its lane bar, lays the preview <img> out at
+// the natural size of the frame it settles on and returns that frame's output time.
+func (p *pageHarness) selectPosition(index int) int {
+	p.t.Helper()
+	p.clickBar(storyboard.OwnerPosition, index)
+	p.fitFrame()
+	p.dispatch(elementWindow, "resize", nil)
+	p.settle()
+	return int(p.eval("window.tune.frameTime()").ToInteger())
+}
+
+// positionCamera is session's camera at ms with the aim of the position at index.
+func positionCamera(t *testing.T, session *Session, ms, index int) CameraView {
+	t.Helper()
+	view, err := session.Camera(time.Duration(ms)*time.Millisecond, &index)
+	if err != nil {
+		t.Fatalf("the camera at %dms for position %d: %v", ms, index, err)
+	}
+	return view
+}
+
+// assertOverlay fails the test unless the preview draws camera's crop and the marker on cell,
+// at one displayed pixel per full-view pixel.
+func (p *pageHarness) assertOverlay(camera CameraView, cell image.Point) {
+	p.t.Helper()
+	crop, origin, size := camera.View.Crop, camera.View.Origin, camera.View.CellSize
+	want := map[string]map[string]float64{
+		elementCameraCrop: {"left": crop.X, "top": crop.Y, "width": crop.W, "height": crop.H},
+		elementCameraMarker: {
+			"left": origin.X + float64(cell.X)*size.X, "top": origin.Y + float64(cell.Y)*size.Y,
+			"width": size.X, "height": size.Y,
+		},
+	}
+	for id, box := range want {
+		if p.isHidden(id) {
+			p.t.Errorf("#%s is hidden, want it drawn", id)
+			continue
+		}
+		for property, value := range box {
+			if got := p.styleOf(id, property); got != pixels(value) {
+				p.t.Errorf("#%s's %s: want %s, got %s", id, property, pixels(value), got)
+			}
+		}
+	}
+}
+
+// assertNoOverlay fails the test unless the crop and the marker are hidden.
+func (p *pageHarness) assertNoOverlay() {
+	p.t.Helper()
+	for _, id := range []string{elementCameraCrop, elementCameraMarker} {
+		if !p.isHidden(id) {
+			p.t.Errorf("#%s is drawn, want it hidden", id)
+		}
+	}
+}
+
+func TestPageJS_SelectAPosition_ShowsTheFullViewWithItsCropAndMarker(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		index int
+	}{
+		{"a cell", cameraCellPosition},
+		{"a text target", cameraTextPosition},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			session := newSessionFixtureOf(t, cameraStoryboard).session
+			page := loadPage(t, session)
+			start := int(page.eval(fmt.Sprintf(
+				"window.tune.state().positions.find((position) => position.index === %d).start_ms",
+				test.index)).ToInteger())
+
+			got := page.selectPosition(test.index)
+
+			if got != start {
+				t.Errorf("the frame shown: want the position's start %dms, got %dms", start, got)
+			}
+			page.lastRequest(fullFrame(start))
+			page.lastRequest(fmt.Sprintf("%s&position=%d", cameraAPI(start), test.index))
+			if view := page.frameView(); view != viewFull {
+				t.Errorf("the view shown: want %s, got %s", viewFull, view)
+			}
+			camera := positionCamera(t, session, start, test.index)
+			page.assertOverlay(camera, *camera.Aim)
+		})
+	}
+}
+
+func TestPageJS_DragThePositionMarker_ClampsToTheGridAndSendsOneCellEdit(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraStoryboard).session
+	page := loadPage(t, session)
+	start := page.selectPosition(cameraCellPosition)
+	camera := positionCamera(t, session, start, cameraCellPosition)
+	aim := *camera.Aim
+	edits := page.editCount()
+
+	page.dispatch(elementCameraMarker, "pointerdown", pointerAt(fullViewCellPixel(t, session, aim.X, aim.Y)))
+	page.dispatch(elementCameraMarker, "pointermove", pointerAt(offGrid))
+	page.settle()
+	page.assertOverlay(camera, lastCell)
+	drop := pointerAt(fullViewCellPixel(t, session, markerDropCell.X, markerDropCell.Y))
+	page.dispatch(elementCameraMarker, "pointermove", drop)
+	page.dispatch(elementCameraMarker, "pointerup", drop)
+	page.settle()
+
+	if got := page.editCount() - edits; got != 1 {
+		t.Fatalf("the edits the drag sent: want 1, got %d", got)
+	}
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":{"x":%d,"y":%d}}`,
+		storyboard.OwnerPosition, cameraCellPosition, storyboard.FieldPositionCell,
+		markerDropCell.X, markerDropCell.Y))
+	moved := positionCamera(t, session, start, cameraCellPosition)
+	if *moved.Aim != markerDropCell {
+		t.Errorf("the position's aim after the drop: want %v, got %v", markerDropCell, *moved.Aim)
+	}
+	page.assertOverlay(moved, markerDropCell)
+}
+
+func TestPageJS_DropThePositionMarkerOnItsAim_SendsNoEdit(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraStoryboard).session
+	page := loadPage(t, session)
+	start := page.selectPosition(cameraCellPosition)
+	camera := positionCamera(t, session, start, cameraCellPosition)
+	grab := pointerAt(fullViewCellPixel(t, session, camera.Aim.X, camera.Aim.Y))
+	edits := page.editCount()
+
+	page.dispatch(elementCameraMarker, "pointerdown", grab)
+	page.dispatch(elementCameraMarker, "pointerup", grab)
+	page.settle()
+
+	if got := page.editCount() - edits; got != 0 {
+		t.Errorf("the edits a drop on the aim sent: want none, got %d", got)
+	}
+	page.assertOverlay(camera, *camera.Aim)
+}
+
+func TestPageJS_SelectAZoomAfterAPosition_ReturnsToTheCamerasFrame(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixtureOf(t, cameraStoryboard).session)
+	start := page.selectPosition(cameraCellPosition)
+	mark := len(page.requests)
+
+	page.clickBar(storyboard.OwnerZoom, cameraZoom)
+
+	page.assertFrames(mark, exactFrame(start))
+	if view := page.frameView(); view == viewFull {
+		t.Errorf("the view shown after selecting the zoom: want the camera's, got %s", view)
+	}
+	page.assertNoOverlay()
+}
+
+func TestPageJS_SelectAPositionAtThePlayhead_FetchesTheFullView(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixtureOf(t, cameraStoryboard).session)
+	start := int(page.eval(fmt.Sprintf(
+		"window.tune.state().positions.find((position) => position.index === %d).start_ms",
+		cameraCellPosition)).ToInteger())
+	page.eval(fmt.Sprintf("window.tune.seek(%d);", start))
+	page.settle()
+	page.assertFrameTime(start)
+	mark := len(page.requests)
+
+	page.selectPosition(cameraCellPosition)
+
+	if frames := page.framesAfter(mark); !slices.Contains(frames, fullFrame(start)) {
+		t.Errorf("the frames requested: want %q among them, got %q", fullFrame(start), frames)
+	}
+	if view := page.frameView(); view != viewFull {
+		t.Errorf("the view shown: want %s, got %s", viewFull, view)
+	}
+}
+
+func TestPageJS_SettleWithAPositionSelected_HidesTheOverlayOnTheDraftFirst(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraStoryboard).session
+	page := loadPage(t, session)
+	start := page.selectPosition(cameraCellPosition)
+	stepped := start + frameStepMS
+	page.holdFrames()
+
+	page.pressKey(keyStepAhead)
+	page.settle()
+	page.releaseFrames()
+
+	page.assertFrameTime(stepped)
+	if view := page.frameView(); view == viewFull {
+		t.Errorf("the view of the draft first: want the camera's, got %s", view)
+	}
+	page.assertNoOverlay()
+	page.releaseFrames()
+	if view := page.frameView(); view != viewFull {
+		t.Errorf("the view once settled: want %s, got %s", viewFull, view)
+	}
+	camera := positionCamera(t, session, stepped, cameraCellPosition)
+	page.assertOverlay(camera, *camera.Aim)
+}
+
+func TestPageJS_PickOnTheFullView_SendsTheFullView(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraStoryboard).session
+	page := loadPage(t, session)
+	page.selectPosition(cameraTextPosition)
+
+	page.dispatch(elementPick, "click", nil)
+	page.dispatch(elementStage, "pointerdown", pointerAt(fullViewCellPixel(t, session, testsFirstCol, testsRow)))
+	page.dispatch(elementStage, "pointerup", pointerAt(fullViewCellPixel(t, session, testsLastCol, testsRow)))
+	page.settle()
+
+	picked := page.lastRequest("/api/pick")
+	var body struct {
+		View string `json:"view"`
+	}
+	if err := json.Unmarshal([]byte(picked.body), &body); err != nil {
+		t.Fatalf("decode the pick %s: %v", picked.body, err)
+	}
+	if body.View != viewFull {
+		t.Errorf("the pick's view: want %s, got %q", viewFull, body.View)
+	}
+	if picked.status != http.StatusOK {
+		t.Fatalf("the pick: want 200, got %d: %s", picked.status, picked.answer)
+	}
+	if !strings.Contains(picked.answer, `"text":"tests"`) {
+		t.Errorf("the pick's answer: want the target tests, got %s", picked.answer)
+	}
+	if page.isHidden(elementPickBox) {
+		t.Error("the pick box is hidden on the full view it was picked on")
+	}
+}

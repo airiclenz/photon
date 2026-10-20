@@ -5,9 +5,9 @@
 // It builds on app.js's window.tune alone: frame for the preview <img>. It measures the page by
 // getBoundingClientRect only and sets the <img>'s max height from window.innerHeight minus what
 // the rest of the page takes above the <img>, below it in the preview column and under the
-// preview; a taller inspector beside the preview is out of its reach. It loads before picker.js,
-// so on a resize the <img> is fitted before it redraws over it; it also redraws on the <img>'s
-// own resize.
+// preview; a taller inspector beside the preview is out of its reach. It loads before marker.js
+// and picker.js, so on a resize the <img> is fitted before they redraw over it; they also redraw
+// on the <img>'s own resize.
 "use strict";
 
 (() => {
