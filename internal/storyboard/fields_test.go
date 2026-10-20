@@ -48,7 +48,8 @@ func textOwner(index int) Owner { return Owner{Kind: OwnerCaption, Index: index}
 // defaultRefusals are the fields of the every-form storyboard whose Default Apply refuses, each
 // with a valid sample of its kind for its owner: a position's cell and target default to null,
 // which Apply refuses, a position or zoom moved to the clip's start overlaps camera.positions[0]
-// or camera.zooms[0], and a zoom of no length or factor 0 is invalid.
+// or camera.zooms[0], a zoom inserted at the clip's start overlaps camera.zooms[0], and a zoom of
+// no length or factor 0 is invalid.
 var defaultRefusals = map[fieldKey]json.RawMessage{
 	{clipOwner, FieldFrameWidth}:            typedValue(300),
 	{clipOwner, FieldFrameFPS}:              typedValue(12),
@@ -70,6 +71,7 @@ var defaultRefusals = map[fieldKey]json.RawMessage{
 	{positionOwner(2), FieldPositionTarget}: typedValue(map[string]any{"text": "Items"}),
 	{positionOwner(3), FieldPositionTarget}: typedValue(map[string]any{"text": "Items"}),
 	{zoomOwner(1), FieldZoomAt}:             moment(1, 1000),
+	{zoomOwner(0), FieldZoomInsert}:         typedValue(map[string]any{"at": moment(0, 2000)}),
 	{zoomOwner(0), FieldZoomOver}:           typedValue(100),
 	{zoomOwner(1), FieldZoomOver}:           typedValue(100),
 	{zoomOwner(2), FieldZoomOver}:           typedValue(100),
@@ -159,10 +161,10 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		{clipOwner, []string{"cols", "rows", FieldFramePadding, FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldFrameWidth, FieldFrameFPS, "max_colors"}},
 		{beatOwner(1), []string{FieldDuration, FieldHold, FieldCut}},
 		{beatOwner(2), []string{FieldDuration, FieldHold, FieldCut}},
-		{positionOwner(0), []string{FieldPositionAt, FieldPositionHold, FieldPositionSpan, FieldPositionEase, FieldPositionCell, FieldPositionTarget}},
-		{positionOwner(3), []string{FieldPositionAt, FieldPositionHold, FieldPositionSpan, FieldPositionEase, FieldPositionCell, FieldPositionTarget}},
-		{zoomOwner(0), []string{FieldZoomAt, FieldZoomOver, FieldZoomEase, FieldZoomTo}},
-		{zoomOwner(2), []string{FieldZoomAt, FieldZoomOver, FieldZoomEase, FieldZoomTo}},
+		{positionOwner(0), []string{FieldPositionAt, FieldPositionHold, FieldPositionSpan, FieldPositionEase, FieldPositionCell, FieldPositionTarget, FieldPositionRemove, FieldPositionInsert}},
+		{positionOwner(3), []string{FieldPositionAt, FieldPositionHold, FieldPositionSpan, FieldPositionEase, FieldPositionCell, FieldPositionTarget, FieldPositionRemove}},
+		{zoomOwner(0), []string{FieldZoomAt, FieldZoomOver, FieldZoomEase, FieldZoomTo, FieldZoomRemove, FieldZoomInsert}},
+		{zoomOwner(2), []string{FieldZoomAt, FieldZoomOver, FieldZoomEase, FieldZoomTo, FieldZoomRemove}},
 		{textOwner(0), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionShift, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionOffset, FieldCaptionPosition, FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionRemove, FieldCaptionMove, FieldCaptionInsert}},
 		{textOwner(2), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionShift, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionOffset, FieldCaptionPosition, FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionRemove, FieldCaptionMove}},
 	}
@@ -195,6 +197,10 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		{fieldKey{zoomOwner(1), FieldZoomOver}, KindDuration, nil, "0", false},
 		{fieldKey{zoomOwner(1), FieldZoomEase}, KindEnum, []string{"smooth", "linear", "ease-in", "ease-out"}, `"smooth"`, false},
 		{fieldKey{zoomOwner(2), FieldZoomTo}, KindDecimal, nil, "0", false},
+		{fieldKey{positionOwner(0), FieldPositionInsert}, KindNewPosition, nil, `{"at":{"beat":0,"offset_ms":0},"cell":{"x":40,"y":12}}`, false},
+		{fieldKey{positionOwner(3), FieldPositionRemove}, KindRemoval, nil, "null", false},
+		{fieldKey{zoomOwner(0), FieldZoomInsert}, KindNewZoom, nil, `{"at":{"beat":0,"offset_ms":0}}`, false},
+		{fieldKey{zoomOwner(2), FieldZoomRemove}, KindRemoval, nil, "null", false},
 		{fieldKey{textOwner(0), FieldCaptionUntil}, KindMoment, nil, "null", false},
 		{fieldKey{textOwner(0), FieldCaptionShift}, KindCount, nil, "0", false},
 		{fieldKey{textOwner(0), FieldCaptionText}, KindText, nil, `""`, false},

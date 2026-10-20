@@ -40,6 +40,12 @@ import (
 //     position's cell;
 //   - zoom.over: a whole number of milliseconds;
 //   - zoom.to: a number, the zoom factor in [1, 3];
+//   - position.insert: a new position, {"at": {"beat": 0, "offset_ms": 1200}, "cell": {"x": 3,
+//     "y": 4}}, a point in time on that cell, added so that it is the position at the owner's
+//     index, 0 through the list's length;
+//   - zoom.insert: a new zoom, {"at": {"beat": 0, "offset_ms": 1200}}, added so that it is the
+//     zoom at the owner's index, 0 through the list's length;
+//   - position.remove, zoom.remove: null, which removes the owner's position or zoom;
 //   - caption.at: a moment, {"beat": 3, "offset_ms": 200}, beat 0 for a clip time offset_ms
 //     after the clip's first frame, which replaces the caption's whole at;
 //   - caption.for: a whole number of milliseconds above 0, which removes the caption's until;
@@ -95,7 +101,8 @@ var editFields = []string{
 	FieldDuration, FieldHold, FieldCut, FieldFrameWidth, FieldFrameFPS, FieldFramePadding,
 	FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldPositionAt, FieldPositionHold,
 	FieldPositionSpan, FieldPositionEase, FieldPositionCell, FieldPositionTarget, FieldZoomAt,
-	FieldZoomOver, FieldZoomEase, FieldZoomTo, FieldCaptionAt, FieldCaptionFor,
+	FieldZoomOver, FieldZoomEase, FieldZoomTo, FieldPositionInsert, FieldPositionRemove,
+	FieldZoomInsert, FieldZoomRemove, FieldCaptionAt, FieldCaptionFor,
 	FieldCaptionUntil, FieldCaptionShift, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign,
 	FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove, FieldCaptionFontSize,
 	FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity,
@@ -156,14 +163,17 @@ const (
 // caption.for deletes the caption's until and a caption.until its for, or, as null, writes the for
 // that keeps the caption's stretch in place of its until. A caption.shift rewrites the caption's at
 // and, if it has one, its until as caption.at and caption.until write them, each keeping its beat,
-// and a shift of 0 writes nothing. An insert writes its caption as one flow line from presets — a
-// caption "Caption" for 2s — and creates a captions key the storyboard lacks as a flow list after
-// the keys that precede it; a remove or move splices only its list's items, and removing a list's
-// only entry deletes its key. The edit is refused with an error led by its owner and field — the
-// beat, camera position, camera zoom or caption, or nothing for a frame field — when its value is
-// of the wrong JSON type or misspelled, when its owner is of another kind than the field's, when it
-// names a beat, position, zoom or caption that is not there, an insert index past the list's length
-// among them, or when the result fails validation; the last wraps the *[ValidationError].
+// and a shift of 0 writes nothing. An insert writes its entry as one flow line — a caption from
+// presets, "Caption" for 2s, a position as its cell, a zoom from presets, to 1.5 over 600ms — and
+// creates a list key the storyboard lacks as a flow list after the keys that precede it, a camera
+// list with a camera the storyboard lacks, or holds empty, as a flow mapping; a remove or move
+// splices only its list's items, removing a list's only entry deletes its key, and removing the
+// camera's only entry deletes the camera. The edit is refused with an error led by its owner and
+// field — the beat, camera position, camera zoom or caption, or nothing for a frame field — when
+// its value is of the wrong JSON type or misspelled, when its owner is of another kind than the
+// field's, when it names a beat, position, zoom or caption that is not there, an insert index past
+// the list's length among them, or when the result fails validation; the last wraps the
+// *[ValidationError].
 func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 	board, err := Parse(src, path)
 	if err != nil {

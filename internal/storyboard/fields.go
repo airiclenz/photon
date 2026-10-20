@@ -37,6 +37,11 @@ const (
 	// KindEntry is a new caption, {"kind": "caption", "at": {"beat": 0, "offset_ms": 0}}, its
 	// kind one of the field's Choices.
 	KindEntry FieldKind = "entry"
+	// KindNewPosition is a new camera position, {"at": {"beat": 0, "offset_ms": 0}, "cell":
+	// {"x": 3, "y": 4}}: a point in time on a cell.
+	KindNewPosition FieldKind = "new-position"
+	// KindNewZoom is a new camera zoom, {"at": {"beat": 0, "offset_ms": 0}}.
+	KindNewZoom FieldKind = "new-zoom"
 	// KindRemoval is null, which removes the owner.
 	KindRemoval FieldKind = "removal"
 	// KindColor is a colour spelled #rrggbb, "#ffcc00".
@@ -53,8 +58,10 @@ const (
 // holds, the Choices of an enum, and its Default, the value it holds when the storyboard leaves
 // its key out (the zero value, or what [Load] fills in), typed as an [Edit] types it; null is a
 // field an absent key leaves unset, a position's cell and target among them. A list field, which
-// adds, removes or reorders an entry and has no key, defaults to a value it takes: an insert's
-// entry of its first choice at the clip's start, a remove's null, a move's own index. A caption's
+// adds, removes or reorders an entry and has no key, defaults to a value it takes: a caption
+// insert's entry of its first choice at the clip's start, a position insert's point at the clip's
+// start on the frame's centre cell, a zoom insert's at the clip's start, a remove's null, a move's
+// own index. A caption's
 // caption.shift, which has no key either, defaults to 0, the shift that changes nothing, and a
 // position's position.span, which sets two keys, to what both mean when absent: the clip's start
 // and a hold of 0. An editable field's Name is the field an [Edit] names; a read-only field is
@@ -101,7 +108,7 @@ var (
 
 // Fields describes every field of board's owners, the editable and the read-only: the clip's
 // frame fields in the frame's key order, then each beat's, camera position's, camera zoom's and
-// caption's in storyboard order, the captions' insert after their entries', owned by index 0,
+// caption's in storyboard order, each list's insert after its entries', owned by index 0,
 // whether or not the list holds an entry. The frame's cols and rows are read-only because they
 // size the terminal the take was recorded in, so a change needs a new `photon record`, and its
 // max_colors because the page draws its preview before the palette is quantized, so the preview
@@ -114,9 +121,11 @@ func Fields(board *Storyboard) []Field {
 	for index := range board.Camera.Positions {
 		fields = append(fields, positionFields(index)...)
 	}
+	fields = append(fields, positionInsertField(board.Frame))
 	for index := range board.Camera.Zooms {
 		fields = append(fields, zoomFields(index)...)
 	}
+	fields = append(fields, zoomInsertField())
 	for index := range board.Captions {
 		fields = append(fields, captionFields(index, board.Frame.FontSize)...)
 	}
@@ -135,13 +144,46 @@ func insertField(kind OwnerKind, name string, kinds []string) Field {
 	}
 }
 
+// positionInsertField describes the camera positions' insert, owned by the list's first index:
+// a point in time at the clip's start on frame's centre cell.
+func positionInsertField(frame Frame) Field {
+	centre := cellJSON(Cell{X: frame.Cols / 2, Y: frame.Rows / 2})
+	return Field{
+		Owner:   Owner{Kind: OwnerPosition},
+		Name:    FieldPositionInsert,
+		Kind:    KindNewPosition,
+		Default: raw(`{"at":` + defaultClipStart + `,"cell":` + centre + `}`),
+	}
+}
+
+// zoomInsertField describes the camera zooms' insert, owned by the list's first index: a zoom at
+// the clip's start.
+func zoomInsertField() Field {
+	return Field{
+		Owner:   Owner{Kind: OwnerZoom},
+		Name:    FieldZoomInsert,
+		Kind:    KindNewZoom,
+		Default: raw(`{"at":` + defaultClipStart + `}`),
+	}
+}
+
+// cellJSON spells cell as an [Edit] types it, {"x":3,"y":4}.
+func cellJSON(cell Cell) string {
+	return `{"x":` + strconv.Itoa(cell.X) + `,"y":` + strconv.Itoa(cell.Y) + `}`
+}
+
 // listEntryFields describes the remove and move of the entry at index of owner's kind, named
 // remove and move.
 func listEntryFields(owner Owner, remove, move string) []Field {
 	return []Field{
-		{Owner: owner, Name: remove, Kind: KindRemoval, Default: raw(jsonNull)},
+		removeField(owner, remove),
 		{Owner: owner, Name: move, Kind: KindCount, Default: raw(strconv.Itoa(owner.Index))},
 	}
+}
+
+// removeField describes the remove of owner, named name: null, the value it takes.
+func removeField(owner Owner, name string) Field {
+	return Field{Owner: owner, Name: name, Kind: KindRemoval, Default: raw(jsonNull)}
 }
 
 // clipFields describes the frame's fields in its field order, each keyed as its yaml tag names it:
@@ -179,7 +221,7 @@ func beatFields(beat Beat) []Field {
 }
 
 // positionFields describes the fields of the camera position at index: its start, its hold, both
-// at once, its ease, and where it aims — a cell or a text target.
+// at once, its ease, where it aims — a cell or a text target — and its remove.
 func positionFields(index int) []Field {
 	owner := Owner{Kind: OwnerPosition, Index: index}
 	return []Field{
@@ -189,11 +231,12 @@ func positionFields(index int) []Field {
 		easeField(owner, FieldPositionEase),
 		{Owner: owner, Name: FieldPositionCell, Kind: KindCell, Default: raw(jsonNull)},
 		{Owner: owner, Name: FieldPositionTarget, Kind: KindTarget, Default: raw(jsonNull)},
+		removeField(owner, FieldPositionRemove),
 	}
 }
 
-// zoomFields describes the fields of the camera zoom at index: its start, its length, its ease
-// and its factor.
+// zoomFields describes the fields of the camera zoom at index: its start, its length, its ease,
+// its factor and its remove.
 func zoomFields(index int) []Field {
 	owner := Owner{Kind: OwnerZoom, Index: index}
 	return []Field{
@@ -201,6 +244,7 @@ func zoomFields(index int) []Field {
 		{Owner: owner, Name: FieldZoomOver, Kind: KindDuration, Default: raw(defaultZero)},
 		easeField(owner, FieldZoomEase),
 		{Owner: owner, Name: FieldZoomTo, Kind: KindDecimal, Default: raw(defaultZero)},
+		removeField(owner, FieldZoomRemove),
 	}
 }
 

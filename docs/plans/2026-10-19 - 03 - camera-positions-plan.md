@@ -334,7 +334,11 @@ position key order row in `TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder`.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard`
 **Commit:** `feat(storyboard): edit camera position and zoom fields`
 
-## 9. Storyboard: insert and remove positions and zooms
+## 9. Storyboard: insert and remove positions and zooms — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): re-derived from the assumption that position and zoom edits route through `edit.go`'s `splicer.apply`; since item 8 `editPosition` and `editZoom` in `internal/storyboard/edit_camera.go` dispatch them, so the list-field branch (as `editCaption` has) lands there, and `setPositionCell`'s `{x: 3, y: 4}` spelling is extracted there as `cellFlow` so `position.insert` shares it.
+NOTES (2026-10-20): `entryList` carries a `holder` path (nil for the top level, `{camera}` for the camera lists), the list's `key`, the holder's key `order` and a `newEntry` func that decodes and spells the insert value; `kinds` is dropped and `decodeEntry` reads the caption kinds directly (its error text is unchanged). The new field kinds are `KindNewPosition` (`"new-position"`) and `KindNewZoom` (`"new-zoom"`); the frame's centre cell is `{cols/2, rows/2}`.
+NOTES (2026-10-20): a camera that is present but empty or null (`camera: {}`, `camera:`) is deleted and rewritten as `{positions|zooms: [...]}` after the keys that precede it, because yamledit's Replace cannot splice into a zero-width null node; `zoom.insert`'s default (clip start, 600ms) overlaps every-form.yaml's `camera.zooms[0]`, so it sits in `defaultRefusals` with a sample at 2000ms, while `position.insert`'s default round-trips.
 
 Depends on item 8.
 

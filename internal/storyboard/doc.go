@@ -15,7 +15,8 @@
 // frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width or frame.fps, a
 // camera position's start, hold — or both at once — ease, cell or text target, a camera zoom's
 // start, length, ease or factor, or a caption's start, end — or both at once, shifted — text,
-// place, align, font, colours, box or fade, or adds, removes or reorders a caption — splicing the
+// place, align, font, colours, box or fade, or adds or removes a camera position or zoom, or
+// adds, removes or reorders a caption — splicing the
 // new value into the source so only the edited key's text changes, a new key placed by the order
 // of the storyboard's yaml struct tags, and refuses an edit whose result fails Parse. A value
 // equal to what an absent key means — a position's hold of 0, an ease of smooth — deletes its
@@ -52,7 +53,8 @@
 //     caption.color, caption.box.color and .opacity, caption.fade.in and .out — and caption.offset
 //     and caption.position.
 //   - edit_list.go: the list edits that add, remove and reorder captions —
-//     caption.insert|remove|move.
+//     caption.insert|remove|move — and add and remove camera positions and zooms —
+//     position.insert|remove and zoom.insert|remove.
 //   - fields.go: [Fields], each owner's editable and read-only [Field] with its [FieldKind],
 //     choices and default.
 //   - clock.go: the clip's [OutputClock], from [Storyboard.Clock]: section starts, moments and

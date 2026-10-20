@@ -79,10 +79,14 @@ func isZoomField(field string) bool {
 }
 
 // editPosition sets field, typed as value, on the camera position at index in board, the
-// storyboard s.doc holds: its start, hold, both at once, ease, cell or target.
+// storyboard s.doc holds: its start, hold, both at once, ease, cell or target — or adds or
+// removes a position for a list field.
 func (s *splicer) editPosition(
 	board *Storyboard, index int, field string, value json.RawMessage,
 ) error {
+	if isListField(field) {
+		return s.editList(positionList(board), index, field, value)
+	}
 	if index < 0 || index >= len(board.Camera.Positions) {
 		return fmt.Errorf("the storyboard has no camera position at index %d", index)
 	}
@@ -111,10 +115,13 @@ func (s *splicer) editPosition(
 }
 
 // editZoom sets field, typed as value, on the camera zoom at index in board, the storyboard
-// s.doc holds: its start, length, ease or factor.
+// s.doc holds: its start, length, ease or factor — or adds or removes a zoom for a list field.
 func (s *splicer) editZoom(
 	board *Storyboard, index int, field string, value json.RawMessage,
 ) error {
+	if isListField(field) {
+		return s.editList(zoomList(board), index, field, value)
+	}
 	if index < 0 || index >= len(board.Camera.Zooms) {
 		return fmt.Errorf("the storyboard has no camera zoom at index %d", index)
 	}
@@ -203,8 +210,7 @@ func (s *splicer) setPositionCell(position yamledit.Path, value json.RawMessage)
 	if err != nil {
 		return err
 	}
-	flow := "{x: " + strconv.Itoa(cell.X) + ", y: " + strconv.Itoa(cell.Y) + "}"
-	if err := s.replaceOrInsert(position, keyCell, flow, positionKeyOrder); err != nil {
+	if err := s.replaceOrInsert(position, keyCell, cellFlow(cell), positionKeyOrder); err != nil {
 		return err
 	}
 	for _, key := range targetKeys {
@@ -272,6 +278,11 @@ func decodeCell(value json.RawMessage) (Cell, error) {
 		return Cell{}, fmt.Errorf(`want a cell such as {"x": 3, "y": 4}, got %s`, value)
 	}
 	return Cell{X: *wire.X, Y: *wire.Y}, nil
+}
+
+// cellFlow spells cell as the storyboard writes one, a {x: 3, y: 4} flow mapping.
+func cellFlow(cell Cell) string {
+	return "{x: " + strconv.Itoa(cell.X) + ", y: " + strconv.Itoa(cell.Y) + "}"
 }
 
 // decodeTarget reads a text target typed as a pick answers it, {"text": "ok", "nth": 2, "area":
