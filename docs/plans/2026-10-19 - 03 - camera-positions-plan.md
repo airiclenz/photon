@@ -550,7 +550,13 @@ on the transition panel; dragging a position or transition bar sends no edit.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune -run 'TestPage'`
 **Commit:** `feat(tune): add the position lane with transition bars`
 
-## 16. Tune page: drag positions and transitions
+## 16. Tune page: drag positions and transitions — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): edge grips are `.handle` nodes appended to the lane track after all bars (a bar's `edges`, from lanes.js, names which edges have one: both for a held position or a transition, only the end for a point). They carry `data-grip`/`data-edge`, not `data-entry`, so selection marking and the bar lookups ignore them. Grip drags use a delta snapped to 50ms, as the bar shift does. Bounds keep the edge on the clip and the bar no shorter than 0. Any further limit, such as a negative hold or an overlap, is left for the server to refuse.
+NOTES (2026-10-20): consequential edit — internal/tune/page/style.css: made necessary by the grips. A 0-length bar, either a point or a hard cut, puts its grips beside its marker (`.handle.beside-start` / `.beside-end`) so a press on the marker still moves it.
+NOTES (2026-10-20): lanes.js's `draggable: false` flag and timeline.js's support for it were removed: once the position bars drag, nothing set it. shiftEdit now takes the bar, not just its entry, because a transition shift needs the bar's edges. Its zoom branch became an AT_SHIFTS table shared by zooms and positions.
+NOTES (2026-10-20): item 15's TestPageJS_DragAPositionOrTransitionBar_SendsNoEdit was replaced by TestPageJS_DragAPositionOrTransitionBar_SendsOneEdit, because this item reverses what that test asserted. The pagejs_test.go helper laneBars now reads only `.block` children so the grips stay out of it. The refused-edit test resizes a position's end onto the next position (refused with "overlaps") and checks that the whole lane is drawn exactly as before.
+NOTES (2026-10-20): timeline.js is now 565 lines, further over the ~400-line guideline it already exceeded at 468.
 
 Depends on item 15.
 

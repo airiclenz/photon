@@ -924,7 +924,8 @@ type laneBar struct {
 	ToMS    int64  `json:"to"`
 }
 
-// laneBars are the bars of the timeline's lane named lane, sorted by the entry each selects.
+// laneBars are the bars of the timeline's lane named lane, without their grips, sorted by the
+// entry each selects.
 func (p *pageHarness) laneBars(lane string) []laneBar {
 	p.t.Helper()
 	encoded := p.eval(fmt.Sprintf(`{
@@ -932,7 +933,9 @@ func (p *pageHarness) laneBars(lane string) []laneBar {
 		const ms = (percent) => Math.round(percent * length / 100);
 		const row = document.getElementById(%q).querySelectorAll(".lane")
 			.find((candidate) => candidate.querySelectorAll(".lane-name")[0].textContent.startsWith(%q));
-		JSON.stringify(row.querySelectorAll(".lane-track")[0].children.map((node) => ({
+		const bars = row.querySelectorAll(".lane-track")[0].children
+			.filter((node) => node.classList.contains("block"));
+		JSON.stringify(bars.map((node) => ({
 			entry: node.dataset.entry,
 			point: node.classList.contains("point"),
 			from: ms(parseFloat(node.style.left)),
@@ -1168,29 +1171,257 @@ func TestPageJS_RemoveAPosition(t *testing.T) {
 	}
 }
 
-func TestPageJS_DragAPositionOrTransitionBar_SendsNoEdit(t *testing.T) {
+// The drags on the position lane of positionedStoryboard, laid out one pixel per millisecond: by
+// start the held cell spans 200ms to 500ms, 200ms into beat 1, the point sits at 700ms, and the
+// held text target spans 1s to 1.5s, from the start of beat 2; the transition into the point spans
+// 500ms to 700ms, the one into the text target 700ms to 1s.
+const (
+	firstStartMS      = 200
+	firstEndMS        = 500
+	pointAtMS         = 700
+	textStartMS       = 1000
+	firstOffsetMS     = 200
+	positionShiftMS   = 100
+	transitionShiftMS = 50
+	resizeMS          = 100
+)
+
+// The edges a grip on a timeline bar resizes.
+const (
+	edgeStart = "start"
+	edgeEnd   = "end"
+)
+
+func TestPageJS_DragAPositionOrTransitionBar_SendsOneEdit(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
+		name  string
 		kind  storyboard.OwnerKind
 		index int
+		grab  int
+		shift int
+		field string
+		value string
 	}{
-		{storyboard.OwnerPosition, firstPosition},
-		{entryTransition, textPosition},
+		{
+			name:  "position",
+			kind:  storyboard.OwnerPosition,
+			index: firstPosition,
+			grab:  firstStartMS + resizeMS,
+			shift: positionShiftMS,
+			field: storyboard.FieldPositionAt,
+			value: fmt.Sprintf(`{"beat":1,"offset_ms":%d}`, firstOffsetMS+positionShiftMS),
+		},
+		{
+			name:  "transition",
+			kind:  entryTransition,
+			index: textPosition,
+			grab:  pointAtMS + resizeMS,
+			shift: transitionShiftMS,
+			field: storyboard.FieldPositionTransition,
+			value: fmt.Sprintf(`{"start_ms":%d,"end_ms":%d}`,
+				pointAtMS+transitionShiftMS, textStartMS+transitionShiftMS),
+		},
 	}
 
 	for _, tc := range cases {
-		t.Run(string(tc.kind), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			session := newSessionFixtureOf(t, positionedStoryboard).session
-			page := loadPage(t, session)
-			bar := session.State().Positions[tc.index]
+			page := loadPage(t, newSessionFixtureOf(t, positionedStoryboard).session)
 
-			page.dragBar(lanePosition, tc.kind, tc.index, int(bar.StartMS), int(bar.StartMS)+300)
+			page.dragBar(lanePosition, tc.kind, tc.index, tc.grab, tc.grab+tc.shift)
 
-			if got := page.editCount(); got != 0 {
-				t.Errorf("the edits the drag sent: want 0, got %d", got)
+			page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%s}`,
+				storyboard.OwnerPosition, tc.index, tc.field, tc.value))
+			if got := page.editCount(); got != 1 {
+				t.Errorf("the edits the drag sent: want 1, got %d", got)
+			}
+			want := fmt.Sprintf(`{"kind":%q,"index":%d}`, tc.kind, tc.index)
+			if got := page.selectedEntry(); got != want {
+				t.Errorf("the selection after the drag: want %s, got %s", want, got)
 			}
 		})
+	}
+}
+
+// grips are the grips of the timeline's lane named lane, each as the entry it resizes and its
+// edge, entry/edge, sorted.
+func (p *pageHarness) grips(lane string) []string {
+	p.t.Helper()
+	encoded := p.eval(fmt.Sprintf(`{
+		const row = document.getElementById(%q).querySelectorAll(".lane")
+			.find((candidate) => candidate.querySelectorAll(".lane-name")[0].textContent.startsWith(%q));
+		JSON.stringify(row.querySelectorAll(".lane-track")[0].children
+			.filter((node) => node.dataset.grip !== undefined)
+			.map((node) => node.dataset.grip + "/" + node.dataset.edge));
+	}`, elementTimeline, lane)).String()
+	var grips []string
+	if err := json.Unmarshal([]byte(encoded), &grips); err != nil {
+		p.t.Fatalf("decode the %s lane's grips %s: %v", lane, encoded, err)
+	}
+	slices.Sort(grips)
+	return grips
+}
+
+// dragGrip drags the grip on edge of the bar of the entry of kind and index on the lane named
+// lane, grabbed at output time grabMS and let go at releaseMS, and settles the page; the lane's
+// track is laid out one pixel per millisecond.
+func (p *pageHarness) dragGrip(lane string, kind storyboard.OwnerKind, index int, edge string, grabMS, releaseMS int) {
+	p.t.Helper()
+	found := p.eval(fmt.Sprintf(`{
+		const lane = document.getElementById(%q).querySelectorAll(".lane")
+			.find((row) => row.querySelectorAll(".lane-name")[0].textContent.startsWith(%q));
+		const track = lane ? lane.querySelectorAll(".lane-track")[0] : null;
+		const grip = track
+			? track.children.find((node) => node.dataset.grip === %q && node.dataset.edge === %q)
+			: null;
+		if (grip) {
+			track.layout = { left: 0, top: 0, width: window.tune.state().length_ms, height: 20 };
+			const fire = (type, ms) => grip.dispatchEvent(new Event(type, { clientX: ms }));
+			fire("pointerdown", %d);
+			fire("pointermove", %d);
+			fire("pointerup", %d);
+		}
+		Boolean(grip);
+	}`, elementTimeline, lane, entryValueOf(kind, index), edge, grabMS, releaseMS, releaseMS)).ToBoolean()
+	if !found {
+		p.t.Fatalf("the %s lane has no %s grip for %s", lane, edge, entryValueOf(kind, index))
+	}
+	p.settle()
+}
+
+func TestPageJS_PositionLane_GripsEveryEdgeButAPointsStart(t *testing.T) {
+	t.Parallel()
+	grip := func(kind storyboard.OwnerKind, index int, edge string) string {
+		return entryValueOf(kind, index) + "/" + edge
+	}
+	want := []string{
+		grip(storyboard.OwnerPosition, textPosition, edgeEnd),
+		grip(storyboard.OwnerPosition, textPosition, edgeStart),
+		grip(storyboard.OwnerPosition, firstPosition, edgeEnd),
+		grip(storyboard.OwnerPosition, firstPosition, edgeStart),
+		grip(storyboard.OwnerPosition, pointPosition, edgeEnd),
+		grip(entryTransition, textPosition, edgeEnd),
+		grip(entryTransition, textPosition, edgeStart),
+		grip(entryTransition, pointPosition, edgeEnd),
+		grip(entryTransition, pointPosition, edgeStart),
+	}
+
+	page := loadPage(t, newSessionFixtureOf(t, positionedStoryboard).session)
+
+	if got := page.grips(lanePosition); !reflect.DeepEqual(got, want) {
+		t.Errorf("the position lane's grips: want %q, got %q", want, got)
+	}
+}
+
+func TestPageJS_DragAPositionOrTransitionGrip_SendsOneResizeEdit(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		kind    storyboard.OwnerKind
+		index   int
+		edge    string
+		grab    int
+		release int
+		field   string
+		value   string
+	}{
+		{
+			name:    "a held position's end",
+			kind:    storyboard.OwnerPosition,
+			index:   firstPosition,
+			edge:    edgeEnd,
+			grab:    firstEndMS,
+			release: firstEndMS + resizeMS,
+			field:   storyboard.FieldPositionHold,
+			value:   strconv.Itoa(firstEndMS + resizeMS - firstStartMS),
+		},
+		{
+			name:    "a held position's start",
+			kind:    storyboard.OwnerPosition,
+			index:   firstPosition,
+			edge:    edgeStart,
+			grab:    firstStartMS,
+			release: firstStartMS - resizeMS,
+			field:   storyboard.FieldPositionSpan,
+			value: fmt.Sprintf(`{"at":{"beat":1,"offset_ms":%d},"hold_ms":%d}`,
+				firstOffsetMS-resizeMS, firstEndMS-firstStartMS+resizeMS),
+		},
+		{
+			name:    "a point's end, opening it",
+			kind:    storyboard.OwnerPosition,
+			index:   pointPosition,
+			edge:    edgeEnd,
+			grab:    pointAtMS,
+			release: pointAtMS + resizeMS,
+			field:   storyboard.FieldPositionHold,
+			value:   strconv.Itoa(resizeMS),
+		},
+		{
+			name:    "a transition's start",
+			kind:    entryTransition,
+			index:   pointPosition,
+			edge:    edgeStart,
+			grab:    firstEndMS,
+			release: firstEndMS - resizeMS,
+			field:   storyboard.FieldPositionTransition,
+			value:   fmt.Sprintf(`{"start_ms":%d,"end_ms":%d}`, firstEndMS-resizeMS, pointAtMS),
+		},
+		{
+			name:    "a transition's end",
+			kind:    entryTransition,
+			index:   pointPosition,
+			edge:    edgeEnd,
+			grab:    pointAtMS,
+			release: pointAtMS - resizeMS,
+			field:   storyboard.FieldPositionTransition,
+			value:   fmt.Sprintf(`{"start_ms":%d,"end_ms":%d}`, firstEndMS, pointAtMS-resizeMS),
+		},
+		{
+			name:    "a transition shrunk to a cut",
+			kind:    entryTransition,
+			index:   pointPosition,
+			edge:    edgeStart,
+			grab:    firstEndMS,
+			release: pointAtMS,
+			field:   storyboard.FieldPositionTransition,
+			value:   fmt.Sprintf(`{"start_ms":%d,"end_ms":%d}`, pointAtMS, pointAtMS),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			page := loadPage(t, newSessionFixtureOf(t, positionedStoryboard).session)
+
+			page.dragGrip(lanePosition, tc.kind, tc.index, tc.edge, tc.grab, tc.release)
+
+			page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%s}`,
+				storyboard.OwnerPosition, tc.index, tc.field, tc.value))
+			if got := page.editCount(); got != 1 {
+				t.Errorf("the edits the drag sent: want 1, got %d", got)
+			}
+		})
+	}
+}
+
+func TestPageJS_RefusedPositionResize_RedrawsInPlaceAndShowsTheRefusal(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, positionedStoryboard).session
+	page := loadPage(t, session)
+	before := page.laneBars(lanePosition)
+
+	page.dragGrip(lanePosition, storyboard.OwnerPosition, firstPosition, edgeEnd, firstEndMS, textStartMS)
+
+	refused := page.lastRequest("/api/edit")
+	if refused.status == http.StatusOK {
+		t.Fatalf("a position held over the next one: want it refused, got 200: %s", refused.answer)
+	}
+	if got := page.laneBars(lanePosition); !reflect.DeepEqual(got, before) {
+		t.Errorf("the position lane after the refusal: want %+v, got %+v", before, got)
+	}
+	if status := page.text(elementStatus); !strings.Contains(status, "overlaps") {
+		t.Errorf("the status after the refused drag: want it containing %q, got %q", "overlaps", status)
 	}
 }
 

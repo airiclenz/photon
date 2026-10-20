@@ -15,12 +15,16 @@
 // places for one section and handles the edges a drag moves. The lanes in the registry
 // window.tuneLanes, which lanes.js fills before this file runs, follow the whole state: such a
 // lane is {name, draw(state), add}, where draw returns its bars as data, {from, to, className,
-// label, title, entry}, each placed from its from to its to and selecting its entry, {kind,
+// label, title, entry, edges}, each placed from its from to its to and selecting its entry, {kind,
 // index}, on a click, and add, {title, edit(state, ms)}, is a button beside the lane's name that
 // sends edit(state, playhead) and selects the entry the edit's owner names; a lane without add has
 // no button. Dragging such a bar shifts its entry's start and keeps its length: one shift edit for
-// a caption, one at edit keeping its beat for a zoom; a bar flagged draggable: false does not
-// drag. Another lane is one more entry in either list.
+// a caption, one at edit keeping its beat for a zoom or a position, one transition edit with both
+// edges moved for a transition. A grip on each edge a bar's edges names, "start" or "end", resizes
+// it: one transition edit with that edge moved for a transition; for a position, one hold edit for
+// its end, and one span edit for its start that keeps its end. A position or a transition may
+// shrink to 0, a point or a hard cut, whose grips sit beside its marker. Another lane is one more
+// entry in either list.
 //
 // A handle is {beat, field, anchor, sign, value, min, max}: the edit's beat and field, the value
 // it holds now in milliseconds, the bounds a drag keeps it in, and where its edge sits on the
@@ -43,7 +47,20 @@
   const OWNER_BEAT = "beat";
   const FIELD_CAPTION_SHIFT = "caption.shift";
   const FIELD_ZOOM_AT = "zoom.at";
+  const FIELD_POSITION_AT = "position.at";
+  const FIELD_POSITION_HOLD = "position.hold";
+  const FIELD_POSITION_SPAN = "position.span";
+  const FIELD_POSITION_TRANSITION = "position.transition";
   const ENTRY_ZOOM = "zoom";
+  const ENTRY_POSITION = page.ENTRY_POSITION;
+  const ENTRY_TRANSITION = page.ENTRY_TRANSITION;
+  // The entry kinds a shift moves the at of, keeping its beat: the state list each kind's entries
+  // are in, and the at field of the edit.
+  const AT_SHIFTS = Object.freeze({
+    [ENTRY_ZOOM]: { list: "zooms", field: FIELD_ZOOM_AT },
+    [ENTRY_POSITION]: { list: "positions", field: FIELD_POSITION_AT },
+  });
+  const EDGE_START = "start";
   const ADD_GLYPH = "+";
 
   const root = document.getElementById("timeline");
@@ -174,11 +191,13 @@
     return laneElement(lane.name, track);
   }
 
-  // clipLaneRow is a registered lane: its bars over the whole clip, each selecting its entry,
-  // and its add button when it has one.
+  // clipLaneRow is a registered lane: its bars over the whole clip, each selecting its entry, the
+  // grips on their edges above them, and its add button when it has one.
   function clipLaneRow(lane, state) {
     const track = element("div", { className: "lane-track" });
-    track.append(...lane.draw(state).map((bar) => barNode(bar, track)));
+    const bars = lane.draw(state);
+    track.append(...bars.map((bar) => barNode(bar, track)));
+    track.append(...bars.flatMap((bar) => (bar.edges || []).map((side) => gripNode(bar, side, track))));
     const controls = lane.add ? [addButton(lane.add)] : [];
     return laneElement(lane.name, track, ...controls);
   }
@@ -199,20 +218,16 @@
     return button;
   }
 
-  // barNode places a registered lane's bar on track, selecting the bar's entry on a click. Unless
-  // the bar is flagged draggable: false, it is dragged through window.tuneDrag by a delta in
-  // milliseconds that keeps the whole bar on the clip: a drag selects the entry and sends the
-  // shiftEdit of its delta; a refusal goes to the transport bar's status.
+  // barNode places a registered lane's bar on track, selecting the bar's entry on a click. It is
+  // dragged through window.tuneDrag by a delta in milliseconds that keeps the whole bar on the
+  // clip: a drag selects the entry and sends the shiftEdit of its delta; a refusal goes to the
+  // transport bar's status.
   function barNode(bar, track) {
-    const isDraggable = bar.draggable !== false;
-    const className = (isDraggable ? "block draggable " : "block ") + bar.className;
-    const node = span(bar.from, bar.to, className, bar.label);
+    const node = span(bar.from, bar.to, "block draggable " + bar.className, bar.label);
     node.title = bar.title;
     node.dataset.entry = entryKey(bar.entry);
     node.addEventListener("click", () => tune.selectEntry(bar.entry));
-    if (isDraggable) {
-      attachShift(bar, node, track);
-    }
+    attachShift(bar, node, track);
     return node;
   }
 
@@ -228,7 +243,7 @@
       valueAt: (ms, grabbedMs) => ms - grabbedMs,
       extent: (delta) => barExtent(bar, delta),
       select: () => tune.selectEntry(bar.entry),
-      edit: (delta) => shiftEdit(bar.entry, delta),
+      edit: (delta) => shiftEdit(bar, delta),
       redraw: () => render(tune.state()),
       refused: (message) => page.reportStatus(message, true),
     });
@@ -242,15 +257,97 @@
     return { edge: from, from, to: bar.to + delta, label: sign + delta + "ms" };
   }
 
-  // shiftEdit is the edit that starts entry, {kind, index}, delta milliseconds later: a caption's
-  // shift moves its at and its until together, and a zoom's at keeps its beat and moves its offset.
-  function shiftEdit(entry, delta) {
-    if (entry.kind === ENTRY_ZOOM) {
-      const zoom = tune.state().zooms.find((candidate) => candidate.index === entry.index);
-      const at = { beat: zoom.at.beat, offset_ms: zoom.at.offset_ms + delta };
-      return { owner: entry, field: FIELD_ZOOM_AT, value: at };
+  // shiftEdit is the edit that starts bar's entry, {kind, index}, delta milliseconds later: a
+  // caption's shift moves its at and its until together, a zoom's or a position's at keeps its
+  // beat and moves its offset, and a transition's edges both move.
+  function shiftEdit(bar, delta) {
+    const entry = bar.entry;
+    if (entry.kind === ENTRY_TRANSITION) {
+      return transitionEdit(entry, { from: bar.from + delta, to: bar.to + delta });
+    }
+    const atShift = AT_SHIFTS[entry.kind];
+    if (atShift) {
+      return { owner: entry, field: atShift.field, value: movedAt(entry, delta) };
     }
     return { owner: entry, field: FIELD_CAPTION_SHIFT, value: delta };
+  }
+
+  // movedAt is the at of entry, a zoom or a position, delta milliseconds later, keeping its beat.
+  function movedAt(entry, delta) {
+    const list = tune.state()[AT_SHIFTS[entry.kind].list];
+    const at = list.find((candidate) => candidate.index === entry.index).at;
+    return { beat: at.beat, offset_ms: at.offset_ms + delta };
+  }
+
+  // --- resizing a bar by an edge ---
+
+  // gripNode is the grip on side, "start" or "end", of bar on track, dragged through
+  // window.tuneDrag by a delta in milliseconds that keeps the edge on the clip and the bar no
+  // shorter than 0: a drag selects bar's entry and sends the resizeEdit of the stretch it leaves;
+  // a refusal goes to the transport bar's status. A bar of length 0 has its grips beside it, so
+  // they leave its marker to the shift drag.
+  function gripNode(bar, side, track) {
+    const isStart = side === EDGE_START;
+    const besideClass = bar.from === bar.to ? " beside-" + side : "";
+    const properties = { className: "handle" + besideClass, title: "Drag to resize " + bar.title };
+    const node = element("div", properties);
+    node.dataset.grip = entryKey(bar.entry);
+    node.dataset.edge = side;
+    node.style.left = percentOf(isStart ? bar.from : bar.to) + "%";
+    dragging.attach({
+      node,
+      track,
+      value: 0,
+      min: isStart ? -bar.from : bar.from - bar.to,
+      max: isStart ? bar.to - bar.from : Math.max(clipLength - bar.to, 0),
+      axis: { msAt, percentOf },
+      valueAt: (ms, grabbedMs) => ms - grabbedMs,
+      extent: (delta) => resizedExtent(bar, side, delta),
+      select: () => tune.selectEntry(bar.entry),
+      edit: (delta) => resizeEdit(bar, resized(bar, side, delta)),
+      redraw: () => render(tune.state()),
+      refused: (message) => page.reportStatus(message, true),
+    });
+    return node;
+  }
+
+  // resized is the stretch, {from, to}, bar spans with its edge on side moved by delta.
+  function resized(bar, side, delta) {
+    if (side === EDGE_START) {
+      return { from: bar.from + delta, to: bar.to };
+    }
+    return { from: bar.from, to: bar.to + delta };
+  }
+
+  // resizedExtent draws bar with its edge on side moved by delta: that edge, and a ghost over the
+  // new stretch labelled with its length.
+  function resizedExtent(bar, side, delta) {
+    const stretch = resized(bar, side, delta);
+    const edge = side === EDGE_START ? stretch.from : stretch.to;
+    return { edge, from: stretch.from, to: stretch.to, label: stretch.to - stretch.from + "ms" };
+  }
+
+  // resizeEdit is the edit that spans bar's entry, a transition or a position, over stretch, one
+  // of its edges moved: a transition's edges; a position's hold when its end moved, else its at,
+  // keeping its beat, and its hold at once, so its end stays.
+  function resizeEdit(bar, stretch) {
+    const entry = bar.entry;
+    if (entry.kind === ENTRY_TRANSITION) {
+      return transitionEdit(entry, stretch);
+    }
+    const hold = stretch.to - stretch.from;
+    if (stretch.from === bar.from) {
+      return { owner: entry, field: FIELD_POSITION_HOLD, value: hold };
+    }
+    const at = movedAt(entry, stretch.from - bar.from);
+    return { owner: entry, field: FIELD_POSITION_SPAN, value: { at, hold_ms: hold } };
+  }
+
+  // transitionEdit is the edit that moves the edges of the transition entry to stretch: the
+  // storyboard owns it through the position it leads into.
+  function transitionEdit(entry, stretch) {
+    const owner = { kind: ENTRY_POSITION, index: entry.index };
+    return { owner, field: FIELD_POSITION_TRANSITION, value: { start_ms: stretch.from, end_ms: stretch.to } };
   }
 
   // laneElement is a lane's row: its name, with controls after it, beside its track.

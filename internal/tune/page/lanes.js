@@ -4,9 +4,10 @@
 //
 // The lanes register in window.tuneLanes, which timeline.js reads, so this file loads before it.
 // A lane here is {name, draw(state), add}: draw takes the whole state and returns the lane's bars
-// as plain data, {from, to, className, label, title, entry}, which the timeline places on its axis,
-// makes selectable as entry, {kind, index}, the shape window.tune's selectEntry takes, and drags
-// to shift that entry's start unless the bar says draggable: false. add, which a lane may leave
+// as plain data, {from, to, className, label, title, entry, edges}, which the timeline places on
+// its axis, makes selectable as entry, {kind, index}, the shape window.tune's selectEntry takes,
+// drags to shift that entry's start, and gives a grip on each edge edges names, "start" or "end",
+// which a drag resizes it by; a bar without edges has no grips. add, which a lane may leave
 // out, is the lane's add button, {title, edit(state, ms)}: edit is the window.tune edit that adds
 // a new entry starting at ms on the output clock, its owner the entry it becomes. Nothing here
 // touches the page or computes timing: every bar spans a start and stop the state reports, and
@@ -20,6 +21,8 @@
   const ENTRY_ZOOM = "zoom";
   const ENTRY_CAPTION = "caption";
   const KIND_CAPTION = "caption";
+  const EDGE_START = "start";
+  const EDGE_END = "end";
   // The state's list of each entry kind a lane adds to.
   const STATE_LISTS = Object.freeze({ [ENTRY_ZOOM]: "zooms", [ENTRY_CAPTION]: "captions" });
   // A moment's beat 0 is a clip time, offset_ms after the clip's first frame.
@@ -28,7 +31,8 @@
   // positionBars are state's camera positions and the transitions between them, by start: each
   // transition, in its own colour, spans from the end of the position before it to the start of
   // the one it leads into, so it meets both; each position covers its hold, or is a point at its
-  // start when it holds for 0. None of them drags.
+  // start when it holds for 0. Every bar drags and resizes by both edges, but a point, which
+  // resizes only by its end, opening into a held position.
   function positionBars(state) {
     const transitionBars = page.transitions(state).map((transition) => ({
       from: transition.start_ms,
@@ -37,7 +41,7 @@
       label: transition.ease,
       title: ENTRY_TRANSITION + " from position " + transition.from + " into position " + transition.index,
       entry: { kind: ENTRY_TRANSITION, index: transition.index },
-      draggable: false,
+      edges: [EDGE_START, EDGE_END],
     }));
     const positions = page.byStart(state.positions).map((position) => ({
       from: position.start_ms,
@@ -46,7 +50,7 @@
       label: page.aimText(position),
       title: ENTRY_POSITION + " " + position.index + " " + page.aimText(position),
       entry: { kind: ENTRY_POSITION, index: position.index },
-      draggable: false,
+      edges: position.end_ms === position.start_ms ? [EDGE_END] : [EDGE_START, EDGE_END],
     }));
     return [...transitionBars, ...positions];
   }

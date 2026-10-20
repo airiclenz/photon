@@ -545,6 +545,16 @@ textarea {
   opacity: 0;
 }
 
+/* A point or a hard cut is a marker centred on its moment: its grips sit beside it, so a press on
+   the marker shifts it. */
+.handle.beside-start {
+  transform: translateX(calc(-100% - var(--point-width) / 2));
+}
+
+.handle.beside-end {
+  transform: translateX(calc(var(--point-width) / 2));
+}
+
 .handle:hover::after,
 .handle.dragging::after {
   opacity: 1;
