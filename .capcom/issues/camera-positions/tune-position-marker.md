@@ -5,6 +5,7 @@ type: feature
 priority: 2
 labels: [tune]
 deps: [tune-position-lane]
+plan: 2026-10-19 - 03 - camera-positions-plan
 created: 2026-10-19T19:44:34Z
 ---
 
