@@ -4,6 +4,7 @@ status: open
 type: bug
 priority: 3
 labels: [tune]
+plan: 2026-10-20 - 00 - tune-point-grip-overlap-plan
 created: 2026-10-20T10:57:41Z
 ---
 
@@ -21,4 +22,5 @@ which does not hit-test, so none catches it. Found closing out plan
 ## Acceptance
 
 - In a browser, a press on a point marker that a transition leads into (or out of) selects that
-  position and a drag sends `position.at`; the transition's grips stay reachable beside it.
+  position and a drag sends `position.at`; a transition has no grip on an edge that meets a
+  point (ratified 2026-10-20: the marker's drag moves that edge), and every other grip stays.
