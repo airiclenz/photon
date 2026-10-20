@@ -16,12 +16,9 @@
   --stage: #111111;
   --lane-block: #e4ebf7;
   --lane-hold: #d9d9d4;
-  --lane-zoom: #cfe3d4;
-  --lane-pan: #e6dcf2;
   --lane-caption: #f6e4c8;
   --lane-hatch: #9a9a94;
   --pick-box: #f2b705;
-  --via-path: #d6338a;
   --lane-name-width: 104px;
   --lane-height: 26px;
   --cut-marker-width: 10px;
@@ -45,12 +42,9 @@
     --stage: #000000;
     --lane-block: #263449;
     --lane-hold: #34342f;
-    --lane-zoom: #23392a;
-    --lane-pan: #352a45;
     --lane-caption: #43361f;
     --lane-hatch: #6b6b66;
     --pick-box: #ffd24d;
-    --via-path: #ff6fb5;
   }
 }
 
@@ -182,28 +176,6 @@ textarea {
   display: none;
 }
 
-/* The via path overlay shows only while drawn: an <svg> has no hidden property. */
-.via-path {
-  position: absolute;
-  display: none;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.via-path.drawn {
-  display: block;
-}
-
-.via-line {
-  fill: none;
-  stroke: var(--via-path);
-  stroke-width: 2;
-  stroke-dasharray: 6 4;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-}
-
 .picker {
   display: flex;
   gap: 8px;
@@ -318,13 +290,6 @@ textarea {
   display: flex;
   gap: 8px;
   margin-top: 14px;
-}
-
-.waypoint-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
 }
 
 .field .inline {
@@ -483,14 +448,6 @@ textarea {
 .block.stretch {
   background: transparent;
   color: var(--muted);
-}
-
-.block.camera-zoom {
-  background: var(--lane-zoom);
-}
-
-.block.pan {
-  background: var(--lane-pan);
 }
 
 .block.caption {

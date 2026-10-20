@@ -26,7 +26,7 @@
   const FRACTION_MIN = "0";
   const FRACTION_MAX = "1";
   const FRACTION_STEP = "0.05";
-  // The kinds of a problem's owner besides a camera move's and a caption's, as /api/state sends them.
+  // The kinds of a problem's owner besides a caption's, as /api/state sends them.
   const OWNER_CLIP = "clip";
   const OWNER_BEAT = "beat";
 
@@ -137,8 +137,8 @@
     return trimmed !== "" && Number.isFinite(number) ? number : trimmed;
   }
 
-  // errorRows are the errors standing on owner — a beat id, 0 for the clip, or a camera move's
-  // or caption's {kind, index} entry — and a refused edit of it.
+  // errorRows are the errors standing on owner — a beat id, 0 for the clip, or a caption's
+  // {kind, index} entry — and a refused edit of it.
   function errorRows(owner) {
     const messages = problemsOn(owner).map((problem) => problem.message);
     const key = isEntry(owner) ? entryValue(owner.kind, owner.index) : String(owner);
@@ -172,7 +172,7 @@
   }
 
   // problemOwner spells owner as a problem's or an edit's {kind, index}: the clip, a beat by its
-  // id, or the camera move's or caption's entry, whose kinds a problem's owner spells the same.
+  // id, or the caption's entry, whose kind a problem's owner spells the same.
   function problemOwner(owner) {
     if (isEntry(owner)) {
       return owner;

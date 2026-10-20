@@ -63,9 +63,8 @@
 //   - page/transport.js: the frame clock, the transport and its keys.
 //   - page/controls.js: the inspector's field controls and its error and refusal rows.
 //   - page/panels.js: the inspector's beat and frame panels.
-//   - page/entries.js: the inspector's camera move and caption panels.
+//   - page/entries.js: the inspector's caption panel.
 //   - page/lanes.js, page/timeline.js, page/picker.js: the timeline, its lanes and the target
 //     picker.
 //   - page/drag.js: the timeline's pointer drag, snapped, sending one edit when let go.
-//   - page/path.js: the via path overlay on the preview.
 package tune

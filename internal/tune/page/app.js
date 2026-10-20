@@ -2,34 +2,33 @@
 // It holds no timing logic of its own: every value it shows comes from /api/state, every change
 // is an edit the server applies and validates, and every frame is one the server composes.
 //
-// window.tune is the contract the timeline lanes, the target picker, the via path overlay and
-// the preview fit build on:
+// window.tune is the contract the timeline lanes, the target picker and the preview fit build
+// on:
 //   state()      the last /api/state JSON, or null before the first arrives
 //   selected()   the id of the beat the inspector shows, or null for the clip's frame or an entry
 //   select(id)   show beat id in the inspector, or the clip's frame for null
-//   selectedEntry()    the camera move or caption the inspector shows, as {kind, index}, or null:
-//                      kind "camera" or "caption", index its place in state().camera or .captions
+//   selectedEntry()    the caption the inspector shows, as {kind, index}, or null:
+//                      kind "caption", index its place in state().captions
 //   selectEntry(entry) show entry, {kind, index}, in the inspector
 //   time()       the playhead, in output milliseconds
 //   frameTime()  the output milliseconds of the frame the preview <img> shows, or null
 //   seek(ms)     move the playhead to ms, clamped to the clip
 //   pause()      stop playing
 //   edit(edit)   apply {owner: {kind, index}, field, value}: owner a beat by its id, the clip
-//                with index 0, or a camera move or caption by its index, value typed per
-//                field; a Promise of the new state, rejected when refused
+//                with index 0, or a caption by its index, value typed per field; a Promise
+//                of the new state, rejected when refused
 //   onState(fn)  call fn(state) with every new state
 //   frame        the preview <img> element
 //
 // This file holds the session's API, the selection and the wiring. The page's own scripts that
 // load after it — frames.js (the preview's draft and exact frames), transport.js (the frame
 // clock, the transport and its status), controls.js (the inspector's field controls and error
-// rows), panels.js (the beat and frame panels) and entries.js (the camera move and caption
-// panels) — share its state through window.tunePage, an internal namespace no part of the
-// contract: app.js puts in it the state they read and the helpers they build with, and each of
-// them adds what it does. Of the other scripts picker.js adds the standing pick's proposal that
-// entries.js's via waypoints read, and timeline.js marks a scrub through transport.js's
-// beginScrub and endScrub and reports a refused lane add or bar drag through its reportStatus;
-// fit.js, the preview fit, reads window.tune alone. app.js calls those only once every script has run, so the wiring, and
+// rows), panels.js (the beat and frame panels) and entries.js (the caption panel) — share its
+// state through window.tunePage, an internal namespace no part of the contract: app.js puts in
+// it the state they read and the helpers they build with, and each of them adds what it does. Of
+// the other scripts picker.js adds the standing pick's proposal, and timeline.js marks a scrub
+// through transport.js's beginScrub and endScrub and reports a refused lane add or bar drag
+// through its reportStatus; fit.js, the preview fit, reads window.tune alone. app.js calls those only once every script has run, so the wiring, and
 // with it the first /api/state request, waits for DOMContentLoaded.
 "use strict";
 
@@ -47,7 +46,6 @@
   const MILLISECONDS_PER_SECOND = 1000;
   const MILLISECONDS_PER_MINUTE = 60000;
   const CLIP = 0;
-  const ENTRY_CAMERA = "camera";
   const ENTRY_CAPTION = "caption";
   const ENTRY_SEPARATOR = ":";
 
@@ -81,7 +79,6 @@
   // page is window.tunePage, the internal namespace the page's own scripts share.
   const page = {
     CLIP,
-    ENTRY_CAMERA,
     ENTRY_CAPTION,
     view,
     frame: frameImage,
@@ -125,9 +122,9 @@
     );
   }
 
-  // edit applies one edit. A refused edit stands on its beat, the clip, or its camera move or
-  // caption until the next accepted one, which also clears the transport bar's status; the
-  // Promise rejects with it as well, for a caller that wants to know.
+  // edit applies one edit. A refused edit stands on its beat, the clip, or its caption until the
+  // next accepted one, which also clears the transport bar's status; the Promise rejects with it
+  // as well, for a caller that wants to know.
   function edit(change) {
     return request(API.edit, change).then(
       (state) => {
@@ -146,16 +143,16 @@
 
   // applyEdit is edit for the inspector's own fields: the refusal is already shown beside the
   // field, so nothing more is done with it. owner is the beat id, 0 for the clip, or the
-  // {kind, index} entry of a camera move's or caption's field.
+  // {kind, index} entry of a caption's field.
   function applyEdit(owner, field, value) {
     edit({ owner: page.problemOwner(owner), field, value }).catch(() => {});
   }
 
-  // ownerKey names what change stands on: its entry's beat select value for a camera move's or
-  // caption's field, else its beat's id, or the clip's 0.
+  // ownerKey names what change stands on: its entry's beat select value for a caption's field,
+  // else its beat's id, or the clip's 0.
   function ownerKey(change) {
     const { kind, index } = change.owner;
-    if (kind === ENTRY_CAMERA || kind === ENTRY_CAPTION) {
+    if (kind === ENTRY_CAPTION) {
       return entryValue(kind, index);
     }
     return String(index);
@@ -244,11 +241,6 @@
     for (const beat of current.beats) {
       options.push(option(String(beat.id), "beat " + beat.id + " " + beat.title + page.errorMark(beat.id)));
     }
-    for (const move of current.camera) {
-      const mark = page.errorMark({ kind: ENTRY_CAMERA, index: move.index });
-      const label = "camera " + move.index + " " + move.kind + mark;
-      options.push(option(entryValue(ENTRY_CAMERA, move.index), label));
-    }
     for (const caption of current.captions) {
       const mark = page.errorMark({ kind: ENTRY_CAPTION, index: caption.index });
       const label = "caption " + caption.index + " " + caption.text + mark;
@@ -284,7 +276,7 @@
     view.inspector.replaceChildren(...(beat ? page.beatPanel(beat) : page.framePanel()));
   }
 
-  // isEntry says owner is a camera move's or caption's {kind, index} rather than a beat id.
+  // isEntry says owner is a caption's {kind, index} rather than a beat id.
   function isEntry(owner) {
     return typeof owner === "object" && owner !== null;
   }
@@ -310,10 +302,9 @@
     return current.beats.find((beat) => beat.id === id);
   }
 
-  // entryOf is the camera move or caption entry names in the current state, or undefined.
+  // entryOf is the caption entry names in the current state, or undefined.
   function entryOf(entry) {
-    const list = entry.kind === ENTRY_CAMERA ? current.camera : current.captions;
-    return list.find((item) => item.index === entry.index);
+    return current.captions.find((item) => item.index === entry.index);
   }
 
   // formatTime spells ms as m:ss.mmm.

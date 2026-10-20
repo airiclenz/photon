@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/dop251/goja"
 
@@ -39,73 +38,37 @@ const (
 	elementFrame      = "frame"
 	elementStage      = "stage"
 	elementPick       = "pick"
-	elementPickPan    = "pick-pan"
-	elementPickStatus = "pick-status"
 	elementBeatSelect = "beat-select"
 	elementInspector  = "inspector-body"
 	elementTimeline   = "timeline"
 	elementTime       = "time"
-	elementStatus     = "status"
 	elementBuild      = "build"
 	elementDocument   = "document"
 )
 
-// panToTarget is the index of cameraCaptionsStoryboard's pan to a target.
-const panToTarget = 2
+// captionedStoryboard is sessionStoryboard with two captions: one set by for in beat 1, one by
+// until in beat 2.
+const captionedStoryboard = sessionStoryboard + `captions:
+  - {text: 'Watch this', at: {beat: 1, offset: 100ms}, for: 700ms, place: top, align: left}
+  - {text: "All green\n", at: {beat: 2}, until: {beat: 2, offset: 1200ms}}
+`
 
-// The entries of cameraCaptionsStoryboard the list tests move and add around: its via pan, the
-// camera move after it, and the caption index a caption added at addCaptionAtMS becomes, after
-// the caption at 100ms and before the one at 1s.
+// The captions of captionedStoryboard the list tests add, move and remove around: the caption
+// index a caption added at addCaptionAtMS becomes, after the caption at 100ms and before the one
+// at 1s, and the caption the move and remove test moves down, and the index it moves to.
 const (
-	viaPan         = 1
-	afterViaPan    = 2
 	addCaptionAtMS = 500
 	addedCaption   = 1
+	movedCaption   = 0
+	movedToCaption = 1
 )
 
-// styledCaption is the caption of cameraCaptionsStoryboard the style tests edit: set by place
-// and align, and laid out in a box.
+// styledCaption is the caption of captionedStoryboard the style tests edit: set by place and
+// align, and laid out in a box.
 const styledCaption = 0
 
 // frameAPIPrefix starts the path of every preview frame request.
 const frameAPIPrefix = "/api/frame?"
-
-// roomyCameraStoryboard is sessionStoryboard's beats under a camera of a zoom early in beat 1 and
-// a pan late in beat 2: a 600ms zoom or pan added at addMoveAtMS overlaps neither.
-const roomyCameraStoryboard = `clip: tuned
-ship: out/tuned.gif
-frame: {cols: 20, rows: 4, padding: 4, font_size: 10, line_height: 1.2, scale: 2, width: 160, fps: 10, max_colors: 16}
-beats:
-  - id: 1
-    title: typing
-    duration: 1s
-  - id: 2
-    title: result
-    do:
-      - pause: {for: 400ms}
-    duration: 1500ms
-camera:
-  - zoom: {to: 2, at: 100ms, over: 300ms}
-  - pan: {to: {cell: {x: 3, y: 2}}, at: 2000ms, over: 100ms}
-`
-
-// The camera moves of roomyCameraStoryboard the add test adds and moves: the playhead it adds
-// both at, the index the zoom added there becomes, after the zoom at 100ms, and the index of the
-// pan added after it, before the pan at 2s.
-const (
-	addMoveAtMS = 500
-	addedZoom   = 1
-	addedPan    = 2
-)
-
-// The refused add of roomyCameraStoryboard: a zoom added at overlapZoomAtMS falls inside its zoom
-// at 100ms, becoming camera move overlapZoom on the zoom track after it, and unrelatedBeat is the
-// beat the inspector shows meanwhile.
-const (
-	overlapZoomAtMS = 200
-	overlapZoom     = 1
-	unrelatedBeat   = "2"
-)
 
 // pageRequest is one request the page sent through fetch and the handler's answer.
 type pageRequest struct {
@@ -477,7 +440,7 @@ func decodeJSON(t *testing.T, text string) any {
 
 func TestPageJS_LoadsAndWires(t *testing.T) {
 	t.Parallel()
-	page := loadPage(t, newSessionFixtureOf(t, cameraCaptionsStoryboard).session)
+	page := loadPage(t, newSessionFixtureOf(t, captionedStoryboard).session)
 
 	state := page.lastRequest("/api/state")
 	frame := page.lastRequest("/api/frame?t=0")
@@ -494,9 +457,6 @@ func TestPageJS_LoadsAndWires(t *testing.T) {
 	if got := page.text(elementTime); !strings.HasPrefix(got, "0:00.000 / ") {
 		t.Errorf("the transport's time: want it from 0:00.000, got %q", got)
 	}
-	if page.isHidden(elementPickPan) {
-		t.Error("the pan target button is hidden on a storyboard with pan moves")
-	}
 }
 
 func TestPageJS_Build_ShowsTheSessionsBuild(t *testing.T) {
@@ -511,86 +471,14 @@ func TestPageJS_Build_ShowsTheSessionsBuild(t *testing.T) {
 	}
 }
 
-func TestPageJS_SetAsPanTarget_SendsTheProposal(t *testing.T) {
-	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
-	if move := session.State().Camera[panToTarget]; move.Kind != "pan" || move.Target == nil {
-		t.Fatalf("camera %d: want a pan to a target, got %+v", panToTarget, move)
-	}
-	page := loadPage(t, session)
-	page.fitFrame()
-	from, to := cellPixel(t, session, 2, 0), cellPixel(t, session, 4, 0)
-
-	page.dispatch(elementPick, "click", nil)
-	page.dispatch(elementStage, "pointerdown", pointerAt(from))
-	page.dispatch(elementStage, "pointerup", pointerAt(to))
-	page.settle()
-	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, panToTarget))
-	page.dispatch(elementPickPan, "click", nil)
-	page.settle()
-
-	picked := page.lastRequest("/api/pick")
-	if picked.status != http.StatusOK {
-		t.Fatalf("the pick: want 200, got %d: %s", picked.status, picked.answer)
-	}
-	var proposal struct {
-		Target json.RawMessage `json:"target"`
-	}
-	if err := json.Unmarshal([]byte(picked.answer), &proposal); err != nil {
-		t.Fatalf("decode the pick's answer %s: %v", picked.answer, err)
-	}
-	edit := page.lastRequest("/api/edit")
-	want := decodeJSON(t, fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":"camera.to","value":%s}`,
-		storyboard.OwnerCamera, panToTarget, proposal.Target))
-	if got := decodeJSON(t, edit.body); !reflect.DeepEqual(got, want) {
-		t.Errorf("the edit sent: want %v, got %v", want, got)
-	}
-	if edit.status != http.StatusOK {
-		t.Errorf("the edit: want 200, got %d: %s", edit.status, edit.answer)
-	}
-	wantReport := fmt.Sprintf("Pan target set on camera %d", panToTarget)
-	if got := page.text(elementPickStatus); got != wantReport {
-		t.Errorf("the pick status: want %q, got %q", wantReport, got)
-	}
-}
-
-// removedZoomButton is the id of the pick result's button that set a zoom target, which the
-// page no longer offers: a camera zoom aims through the pans around it.
-const removedZoomButton = "pick-zoom"
-
-// roomyZoom is roomyCameraStoryboard's camera zoom.
-const roomyZoom = 0
-
-func TestPageJS_CameraZoom_OffersNoZoomTarget(t *testing.T) {
-	t.Parallel()
-	session := newSessionFixtureOf(t, roomyCameraStoryboard).session
-	page := loadPage(t, session)
-
-	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, roomyZoom))
-	page.settle()
-
-	index := string(readPageFile(t, pageIndex))
-	for _, match := range indexElementPattern.FindAllStringSubmatch(index, -1) {
-		if match[2] == removedZoomButton {
-			t.Errorf("index.html: want no #%s, got a <%s>", removedZoomButton, match[1])
-		}
-	}
-	if !page.hasField("to (×)") {
-		t.Fatalf("camera %d's panel: want its to (×) row", roomyZoom)
-	}
-	if got := page.fieldCount("target"); got != 0 {
-		t.Errorf("camera %d's panel: want no target row, got %d", roomyZoom, got)
-	}
-}
-
-// entryValueOf spells a camera move's or caption's entry as the beat select's value for it.
+// entryValueOf spells a caption's entry as the beat select's value for it.
 func entryValueOf(kind storyboard.OwnerKind, index int) string {
 	return fmt.Sprintf("%s:%d", kind, index)
 }
 
 func TestPageJS_AddCaptionAtThePlayhead(t *testing.T) {
 	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	session := newSessionFixtureOf(t, captionedStoryboard).session
 	page := loadPage(t, session)
 	page.eval(fmt.Sprintf("window.tune.seek(%d)", addCaptionAtMS))
 	page.settle()
@@ -607,83 +495,6 @@ func TestPageJS_AddCaptionAtThePlayhead(t *testing.T) {
 	want := fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerCaption, addedCaption)
 	if got := page.selectedEntry(); got != want {
 		t.Errorf("the selection after the add: want %s, got %s", want, got)
-	}
-}
-
-func TestPageJS_AddAZoomAndAPanAtThePlayhead_ThenMoveUp(t *testing.T) {
-	t.Parallel()
-	session := newSessionFixtureOf(t, roomyCameraStoryboard).session
-	page := loadPage(t, session)
-	page.eval(fmt.Sprintf("window.tune.seek(%d)", addMoveAtMS))
-	page.settle()
-	selected := func(index int) string {
-		return fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerCamera, index)
-	}
-
-	page.click(elementTimeline, "Add a zoom at the playhead")
-
-	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
-		`"value":{"kind":"zoom","at":{"beat":0,"offset_ms":%d}}}`,
-		storyboard.OwnerCamera, addedZoom, storyboard.FieldCameraInsert, addMoveAtMS))
-	if got := page.selectedEntry(); got != selected(addedZoom) {
-		t.Errorf("the selection after the zoom add: want %s, got %s", selected(addedZoom), got)
-	}
-
-	page.click(elementTimeline, "Add a pan at the playhead")
-
-	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
-		`"value":{"kind":"pan","at":{"beat":0,"offset_ms":%d}}}`,
-		storyboard.OwnerCamera, addedPan, storyboard.FieldCameraInsert, addMoveAtMS))
-	if got := page.selectedEntry(); got != selected(addedPan) {
-		t.Fatalf("the selection after the pan add: want %s, got %s", selected(addedPan), got)
-	}
-
-	page.click(elementInspector, "Move up")
-
-	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%d}`,
-		storyboard.OwnerCamera, addedPan, storyboard.FieldCameraMove, addedZoom))
-	moved := session.State().Camera[addedZoom]
-	if moved.Kind != "pan" || moved.StartMS != addMoveAtMS {
-		t.Errorf("the camera move after the move up: want the pan from %dms, got %+v",
-			addMoveAtMS, moved)
-	}
-	if got := page.selectedEntry(); got != selected(addedZoom) {
-		t.Errorf("the selection after the move up: want %s, got %s", selected(addedZoom), got)
-	}
-}
-
-func TestPageJS_RefusedLaneAdd_ShowsInTheStatusUntilAnAcceptedEdit(t *testing.T) {
-	t.Parallel()
-	session := newSessionFixtureOf(t, roomyCameraStoryboard).session
-	page := loadPage(t, session)
-	page.selectValue(elementBeatSelect, unrelatedBeat)
-	page.eval(fmt.Sprintf("window.tune.seek(%d)", overlapZoomAtMS))
-	page.settle()
-
-	page.click(elementTimeline, "Add a zoom at the playhead")
-
-	refused := page.lastRequest("/api/edit")
-	if refused.status == http.StatusOK {
-		t.Fatalf("the overlapping zoom add: want it refused, got 200: %s", refused.answer)
-	}
-	status := page.text(elementStatus)
-	for _, move := range []string{"camera[0]", fmt.Sprintf("camera[%d]", overlapZoom)} {
-		if !strings.Contains(status, move) {
-			t.Errorf("the status after the refused add: want it naming %s, got %q", move, status)
-		}
-	}
-	if !page.eval(fmt.Sprintf(`document.getElementById(%q).classList.contains("failed")`,
-		elementStatus)).ToBoolean() {
-		t.Error("the status after the refused add is not styled as a failure")
-	}
-
-	page.click(elementTimeline, "Add a pan at the playhead")
-
-	if got := page.lastRequest("/api/edit"); got.status != http.StatusOK {
-		t.Fatalf("the pan add: want 200, got %d: %s", got.status, got.answer)
-	}
-	if got := page.text(elementStatus); got != "" {
-		t.Errorf("the status after an accepted edit: want it cleared, got %q", got)
 	}
 }
 
@@ -745,38 +556,20 @@ func TestPageJS_DragABeatsEnd_SendsOneSnappedDurationEdit(t *testing.T) {
 	}
 }
 
-// The bar drags of cameraCaptionsStoryboard, on lanes laid out one pixel per millisecond: its
-// via pan, from 200ms at {beat: 1, offset: 200ms}, grabbed at panGrabMS and let go at
-// panReleaseMS, a shift snapped to panShiftMS; its until caption, from 1s at {beat: 2}, grabbed
-// at captionGrabMS and let go at captionReleaseMS, a shift snapped to captionShiftMS; and its
-// zoom, from 100ms, grabbed at zoomGrabMS and let go at zoomReleaseMS, onto the stretch of
-// releaseStretchZoom.
+// The bar drag of captionedStoryboard, on a lane laid out one pixel per millisecond: its until
+// caption, from 1s at {beat: 2}, grabbed at captionGrabMS and let go at captionReleaseMS, a shift
+// snapped to captionShiftMS.
 const (
-	panGrabMS        = 400
-	panReleaseMS     = 290
-	panShiftMS       = -100
-	viaPanStartMS    = 200
 	untilCaption     = 1
 	captionGrabMS    = 1500
 	captionReleaseMS = 1730
 	captionShiftMS   = 250
 	captionStartMS   = 1000
 	captionStopMS    = 2200
-	movedZoom        = 0
-	zoomGrabMS       = 200
-	zoomReleaseMS    = 1400
 )
 
-// releaseStretchZoom is a second camera zoom, appended to cameraCaptionsStoryboard's camera, over
-// the stretch the zoom dragged to zoomReleaseMS lands on.
-const releaseStretchZoom = "  - zoom: {to: 3, at: {beat: 2, offset: 400ms}, over: 300ms}\n"
-
-// The lanes of the timeline the bar drags run on, by name.
-const (
-	laneCameraZoom = "camera zoom"
-	lanePan        = "pan"
-	laneCaptions   = "captions"
-)
+// laneCaptions is the name of the timeline's lane the bar drags run on.
+const laneCaptions = "captions"
 
 // dragBar drags the bar of the entry of kind and index on the lane named lane, grabbed at output
 // time grabMS and let go at releaseMS, and settles the page; the lane's track is laid out one
@@ -803,14 +596,6 @@ func (p *pageHarness) dragBar(lane string, kind storyboard.OwnerKind, index, gra
 	p.settle()
 }
 
-// barLeft is the left of the timeline's bar for the entry of kind and index, as drawn now.
-func (p *pageHarness) barLeft(kind storyboard.OwnerKind, index int) string {
-	p.t.Helper()
-	return p.eval(fmt.Sprintf(`document.getElementById(%q).querySelectorAll(".block")
-		.find((node) => node.dataset.entry === %q).style.left`,
-		elementTimeline, entryValueOf(kind, index))).String()
-}
-
 // editCount is how many edits the page has sent.
 func (p *pageHarness) editCount() int {
 	edits := 0
@@ -822,31 +607,9 @@ func (p *pageHarness) editCount() int {
 	return edits
 }
 
-func TestPageJS_DragAPanBar_SendsOneCameraAtEditKeepingItsBeat(t *testing.T) {
-	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
-	page := loadPage(t, session)
-
-	page.dragBar(lanePan, storyboard.OwnerCamera, viaPan, panGrabMS, panReleaseMS)
-
-	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
-		`"value":{"beat":1,"offset_ms":%d}}`,
-		storyboard.OwnerCamera, viaPan, storyboard.FieldCameraAt, viaPanStartMS+panShiftMS))
-	if got := page.editCount(); got != 1 {
-		t.Errorf("the edits the drag sent: want 1, got %d", got)
-	}
-	if got := session.State().Camera[viaPan].StartMS; got != viaPanStartMS+panShiftMS {
-		t.Errorf("the dragged pan's start: want %dms, got %dms", viaPanStartMS+panShiftMS, got)
-	}
-	if got, want := page.selectedEntry(), fmt.Sprintf(`{"kind":%q,"index":%d}`,
-		storyboard.OwnerCamera, viaPan); got != want {
-		t.Errorf("the selection after the drag: want %s, got %s", want, got)
-	}
-}
-
 func TestPageJS_DragAnUntilCaptionBar_SendsOneCaptionShift(t *testing.T) {
 	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	session := newSessionFixtureOf(t, captionedStoryboard).session
 	page := loadPage(t, session)
 
 	page.dragBar(laneCaptions, storyboard.OwnerCaption, untilCaption, captionGrabMS, captionReleaseMS)
@@ -862,7 +625,7 @@ func TestPageJS_DragAnUntilCaptionBar_SendsOneCaptionShift(t *testing.T) {
 
 func TestPageJS_ClickABarWithoutMoving_SelectsAndSendsNoEdit(t *testing.T) {
 	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	session := newSessionFixtureOf(t, captionedStoryboard).session
 	page := loadPage(t, session)
 
 	page.dragBar(laneCaptions, storyboard.OwnerCaption, untilCaption, captionGrabMS, captionGrabMS)
@@ -876,42 +639,18 @@ func TestPageJS_ClickABarWithoutMoving_SelectsAndSendsNoEdit(t *testing.T) {
 	}
 }
 
-func TestPageJS_RefusedBarDrag_RedrawsInPlaceAndShowsTheRefusal(t *testing.T) {
+func TestPageJS_RemoveAndMoveACaption(t *testing.T) {
 	t.Parallel()
-	board := strings.Replace(cameraCaptionsStoryboard, "captions:", releaseStretchZoom+"captions:", 1)
-	session := newSessionFixtureOf(t, board).session
+	session := newSessionFixtureOf(t, captionedStoryboard).session
 	page := loadPage(t, session)
-	before := page.barLeft(storyboard.OwnerCamera, movedZoom)
-
-	page.dragBar(laneCameraZoom, storyboard.OwnerCamera, movedZoom, zoomGrabMS, zoomReleaseMS)
-
-	refused := page.lastRequest("/api/edit")
-	if refused.status == http.StatusOK {
-		t.Fatalf("the zoom dragged onto another zoom: want it refused, got 200: %s", refused.answer)
-	}
-	if got := page.barLeft(storyboard.OwnerCamera, movedZoom); got != before {
-		t.Errorf("the refused bar's left: want %s, got %s", before, got)
-	}
-	status := page.text(elementStatus)
-	for _, want := range []string{"overlaps", "on the zoom track"} {
-		if !strings.Contains(status, want) {
-			t.Errorf("the status after the refused drag: want it containing %q, got %q", want, status)
-		}
-	}
-}
-
-func TestPageJS_RemoveAndMoveACameraMove(t *testing.T) {
-	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
-	page := loadPage(t, session)
-	moves := len(session.State().Camera)
-	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, viaPan))
+	captions := len(session.State().Captions)
+	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCaption, movedCaption))
 
 	page.click(elementInspector, "Move down")
 
 	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%d}`,
-		storyboard.OwnerCamera, viaPan, storyboard.FieldCameraMove, afterViaPan))
-	moved := fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerCamera, afterViaPan)
+		storyboard.OwnerCaption, movedCaption, storyboard.FieldCaptionMove, movedToCaption))
+	moved := fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerCaption, movedToCaption)
 	if got := page.selectedEntry(); got != moved {
 		t.Fatalf("the selection after the move: want %s, got %s", moved, got)
 	}
@@ -919,9 +658,9 @@ func TestPageJS_RemoveAndMoveACameraMove(t *testing.T) {
 	page.click(elementInspector, "Remove")
 
 	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":null}`,
-		storyboard.OwnerCamera, afterViaPan, storyboard.FieldCameraRemove))
-	if got := len(session.State().Camera); got != moves-1 {
-		t.Errorf("the camera after the remove: want %d moves, got %d", moves-1, got)
+		storyboard.OwnerCaption, movedToCaption, storyboard.FieldCaptionRemove))
+	if got := len(session.State().Captions); got != captions-1 {
+		t.Errorf("the captions after the remove: want %d, got %d", captions-1, got)
 	}
 	if got := page.selectedEntry(); got != "null" {
 		t.Errorf("the selection after the remove: want none, got %s", got)
@@ -930,7 +669,7 @@ func TestPageJS_RemoveAndMoveACameraMove(t *testing.T) {
 
 func TestPageJS_MoveButtons_DisabledAtTheListEnds(t *testing.T) {
 	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	session := newSessionFixtureOf(t, captionedStoryboard).session
 	state := session.State()
 	page := loadPage(t, session)
 	cases := []struct {
@@ -938,8 +677,6 @@ func TestPageJS_MoveButtons_DisabledAtTheListEnds(t *testing.T) {
 		index  int
 		button string
 	}{
-		{storyboard.OwnerCamera, 0, "Move up"},
-		{storyboard.OwnerCamera, len(state.Camera) - 1, "Move down"},
 		{storyboard.OwnerCaption, 0, "Move up"},
 		{storyboard.OwnerCaption, len(state.Captions) - 1, "Move down"},
 	}
@@ -956,7 +693,7 @@ func TestPageJS_MoveButtons_DisabledAtTheListEnds(t *testing.T) {
 func TestPageJS_CaptionColour_SendsTheEditAndReloadsTheFrame(t *testing.T) {
 	t.Parallel()
 	const color = "#ff8800"
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	session := newSessionFixtureOf(t, captionedStoryboard).session
 	page := loadPage(t, session)
 	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCaption, styledCaption))
 
@@ -976,7 +713,7 @@ func TestPageJS_CaptionFont_ShowsSizeAndWeight_AndSendsTheEdits(t *testing.T) {
 	t.Parallel()
 	const size = 14.5
 	weight := string(storyboard.WeightBold)
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	session := newSessionFixtureOf(t, captionedStoryboard).session
 	page := loadPage(t, session)
 	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCaption, styledCaption))
 
@@ -1059,7 +796,7 @@ func (p *pageHarness) fieldCount(label string) int {
 
 func TestPageJS_CaptionPosition_SeedsTheLaidOutCorner(t *testing.T) {
 	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	session := newSessionFixtureOf(t, captionedStoryboard).session
 	corner := session.State().Captions[styledCaption].BoxPosition
 	if corner == nil {
 		t.Fatalf("caption %d: want a laid-out box, got none", styledCaption)
@@ -1087,12 +824,11 @@ func TestPageJS_CaptionPosition_SeedsTheLaidOutCorner(t *testing.T) {
 // clipFrameEntry is the beat select's value for the Clip frame panel.
 const clipFrameEntry = ""
 
-// The problem edits' values: a beat's hold past its 1s duration, a frame rate under one, a pan
-// target the take never shows, and a caption text wider than the session frame.
+// The problem edits' values: a beat's hold past its 1s duration, a frame rate under one, and a
+// caption text wider than the session frame.
 const (
 	holdPastDuration = "5000"
 	fpsUnderOne      = "0"
-	targetOffScreen  = "nowhere"
 )
 
 var captionTooWide = strings.Repeat("too wide ", 20)
@@ -1129,17 +865,8 @@ func TestPageJS_EditProblem_ShowsOnItsOwningPanel(t *testing.T) {
 			want:      storyboard.FieldFrameFPS,
 		},
 		{
-			name:      "camera move",
-			board:     aimedStoryboard,
-			owner:     entryValueOf(storyboard.OwnerCamera, aimedPan),
-			elsewhere: clipFrameEntry,
-			edit:      func(page *pageHarness) { page.setField("to", "value", targetOffScreen) },
-			status:    http.StatusOK,
-			want:      fmt.Sprintf("camera[%d]", aimedPan),
-		},
-		{
 			name:      "caption",
-			board:     cameraCaptionsStoryboard,
+			board:     captionedStoryboard,
 			owner:     entryValueOf(storyboard.OwnerCaption, styledCaption),
 			elsewhere: clipFrameEntry,
 			edit:      func(page *pageHarness) { page.setTextArea("text", captionTooWide) },
@@ -1181,13 +908,6 @@ func containsRow(rows []string, want string) bool {
 	return false
 }
 
-// The via path overlay's elements and the class that shows it.
-const (
-	elementViaPath = "via-path"
-	elementViaLine = "via-line"
-	viaPathDrawn   = "drawn"
-)
-
 // pickAcross picks the cells from column first to last of row on the preview and returns the
 // proposal's target the pick answered.
 func (p *pageHarness) pickAcross(session *Session, row, first, last int) json.RawMessage {
@@ -1228,144 +948,6 @@ func (p *pageHarness) chooseField(label, value string) {
 		p.t.Fatalf("no one select in a field row labelled %q under #%s", label, elementInspector)
 	}
 	p.settle()
-}
-
-// isViaPathDrawn says the via path overlay shows.
-func (p *pageHarness) isViaPathDrawn() bool {
-	p.t.Helper()
-	return p.eval(fmt.Sprintf(`document.getElementById(%q).classList.contains(%q)`,
-		elementViaPath, viaPathDrawn)).ToBoolean()
-}
-
-// assertViaPath fails the test unless the page asked for the via pan's path on the frame it
-// shows and its line draws the points the session answers for it.
-func (p *pageHarness) assertViaPath(session *Session) {
-	p.t.Helper()
-	ms := p.eval("window.tune.frameTime()").ToInteger()
-	asked := p.lastRequest(fmt.Sprintf("/api/path?camera=%d&t=%d", viaPan, ms))
-	if asked.status != http.StatusOK {
-		p.t.Fatalf("the path request at %dms: want 200, got %d: %s", ms, asked.status, asked.answer)
-	}
-	points, err := session.Path(time.Duration(ms)*time.Millisecond, viaPan)
-	if err != nil {
-		p.t.Fatalf("the session's path at %dms: %v", ms, err)
-	}
-	spelled := make([]string, 0, len(points))
-	for _, point := range points {
-		spelled = append(spelled, fmt.Sprintf("%d,%d", point.X, point.Y))
-	}
-	want := strings.Join(spelled, " ")
-	got := p.eval(fmt.Sprintf(`document.getElementById(%q).getAttribute("points")`,
-		elementViaLine)).String()
-	if got != want {
-		p.t.Errorf("the via line at %dms: want points %q, got %q", ms, want, got)
-	}
-	if !p.isViaPathDrawn() {
-		p.t.Errorf("the via path at %dms is not drawn", ms)
-	}
-}
-
-func TestPageJS_ViaWaypoint_SetFromPick(t *testing.T) {
-	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
-	page := loadPage(t, session)
-	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, viaPan))
-	page.settle()
-
-	page.click(elementInspector, "Set waypoint 0 from the pick")
-
-	if got := page.text(elementPickStatus); !strings.HasPrefix(got, "Pick a target first") {
-		t.Errorf("the pick status with no pick standing: want it to ask for a pick, got %q", got)
-	}
-	for _, request := range page.requests {
-		if request.path == "/api/edit" {
-			t.Fatalf("the page sent an edit with no pick standing: %s", request.body)
-		}
-	}
-
-	target := page.pickAcross(session, 0, 2, 4)
-	page.click(elementInspector, "Set waypoint 0 from the pick")
-
-	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
-		`"value":{"index":0,"point":%s}}`,
-		storyboard.OwnerCamera, viaPan, storyboard.FieldCameraVia, target))
-	if got := session.State().Camera[viaPan].Via[0]; got.Target == nil {
-		t.Errorf("waypoint 0 after the set: want the picked target, got %+v", got)
-	}
-}
-
-func TestPageJS_ViaWaypoint_InsertAndRemove(t *testing.T) {
-	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
-	first := *session.State().Camera[viaPan].Via[0].Cell
-	page := loadPage(t, session)
-	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, viaPan))
-	page.settle()
-	owner := fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerCamera, viaPan)
-
-	page.click(elementInspector, "Insert a copy of waypoint 0 after it")
-
-	page.assertEdit(fmt.Sprintf(`{"owner":%s,"field":%q,`+
-		`"value":{"index":1,"point":{"cell":{"x":%d,"y":%d}}}}`,
-		owner, storyboard.FieldCameraViaInsert, first.X, first.Y))
-	via := session.State().Camera[viaPan].Via
-	if len(via) != 3 || via[1].Cell == nil || *via[1].Cell != first {
-		t.Fatalf("the via path after the insert: want 3 waypoints, the second %+v, got %+v", first, via)
-	}
-
-	page.click(elementInspector, "Remove waypoint 2")
-
-	page.assertEdit(fmt.Sprintf(`{"owner":%s,"field":%q,"value":{"index":2}}`,
-		owner, storyboard.FieldCameraViaRemove))
-	if via := session.State().Camera[viaPan].Via; len(via) != 2 || via[1].Cell == nil {
-		t.Fatalf("the via path after the remove: want the two cells, got %+v", via)
-	}
-
-	page.setField("waypoint 1 (x, y)", "value", "5")
-
-	page.assertEdit(fmt.Sprintf(`{"owner":%s,"field":%q,`+
-		`"value":{"index":1,"point":{"cell":{"x":5,"y":%d}}}}`,
-		owner, storyboard.FieldCameraVia, first.Y))
-
-	page.chooseField("path", "to")
-
-	page.assertEdit(fmt.Sprintf(`{"owner":%s,"field":%q,"value":"to"}`,
-		owner, storyboard.FieldCameraPath))
-	moved := session.State().Camera[viaPan]
-	if moved.Via != nil || moved.Cell == nil || moved.Cell.X != 5 {
-		t.Errorf("the pan after the path change: want it straight to the last waypoint, got %+v", moved)
-	}
-}
-
-func TestPageJS_ViaPath_IsDrawnForTheSelectedPan(t *testing.T) {
-	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
-	page := loadPage(t, session)
-	page.fitFrame()
-
-	if page.isViaPathDrawn() {
-		t.Fatal("the via path is drawn with nothing selected")
-	}
-
-	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, viaPan))
-	page.settle()
-
-	page.assertViaPath(session)
-
-	page.eval(fmt.Sprintf("window.tune.seek(%d)", beatOneMS))
-	page.settle()
-
-	if got := page.eval("window.tune.frameTime()").ToInteger(); got != beatOneMS {
-		t.Fatalf("the frame shown after the seek: want the one at %dms, got %d", beatOneMS, got)
-	}
-	page.assertViaPath(session)
-
-	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, panToTarget))
-	page.settle()
-
-	if page.isViaPathDrawn() {
-		t.Error("the via path is drawn with a pan to selected")
-	}
 }
 
 // The elements the preview fit measures and the window it hears a resize on.
@@ -1414,7 +996,7 @@ func (p *pageHarness) styleOf(id, property string) string {
 
 func TestPageJS_FitPreview_ShrinksTheFrameToAShortWindow(t *testing.T) {
 	t.Parallel()
-	page := loadPage(t, newSessionFixtureOf(t, cameraCaptionsStoryboard).session)
+	page := loadPage(t, newSessionFixtureOf(t, captionedStoryboard).session)
 	page.eval(fmt.Sprintf(`{
 		const frame = document.getElementById(%q);
 		frame.naturalWidth = %d;
@@ -1451,12 +1033,10 @@ func TestPageJS_FitPreview_ShrinksTheFrameToAShortWindow(t *testing.T) {
 	}
 }
 
-func TestPageJS_FitPreview_KeepsThePickBoxAndViaPathOnTheShrunkFrame(t *testing.T) {
+func TestPageJS_FitPreview_KeepsThePickBoxOnTheShrunkFrame(t *testing.T) {
 	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
+	session := newSessionFixtureOf(t, captionedStoryboard).session
 	page := loadPage(t, session)
-	page.selectValue(elementBeatSelect, entryValueOf(storyboard.OwnerCamera, viaPan))
-	page.settle()
 	page.pickAcross(session, 0, 2, 4)
 	var proposal struct {
 		Rect pixelRect `json:"rect"`
@@ -1495,19 +1075,13 @@ func TestPageJS_FitPreview_KeepsThePickBoxAndViaPathOnTheShrunkFrame(t *testing.
 				"left": float64(rect.X) / ratio, "top": float64(rect.Y) / ratio,
 				"width": float64(rect.W) / ratio, "height": float64(rect.H) / ratio,
 			}
-			wantPath := map[string]float64{"left": 0, "top": 0, "width": width, "height": height}
 			for property, want := range wantBox {
 				if got := page.styleOf(elementPickBox, property); got != pixels(want) {
 					t.Errorf("the pick box's %s: want %s, got %s", property, pixels(want), got)
 				}
 			}
-			for property, want := range wantPath {
-				if got := page.styleOf(elementViaPath, property); got != pixels(want) {
-					t.Errorf("the via path's %s: want %s, got %s", property, pixels(want), got)
-				}
-			}
-			if page.isHidden(elementPickBox) || !page.isViaPathDrawn() {
-				t.Error("the pick box or the via path is not shown on the shrunk frame")
+			if page.isHidden(elementPickBox) {
+				t.Error("the pick box is not shown on the shrunk frame")
 			}
 		})
 	}

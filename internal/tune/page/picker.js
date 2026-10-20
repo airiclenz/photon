@@ -1,23 +1,18 @@
 // photon tune's target picker: ⌖ arms pick mode on the paused preview, and a drag across the
 // cells of one row asks the server for the target that names them.
 // It builds on app.js's window.tune: frame for the preview <img>, pause() to hold the frame
-// still, frameTime() for the output time of the frame the <img> shows, selectedEntry() and
-// state() for the pan move a pan target goes on, onState(fn) to offer the pan target only while
-// a pan exists, and edit(edit) to set it. It adds pickProposal() and
-// reportPick(message, isFailure) to window.tunePage, the page's internal namespace, where
-// entries.js's via waypoints read the standing proposal's target. Nothing here maps pixels to
-// cells or resolves a target: the drag's two corners go to /api/pick in output-frame pixels, and
-// the server answers the resolver-checked proposal: its target as a camera.to edit takes it, its
-// box in output-frame pixels and the YAML snippets that write it.
+// still and frameTime() for the output time of the frame the <img> shows. It adds pickProposal()
+// and reportPick(message, isFailure) to window.tunePage, the page's internal namespace, for the
+// page's scripts that read the standing proposal's target. Nothing here maps pixels to cells or
+// resolves a target: the drag's two corners go to /api/pick in output-frame pixels, and the
+// server answers the resolver-checked proposal: its target as an edit takes it, its box in
+// output-frame pixels and the YAML snippets that write it.
 "use strict";
 
 (() => {
   const tune = window.tune;
   const PICK_URL = "/api/pick";
   const SNIPPET_ZOOM = "zoom";
-  const FIELD_CAMERA_TO = "camera.to";
-  const ENTRY_CAMERA = "camera";
-  const KIND_PAN = "pan";
   const ESCAPE_KEY = "Escape";
   const ARMED_HINT = "Drag across the cells of one row on the preview; Esc cancels.";
 
@@ -30,7 +25,6 @@
     box: document.getElementById("pick-box"),
     result: document.getElementById("pick-result"),
     target: document.getElementById("pick-target"),
-    setPan: document.getElementById("pick-pan"),
     copies: document.querySelectorAll("#pick-result [data-snippet]"),
   };
 
@@ -191,40 +185,6 @@
     place(view.box, rect.x / ratio, rect.y / ratio, rect.w / ratio, rect.h / ratio);
   }
 
-  // setAsPanTarget sets the proposal as where the selected pan move goes, in place of its target
-  // or cell; the server refuses it on a pan along a via path.
-  function setAsPanTarget() {
-    const move = selectedPan();
-    if (!proposal || !move) {
-      report("Select a pan move first.", true);
-      return;
-    }
-    const change = {
-      owner: { kind: ENTRY_CAMERA, index: move.index },
-      field: FIELD_CAMERA_TO,
-      value: proposal.target,
-    };
-    tune.edit(change).then(
-      () => report("Pan target set on camera " + move.index, false),
-      (error) => report(error.message, true),
-    );
-  }
-
-  // selectedPan is the pan move the inspector shows, or undefined when it shows anything else.
-  function selectedPan() {
-    const entry = tune.selectedEntry();
-    const state = tune.state();
-    if (!entry || !state || entry.kind !== ENTRY_CAMERA) {
-      return undefined;
-    }
-    return state.camera.find((move) => move.index === entry.index && move.kind === KIND_PAN);
-  }
-
-  // offerPan shows the pan target button only while the storyboard has a pan move to aim.
-  function offerPan(state) {
-    view.setPan.hidden = !state.camera.some((move) => move.kind === KIND_PAN);
-  }
-
   function copySnippet(key) {
     if (!proposal) {
       return;
@@ -271,15 +231,13 @@
     // fit.js resizes the <img> on more than a window resize.
     new ResizeObserver(drawBox).observe(frameImage);
     document.addEventListener("keydown", onKey);
-    view.setPan.addEventListener("click", setAsPanTarget);
-    tune.onState(offerPan);
     for (const button of view.copies) {
       button.addEventListener("click", () => copySnippet(button.dataset.snippet));
     }
   }
 
-  // pickProposal is the standing proposal's target, as a camera.to or waypoint edit takes it, or
-  // null while none stands.
+  // pickProposal is the standing proposal's target, as an edit takes it, or null while none
+  // stands.
   function pickProposal() {
     return proposal ? proposal.target : null;
   }

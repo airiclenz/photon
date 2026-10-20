@@ -25,11 +25,10 @@ const pageScriptPattern = "*.js"
 // pageAssetNames are the files index.html loads besides its scripts.
 var pageAssetNames = []string{"style.css"}
 
-// splitScripts are app.js, the scripts split from it, the via path overlay's, the timeline's
-// pointer drag and the preview fit, each kept under maxScriptLines.
+// splitScripts are app.js, the scripts split from it, the timeline's pointer drag and the
+// preview fit, each kept under maxScriptLines.
 var splitScripts = []string{
-	"app.js", "frames.js", "transport.js", "controls.js", "panels.js", "entries.js", "path.js", "drag.js",
-	"fit.js",
+	"app.js", "frames.js", "transport.js", "controls.js", "panels.js", "entries.js", "drag.js", "fit.js",
 }
 
 // maxScriptLines is the file-size guide of Note coding-conventions a split script stays below.
@@ -52,20 +51,17 @@ var registeredLanes = []struct {
 	name     string
 	barClass string
 }{
-	{"camera zoom", "camera-zoom"},
-	{"pan", "pan"},
 	{"captions", "caption"},
 }
 
 // entryReaders are the variables the page reads state entries through, each with the state type
-// whose json keys it may name: state.<key>, move.<key>, caption.<key>, moment.<key>,
-// problem.<key>, owner.<key> and field.<key>.
+// whose json keys it may name: state.<key>, caption.<key>, moment.<key>, problem.<key>,
+// owner.<key> and field.<key>.
 var entryReaders = []struct {
 	variable string
 	of       any
 }{
 	{"state", State{}},
-	{"move", CameraState{}},
 	{"caption", CaptionState{}},
 	{"moment", MomentState{}},
 	{"problem", Problem{}},
@@ -73,9 +69,9 @@ var entryReaders = []struct {
 	{"field", storyboard.Field{}},
 }
 
-// entryFieldName finds a camera move's or caption's edit field written as a string literal, its
-// name one or more dotted words: caption.at, caption.font.size, camera.via.insert.
-var entryFieldName = regexp.MustCompile(`"((?:camera|caption)(?:\.[a-z_]+)+)"`)
+// entryFieldName finds a caption's edit field written as a string literal, its name one or more
+// dotted words: caption.at, caption.font.size, caption.box.opacity.
+var entryFieldName = regexp.MustCompile(`"(caption(?:\.[a-z_]+)+)"`)
 
 // stringLiteral finds a double-quoted JavaScript string literal; yamlFlowKey finds, inside one,
 // a storyboard key spelled as YAML flow text ({beat: 3, offset: 200ms}, {text: 'ok', nth: 2}),
@@ -284,7 +280,7 @@ func TestPage_Picker_CallsPickAndClipboard(t *testing.T) {
 func TestPage_EntryFields_AreEditFields(t *testing.T) {
 	t.Parallel()
 	editable := map[string]bool{}
-	for _, field := range newSessionFixtureOf(t, cameraCaptionsStoryboard).session.State().Fields {
+	for _, field := range newSessionFixtureOf(t, captionedStoryboard).session.State().Fields {
 		if !field.IsReadOnly {
 			editable[field.Name] = true
 		}
@@ -302,7 +298,7 @@ func TestPage_EntryFields_AreEditFields(t *testing.T) {
 	}
 
 	for field := range editable {
-		isEntryField := strings.HasPrefix(field, "camera.") || strings.HasPrefix(field, "caption.")
+		isEntryField := strings.HasPrefix(field, "caption.")
 		if isEntryField && !sent[field] {
 			t.Errorf("the page sends no %s edit", field)
 		}
@@ -403,10 +399,10 @@ func TestPage_EntryReads_AreStateKeys(t *testing.T) {
 	}
 }
 
-func TestPage_Lanes_ReadCameraAndCaptions(t *testing.T) {
+func TestPage_Lanes_ReadCaptions(t *testing.T) {
 	t.Parallel()
 	lanes := string(readPageFile(t, "lanes.js"))
-	keys := []string{"camera", "captions"}
+	keys := []string{"captions"}
 
 	for _, key := range keys {
 		if !strings.Contains(lanes, "state."+key) {

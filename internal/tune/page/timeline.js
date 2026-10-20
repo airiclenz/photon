@@ -1,14 +1,14 @@
 // photon tune's timeline: lanes on the clip's output-time axis under the transport bar.
 // It builds on app.js's window.tune: state() and onState(fn) for what to draw, time() for the
 // playhead, selected() and select(id) for the beat the inspector shows, selectedEntry() and
-// selectEntry(entry) for the camera move or caption it shows instead, seek(ms) for the axis, and
+// selectEntry(entry) for the caption it shows instead, seek(ms) for the axis, and
 // edit(edit) for a lane's add, which the server applies, validates and schedules; a drag sends
 // its edit through window.tuneDrag. From the page's internal window.tunePage it takes
 // reportStatus, to show a refused add or bar drag in the transport bar, and beginScrub and
 // endScrub, to tell the transport a scrub's pointer went down or up. A scrub starts on a press on
 // the axis and ends on a pointer release or cancel anywhere in the window, so a redraw that
-// replaces the axis mid-drag does not leave it running. Nothing here computes timing: every position comes from the state's sections, beats, camera moves and
-// captions.
+// replaces the axis mid-drag does not leave it running. Nothing here computes timing: every
+// position comes from the state's sections, beats and captions.
 //
 // The timeline is two lists of lanes, drawn top to bottom. Its own lanes follow the beats: such a
 // lane is {name, draw(section, state), handles(section, state)}, where draw returns the nodes it
@@ -18,9 +18,8 @@
 // label, title, entry}, each placed from its from to its to and selecting its entry, {kind,
 // index}, on a click, and add, {title, edit(state, ms)}, is a button beside the lane's name that
 // sends edit(state, playhead) and selects the entry the edit's owner names. Dragging such a bar
-// shifts its entry's start and keeps its length: one camera.at edit for a camera move, its at
-// keeping its beat, or one shift edit for a caption. Another lane is one more entry in
-// either list.
+// shifts its entry's start and keeps its length: one shift edit for a caption. Another lane is
+// one more entry in either list.
 //
 // A handle is {beat, field, anchor, sign, value, min, max}: the edit's beat and field, the value
 // it holds now in milliseconds, the bounds a drag keeps it in, and where its edge sits on the
@@ -41,8 +40,6 @@
   const AXIS_NAME = "time";
   const TOO_FAST_GLYPH = "⚠";
   const OWNER_BEAT = "beat";
-  const OWNER_CAPTION = "caption";
-  const FIELD_CAMERA_AT = "camera.at";
   const FIELD_CAPTION_SHIFT = "caption.shift";
   const ADD_GLYPH = "+";
 
@@ -233,15 +230,9 @@
   }
 
   // shiftEdit is the edit that starts entry, {kind, index}, delta milliseconds later: a caption's
-  // shift moves its at and its until together, and a camera move's at keeps its beat and takes
-  // delta on its offset.
+  // shift moves its at and its until together.
   function shiftEdit(entry, delta) {
-    if (entry.kind === OWNER_CAPTION) {
-      return { owner: entry, field: FIELD_CAPTION_SHIFT, value: delta };
-    }
-    const at = tune.state().camera[entry.index].at;
-    const value = { beat: at.beat, offset_ms: at.offset_ms + delta };
-    return { owner: entry, field: FIELD_CAMERA_AT, value };
+    return { owner: entry, field: FIELD_CAPTION_SHIFT, value: delta };
   }
 
   // laneElement is a lane's row: its name, with controls after it, beside its track.

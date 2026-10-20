@@ -56,7 +56,12 @@ gone from the schema, the code and the docs.
 - 19: guard folded
 - 20: guard folded (narrowed grep, binding over Files); supersedes the CHANGELOG.md [Unreleased] pan, via, pick and `camera:` list bullets
 
-## 1. Tune page drops the old camera lanes, panels, pan pick and via path
+## 1. Tune page drops the old camera lanes, panels, pan pick and via path — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): consequential edit — internal/tune/page/controls.js: made necessary by dropping the camera move panel (three comments named a camera move's owner; code unchanged)
+NOTES (2026-10-20): TestPageJS_RemoveAndMoveACameraMove is recast as TestPageJS_RemoveAndMoveACaption (caption 0 moved down, then removed) instead of deleted, so the inspector's list buttons keep a page test; the camera-only TestPageJS_RefusedLaneAdd_* and TestPageJS_RefusedBarDrag_* are deleted, leaving no page test of a refused lane add or bar drag until a later lane brings one back
+NOTES (2026-10-20): lanes.js `adding` and entries.js `entryPanel` now look their list and panel up by entry kind (STATE_LISTS, PANELS), each holding only the caption row, so the later position and zoom lanes add a row each
+NOTES (2026-10-20): picker.js keeps pickProposal and reportPick on window.tunePage with no reader left, and controls.js keeps targetInputs/targetRows/targetOf with no caller left, for the position target items (15, 19); the unused test consts elementPickStatus and elementStatus went with their tests
 
 **What:**
 **Goal:** the tune page has no `camera zoom` or `pan` lane, camera move panel, "Set as pan

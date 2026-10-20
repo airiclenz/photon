@@ -16,7 +16,6 @@
 <script src="/assets/drag.js" defer></script>
 <script src="/assets/timeline.js" defer></script>
 <script src="/assets/picker.js" defer></script>
-<script src="/assets/path.js" defer></script>
 </head>
 <body>
 <div id="banner" class="banner" hidden>
@@ -29,7 +28,6 @@
       <img id="frame" alt="The composed frame at the playhead" draggable="false">
       <div id="pick-drag" class="pick-drag" hidden></div>
       <div id="pick-box" class="pick-box" hidden></div>
-      <svg id="via-path" class="via-path" preserveAspectRatio="none" aria-hidden="true"><polyline id="via-line" class="via-line"></polyline></svg>
     </div>
     <p id="frame-message" class="frame-message" hidden></p>
     <div class="picker">
@@ -39,7 +37,6 @@
     <div id="pick-result" class="pick-result" hidden>
       <code id="pick-target" class="pick-target"></code>
       <div class="pick-actions">
-        <button id="pick-pan" type="button" hidden>Set as pan target</button>
         <button type="button" data-snippet="click">Copy click</button>
         <button type="button" data-snippet="seen">Copy seen</button>
         <button type="button" data-snippet="drag-from">Copy drag from</button>
