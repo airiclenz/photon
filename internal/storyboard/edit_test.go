@@ -360,6 +360,7 @@ func TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder(t *testing.T) {
 		{"a point leaves its inline target out", reflect.TypeFor[Point](), []string{"cell"}},
 		{"the camera", reflect.TypeFor[Camera](), []string{"positions", "zooms"}},
 		{"a zoom move skips its unexported start", reflect.TypeFor[ZoomMove](), []string{"to", "at", "over", "ease"}},
+		{"a position leaves its inline point out", reflect.TypeFor[Position](), []string{"at", "hold", "ease"}},
 		{"a caption skips its resolved times and colours", reflect.TypeFor[Caption](), []string{
 			"text", "at", "for", "until", "font", "place", "align", "offset", "position", "color", "box", "fade",
 		}},
@@ -375,6 +376,15 @@ func TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("a position's point keys lead its own", func(t *testing.T) {
+		t.Parallel()
+		want := []string{"text", "nth", "area", "cell", "at", "hold", "ease"}
+
+		if !slices.Equal(positionKeyOrder, want) {
+			t.Errorf("positionKeyOrder = %q, want %q", positionKeyOrder, want)
+		}
+	})
 }
 
 // editBaseBoard is the storyboard the caption and list edit tests build on: beat 1 lasts 1s and

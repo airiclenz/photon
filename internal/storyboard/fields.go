@@ -29,8 +29,11 @@ const (
 	KindMoment FieldKind = "moment"
 	// KindTarget is an on-screen target, {"text": "ok", "nth": 2, "area": "list"}.
 	KindTarget FieldKind = "target"
-	// KindPoint is a target or a cell of the terminal grid, {"cell": {"x": 3, "y": 4}}.
-	KindPoint FieldKind = "point"
+	// KindCell is a cell of the terminal grid, {"x": 3, "y": 4}: column X and row Y, from 0.
+	KindCell FieldKind = "cell"
+	// KindSpan is a camera position's start and hold at once, {"at": {"beat": 3, "offset_ms":
+	// 200}, "hold_ms": 600}.
+	KindSpan FieldKind = "span"
 	// KindEntry is a new caption, {"kind": "caption", "at": {"beat": 0, "offset_ms": 0}}, its
 	// kind one of the field's Choices.
 	KindEntry FieldKind = "entry"
@@ -45,14 +48,16 @@ const (
 	KindPixels FieldKind = "pixels"
 )
 
-// Field describes one field of a storyboard's owner — the clip, a beat or a caption — as photon
-// tune's page shows it: its Name, the kind of value it holds, the Choices of an enum, and its
-// Default, the value it holds when the storyboard leaves its key out (the zero value, or what
-// [Load] fills in), typed as an [Edit] types it; null is a field an absent key leaves unset. A
-// list field, which adds, removes or reorders an entry and has no key, defaults to a value it
-// takes: an insert's entry of its first choice at the clip's start, a remove's null, a move's own
-// index. A caption's caption.shift, which has no key either, defaults to 0, the shift that
-// changes nothing. An editable field's Name is the field an [Edit] names; a read-only field is
+// Field describes one field of a storyboard's owner — the clip, a beat, a camera position, a
+// camera zoom or a caption — as photon tune's page shows it: its Name, the kind of value it
+// holds, the Choices of an enum, and its Default, the value it holds when the storyboard leaves
+// its key out (the zero value, or what [Load] fills in), typed as an [Edit] types it; null is a
+// field an absent key leaves unset, a position's cell and target among them. A list field, which
+// adds, removes or reorders an entry and has no key, defaults to a value it takes: an insert's
+// entry of its first choice at the clip's start, a remove's null, a move's own index. A caption's
+// caption.shift, which has no key either, defaults to 0, the shift that changes nothing, and a
+// position's position.span, which sets two keys, to what both mean when absent: the clip's start
+// and a hold of 0. An editable field's Name is the field an [Edit] names; a read-only field is
 // one of the frame's keys photon tune shows but does not edit — cols, rows or max_colors — named
 // by that key alone.
 type Field struct {
@@ -68,13 +73,15 @@ type Field struct {
 const frameFieldPrefix = "frame."
 
 // The defaults a field's absent key means, typed as an [Edit] types them: zero, false,
-// no text, a moment at the clip's first frame, and no offset.
+// no text, a moment at the clip's first frame, no offset, and a span at the clip's first frame
+// holding no time.
 const (
 	defaultZero      = "0"
 	defaultFalse     = "false"
 	defaultText      = `""`
 	defaultClipStart = `{"beat":0,"offset_ms":0}`
 	defaultNoOffset  = `{"x":0,"y":0}`
+	defaultSpan      = `{"at":` + defaultClipStart + `,"hold_ms":0}`
 )
 
 // newEntryDefault is the default of a list's insert: an entry of kind at the clip's start.
@@ -87,18 +94,28 @@ var (
 	placeChoices  = []string{string(PlaceTop), string(PlaceMiddle), string(PlaceBottom)}
 	alignChoices  = []string{string(AlignLeft), string(AlignMiddle), string(AlignRight)}
 	weightChoices = []string{string(WeightRegular), string(WeightBold)}
+	easeChoices   = []string{
+		string(EaseSmooth), string(EaseLinear), string(EaseIn), string(EaseOut),
+	}
 )
 
 // Fields describes every field of board's owners, the editable and the read-only: the clip's
-// frame fields in the frame's key order, then each beat's and caption's in storyboard order, the
-// captions' insert after their entries', owned by index 0, whether or not the list holds an
-// entry. The frame's cols and rows are read-only because they size the terminal the take was
-// recorded in, so a change needs a new `photon record`, and its max_colors because the page draws
-// its preview before the palette is quantized, so the preview could not show a change.
+// frame fields in the frame's key order, then each beat's, camera position's, camera zoom's and
+// caption's in storyboard order, the captions' insert after their entries', owned by index 0,
+// whether or not the list holds an entry. The frame's cols and rows are read-only because they
+// size the terminal the take was recorded in, so a change needs a new `photon record`, and its
+// max_colors because the page draws its preview before the palette is quantized, so the preview
+// could not show a change.
 func Fields(board *Storyboard) []Field {
 	fields := clipFields()
 	for _, beat := range board.Beats {
 		fields = append(fields, beatFields(beat)...)
+	}
+	for index := range board.Camera.Positions {
+		fields = append(fields, positionFields(index)...)
+	}
+	for index := range board.Camera.Zooms {
+		fields = append(fields, zoomFields(index)...)
 	}
 	for index := range board.Captions {
 		fields = append(fields, captionFields(index, board.Frame.FontSize)...)
@@ -158,6 +175,40 @@ func beatFields(beat Beat) []Field {
 		{Owner: owner, Name: FieldDuration, Kind: KindDuration, Default: raw(defaultZero)},
 		{Owner: owner, Name: FieldHold, Kind: KindDuration, Default: raw(defaultZero)},
 		{Owner: owner, Name: FieldCut, Kind: KindBool, Default: raw(defaultFalse)},
+	}
+}
+
+// positionFields describes the fields of the camera position at index: its start, its hold, both
+// at once, its ease, and where it aims — a cell or a text target.
+func positionFields(index int) []Field {
+	owner := Owner{Kind: OwnerPosition, Index: index}
+	return []Field{
+		{Owner: owner, Name: FieldPositionAt, Kind: KindMoment, Default: raw(defaultClipStart)},
+		{Owner: owner, Name: FieldPositionHold, Kind: KindDuration, Default: raw(defaultZero)},
+		{Owner: owner, Name: FieldPositionSpan, Kind: KindSpan, Default: raw(defaultSpan)},
+		easeField(owner, FieldPositionEase),
+		{Owner: owner, Name: FieldPositionCell, Kind: KindCell, Default: raw(jsonNull)},
+		{Owner: owner, Name: FieldPositionTarget, Kind: KindTarget, Default: raw(jsonNull)},
+	}
+}
+
+// zoomFields describes the fields of the camera zoom at index: its start, its length, its ease
+// and its factor.
+func zoomFields(index int) []Field {
+	owner := Owner{Kind: OwnerZoom, Index: index}
+	return []Field{
+		{Owner: owner, Name: FieldZoomAt, Kind: KindMoment, Default: raw(defaultClipStart)},
+		{Owner: owner, Name: FieldZoomOver, Kind: KindDuration, Default: raw(defaultZero)},
+		easeField(owner, FieldZoomEase),
+		{Owner: owner, Name: FieldZoomTo, Kind: KindDecimal, Default: raw(defaultZero)},
+	}
+}
+
+// easeField describes owner's ease, name: an enum of the four eases, smooth by default.
+func easeField(owner Owner, name string) Field {
+	return Field{
+		Owner: owner, Name: name, Kind: KindEnum,
+		Choices: slices.Clone(easeChoices), Default: quoted(string(EaseSmooth)),
 	}
 }
 

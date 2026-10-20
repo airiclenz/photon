@@ -36,27 +36,52 @@ var clipOwner = Owner{Kind: OwnerClip}
 // beatOwner is the beat with id.
 func beatOwner(id int) Owner { return Owner{Kind: OwnerBeat, Index: id} }
 
+// positionOwner is the camera position at index.
+func positionOwner(index int) Owner { return Owner{Kind: OwnerPosition, Index: index} }
+
+// zoomOwner is the camera zoom at index.
+func zoomOwner(index int) Owner { return Owner{Kind: OwnerZoom, Index: index} }
+
 // textOwner is the caption at index.
 func textOwner(index int) Owner { return Owner{Kind: OwnerCaption, Index: index} }
 
 // defaultRefusals are the fields of the every-form storyboard whose Default Apply refuses, each
-// with a valid sample of its kind for its owner.
+// with a valid sample of its kind for its owner: a position's cell and target default to null,
+// which Apply refuses, a position or zoom moved to the clip's start overlaps camera.positions[0]
+// or camera.zooms[0], and a zoom of no length or factor 0 is invalid.
 var defaultRefusals = map[fieldKey]json.RawMessage{
-	{clipOwner, FieldFrameWidth}:      typedValue(300),
-	{clipOwner, FieldFrameFPS}:        typedValue(12),
-	{clipOwner, FieldFrameFontSize}:   typedValue(16),
-	{clipOwner, FieldFrameLineHeight}: typedValue(1.3),
-	{clipOwner, FieldFrameScale}:      typedValue(3),
-	{beatOwner(1), FieldDuration}:     typedValue(2500),
-	{beatOwner(2), FieldDuration}:     typedValue(5000),
-	{beatOwner(3), FieldDuration}:     typedValue(7000),
-	{beatOwner(4), FieldCut}:          typedValue(true),
-	{textOwner(0), FieldCaptionFor}:   typedValue(1000),
-	{textOwner(1), FieldCaptionFor}:   typedValue(1000),
-	{textOwner(2), FieldCaptionFor}:   typedValue(1000),
-	{textOwner(0), FieldCaptionText}:  typedValue("Hello"),
-	{textOwner(1), FieldCaptionText}:  typedValue("Hello\nthere"),
-	{textOwner(2), FieldCaptionText}:  typedValue("Bye"),
+	{clipOwner, FieldFrameWidth}:            typedValue(300),
+	{clipOwner, FieldFrameFPS}:              typedValue(12),
+	{clipOwner, FieldFrameFontSize}:         typedValue(16),
+	{clipOwner, FieldFrameLineHeight}:       typedValue(1.3),
+	{clipOwner, FieldFrameScale}:            typedValue(3),
+	{beatOwner(1), FieldDuration}:           typedValue(2500),
+	{beatOwner(2), FieldDuration}:           typedValue(5000),
+	{beatOwner(3), FieldDuration}:           typedValue(7000),
+	{beatOwner(4), FieldCut}:                typedValue(true),
+	{positionOwner(1), FieldPositionAt}:     moment(2, 0),
+	{positionOwner(2), FieldPositionAt}:     moment(0, 600),
+	{positionOwner(0), FieldPositionCell}:   typedValue(cell(1, 1)),
+	{positionOwner(1), FieldPositionCell}:   typedValue(cell(1, 1)),
+	{positionOwner(2), FieldPositionCell}:   typedValue(cell(1, 1)),
+	{positionOwner(3), FieldPositionCell}:   typedValue(cell(1, 1)),
+	{positionOwner(0), FieldPositionTarget}: typedValue(map[string]any{"text": "Items"}),
+	{positionOwner(1), FieldPositionTarget}: typedValue(map[string]any{"text": "Items"}),
+	{positionOwner(2), FieldPositionTarget}: typedValue(map[string]any{"text": "Items"}),
+	{positionOwner(3), FieldPositionTarget}: typedValue(map[string]any{"text": "Items"}),
+	{zoomOwner(1), FieldZoomAt}:             moment(1, 1000),
+	{zoomOwner(0), FieldZoomOver}:           typedValue(100),
+	{zoomOwner(1), FieldZoomOver}:           typedValue(100),
+	{zoomOwner(2), FieldZoomOver}:           typedValue(100),
+	{zoomOwner(0), FieldZoomTo}:             typedValue(2),
+	{zoomOwner(1), FieldZoomTo}:             typedValue(2),
+	{zoomOwner(2), FieldZoomTo}:             typedValue(2),
+	{textOwner(0), FieldCaptionFor}:         typedValue(1000),
+	{textOwner(1), FieldCaptionFor}:         typedValue(1000),
+	{textOwner(2), FieldCaptionFor}:         typedValue(1000),
+	{textOwner(0), FieldCaptionText}:        typedValue("Hello"),
+	{textOwner(1), FieldCaptionText}:        typedValue("Hello\nthere"),
+	{textOwner(2), FieldCaptionText}:        typedValue("Bye"),
 }
 
 func TestFields_EveryEditableField_RoundTripsThroughApply(t *testing.T) {
@@ -134,6 +159,10 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		{clipOwner, []string{"cols", "rows", FieldFramePadding, FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldFrameWidth, FieldFrameFPS, "max_colors"}},
 		{beatOwner(1), []string{FieldDuration, FieldHold, FieldCut}},
 		{beatOwner(2), []string{FieldDuration, FieldHold, FieldCut}},
+		{positionOwner(0), []string{FieldPositionAt, FieldPositionHold, FieldPositionSpan, FieldPositionEase, FieldPositionCell, FieldPositionTarget}},
+		{positionOwner(3), []string{FieldPositionAt, FieldPositionHold, FieldPositionSpan, FieldPositionEase, FieldPositionCell, FieldPositionTarget}},
+		{zoomOwner(0), []string{FieldZoomAt, FieldZoomOver, FieldZoomEase, FieldZoomTo}},
+		{zoomOwner(2), []string{FieldZoomAt, FieldZoomOver, FieldZoomEase, FieldZoomTo}},
 		{textOwner(0), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionShift, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionOffset, FieldCaptionPosition, FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionRemove, FieldCaptionMove, FieldCaptionInsert}},
 		{textOwner(2), []string{FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil, FieldCaptionShift, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCaptionOffset, FieldCaptionPosition, FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionRemove, FieldCaptionMove}},
 	}
@@ -156,6 +185,16 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		{fieldKey{clipOwner, "max_colors"}, KindCount, nil, "0", true},
 		{fieldKey{clipOwner, FieldFrameFPS}, KindCount, nil, "0", false},
 		{fieldKey{beatOwner(1), FieldCut}, KindBool, nil, "false", false},
+		{fieldKey{positionOwner(0), FieldPositionAt}, KindMoment, nil, `{"beat":0,"offset_ms":0}`, false},
+		{fieldKey{positionOwner(0), FieldPositionHold}, KindDuration, nil, "0", false},
+		{fieldKey{positionOwner(1), FieldPositionSpan}, KindSpan, nil, `{"at":{"beat":0,"offset_ms":0},"hold_ms":0}`, false},
+		{fieldKey{positionOwner(2), FieldPositionEase}, KindEnum, []string{"smooth", "linear", "ease-in", "ease-out"}, `"smooth"`, false},
+		{fieldKey{positionOwner(2), FieldPositionCell}, KindCell, nil, "null", false},
+		{fieldKey{positionOwner(3), FieldPositionTarget}, KindTarget, nil, "null", false},
+		{fieldKey{zoomOwner(0), FieldZoomAt}, KindMoment, nil, `{"beat":0,"offset_ms":0}`, false},
+		{fieldKey{zoomOwner(1), FieldZoomOver}, KindDuration, nil, "0", false},
+		{fieldKey{zoomOwner(1), FieldZoomEase}, KindEnum, []string{"smooth", "linear", "ease-in", "ease-out"}, `"smooth"`, false},
+		{fieldKey{zoomOwner(2), FieldZoomTo}, KindDecimal, nil, "0", false},
 		{fieldKey{textOwner(0), FieldCaptionUntil}, KindMoment, nil, "null", false},
 		{fieldKey{textOwner(0), FieldCaptionShift}, KindCount, nil, "0", false},
 		{fieldKey{textOwner(0), FieldCaptionText}, KindText, nil, `""`, false},

@@ -298,7 +298,11 @@ by a position; lint names an undeclared position area; the "beat zoom" row names
 - `grep -rniE '\bpans?\b|\bvia\b|camera move|PanMove|CameraMove|Compositor\.Path' internal/storyboard internal/compose internal/render internal/clip --include=*.go | grep -v _test.go` prints nothing
 **Commit:** `feat(storyboard)!: aim the camera with positions and zoom with camera.zooms`
 
-## 8. Storyboard edits for position and zoom fields
+## 8. Storyboard edits for position and zoom fields — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): the position key order is the struct order text, nth, area, cell, at, hold, ease (Point leads Position, so its keys sit "at the Point's place" as the guard says), not the guard's parenthetical (at, hold, text, nth, area, cell, ease), which contradicts that wording and the every-form fixture; `positionKeyOrder` is pinned in `TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder` beside a `keyOrder(Position)` row.
+NOTES (2026-10-20): `KindPoint` (`{"cell": {...}}`, left by item 3 for the position edits) is removed: no field takes that shape. `position.cell` gets the new `KindCell` (`{"x", "y"}`), `position.span` the new `KindSpan`, and `position.target` reuses `KindTarget`; `position.cell` and `position.target` default to null, which Apply refuses, so they sit in `defaultRefusals` with samples, as do `zoom.over` and `zoom.to` (default 0).
+NOTES (2026-10-20): `editName` is now `Owner.prefix() + field`, so a camera owner on a beat or caption field is named by its owner again (`camera.positions[0]: duration: …`), which reverses item 3's note; the existing `edit_test.go` assertions match by substring and still pass.
 
 Depends on item 7.
 

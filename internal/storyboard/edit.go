@@ -19,13 +19,27 @@ import (
 // Edit is one typed change to a storyboard field, as photon tune's page sends it:
 // {"owner": {"kind": "<kind>", "index": <n>}, "field": "<name>", "value": <JSON>}. Owner is
 // what the field edits: the beat by its id for a beat field, the clip with index 0 for
-// frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width and frame.fps, and
-// the caption by its index in the storyboard's captions list, from 0, for a caption field. Value
-// is typed per field:
+// frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width and frame.fps, the
+// camera position or zoom by its index in the storyboard's camera.positions or camera.zooms list,
+// from 0, for a position or zoom field, and the caption by its index in the storyboard's captions
+// list, from 0, for a caption field. Value is typed per field:
 //   - duration, hold: a whole number of milliseconds (1850);
 //   - cut: true or false;
 //   - frame.padding, frame.scale, frame.width, frame.fps: a whole number;
 //   - frame.font_size, frame.line_height: a number above 0, the font size in [6, 72];
+//   - position.at, zoom.at: a moment, which replaces the entry's whole at;
+//   - position.hold: a whole number of milliseconds, 0 removing the key;
+//   - position.span: the position's at and hold at once, {"at": {"beat": 3, "offset_ms": 200},
+//     "hold_ms": 600}, each written as position.at and position.hold write it;
+//   - position.ease, zoom.ease: "smooth", which removes the key, "linear", "ease-in" or
+//     "ease-out";
+//   - position.cell: a cell of the terminal grid, {"x": 3, "y": 4}, which removes the position's
+//     text, nth and area;
+//   - position.target: a text target as a pick answers it, {"text": "ok", "nth": 2, "area":
+//     "list"}, its nth and area optional, an absent one removing its key, which removes the
+//     position's cell;
+//   - zoom.over: a whole number of milliseconds;
+//   - zoom.to: a number, the zoom factor in [1, 3];
 //   - caption.at: a moment, {"beat": 3, "offset_ms": 200}, beat 0 for a clip time offset_ms
 //     after the clip's first frame, which replaces the caption's whole at;
 //   - caption.for: a whole number of milliseconds above 0, which removes the caption's until;
@@ -79,7 +93,9 @@ const (
 // editFields lists every field Apply takes, as the unknown-field error offers them.
 var editFields = []string{
 	FieldDuration, FieldHold, FieldCut, FieldFrameWidth, FieldFrameFPS, FieldFramePadding,
-	FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldCaptionAt, FieldCaptionFor,
+	FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldPositionAt, FieldPositionHold,
+	FieldPositionSpan, FieldPositionEase, FieldPositionCell, FieldPositionTarget, FieldZoomAt,
+	FieldZoomOver, FieldZoomEase, FieldZoomTo, FieldCaptionAt, FieldCaptionFor,
 	FieldCaptionUntil, FieldCaptionShift, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign,
 	FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove, FieldCaptionFontSize,
 	FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity,
@@ -115,33 +131,39 @@ const (
 	tagSeparator = ","
 )
 
-// Apply returns src, the valid storyboard at path, with edit spliced in, and the storyboard
-// those bytes decode to; path names the file in both decodes' errors and is the result's Path.
-// Only the edited key's text changes. A duration keeps its unit: an old value in ms is written in
-// ms, one in plain seconds in seconds with the fewest decimals, any other or new value as
-// time.Duration.String(). A new key goes after the keys that precede it in the storyboard's
-// field order, its yaml struct tags; a value equal to the default of a key that is absent writes
-// nothing; cut false, caption.place bottom, caption.align middle, caption.offset {0, 0} and a
-// caption's font, colour, box or fade at the default [Load] fills in delete their key, and a
-// caption's font, box or fade mapping left holding no key goes with it, while a style value a
+// Apply returns src, the valid storyboard at path, with edit spliced in, and the storyboard those
+// bytes decode to; path names the file in both decodes' errors and is the result's Path. Only the
+// edited key's text changes. A duration keeps its unit: an old value in ms is written in ms, one in
+// plain seconds in seconds with the fewest decimals, any other or new value as
+// time.Duration.String(). A new key goes after the keys that precede it in the storyboard's field
+// order, its yaml struct tags, a position's point keys ahead of its at, hold and ease; a value
+// equal to the default of a key that is absent writes nothing; cut false, a position's hold of 0, a
+// position's or zoom's ease smooth, caption.place bottom, caption.align middle, caption.offset {0,
+// 0} and a caption's font, colour, box or fade at the default [Load] fills in delete their key, and
+// a caption's font, box or fade mapping left holding no key goes with it, while a style value a
 // caption lacks the mapping for creates it as a one-key flow mapping. A colour is written quoted,
-// '#ffcc00', and compared to its default case-insensitively. A caption.at or caption.until is
-// written as a clip time in ms or a {beat: 3, offset: 200ms} flow mapping and replaces its whole
-// node with the value's flow text, and a caption.text replaces its whole node, a block scalar
-// too, with one double-quoted line; a caption.offset or caption.position is written as an
-// {x: 8, y: -4} flow mapping in place of its whole node, a position deletes the caption's place,
-// align and offset, a place, align or offset deletes its position, and a null position deletes
-// the key; a caption.for deletes the caption's until and a caption.until its for, or, as null,
-// writes the for that keeps the caption's stretch in place of its until. A caption.shift rewrites
-// the caption's at and, if it has one, its until as caption.at and caption.until write them, each
-// keeping its beat, and a shift of 0 writes nothing. An insert writes its caption as one flow line
-// from presets — a caption "Caption" for 2s — and creates a captions key the storyboard lacks as
-// a flow list after the keys that precede it; a remove or move splices only its list's items, and
-// removing a list's only entry deletes its key. The edit is refused with an error led by its owner
-// and field — the beat or caption, or nothing for a frame field — when its value is of the wrong
-// JSON type or misspelled, when its owner is of another kind than the field's, when it names a
-// beat or caption that is not there, an insert index past the list's length among them, or when
-// the result fails validation; the last wraps the *[ValidationError].
+// '#ffcc00', and compared to its default case-insensitively. A caption.at or caption.until, and a
+// position's or zoom's at, is written as a clip time in ms or a {beat: 3, offset: 200ms} flow
+// mapping and replaces its whole node with the value's flow text. A position.cell is written as a
+// {x: 3, y: 4} flow mapping in place of its whole node and deletes the position's text, nth and
+// area; a position.target writes its text quoted, 'ok', and its nth and area as a pick snippet
+// spells them, deleting the one it leaves out, in place of each whole node, and deletes the
+// position's cell; each writes its new key before deleting the old ones, so a position's only key
+// is never deleted. A caption.text replaces its whole node, a block scalar too, with one
+// double-quoted line; a caption.offset or caption.position is written as an {x: 8, y: -4} flow
+// mapping in place of its whole node, a caption.position deletes the caption's place, align and
+// offset, a place, align or offset deletes its position, and a null position deletes the key; a
+// caption.for deletes the caption's until and a caption.until its for, or, as null, writes the for
+// that keeps the caption's stretch in place of its until. A caption.shift rewrites the caption's at
+// and, if it has one, its until as caption.at and caption.until write them, each keeping its beat,
+// and a shift of 0 writes nothing. An insert writes its caption as one flow line from presets — a
+// caption "Caption" for 2s — and creates a captions key the storyboard lacks as a flow list after
+// the keys that precede it; a remove or move splices only its list's items, and removing a list's
+// only entry deletes its key. The edit is refused with an error led by its owner and field — the
+// beat, camera position, camera zoom or caption, or nothing for a frame field — when its value is
+// of the wrong JSON type or misspelled, when its owner is of another kind than the field's, when it
+// names a beat, position, zoom or caption that is not there, an insert index past the list's length
+// among them, or when the result fails validation; the last wraps the *[ValidationError].
 func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 	board, err := Parse(src, path)
 	if err != nil {
@@ -165,24 +187,22 @@ func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 }
 
 // editName names what edit changes, as its errors lead with it: `beat 2: hold`, `frame.fps`,
-// `captions[0]: caption.text`.
+// `camera.positions[1]: position.hold`, `camera.zooms[0]: zoom.to`, `captions[0]: caption.text`.
 func editName(edit Edit) string {
-	switch edit.Owner.Kind {
-	case OwnerBeat:
-		return fmt.Sprintf("beat %d: %s", edit.Owner.Index, edit.Field)
-	case OwnerCaption:
-		return fmt.Sprintf("captions[%d]: %s", edit.Owner.Index, edit.Field)
-	default:
-		return edit.Field
-	}
+	return edit.Owner.prefix() + edit.Field
 }
 
-// ownerKindOf is the kind of owner field edits: the clip for a frame field, a caption for a
-// caption field and a beat for every other.
+// ownerKindOf is the kind of owner field edits: the clip for a frame field, a camera position
+// for a position field, a camera zoom for a zoom field, a caption for a caption field and a beat
+// for every other.
 func ownerKindOf(field string) OwnerKind {
 	switch {
 	case strings.HasPrefix(field, frameFieldPrefix):
 		return OwnerClip
+	case isPositionField(field):
+		return OwnerPosition
+	case isZoomField(field):
+		return OwnerZoom
 	case isCaptionField(field):
 		return OwnerCaption
 	default:
@@ -196,8 +216,9 @@ type splicer struct {
 	doc *yamledit.Document
 }
 
-// apply routes edit to the frame or to its beat or caption in board, the storyboard
-// doc holds, once its field, its owner's kind and the presence of its value check out.
+// apply routes edit to the frame or to its beat, camera position, camera zoom or caption in
+// board, the storyboard doc holds, once its field, its owner's kind and the presence of its
+// value check out.
 func (s *splicer) apply(board *Storyboard, edit Edit) error {
 	if !slices.Contains(editFields, edit.Field) {
 		return fmt.Errorf("unknown field, want one of %s", strings.Join(editFields, ", "))
@@ -217,6 +238,10 @@ func (s *splicer) apply(board *Storyboard, edit Edit) error {
 	switch edit.Owner.Kind {
 	case OwnerClip:
 		return s.editFrame(edit)
+	case OwnerPosition:
+		return s.editPosition(board, edit.Owner.Index, edit.Field, edit.Value)
+	case OwnerZoom:
+		return s.editZoom(board, edit.Owner.Index, edit.Field, edit.Value)
 	case OwnerCaption:
 		return s.editCaption(board, edit.Owner.Index, edit.Field, edit.Value)
 	}
@@ -261,9 +286,9 @@ func (s *splicer) replaceOrInsert(mapping yamledit.Path, key, text string, order
 	return s.doc.Upsert(mapping, key, text, order)
 }
 
-// setMoment replaces the whole at of mapping, a caption, whatever its form, with the moment value
-// types, spelled as [momentFlow] does. A clip start on a mapping without at writes nothing: an
-// absent at already starts it there.
+// setMoment replaces the whole at of mapping, a caption, position or zoom, whatever its form,
+// with the moment value types, spelled as [momentFlow] does. A clip start on a mapping without at
+// writes nothing: an absent at already starts it there.
 func (s *splicer) setMoment(mapping yamledit.Path, order []string, value json.RawMessage) error {
 	moment, err := decodeMoment(value)
 	if err != nil {
