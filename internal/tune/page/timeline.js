@@ -24,8 +24,9 @@
 // edges moved for a transition. A grip on each edge a bar's edges names, "start" or "end", resizes
 // it: one transition edit with that edge moved for a transition; for a position, one hold edit for
 // its end, and one span edit for its start that keeps its end. A position or a transition may
-// shrink to 0, a point or a hard cut, whose grips sit beside its marker. Another lane is one more
-// entry in either list.
+// shrink to 0, a point or a hard cut, whose grips sit beside its marker; a transition names no
+// edge that meets a point, so no grip sits on a point's marker and its shift drag moves that
+// edge. Another lane is one more entry in either list.
 //
 // A handle is {beat, field, anchor, sign, value, min, max}: the edit's beat and field, the value
 // it holds now in milliseconds, the bounds a drag keeps it in, and where its edge sits on the
@@ -284,7 +285,8 @@
   // window.tuneDrag by a delta in milliseconds that keeps the edge on the clip and the bar no
   // shorter than 0: a drag selects bar's entry and sends the resizeEdit of the stretch it leaves;
   // a refusal goes to the transport bar's status. A bar of length 0 has its grips beside it, so
-  // they leave its marker to the shift drag.
+  // they leave its marker to the shift drag; a transition's bar names no edge at a point's
+  // marker, so no grip lands on that marker either.
   function gripNode(bar, side, track) {
     const isStart = side === EDGE_START;
     const besideClass = bar.from === bar.to ? " beside-" + side : "";

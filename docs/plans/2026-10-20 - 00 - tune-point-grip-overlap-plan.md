@@ -31,7 +31,11 @@ drag sends `position.at`; no transition grip sits over the marker.
 - Grip placement for hard cuts and points (`beside-start`/`beside-end` in `style.css`).
 - Any storyboard or edit-layer change.
 
-## 1. Drop a transition's grip on an edge that meets a point
+## 1. Drop a transition's grip on an edge that meets a point — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): lanes.js's file header was left unchanged: it describes the bar data shape generically ("a grip on each edge edges names") and stays true; the grip rule is documented in positionBars' and the new transitionEdges' comments instead.
+NOTES (2026-10-20): added a small isPoint helper in lanes.js, now shared by pointClass, the position bars' edges and the new transitionEdges, so the "end_ms equals start_ms" test lives in one place.
+NOTES (2026-10-20): the test harness's dragBar dispatches pointer events on the bar node itself, so the new "point" drag case proves the marker's drag sends one position.at edit and selects the point, while the grip-list test is what proves no transition grip sits on the marker.
 
 **What:** fix for issue `tune-point-grip-overlap`: a transition's grip centred on a point marker
 takes the press, so the point cannot be selected or moved from its marker.

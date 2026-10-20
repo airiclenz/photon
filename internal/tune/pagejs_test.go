@@ -1368,6 +1368,15 @@ func TestPageJS_DragAPositionOrTransitionBar_SendsOneEdit(t *testing.T) {
 			value: fmt.Sprintf(`{"start_ms":%d,"end_ms":%d}`,
 				pointAtMS+transitionShiftMS, textStartMS+transitionShiftMS),
 		},
+		{
+			name:  "point",
+			kind:  storyboard.OwnerPosition,
+			index: pointPosition,
+			grab:  pointAtMS,
+			shift: positionShiftMS,
+			field: storyboard.FieldPositionAt,
+			value: fmt.Sprintf(`{"beat":0,"offset_ms":%d}`, pointAtMS+positionShiftMS),
+		},
 	}
 
 	for _, tc := range cases {
@@ -1436,7 +1445,7 @@ func (p *pageHarness) dragGrip(lane string, kind storyboard.OwnerKind, index int
 	p.settle()
 }
 
-func TestPageJS_PositionLane_GripsEveryEdgeButAPointsStart(t *testing.T) {
+func TestPageJS_PositionLane_GripsEveryEdgeButAPointsStartAndATransitionsAtAPoint(t *testing.T) {
 	t.Parallel()
 	grip := func(kind storyboard.OwnerKind, index int, edge string) string {
 		return entryValueOf(kind, index) + "/" + edge
@@ -1448,8 +1457,6 @@ func TestPageJS_PositionLane_GripsEveryEdgeButAPointsStart(t *testing.T) {
 		grip(storyboard.OwnerPosition, firstPosition, edgeStart),
 		grip(storyboard.OwnerPosition, pointPosition, edgeEnd),
 		grip(entryTransition, textPosition, edgeEnd),
-		grip(entryTransition, textPosition, edgeStart),
-		grip(entryTransition, pointPosition, edgeEnd),
 		grip(entryTransition, pointPosition, edgeStart),
 	}
 
@@ -1516,12 +1523,12 @@ func TestPageJS_DragAPositionOrTransitionGrip_SendsOneResizeEdit(t *testing.T) {
 		{
 			name:    "a transition's end",
 			kind:    entryTransition,
-			index:   pointPosition,
+			index:   textPosition,
 			edge:    edgeEnd,
-			grab:    pointAtMS,
-			release: pointAtMS - resizeMS,
+			grab:    textStartMS,
+			release: textStartMS - resizeMS,
 			field:   storyboard.FieldPositionTransition,
-			value:   fmt.Sprintf(`{"start_ms":%d,"end_ms":%d}`, firstEndMS, pointAtMS-resizeMS),
+			value:   fmt.Sprintf(`{"start_ms":%d,"end_ms":%d}`, pointAtMS, textStartMS-resizeMS),
 		},
 		{
 			name:    "a transition shrunk to a cut",

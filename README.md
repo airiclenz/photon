@@ -178,7 +178,8 @@ text target (`text`, `nth`, `area`), a transition's start, length and ease (the 
 position it leads into), a zoom's `at`, `over`, `to` and `ease`, and a caption's `text`, `at`,
 `for` or `until`, `place`, `align`, `offset` or `position`, font, colours, box and fade. Dragging
 a bar moves it in 50ms steps. A position's or a transition's edge grips move just that edge, and
-a transition shrunk to 0 is a hard cut. The zoom and captions lanes' `+` adds a zoom or a caption
+a transition shrunk to 0 is a hard cut. A transition has no grip on an edge that meets a point:
+that edge moves with the point's marker. The zoom and captions lanes' `+` adds a zoom or a caption
 at the playhead; the position lane's `+` adds a point there on the cell the camera is centred on,
 so the camera does not move. The inspector removes the entry it shows, and moves a caption up or
 down its list. While a position is selected and the preview paused, the preview shows the full

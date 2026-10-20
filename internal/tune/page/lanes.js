@@ -38,7 +38,9 @@
   // transition, in its own colour, spans from the end of the position before it to the start of
   // the one it leads into, so it meets both; each position covers its hold, or is a point at its
   // start when it holds for 0. Every bar drags and resizes by both edges, but a point, which
-  // resizes only by its end, opening into a held position.
+  // resizes only by its end, opening into a held position, and a transition, which has no grip
+  // on an edge that meets a point: the point's marker takes the press, and its drag moves that
+  // edge with it.
   function positionBars(state) {
     const transitionBars = page.transitions(state).map((transition) => ({
       from: transition.start_ms,
@@ -47,7 +49,7 @@
       label: transition.ease,
       title: ENTRY_TRANSITION + " from position " + transition.from + " into position " + transition.index,
       entry: { kind: ENTRY_TRANSITION, index: transition.index },
-      edges: [EDGE_START, EDGE_END],
+      edges: transitionEdges(state, transition),
     }));
     const positions = page.byStart(state.positions).map((position) => ({
       from: position.start_ms,
@@ -56,14 +58,33 @@
       label: page.aimText(position),
       title: ENTRY_POSITION + " " + position.index + " " + page.aimText(position),
       entry: { kind: ENTRY_POSITION, index: position.index },
-      edges: position.end_ms === position.start_ms ? [EDGE_END] : [EDGE_START, EDGE_END],
+      edges: isPoint(position) ? [EDGE_END] : [EDGE_START, EDGE_END],
     }));
     return [...transitionBars, ...positions];
   }
 
+  // transitionEdges are the edges of transition, one of page.transitions(state), that get a grip:
+  // its start unless the position it leaves from is a point, its end unless the position it leads
+  // into is one. A grip there would sit on the point's marker and take its press.
+  function transitionEdges(state, transition) {
+    const edges = [];
+    if (!isPoint(state.positions[transition.from])) {
+      edges.push(EDGE_START);
+    }
+    if (!isPoint(state.positions[transition.index])) {
+      edges.push(EDGE_END);
+    }
+    return edges;
+  }
+
   // pointClass marks a stretch that starts where it ends as a point in time.
   function pointClass(stretch) {
-    return stretch.end_ms === stretch.start_ms ? " point" : "";
+    return isPoint(stretch) ? " point" : "";
+  }
+
+  // isPoint says whether stretch starts where it ends: a point in time.
+  function isPoint(stretch) {
+    return stretch.end_ms === stretch.start_ms;
   }
 
   // zoomBars are state's camera zooms, in storyboard order, each labelled with the factor it
