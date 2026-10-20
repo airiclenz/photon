@@ -92,7 +92,13 @@ internal/storyboard/fields.go — Fields
 - `grep -nE 'Camera|camera|via|pick-pan' internal/tune/page*_test.go` prints nothing
 **Commit:** `refactor(tune): drop the pan and zoom move lanes from the page`
 
-## 2. Tune server drops camera state and the path route
+## 2. Tune server drops camera state and the path route — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): re-derived from the assumption that page_test.go's entryReaders holds a CameraState row: item 1 already removed it, so page_test.go needed no change and is not in FILES.
+NOTES (2026-10-20): consequential edit — internal/tune/pick.go: made necessary by the Acceptance grep for `camera:`, which matched the Pick doc comment's "pipeline's camera: the row"; the colon became a semicolon, no wording changed.
+NOTES (2026-10-20): the tests that broke the pipeline with a pan target not on screen (CaptionBoxes_AbsentWithoutAFullPipeline, EveryEditsBuild_ReusesTheGoodPipeline, and the former PanTargetNotOnScreen_KeepsTheLastGoodPipelineAndBlocksSave, renamed BuildError_KeepsTheLastGoodPipelineAndBlocksSave) now break it with a caption text wider than the frame (new tooWideText and tooWideCaptionEdit helpers).
+NOTES (2026-10-20): renamed the fixture cameraCaptionsStoryboard to captionsStoryboard and TestSession_State_ReportsCameraMovesAndCaptions to TestSession_State_ReportsCaptions, since neither holds a camera any more; TestHandler_EditsAsThePageSendsThem_AreApplied keeps only its beat drag (its camera.to half went with the camera edits).
+NOTES (2026-10-20): kept TargetState, CellState and PointState in state.go (no longer read by State) because item 11 builds position state on TargetState.
 
 Depends on item 1.
 

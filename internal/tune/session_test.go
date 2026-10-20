@@ -2,7 +2,6 @@ package tune
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -27,7 +26,7 @@ launch:
 `
 
 // sessionStoryboard is the storyboard a session tunes: beat 1 lasts 1s and beat 2 1.5s, with no
-// camera, which the fixtures built on it append.
+// captions, which the fixtures built on it append.
 const sessionStoryboard = `# A storyboard a session tunes.
 clip: tuned
 ship: out/tuned.gif
@@ -43,31 +42,16 @@ beats:
     duration: 1500ms # kept in ms
 `
 
-// aimedStoryboard is sessionStoryboard with a camera over beat 2: camera move 0 zooms in from its
-// start and aimedPan pans onto the PASS its take shows.
-const aimedStoryboard = sessionStoryboard + `camera:
-  - zoom: {to: 2, at: {beat: 2}, over: 300ms}
-  - pan: {to: {text: 'PASS'}, at: {beat: 2, offset: 900ms}, over: 300ms}
-`
-
-// aimedPan is the index of aimedStoryboard's pan.
-const aimedPan = 1
-
-// notOnScreen is a pan destination the session take never shows, as the page sends it.
-const notOnScreen = `{"text": "nowhere"}`
-
-// cameraCaptionsStoryboard is sessionStoryboard with a camera of one zoom and three pans — a via
-// path and a pan to a target and to a cell — inside beat 1, and two captions: one set by for in
-// beat 1, one by until in beat 2.
-const cameraCaptionsStoryboard = sessionStoryboard + `camera:
-  - zoom: {to: 2, at: 100ms, over: 300ms}
-  - pan: {via: [{cell: {x: 2, y: 1}}, {text: 'failing'}], at: {beat: 1, offset: 200ms}, over: 600ms, ease: linear}
-  - pan: {to: {text: 'tests', nth: last}, at: 800ms, over: 100ms}
-  - pan: {to: {cell: {x: 3, y: 2}}, at: 900ms, over: 100ms}
-captions:
+// captionsStoryboard is sessionStoryboard with two captions: one set by for in beat 1, one by
+// until in beat 2.
+const captionsStoryboard = sessionStoryboard + `captions:
   - {text: 'Watch this', at: {beat: 1, offset: 100ms}, for: 700ms, place: top, align: left}
   - {text: "All green\n", at: {beat: 2}, until: {beat: 2, offset: 1200ms}}
 `
+
+// tooWideText is a caption's text whose box is wider than the session fixture's frame, so the
+// storyboard parses but its pipeline does not build.
+var tooWideText = strings.Repeat("too wide ", 20)
 
 // The session fixture's own values, as sessionStoryboard and sessionTake set them.
 const (
@@ -324,31 +308,12 @@ func TestSession_State_ReadOnlyClipFields_AreStateKeys(t *testing.T) {
 	}
 }
 
-func TestSession_State_ReportsCameraMovesAndCaptions(t *testing.T) {
+func TestSession_State_ReportsCaptions(t *testing.T) {
 	t.Parallel()
-	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
+	f := newSessionFixtureOf(t, captionsStoryboard)
 
 	state := f.session.State()
 
-	wantCamera := []CameraState{
-		{Index: 0, Kind: "zoom", StartMS: 100, EndMS: 400, At: MomentState{0, 100}, OverMS: 300, Ease: "smooth", Factor: 2},
-		{
-			Index: 1, Kind: "pan", StartMS: 200, EndMS: 800, At: MomentState{1, 200}, OverMS: 600, Ease: "linear",
-			Via:      []PointState{{Cell: &CellState{X: 2, Y: 1}}, {Target: &TargetState{Text: "failing"}}},
-			ViaCount: 2,
-		},
-		{
-			Index: 2, Kind: "pan", StartMS: 800, EndMS: 900, At: MomentState{0, 800}, OverMS: 100, Ease: "smooth",
-			Target: &TargetState{Text: "tests", Nth: -1},
-		},
-		{
-			Index: 3, Kind: "pan", StartMS: 900, EndMS: 1000, At: MomentState{0, 900}, OverMS: 100, Ease: "smooth",
-			Cell: &CellState{X: 3, Y: 2},
-		},
-	}
-	if !reflect.DeepEqual(state.Camera, wantCamera) {
-		t.Errorf("camera\n got %+v\nwant %+v", state.Camera, wantCamera)
-	}
 	wantCaptions := []CaptionState{
 		{
 			Index: 0, Text: "Watch this", StartMS: 100, StopMS: 800, At: MomentState{1, 100}, ForMS: 700,
@@ -443,9 +408,9 @@ func TestSession_State_CaptionBoxes_AreThePipelinesLayout(t *testing.T) {
 
 func TestSession_State_CaptionBoxes_AbsentWithoutAFullPipeline(t *testing.T) {
 	t.Parallel()
-	f := newSessionFixtureOf(t, aimedStoryboard+styledCaptions)
+	f := newSessionFixtureOf(t, styledCaptionsStoryboard)
 
-	f.apply(t, cameraEdit(aimedPan, storyboard.FieldCameraTo, json.RawMessage(notOnScreen)))
+	f.apply(t, tooWideCaptionEdit(0))
 
 	captions := f.session.State().Captions
 	if len(captions) != 2 {
@@ -464,7 +429,7 @@ func TestSession_State_CaptionBoxes_AbsentWithoutAFullPipeline(t *testing.T) {
 
 func TestSession_State_CaptionTimesFollowABeatDuration(t *testing.T) {
 	t.Parallel()
-	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
+	f := newSessionFixtureOf(t, captionsStoryboard)
 
 	f.apply(t, beatEdit(1, storyboard.FieldDuration, 1200))
 
@@ -485,13 +450,6 @@ func TestSession_Refresh_InvalidOutsideWrite_ShowsEachProblemOnAPanel(t *testing
 		wantOwner  storyboard.Owner
 	}{
 		{
-			name:       "camera move past the shown list is on the clip",
-			good:       sessionStoryboard,
-			written:    sessionStoryboard + "camera:\n  - zoom: {to: 9, at: 1200ms, over: 300ms}\n",
-			wantPrefix: "camera[0]:",
-			wantOwner:  clipOwner,
-		},
-		{
 			name:       "caption past the shown list is on the clip",
 			good:       sessionStoryboard,
 			written:    sessionStoryboard + "captions:\n  - {text: 'hi', at: 100ms, for: 300ms, color: red}\n",
@@ -499,16 +457,9 @@ func TestSession_Refresh_InvalidOutsideWrite_ShowsEachProblemOnAPanel(t *testing
 			wantOwner:  clipOwner,
 		},
 		{
-			name:       "camera move on the shown list is on the move",
-			good:       cameraCaptionsStoryboard,
-			written:    strings.Replace(cameraCaptionsStoryboard, "zoom: {to: 2, at: 100ms,", "zoom: {to: 9, at: 100ms,", 1),
-			wantPrefix: "camera[0]:",
-			wantOwner:  storyboard.Owner{Kind: storyboard.OwnerCamera, Index: 0},
-		},
-		{
 			name:       "caption on the shown list is on the caption",
-			good:       cameraCaptionsStoryboard,
-			written:    strings.Replace(cameraCaptionsStoryboard, "align: left}", "align: left, color: red}", 1),
+			good:       captionsStoryboard,
+			written:    strings.Replace(captionsStoryboard, "align: left}", "align: left, color: red}", 1),
 			wantPrefix: "captions[0]:",
 			wantOwner:  storyboard.Owner{Kind: storyboard.OwnerCaption, Index: 0},
 		},
@@ -534,27 +485,10 @@ func TestSession_Refresh_InvalidOutsideWrite_ShowsEachProblemOnAPanel(t *testing
 	}
 }
 
-func TestSession_PanTargetNotOnScreen_IsOnTheMove(t *testing.T) {
-	t.Parallel()
-	f := newSessionFixture(t)
-	writeTestFile(t, f.boardPath, sessionStoryboard+"camera:\n  - pan: {to: {text: 'nowhere'}, at: 100ms, over: 300ms}\n")
-
-	if err := f.session.Refresh(); err != nil {
-		t.Fatalf("Refresh: %v", err)
-	}
-
-	errs := f.session.State().Errors
-	want := storyboard.Owner{Kind: storyboard.OwnerCamera, Index: 0}
-	if len(errs) != 1 || errs[0].Owner != want || !strings.HasPrefix(errs[0].Message, "compose: camera[0]: ") {
-		t.Errorf("errors %+v, want one compose problem on camera 0", errs)
-	}
-}
-
 func TestSession_CaptionBoxLargerThanTheFrame_IsOnTheCaption(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixture(t)
-	wide := strings.Repeat("too wide ", 20)
-	writeTestFile(t, f.boardPath, sessionStoryboard+"captions:\n  - {text: '"+wide+"', at: 100ms, for: 300ms}\n")
+	writeTestFile(t, f.boardPath, sessionStoryboard+"captions:\n  - {text: '"+tooWideText+"', at: 100ms, for: 300ms}\n")
 
 	if err := f.session.Refresh(); err != nil {
 		t.Fatalf("Refresh: %v", err)
@@ -611,17 +545,18 @@ func TestSession_RefusedEdit_ChangesNothing(t *testing.T) {
 	}
 }
 
-func TestSession_PanTargetNotOnScreen_KeepsTheLastGoodPipelineAndBlocksSave(t *testing.T) {
+func TestSession_BuildError_KeepsTheLastGoodPipelineAndBlocksSave(t *testing.T) {
 	t.Parallel()
-	f := newSessionFixtureOf(t, aimedStoryboard)
+	f := newSessionFixtureOf(t, captionsStoryboard)
 	good := f.session.good.frames
-	pan := storyboard.Owner{Kind: storyboard.OwnerCamera, Index: aimedPan}
+	caption := storyboard.Owner{Kind: storyboard.OwnerCaption, Index: 0}
 
-	f.apply(t, cameraEdit(aimedPan, storyboard.FieldCameraTo, json.RawMessage(notOnScreen)))
+	f.apply(t, tooWideCaptionEdit(0))
 
 	state := f.session.State()
-	if len(state.Errors) != 1 || state.Errors[0].Owner != pan || !strings.Contains(state.Errors[0].Message, "nowhere") {
-		t.Errorf("errors %+v, want one on camera %d naming the target", state.Errors, aimedPan)
+	if len(state.Errors) != 1 || state.Errors[0].Owner != caption ||
+		!strings.HasPrefix(state.Errors[0].Message, "caption: captions[0]: ") {
+		t.Errorf("errors %+v, want one caption problem on caption 0", state.Errors)
 	}
 	if f.session.good.frames != good {
 		t.Error("the last good pipeline was replaced")
@@ -629,14 +564,14 @@ func TestSession_PanTargetNotOnScreen_KeepsTheLastGoodPipelineAndBlocksSave(t *t
 	if err := f.session.Save(); !errors.Is(err, ErrInvalid) {
 		t.Errorf("Save: got %v, want ErrInvalid", err)
 	}
-	if got := f.readDisk(t); got != aimedStoryboard {
+	if got := f.readDisk(t); got != captionsStoryboard {
 		t.Errorf("the storyboard on disk changed:\n%s", got)
 	}
 }
 
 func TestSession_EveryEditsBuild_ReusesTheGoodPipeline(t *testing.T) {
 	t.Parallel()
-	f := newSessionFixtureOf(t, aimedStoryboard)
+	f := newSessionFixtureOf(t, captionsStoryboard)
 	var reused []bool
 	f.session.buildPipeline = func(
 		loaded *clip.Clip,
@@ -650,7 +585,7 @@ func TestSession_EveryEditsBuild_ReusesTheGoodPipeline(t *testing.T) {
 	}
 	edits := []Edit{
 		beatEdit(1, storyboard.FieldDuration, 1100),
-		cameraEdit(aimedPan, storyboard.FieldCameraTo, json.RawMessage(notOnScreen)),
+		tooWideCaptionEdit(0),
 		beatEdit(1, storyboard.FieldDuration, 1200),
 		frameEdit(storyboard.FieldFrameWidth, 120),
 	}
@@ -870,25 +805,5 @@ func TestSession_ApplyAndState_RunInParallel(t *testing.T) {
 	}
 	if got := beatDuration(t, f.session.State(), 1); got != 1100 && got != 1200 {
 		t.Errorf("beat 1 duration %dms, want one of the applied", got)
-	}
-}
-
-func TestSession_CameraEdit_MovesTheMoveAndUndoes(t *testing.T) {
-	t.Parallel()
-	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
-
-	f.apply(t, cameraEdit(0, storyboard.FieldCameraAt, json.RawMessage(`{"beat":1,"offset_ms":150}`)))
-	edited := f.session.State()
-	undoErr := f.session.Undo()
-	undone := f.session.State()
-
-	if move := edited.Camera[0]; move.StartMS != 150 || move.At != (MomentState{1, 150}) || !edited.IsDirty {
-		t.Errorf("after the edit: camera[0] %+v, dirty %v; want a start at 150ms on beat 1, dirty", move, edited.IsDirty)
-	}
-	if undoErr != nil {
-		t.Fatalf("Undo: %v", undoErr)
-	}
-	if move := undone.Camera[0]; move.StartMS != 100 || undone.IsDirty {
-		t.Errorf("after the undo: camera[0] %+v, dirty %v; want the start at 100ms, the bytes on disk", move, undone.IsDirty)
 	}
 }

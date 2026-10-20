@@ -1,7 +1,6 @@
 package tune
 
 import (
-	"encoding/json"
 	"errors"
 	"image"
 	"path/filepath"
@@ -36,8 +35,7 @@ areas:
     bottom: {match: '^a\+b'}
 `
 
-// pickStoryboard is one 2s beat over pickScreen under camera move pickPan, a pan to a cell, which
-// a pick's target replaces.
+// pickStoryboard is one 2s beat over pickScreen.
 const pickStoryboard = `clip: picked
 ship: out/picked.gif
 frame: {cols: 30, rows: 9, padding: 4, font_size: 10, line_height: 1.2, scale: 2, width: 600, fps: 10, max_colors: 16}
@@ -45,12 +43,7 @@ beats:
   - id: 1
     title: list
     duration: 2s
-camera:
-  - pan: {to: {cell: {x: 1, y: 1}}, at: 200ms, over: 600ms}
 `
-
-// pickPan is the index of pickStoryboard's pan.
-const pickPan = 0
 
 // pickScreen is what the pick take shows, one line per row.
 var pickScreen = []string{
@@ -262,113 +255,6 @@ func TestSession_Pick_NoTarget_IsRefused(t *testing.T) {
 
 			if !errors.Is(err, test.want) {
 				t.Errorf("Pick: want %v, got %v", test.want, err)
-			}
-		})
-	}
-}
-
-func TestSession_Pick_ProposedTargetIsAPanDestinationEdit(t *testing.T) {
-	t.Parallel()
-	session := newPickSession(t)
-	proposal, err := session.Pick(0, cellPixel(t, session, 0, 4), cellPixel(t, session, 6, 4))
-	if err != nil {
-		t.Fatalf("Pick: %v", err)
-	}
-
-	err = session.Apply(cameraEdit(pickPan, storyboard.FieldCameraTo, responseOf(proposal).Target))
-
-	if err != nil {
-		t.Fatalf("Apply the proposed target: %v", err)
-	}
-	state := session.State()
-	if len(state.Errors) != 0 {
-		t.Errorf("errors after the edit: %+v", state.Errors)
-	}
-	want := TargetState{Text: proposal.Target.Text, Nth: int(proposal.Target.Nth), Area: proposal.Target.Area}
-	if pan := state.Camera[pickPan]; pan.Cell != nil || pan.Target == nil || *pan.Target != want {
-		t.Errorf("camera %d: want the target %+v, got %+v", pickPan, want, pan)
-	}
-}
-
-func TestSession_LastMatchTarget_RoundTripsThroughTheProposalAndItsApply(t *testing.T) {
-	t.Parallel()
-	session := newPickSession(t)
-	last := storyboard.Target{Text: "beta", Nth: storyboard.NthLast}
-	response := responseOf(Proposal{Target: last, Snippets: snippetsOf(last)})
-
-	encoded, encodeErr := json.Marshal(response.Target)
-	applyErr := session.Apply(cameraEdit(pickPan, storyboard.FieldCameraTo, json.RawMessage(encoded)))
-
-	if encodeErr != nil {
-		t.Fatalf("encode the proposed target: %v", encodeErr)
-	}
-	if want := `{"text":"beta","nth":"last"}`; string(encoded) != want {
-		t.Errorf("the proposed target on the wire: want %s, got %s", want, encoded)
-	}
-	if want := "{text: 'beta', nth: last}"; response.Snippets[snippetZoom] != want {
-		t.Errorf("the bare target snippet: want %q, got %q", want, response.Snippets[snippetZoom])
-	}
-	if applyErr != nil {
-		t.Fatalf("Apply the proposed target: %v", applyErr)
-	}
-	want := TargetState{Text: "beta", Nth: int(storyboard.NthLast)}
-	if pan := session.State().Camera[pickPan]; pan.Target == nil || *pan.Target != want {
-		t.Errorf("camera %d: want the target %+v, got %+v", pickPan, want, pan)
-	}
-}
-
-func TestSession_PickProposal_AppliesAsAPanDestination(t *testing.T) {
-	t.Parallel()
-	session := newPickSession(t)
-	picked := func(row, fromCol, toCol int) func(*testing.T) Proposal {
-		return func(t *testing.T) Proposal {
-			t.Helper()
-			proposal, err := session.Pick(0, cellPixel(t, session, fromCol, row), cellPixel(t, session, toCol, row))
-			if err != nil {
-				t.Fatalf("Pick: %v", err)
-			}
-			return proposal
-		}
-	}
-	// built is a proposal of a shape the pick screen cannot yield, as the proposer would hand it.
-	built := func(target storyboard.Target) func(*testing.T) Proposal {
-		return func(*testing.T) Proposal {
-			return Proposal{Target: target, Snippets: snippetsOf(target)}
-		}
-	}
-	tests := []struct {
-		name     string
-		proposal func(*testing.T) Proposal
-		want     storyboard.Target
-	}{
-		{name: "first match", proposal: picked(5, 0, 5),
-			want: storyboard.Target{Text: "unique"}},
-		{name: "first match in an area", proposal: picked(4, 8, 11),
-			want: storyboard.Target{Text: "here", Area: "status"}},
-		{name: "first match spelled as nth 1", proposal: built(storyboard.Target{Text: "unique", Nth: storyboard.NthFirst}),
-			want: storyboard.Target{Text: "unique"}},
-		{name: "nth 2", proposal: built(storyboard.Target{Text: "beta", Nth: 2}),
-			want: storyboard.Target{Text: "beta", Nth: 2}},
-		{name: "nth 2 in an area", proposal: picked(2, 7, 10),
-			want: storyboard.Target{Text: "beta", Nth: 2, Area: "list"}},
-		{name: "last match", proposal: built(storyboard.Target{Text: "beta", Nth: storyboard.NthLast}),
-			want: storyboard.Target{Text: "beta", Nth: storyboard.NthLast}},
-		{name: "last match in an area", proposal: built(storyboard.Target{Text: "beta", Nth: storyboard.NthLast, Area: "list"}),
-			want: storyboard.Target{Text: "beta", Nth: storyboard.NthLast, Area: "list"}},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-			proposed := responseOf(test.proposal(t)).Target
-			panTo := cameraEdit(pickPan, storyboard.FieldCameraTo, proposed)
-
-			_, panned, panErr := storyboard.Apply([]byte(pickStoryboard), "picked.yaml", panTo)
-
-			if panErr != nil {
-				t.Fatalf("apply %+v as camera.to: %v", proposed, panErr)
-			}
-			if got := panned.Camera[pickPan].Pan.To; got.Cell != nil || got.Target != test.want {
-				t.Errorf("camera.to: want %+v, got %+v", test.want, got)
 			}
 		})
 	}

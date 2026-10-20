@@ -10,14 +10,12 @@ import (
 	"image"
 	"image/png"
 	"io"
-	"maps"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -279,51 +277,16 @@ func TestHandler_EditThenFrame_ChangesTheFrame(t *testing.T) {
 
 func TestHandler_EditsAsThePageSendsThem_AreApplied(t *testing.T) {
 	t.Parallel()
-	session := newPickSession(t)
-	handler := newHandler(session, testAddr)
-	picked := post(t, handler, "/api/pick", pickBody(t, 0, cellPixel(t, session, 0, 5), cellPixel(t, session, 5, 5)))
-	assertStatus(t, picked, http.StatusOK)
-	var answer struct {
-		Target json.RawMessage `json:"target"`
-	}
-	decodeResponse(t, picked, &answer)
+	handler := newHandler(newPickSession(t), testAddr)
 	drag := `{"owner":{"kind":"beat","index":1},"field":"duration","value":1500}`
-	target := `{"owner":{"kind":"camera","index":0},"field":"camera.to","value":` + string(answer.Target) + `}`
 
 	dragged := post(t, handler, "/api/edit", drag)
-	targeted := post(t, handler, "/api/edit", target)
 
 	assertStatus(t, dragged, http.StatusOK)
-	assertStatus(t, targeted, http.StatusOK)
 	var state State
-	decodeResponse(t, targeted, &state)
+	decodeResponse(t, dragged, &state)
 	if got := beatDuration(t, state, 1); got != 1500 {
 		t.Errorf("beat 1 after the drag: want 1500ms, got %dms", got)
-	}
-	if pan := state.Camera[pickPan]; pan.Target == nil || *pan.Target != (TargetState{Text: "unique"}) {
-		t.Errorf("camera %d after the picked target: want unique, got %+v", pickPan, pan)
-	}
-}
-
-func TestHandler_CameraEditsAsThePageSendsThem_AreApplied(t *testing.T) {
-	t.Parallel()
-	handler := newHandler(newSessionFixtureOf(t, cameraCaptionsStoryboard).session, testAddr)
-	moved := `{"owner":{"kind":"camera","index":0},"field":"camera.at","value":{"beat":1,"offset_ms":150}}`
-	aimed := `{"owner":{"kind":"camera","index":3},"field":"camera.to","value":{"text":"tests","nth":"last"}}`
-
-	movedResponse := post(t, handler, "/api/edit", moved)
-	aimedResponse := post(t, handler, "/api/edit", aimed)
-
-	assertStatus(t, movedResponse, http.StatusOK)
-	assertStatus(t, aimedResponse, http.StatusOK)
-	var state State
-	decodeResponse(t, aimedResponse, &state)
-	if move := state.Camera[0]; move.At != (MomentState{Beat: 1, OffsetMS: 150}) {
-		t.Errorf("camera 0 after the moment: want at beat 1 + 150ms, got %+v", move.At)
-	}
-	wantTarget := TargetState{Text: "tests", Nth: int(storyboard.NthLast)}
-	if move := state.Camera[3]; move.Cell != nil || move.Target == nil || *move.Target != wantTarget {
-		t.Errorf("camera 3 after the picked target: want %+v and no cell, got %+v", wantTarget, move)
 	}
 }
 
@@ -492,92 +455,6 @@ func TestHandler_PickOnBlanks_Is422(t *testing.T) {
 	decodeResponse(t, response, &failure)
 	if failure.Error == "" {
 		t.Error("the refusal carries no message")
-	}
-}
-
-// viaPanIndex is the index of cameraCaptionsStoryboard's via pan, whose two points are cell
-// (2, 1) and the target failing.
-const viaPanIndex = 1
-
-func TestHandler_State_SpellsAViaPansPoints(t *testing.T) {
-	t.Parallel()
-	handler := newHandler(newSessionFixtureOf(t, cameraCaptionsStoryboard).session, testAddr)
-
-	response := get(t, handler, "/api/state")
-
-	assertStatus(t, response, http.StatusOK)
-	var state struct {
-		Camera []map[string]json.RawMessage `json:"camera"`
-	}
-	decodeResponse(t, response, &state)
-	var via []map[string]json.RawMessage
-	if err := json.Unmarshal(state.Camera[viaPanIndex]["via"], &via); err != nil {
-		t.Fatalf("decode the via pan's via %s: %v", state.Camera[viaPanIndex]["via"], err)
-	}
-	if len(via) != 2 || keysOf(via[0]) != "cell" || keysOf(via[1]) != "target" {
-		t.Errorf("via: want a cell point then a target point, got %s", state.Camera[viaPanIndex]["via"])
-	}
-	for _, index := range []int{0, 2, 3} {
-		if _, ok := state.Camera[index]["via"]; ok {
-			t.Errorf("camera[%d]: want no via key on a move that is not a via pan", index)
-		}
-	}
-}
-
-// keysOf is the keys of object, sorted and joined by commas.
-func keysOf(object map[string]json.RawMessage) string {
-	return strings.Join(slices.Sorted(maps.Keys(object)), ",")
-}
-
-func TestHandler_Path_IsTheViaPansPointsOnTheFrame(t *testing.T) {
-	t.Parallel()
-	session := newSessionFixtureOf(t, cameraCaptionsStoryboard).session
-	handler := newHandler(session, testAddr)
-
-	response := get(t, handler, "/api/path?camera=1&t=0")
-
-	assertStatus(t, response, http.StatusOK)
-	var path pathResponse
-	decodeResponse(t, response, &path)
-	frames := session.goodPipeline().frames
-	if len(path.Points) != 2 {
-		t.Fatalf("points: want one per waypoint, 2, got %+v", path.Points)
-	}
-	for _, point := range path.Points {
-		if !image.Pt(point.X, point.Y).In(image.Rectangle{Max: frames.Size()}) {
-			t.Errorf("point %+v: want it inside the %v frame", point, frames.Size())
-		}
-	}
-	first := path.Points[0]
-	if col, row, ok := frames.Cell(0, image.Pt(first.X, first.Y)); !ok || col != 2 || row != 1 {
-		t.Errorf("first point %+v: want on cell (2, 1), got (%d, %d) on the grid %t", first, col, row, ok)
-	}
-}
-
-func TestHandler_Path_BadQuery_IsRefused(t *testing.T) {
-	t.Parallel()
-	handler := newHandler(newSessionFixtureOf(t, cameraCaptionsStoryboard).session, testAddr)
-	tests := []struct {
-		name   string
-		query  string
-		status int
-	}{
-		{name: "a zoom", query: "camera=0&t=0", status: http.StatusUnprocessableEntity},
-		{name: "a pan to", query: "camera=2&t=0", status: http.StatusUnprocessableEntity},
-		{name: "past the camera list", query: "camera=4&t=0", status: http.StatusUnprocessableEntity},
-		{name: "before the camera list", query: "camera=-1&t=0", status: http.StatusUnprocessableEntity},
-		{name: "camera not a number", query: "camera=first&t=0", status: http.StatusBadRequest},
-		{name: "camera missing", query: "t=0", status: http.StatusBadRequest},
-		{name: "time not a number", query: "camera=1&t=soon", status: http.StatusBadRequest},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			response := get(t, handler, "/api/path?"+test.query)
-
-			assertStatus(t, response, test.status)
-		})
 	}
 }
 

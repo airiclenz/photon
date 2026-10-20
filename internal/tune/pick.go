@@ -47,7 +47,7 @@ type Proposal struct {
 }
 
 // Pick proposes a target for the cells a rectangle from from to to picks, in output-frame pixels on
-// the frame shown at output time out, mapped to cells through the last good pipeline's camera: the
+// the frame shown at output time out, mapped to cells through the last good pipeline's camera; the
 // row is the one under from, the columns span from from to to, clamped to that row, and blank cells
 // at either edge are dropped. The target is the picked text, regex-escaped. It is searched in the
 // declared areas holding the row, fewest rows first and equal heights in name order, and the first

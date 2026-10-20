@@ -79,7 +79,6 @@ func TestSession_Frame_AfterEditMatchesTheRenderOfTheSavedFile(t *testing.T) {
 		{"duration", sessionStoryboard, beatEdit(1, storyboard.FieldDuration, 2000), 500 * time.Millisecond},
 		{"hold", sessionStoryboard, beatEdit(1, storyboard.FieldHold, 600), 500 * time.Millisecond},
 		{"cut", sessionStoryboard, beatEdit(1, storyboard.FieldCut, true), 500 * time.Millisecond},
-		{"zoom ramp", aimedStoryboard, cameraEdit(0, storyboard.FieldCameraOver, 600), 1200 * time.Millisecond},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

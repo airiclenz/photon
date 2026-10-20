@@ -42,7 +42,6 @@ const (
 	routeReload  = "POST /api/reload"
 	routeSave    = "POST /api/save"
 	routePick    = "POST /api/pick"
-	routePath    = "GET /api/path"
 )
 
 // The headers and media types the API reads and writes.
@@ -56,8 +55,7 @@ const (
 	noSniff            = "nosniff"
 )
 
-// frameTimeParam is the frame and path routes' query parameter: the output time in whole
-// milliseconds.
+// frameTimeParam is the frame route's query parameter: the output time in whole milliseconds.
 const frameTimeParam = "t"
 
 // frameDraftParam is the frame route's query parameter asking for a draft frame: 1 asks for one,
@@ -69,9 +67,6 @@ const (
 	draftOn  = "1"
 	draftOff = "0"
 )
-
-// pathCameraParam is the path route's query parameter: the via pan's index in the camera list.
-const pathCameraParam = "camera"
 
 // localhostName is the other host name, beside the listen address's own IP, a request may name.
 const localhostName = "localhost"
@@ -105,11 +100,6 @@ type pickRequest struct {
 type pixelPoint struct {
 	X int `json:"x"`
 	Y int `json:"y"`
-}
-
-// pathResponse is a path's answer: the via pan's points in order, in output-frame pixels.
-type pathResponse struct {
-	Points []pixelPoint `json:"points"`
 }
 
 // pickResponse is a pick's answer: the target, the cell box it resolves to, that box in
@@ -169,7 +159,6 @@ func newHandler(session *Session, addr string) http.Handler {
 	mux.HandleFunc(routeReload, serving.stateAfter(session.Reload))
 	mux.HandleFunc(routeSave, serving.stateAfter(session.Save))
 	mux.HandleFunc(routePick, serving.handlePick)
-	mux.HandleFunc(routePath, serving.handlePath)
 	return serving.guard(mux)
 }
 
@@ -248,30 +237,6 @@ func (s *server) handleFrame(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	//nolint:errcheck,gosec // a failed write means the page went away; nothing is left to tell
 	w.Write(frame)
-}
-
-// handlePath answers the points of the via pan ?camera= on the frame at the output time ?t=, in
-// whole milliseconds, or 422 when that camera move is not a via pan.
-func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
-	out, ok := frameTimeOf(w, r)
-	if !ok {
-		return
-	}
-	index, err := strconv.Atoi(r.URL.Query().Get(pathCameraParam))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "the camera index must be a whole number")
-		return
-	}
-	points, err := s.session.Path(out, index)
-	if err != nil {
-		writeError(w, statusOf(err), err.Error())
-		return
-	}
-	response := pathResponse{Points: make([]pixelPoint, 0, len(points))}
-	for _, point := range points {
-		response.Points = append(response.Points, pixelPoint{X: point.X, Y: point.Y})
-	}
-	writeJSON(w, http.StatusOK, response)
 }
 
 // frameTimeOf is r's output time ?t=, in whole milliseconds; when it is not one, it answers 400
@@ -380,8 +345,7 @@ func statusOf(err error) int {
 	case errors.Is(err, ErrStale):
 		return http.StatusConflict
 	case errors.Is(err, ErrInvalid), errors.Is(err, ErrNoUndo), errors.Is(err, ErrNoRedo),
-		errors.Is(err, render.ErrOutsideClip), errors.Is(err, ErrNoProposal),
-		errors.Is(err, ErrNoPath):
+		errors.Is(err, render.ErrOutsideClip), errors.Is(err, ErrNoProposal):
 		return http.StatusUnprocessableEntity
 	default:
 		return http.StatusInternalServerError

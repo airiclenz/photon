@@ -28,21 +28,21 @@ func frameEdit(field string, value any) Edit {
 	return Edit{Owner: storyboard.Owner{Kind: storyboard.OwnerClip}, Field: field, Value: typedValue(value)}
 }
 
-// cameraEdit is an Edit of the camera move at index, its value typed as value encodes.
-func cameraEdit(index int, field string, value any) Edit {
-	owner := storyboard.Owner{Kind: storyboard.OwnerCamera, Index: index}
-	return Edit{Owner: owner, Field: field, Value: typedValue(value)}
-}
-
 // captionEdit is an Edit of the caption at index, its value typed as value encodes.
 func captionEdit(index int, field string, value any) Edit {
 	owner := storyboard.Owner{Kind: storyboard.OwnerCaption, Index: index}
 	return Edit{Owner: owner, Field: field, Value: typedValue(value)}
 }
 
+// tooWideCaptionEdit is an Edit setting the caption at index to [tooWideText], which leaves the
+// storyboard valid but its pipeline unbuilt.
+func tooWideCaptionEdit(index int) Edit {
+	return captionEdit(index, storyboard.FieldCaptionText, tooWideText)
+}
+
 func TestSession_CaptionEdit_SwapsTheEndAndUndoes(t *testing.T) {
 	t.Parallel()
-	f := newSessionFixtureOf(t, cameraCaptionsStoryboard)
+	f := newSessionFixtureOf(t, captionsStoryboard)
 
 	f.apply(t, captionEdit(1, storyboard.FieldCaptionFor, 1000))
 	edited := f.session.State()

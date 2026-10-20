@@ -4,7 +4,6 @@ import (
 	"image"
 	"math"
 	"slices"
-	"time"
 
 	"github.com/airiclenz/photon/internal/render"
 	"github.com/airiclenz/photon/internal/schedule"
@@ -12,8 +11,8 @@ import (
 )
 
 // State is everything the page shows of a session, as `/api/state` sends it. Durations are
-// whole milliseconds, the spelling an [Edit] takes. Beats, Camera and Captions come from the
-// current storyboard, and so does Fields, the description of every field the page shows; Sections,
+// whole milliseconds, the spelling an [Edit] takes. Beats and Captions come from the current
+// storyboard, and so does Fields, the description of every field the page shows; Sections,
 // Warnings and Length from its schedule, or from the last good pipeline's while the current bytes
 // do not schedule; a caption's laid-out box from the current bytes' pipeline, only while it builds
 // in full. Version rises on every change, so a page that saw it already has nothing new
@@ -23,7 +22,6 @@ type State struct {
 	Version  int            `json:"version"`
 	Build    string         `json:"build"`
 	Beats    []BeatState    `json:"beats"`
-	Camera   []CameraState  `json:"camera"`
 	Captions []CaptionState `json:"captions"`
 	Sections []SectionState `json:"sections"`
 	Warnings []string       `json:"warnings"`
@@ -71,38 +69,11 @@ type TargetState struct {
 	Area string `json:"area"`
 }
 
-// CameraState is one camera move, in storyboard order: its Index in the storyboard's camera
-// list, its Kind (zoom or pan), where it starts and ends on the output clock, and its fields.
-// Factor is a zoom's destination magnification. A pan to aims at its Target or its Cell, one of
-// the two; a via pan has neither and reports Via, the points of its path in order, each spelled
-// as a pan to's destination is, and ViaCount, how many there are. Where the path runs on a
-// frame is [Session.Path]'s.
-type CameraState struct {
-	Index    int          `json:"index"`
-	Kind     string       `json:"kind"`
-	StartMS  int64        `json:"start_ms"`
-	EndMS    int64        `json:"end_ms"`
-	At       MomentState  `json:"at"`
-	OverMS   int64        `json:"over_ms"`
-	Ease     string       `json:"ease"`
-	Factor   float64      `json:"factor,omitempty"`
-	Target   *TargetState `json:"target,omitempty"`
-	Cell     *CellState   `json:"cell,omitempty"`
-	Via      []PointState `json:"via,omitempty"`
-	ViaCount int          `json:"via_count"`
-}
-
 // PointState is one point a pan aims at: a Target or a Cell, one of the two.
 type PointState struct {
 	Target *TargetState `json:"target,omitempty"`
 	Cell   *CellState   `json:"cell,omitempty"`
 }
-
-// The spellings of CameraState's Kind.
-const (
-	cameraKindZoom = "zoom"
-	cameraKindPan  = "pan"
-)
 
 // CellState is one cell of the terminal grid a pan aims at: column X and row Y, both 0-based.
 type CellState struct {
@@ -177,8 +148,8 @@ type SectionState struct {
 	Report     string  `json:"report"`
 }
 
-// Problem is one error standing on the storyboard: Owner is the beat, camera move or caption it
-// belongs to, or the clip as a whole.
+// Problem is one error standing on the storyboard: Owner is the beat or caption it belongs to,
+// or the clip as a whole.
 type Problem struct {
 	Owner   storyboard.Owner `json:"owner"`
 	Message string           `json:"message"`
@@ -203,7 +174,6 @@ func (s *Session) State() State {
 		Version:    s.version,
 		Build:      s.photonBuild,
 		Beats:      beatStates(board),
-		Camera:     cameraStates(board),
 		Captions:   captionStates(board, s.current.frames),
 		Sections:   sectionStates(clipSchedule),
 		Warnings:   append([]string{}, clipSchedule.Warnings...),
@@ -240,59 +210,6 @@ func beatStates(board *storyboard.Storyboard) []BeatState {
 		})
 	}
 	return beats
-}
-
-// cameraStates lists board's camera moves in storyboard order.
-func cameraStates(board *storyboard.Storyboard) []CameraState {
-	moves := make([]CameraState, 0, len(board.Camera))
-	for index, move := range board.Camera {
-		var state CameraState
-		switch {
-		case move.Zoom != nil:
-			zoom := move.Zoom
-			state = movedState(cameraKindZoom, zoom.Start(), zoom.At, zoom.Over, zoom.Ease)
-			state.Factor = zoom.To
-		case move.Pan != nil:
-			pan := move.Pan
-			state = movedState(cameraKindPan, pan.Start(), pan.At, pan.Over, pan.Ease)
-			state.ViaCount = len(pan.Via)
-			if to := pan.To; to != nil {
-				aimed := pointState(*to)
-				state.Target, state.Cell = aimed.Target, aimed.Cell
-			}
-			for _, point := range pan.Via {
-				state.Via = append(state.Via, pointState(point))
-			}
-		}
-		state.Index = index
-		moves = append(moves, state)
-	}
-	return moves
-}
-
-// pointState spells point, a pan's destination or one of its via points, as the page reads it.
-func pointState(point storyboard.Point) PointState {
-	if point.Cell != nil {
-		return PointState{Cell: &CellState{X: point.Cell.X, Y: point.Cell.Y}}
-	}
-	return PointState{Target: &TargetState{Text: point.Text, Nth: int(point.Nth), Area: point.Area}}
-}
-
-// movedState is the part of a camera move's state every form shares: its kind, its timing as
-// the storyboard spells it, and where it starts and ends on the output clock, from start, its
-// resolved At.
-func movedState(
-	kind string, start time.Duration, at storyboard.Moment, over time.Duration,
-	ease storyboard.Ease,
-) CameraState {
-	return CameraState{
-		Kind:    kind,
-		StartMS: start.Milliseconds(),
-		EndMS:   (start + over).Milliseconds(),
-		At:      momentState(at),
-		OverMS:  over.Milliseconds(),
-		Ease:    string(ease),
-	}
 }
 
 // captionStates lists board's captions in storyboard order, each with the box frames lays it
@@ -404,9 +321,9 @@ func problemsOf(err error, board *storyboard.Storyboard) []Problem {
 	return problems
 }
 
-// ownerOn returns owner, or the clip when owner is a beat, camera move or caption board does not
-// have, so the problem still shows on a panel: an outside write that fails to parse adds what the
-// last good board, the one the page shows, lacks.
+// ownerOn returns owner, or the clip when owner is a beat or caption board does not have, or any
+// other owner, so the problem still shows on a panel: an outside write that fails to parse adds
+// what the last good board, the one the page shows, lacks.
 func ownerOn(owner storyboard.Owner, board *storyboard.Storyboard) storyboard.Owner {
 	if owner.Kind == storyboard.OwnerClip {
 		return owner
@@ -417,15 +334,13 @@ func ownerOn(owner storyboard.Owner, board *storyboard.Storyboard) storyboard.Ow
 	return owner
 }
 
-// hasOwner reports whether board has the beat, camera move or caption owner names.
+// hasOwner reports whether board has the beat or caption owner names.
 func hasOwner(board *storyboard.Storyboard, owner storyboard.Owner) bool {
 	switch owner.Kind {
 	case storyboard.OwnerBeat:
 		return slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool {
 			return beat.ID == owner.Index
 		})
-	case storyboard.OwnerCamera:
-		return owner.Index >= 0 && owner.Index < len(board.Camera)
 	case storyboard.OwnerCaption:
 		return owner.Index >= 0 && owner.Index < len(board.Captions)
 	default:
