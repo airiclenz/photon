@@ -16,8 +16,9 @@ import (
 
 // move is one move of a camera track on the output clock: from Start it eases the track from the
 // value it holds then to To over Over; an Over of 0 sets To at Start. Ease picks the pace of its
-// progress: smootherstep, the default when empty, or linear. Via lists the points a pan passes
-// through on its way to To, in order; a zoom move leaves it empty.
+// progress as [eased] runs it: smootherstep, the default when empty, linear, ease-in or ease-out.
+// Via lists the points a pan passes through on its way to To, in order; a zoom move leaves it
+// empty.
 type move[V any] struct {
 	Start, Over time.Duration
 	To          V
@@ -91,11 +92,25 @@ func (m move[V]) timing() move[V] { return m }
 
 // progress is the eased share of the move done at output time t, clamped to [0, 1].
 func (m move[V]) progress(t time.Duration) float64 {
-	share := clamp01(float64(t-m.Start) / float64(m.Over))
-	if m.Ease == storyboard.EaseLinear {
-		return share
+	return eased(m.Ease, float64(t-m.Start)/float64(m.Over))
+}
+
+// eased is share, clamped to [0, 1], run through ease: linear keeps it, ease-in is share³ (slow
+// to start), ease-out is 1−(1−share)³ (slow to settle) and smooth — also an empty ease — is
+// smootherstep.
+func eased(ease storyboard.Ease, share float64) float64 {
+	clamped := clamp01(share)
+	switch ease {
+	case storyboard.EaseLinear:
+		return clamped
+	case storyboard.EaseIn:
+		return clamped * clamped * clamped
+	case storyboard.EaseOut:
+		remaining := 1 - clamped
+		return 1 - remaining*remaining*remaining
+	default:
+		return easeInOut(clamped)
 	}
-	return easeInOut(share)
 }
 
 // sortByStart sorts a track's moves by start, keeping the given order of moves that start

@@ -8,16 +8,16 @@
 // track of the magnification, at rest at 1, and a pan track of the crop's centre, at rest at the
 // frame's centre. The storyboard's `camera` moves are planned onto them, each at its `at` on the
 // output clock for its `over`: a zoom move goes on the zoom track alone and eases to its factor,
-// and a pan move is the only move of the pan track. Each zoom move runs smootherstep on the
-// factor's exponent, so every frame scales by the same ratio at the same eased pace. A pan move
-// carries the centre along a centripetal Catmull-Rom path from the centre the crop shows at its
-// start — the frame's centre at a factor of 1, else the held centre clamped as the crop clamps
-// it — through any waypoints, to its end, walked by arc length, so it turns without a corner at a
-// waypoint; its progress runs smootherstep, or straight when its ease is linear. A pan's points
-// are a cell's centre or a target's box centre, resolved on the screen shown at the move's end
-// and walking back to the one shown at its start. A zoomed frame is cleared to the background
-// colour [New] is given before the crop is drawn, and the cursor is mapped through the same crop,
-// so it follows the camera.
+// and a pan move is the only move of the pan track. Each zoom move eases the factor's exponent, so
+// every frame scales by the same ratio at the same eased pace. A pan move carries the centre
+// along a centripetal Catmull-Rom path from the centre the crop shows at its start — the frame's
+// centre at a factor of 1, else the held centre clamped as the crop clamps it — through any
+// waypoints, to its end, walked by arc length, so it turns without a corner at a waypoint. Every
+// move's progress runs by its ease: smootherstep (`smooth`, the default), straight (`linear`), t³
+// (`ease-in`) or 1−(1−t)³ (`ease-out`). A pan's points are a cell's centre or a target's box
+// centre, resolved on the screen shown at the move's end and walking back to the one shown at
+// its start. A zoomed frame is cleared to the background colour [New] is given before the crop is
+// drawn, and the cursor is mapped through the same crop, so it follows the camera.
 //
 // The cursor is drawn, not recorded: a white dot in a dark outline that fades in, glides
 // (smootherstep) from the previous point — the bottom row's centre before the first — to each
@@ -46,6 +46,8 @@
 //     planning the storyboard's camera moves onto them, a via pan's points kept by its index,
 //     and resolving a target on the screens a stretch of the take shows.
 //   - path.go: a pan's smooth path through its points, walked by arc length.
+//   - position.go: the position track of the camera's aims on the output clock, held at each
+//     position and glided across the gaps between them.
 //   - cursor.go: the cursor's track of clicks and drags, its position, opacity and ring,
 //     painting it, and the smootherstep ease.
 package compose

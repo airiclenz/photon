@@ -63,6 +63,35 @@ func TestCameraZoomEasesInLogSpace(t *testing.T) {
 	}
 }
 
+func TestCameraZoomProgressRunsByItsEase(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		ease  storyboard.Ease
+		share float64
+	}{
+		{name: "linear", ease: storyboard.EaseLinear, share: 0.25},
+		{name: "smooth", ease: storyboard.EaseSmooth, share: 0.103515625},
+		{name: "empty eases as smooth", ease: "", share: 0.103515625},
+		{name: "ease-in", ease: storyboard.EaseIn, share: 0.015625},
+		{name: "ease-out", ease: storyboard.EaseOut, share: 0.578125},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			clipCamera := newCamera(cameraLayout, []move[float64]{
+				{Start: 0, Over: 4 * sec, To: 16, Ease: tc.ease},
+			}, nil)
+
+			got := clipCamera.factorAt(sec)
+
+			// The factor eases by exponent, so a quarter of the time in is 16 to the eased share.
+			if want := math.Pow(16, tc.share); math.Abs(got-want) > 1e-9 {
+				t.Errorf("factor a quarter through the zoom: want %g, got %g", want, got)
+			}
+		})
+	}
+}
+
 func TestCameraPanEasesAlongAStraightLine(t *testing.T) {
 	t.Parallel()
 	clipCamera := newCamera(cameraLayout, nil, []move[pointF]{

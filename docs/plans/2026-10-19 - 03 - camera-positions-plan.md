@@ -197,7 +197,10 @@ moves' "ease unknown" row with the four-ease message.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard`
 **Commit:** `feat(storyboard): add camera positions and zooms with their validation`
 
-## 5. Compose: the position track and the four eases
+## 5. Compose: the position track and the four eases — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): doc.go's package comment now says every move's progress runs by its ease (four curves) and that a zoom eases its exponent, replacing "smootherstep, or straight when linear"; the position track is not described there yet (item 7 wires it in), only listed in the file map.
+NOTES (2026-10-20): `make lint` fails outside this item: internal/tune/pagejs_test.go:1068 ineffassign on `height`, left behind when da397bc (item 1) removed the `wantPath` line that read it.
 
 Depends on item 4.
 
