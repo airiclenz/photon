@@ -1,12 +1,14 @@
 ---
 title: Drag a position's cell on the tune preview
-status: open
+status: done
 type: feature
 priority: 2
 labels: [tune]
 deps: [tune-position-lane]
 plan: 2026-10-19 - 03 - camera-positions-plan
 created: 2026-10-19T19:44:34Z
+closed: 2026-10-20T10:58:42Z
+reason: "Resolved by camera-positions-plan (c433437): preview marker drag sets a position's cell (item 18)"
 ---
 
 A position's cell can only be typed in as numbers today. Aiming the camera should happen on the

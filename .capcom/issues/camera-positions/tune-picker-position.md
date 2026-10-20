@@ -1,12 +1,14 @@
 ---
 title: Picker sets a position's text target
-status: open
+status: done
 type: feature
 priority: 2
 labels: [tune]
 deps: [tune-position-lane]
 plan: 2026-10-19 - 03 - camera-positions-plan
 created: 2026-10-19T19:44:34Z
+closed: 2026-10-20T10:58:42Z
+reason: "Resolved by camera-positions-plan (c433437): Set as position target (item 19)"
 ---
 
 The target picker (`internal/tune/page/picker.js`, `internal/tune/pick.go`) offers "Set as pan

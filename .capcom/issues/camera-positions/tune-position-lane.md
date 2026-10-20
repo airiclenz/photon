@@ -1,12 +1,14 @@
 ---
 title: Position lane with transition bars in tune
-status: open
+status: done
 type: feature
 priority: 2
 labels: [tune]
 deps: [position-schema]
 plan: 2026-10-19 - 03 - camera-positions-plan
 created: 2026-10-19T19:44:34Z
+closed: 2026-10-20T10:58:42Z
+reason: "Resolved by camera-positions-plan (c433437): position lane, transition bars, drags, + on centre (items 14-17)"
 ---
 
 The tune page's `pan` lane draws one bar per pan move (`internal/tune/page/lanes.js`,
@@ -38,3 +40,7 @@ Wanted, in `photon tune`:
   move, resize hold, drag a transition, resize a transition edge, shrink to a cut, a refused edit
   snapping back, and `+` adding a point on the current centre.
 - Each edit is one undoable storyboard edit and is saved back changing only the edited values.
+
+## Log
+
+- 2026-10-20 Airic Lenz: Known gap: in a real browser the 9px edge grips of a neighbouring transition cover a point marker it leads into, so a press there sends position.transition (equivalent storyboard result) instead of position.at; goja cannot hit-test this.

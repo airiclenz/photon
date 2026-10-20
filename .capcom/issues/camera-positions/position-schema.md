@@ -1,11 +1,13 @@
 ---
 title: Camera positions and zooms in the storyboard and render
-status: open
+status: done
 type: feature
 priority: 2
 labels: [storyboard]
 plan: 2026-10-19 - 03 - camera-positions-plan
 created: 2026-10-19T19:44:34Z
+closed: 2026-10-20T10:58:42Z
+reason: "Resolved by camera-positions-plan (c433437): positions/zooms schema, lint, render, docs (items 4-12)"
 ---
 
 The storyboard's camera is a list of `zoom` and `pan` moves (`internal/storyboard/camera.go`).
