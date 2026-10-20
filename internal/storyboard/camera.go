@@ -1,7 +1,9 @@
 package storyboard
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -18,6 +20,14 @@ import (
 type CameraMove struct {
 	Zoom *ZoomMove `yaml:"zoom"`
 	Pan  *PanMove  `yaml:"pan"`
+}
+
+// Camera is the clip's camera on two tracks: Positions say where it aims and Zooms how far it
+// magnifies. Either list may be given in any order; validation places each entry on the clip's
+// output clock and refuses two positions, or two zooms, that overlap.
+type Camera struct {
+	Positions []Position `yaml:"positions"`
+	Zooms     []ZoomMove `yaml:"zooms"`
 }
 
 // ZoomMove changes the magnification to To, a factor in [1, 3], starting At and lasting Over. It
@@ -77,15 +87,27 @@ type Cell struct {
 	Y int `yaml:"y"`
 }
 
-// Ease is how a camera move's progress runs over its length. [Load] sets an absent one to
-// [EaseSmooth].
+// Ease is how a camera move's progress, or a transition's into a position, runs over its length.
+// [Load] sets an absent one on a camera move to [EaseSmooth].
 type Ease string
 
-// The spellings of Ease.
+// The spellings of Ease: [EaseLinear] runs at an even pace, [EaseSmooth] starts and ends gently,
+// [EaseIn] starts slow and [EaseOut] ends slow.
 const (
 	EaseSmooth Ease = "smooth"
 	EaseLinear Ease = "linear"
+	EaseIn     Ease = "ease-in"
+	EaseOut    Ease = "ease-out"
 )
+
+// validateEase checks that an ease, when set, is one of the four spellings. Problems are filed
+// under ease.
+func validateEase(ease Ease, report reporter) {
+	if ease == "" || slices.Contains([]Ease{EaseSmooth, EaseLinear, EaseIn, EaseOut}, ease) {
+		return
+	}
+	report("ease: want %s, %s, %s or %s, got %q", EaseSmooth, EaseLinear, EaseIn, EaseOut, ease)
+}
 
 // Pan path bounds: a via path runs from at least one waypoint to its destination.
 const minViaPoints = 2
@@ -113,6 +135,62 @@ func (s span) String() string {
 	return fmt.Sprintf("[%s, %s)", s.start, s.end)
 }
 
+// heldSpan is the stretch one camera entry holds, with the owner its problems are filed under.
+type heldSpan struct {
+	owner Owner
+	span
+}
+
+// reportOverlaps files every two entries of one track that overlap under the later of them by
+// start, naming the earlier. Two entries that start together overlap even when one holds no time.
+// It sorts held by start, keeping list order between equal starts.
+func reportOverlaps(held []heldSpan, collect collector) {
+	slices.SortStableFunc(held, func(a, b heldSpan) int { return cmp.Compare(a.start, b.start) })
+	for later, entry := range held {
+		for _, earlier := range held[:later] {
+			if earlier.start == entry.start || earlier.overlaps(entry.span) {
+				collect.at(entry.owner)("overlaps %s (%s and %s)",
+					earlier.holder, earlier.span, entry.span)
+			}
+		}
+	}
+}
+
+// validate checks every position and zoom against frame and the clip's output clock, keeping the
+// start each resolves, then that no two positions and no two zooms overlap. Problems are filed
+// under camera.positions[i] or camera.zooms[i]; an overlap under the later of the two by start.
+func (c Camera) validate(frame Frame, clock OutputClock, collect collector) {
+	positions := make([]heldSpan, 0, len(c.Positions))
+	for index := range c.Positions {
+		position := &c.Positions[index]
+		owner := Owner{Kind: OwnerPosition, Index: index}
+		placed, isPlaced := position.validate(frame, clock, collect.at(owner))
+		if !isPlaced {
+			continue
+		}
+		position.start = placed.start
+		placed.holder = fmt.Sprintf("camera.positions[%d]", index)
+		positions = append(positions, heldSpan{owner: owner, span: placed})
+	}
+	reportOverlaps(positions, collect)
+
+	zooms := make([]heldSpan, 0, len(c.Zooms))
+	for index := range c.Zooms {
+		zoom := &c.Zooms[index]
+		owner := Owner{Kind: OwnerZoom, Index: index}
+		report := collect.at(owner)
+		zoom.validate(report)
+		placed, isPlaced := placeMove(clock, moveTiming{zoom.At, zoom.Over, zoom.Ease}, report)
+		if !isPlaced {
+			continue
+		}
+		zoom.start = placed.start
+		placed.holder = fmt.Sprintf("camera.zooms[%d]", index)
+		zooms = append(zooms, heldSpan{owner: owner, span: placed})
+	}
+	reportOverlaps(zooms, collect)
+}
+
 // moveTiming is the part every camera move form shares: where it starts, how long it runs and
 // how it eases.
 type moveTiming struct {
@@ -134,7 +212,7 @@ func (s *Storyboard) validateCamera(collect collector) {
 		if !isFormValid {
 			continue
 		}
-		placed, isPlaced := placeMove(clock, timing, track, moveReport)
+		placed, isPlaced := placeMove(clock, timing, prefixed(moveReport, track+"."))
 		if !isPlaced {
 			continue
 		}
@@ -220,56 +298,60 @@ func (p PanMove) validate(frame Frame, report reporter) {
 
 // validate checks that the point sets exactly one of text and cell, then the target's fields or
 // that the cell lies inside the frame. A cell is a fixed place, so a target's nth and area do
-// not apply to it. Problems are filed under field.
+// not apply to it. Problems are filed under field, or under the owner itself when field is empty,
+// as for a position whose point keys sit beside its own.
 func (p Point) validate(field string, frame Frame, report reporter) {
+	whole, keys := report, report
+	if field != "" {
+		whole, keys = prefixed(report, field+": "), prefixed(report, field+".")
+	}
 	if (p.Text == "") == (p.Cell == nil) {
-		report("%s: want exactly one of text or cell", field)
+		whole("want exactly one of text or cell")
 		return
 	}
 	if p.Cell == nil {
-		p.Target.validate(prefixed(report, field+"."))
+		p.Target.validate(keys)
 		return
 	}
 	if p.Nth != 0 {
-		report("%s.nth: only a text point takes an nth", field)
+		keys("nth: only a text point takes an nth")
 	}
 	if p.Area != "" {
-		report("%s.area: only a text point takes an area", field)
+		keys("area: only a text point takes an area")
 	}
 	cell := *p.Cell
 	if cell.X < 0 || cell.X >= frame.Cols || cell.Y < 0 || cell.Y >= frame.Rows {
-		report("%s.cell: want x in [0, %d) and y in [0, %d), got x %d, y %d",
-			field, frame.Cols, frame.Rows, cell.X, cell.Y)
+		keys("cell: want x in [0, %d) and y in [0, %d), got x %d, y %d",
+			frame.Cols, frame.Rows, cell.X, cell.Y)
 	}
 }
 
 // placeMove checks the move's length, start, end and ease, and returns the stretch it holds on
 // the output clock. isPlaced is false when the move has no length or does not fit in the clip,
-// so it holds no stretch to check for overlaps. Problems are filed under the move's form.
+// so it holds no stretch to check for overlaps. Problems are filed through report, which names
+// the move.
 func placeMove(
-	clock OutputClock, timing moveTiming, form string, report reporter,
+	clock OutputClock, timing moveTiming, report reporter,
 ) (placed span, isPlaced bool) {
-	if timing.ease != "" && timing.ease != EaseSmooth && timing.ease != EaseLinear {
-		report("%s.ease: want %s or %s, got %q", form, EaseSmooth, EaseLinear, timing.ease)
-	}
+	validateEase(timing.ease, report)
 	isPlaced = true
 	if timing.over <= 0 {
-		report("%s.over: want >0, got %s", form, timing.over)
+		report("over: want >0, got %s", timing.over)
 		isPlaced = false
 	}
 	start, err := clock.Resolve(timing.at)
 	if err != nil {
-		report("%s.at: %v", form, err)
+		report("at: %v", err)
 		return span{}, false
 	}
 	length := clock.Length()
 	if start < 0 || start >= length {
-		report("%s.at: want a start in [0s, %s), got %s", form, length, start)
+		report("at: want a start in [0s, %s), got %s", length, start)
 		return span{}, false
 	}
 	if isPlaced && start+timing.over > length {
-		report("%s.over: want the move to end by the clip's end %s, got an end at %s",
-			form, length, start+timing.over)
+		report("over: want the move to end by the clip's end %s, got an end at %s",
+			length, start+timing.over)
 		return span{}, false
 	}
 	return span{start: start, end: start + timing.over}, isPlaced

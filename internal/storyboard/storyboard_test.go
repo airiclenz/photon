@@ -225,7 +225,7 @@ func TestLoadRejects_Camera(t *testing.T) {
 		{"zoom factor too large", "to: 2,", "to: 3.5,", "camera[0]: zoom.to: want in [1, 3], got 3.5", false},
 		{"zoom factor missing", "to: 2, ", "", "camera[0]: zoom.to: want in [1, 3], got 0", false},
 		{"length zero", "over: 500ms", "over: 0s", "camera[0]: zoom.over: want >0, got 0s", false},
-		{"ease unknown", "ease: linear", "ease: bounce", `camera[0]: zoom.ease: want smooth or linear, got "bounce"`, false},
+		{"ease unknown", "ease: linear", "ease: bounce", `camera[0]: zoom.ease: want smooth, linear, ease-in or ease-out, got "bounce"`, false},
 		{"start at an unknown beat", "beat: 2,", "beat: 9,", "camera[0]: zoom.at: beat 9 is not in the storyboard", false},
 		{"start at the clip's end", "at: 3s", "at: 5s", "camera[1]: pan.at: want a start in [0s, 5s), got 5s", false},
 		{"start before the clip", "at: 3s", "at: -1s", "camera[1]: pan.at: want a start in [0s, 5s), got -1s", false},

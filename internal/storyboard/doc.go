@@ -33,7 +33,8 @@
 //   - storyboard.go: the [Storyboard] and its [Frame], [Load], [Parse] and [ValidationError].
 //   - beat.go: a [Beat], its [Action] forms, [Target] and [Nth], and [Expect].
 //   - camera.go: a [CameraMove] — a [ZoomMove] or [PanMove] — its [Point], [Cell] and [Ease], and
-//     their rules.
+//     their rules; the [Camera] of positions and zooms, and the rules that place them.
+//   - position.go: a camera [Position], its point, hold and ease, and its rules.
 //   - edit.go: an [Edit], [Apply] and the splicing every edit shares: field and owner checks,
 //     durations, moments, key order from yaml tags.
 //   - edit_beat.go: the beat and frame edits — duration, hold, cut, frame.padding,
@@ -53,7 +54,7 @@
 //   - caption.go: a [Caption], its [CaptionFont] and [Weight], [Place], [Align], [Pixels],
 //     [CaptionBox], [Fade] and [RGB], and their rules.
 //   - located.go: a problem's [Owner] and [OwnerKind], the [LocatedError] that carries one,
-//     [AtBeat], [AtCamera], [AtCaption] and [OwnerOf].
+//     [AtBeat], [AtCamera], [AtPosition], [AtZoom], [AtCaption] and [OwnerOf].
 //   - moment.go: a [Moment] on the clip's output clock and how it decodes.
 //   - validate.go: every other validation rule, each reporting its problem under the field's path.
 package storyboard

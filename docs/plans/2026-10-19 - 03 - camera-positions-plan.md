@@ -163,7 +163,11 @@ internal/storyboard/fields_test.go — defaultRefusals, TestFields_DescribeEachO
 - `make lint`
 **Commit:** `refactor(storyboard): drop the camera move edits`
 
-## 4. Storyboard: position and zoom schema with validation
+## 4. Storyboard: position and zoom schema with validation — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): to file a position's point and timing problems under the entry itself (`camera.positions[i]: cell: …` rather than `…: .cell: …`), `Point.validate` now takes an empty field for keys that sit at the owner's top level, and `placeMove` takes a reporter its caller has already prefixed (the old moves pass `zoom.`/`pan.`). The old moves' messages are unchanged apart from the four-ease wording.
+NOTES (2026-10-20): zoom overlaps now go through the same helper as position overlaps, so they are filed under the later zoom by start rather than the later one in the list. The rule itself is unchanged, and the old `camera:` list keeps its own overlap check until item 7.
+NOTES (2026-10-20): a `target:` key on an entry under `camera.zooms` still decodes into `ZoomMove.RemovedTarget`, and the new validation ignores it. Item 7 drops that field, after which the strict decode refuses the key.
 
 Depends on item 3.
 
