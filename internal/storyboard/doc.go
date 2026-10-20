@@ -13,7 +13,8 @@
 //
 // [Apply] changes one field by a typed [Edit] — a beat's duration, hold or cut, the clip's
 // frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width or frame.fps, a
-// camera position's start, hold — or both at once — ease, cell or text target, a camera zoom's
+// camera position's start, hold — or both at once — ease, cell or text target, the edges of the
+// camera transition into a position, a camera zoom's
 // start, length, ease or factor, or a caption's start, end — or both at once, shifted — text,
 // place, align, font, colours, box or fade, or adds or removes a camera position or zoom, or
 // adds, removes or reorders a caption — splicing the
@@ -47,6 +48,8 @@
 //     [Target.YAMLFlow].
 //   - edit_camera.go: the camera position and zoom edits — position.at, .hold, .span, .ease,
 //     .cell and .target, and zoom.at, .over, .ease and .to.
+//   - edit_transition.go: the camera transition edit, position.transition, which moves the end of
+//     one position and the start of the next at once.
 //   - edit_caption.go: the caption edits — caption.at, caption.for, caption.until,
 //     caption.shift, caption.text, caption.place and caption.align.
 //   - edit_caption_style.go: the caption style edits — caption.font.size and .weight,

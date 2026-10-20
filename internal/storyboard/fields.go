@@ -34,6 +34,9 @@ const (
 	// KindSpan is a camera position's start and hold at once, {"at": {"beat": 3, "offset_ms":
 	// 200}, "hold_ms": 600}.
 	KindSpan FieldKind = "span"
+	// KindTransition is the edges of a camera transition on the output clock, {"start_ms":
+	// 1200, "end_ms": 1800}: from the end of one position to the start of the next.
+	KindTransition FieldKind = "transition"
 	// KindEntry is a new caption, {"kind": "caption", "at": {"beat": 0, "offset_ms": 0}}, its
 	// kind one of the field's Choices.
 	KindEntry FieldKind = "entry"
@@ -64,9 +67,11 @@ const (
 // own index. A caption's
 // caption.shift, which has no key either, defaults to 0, the shift that changes nothing, and a
 // position's position.span, which sets two keys, to what both mean when absent: the clip's start
-// and a hold of 0. An editable field's Name is the field an [Edit] names; a read-only field is
-// one of the frame's keys photon tune shows but does not edit — cols, rows or max_colors — named
-// by that key alone.
+// and a hold of 0. A position's position.transition, which has no key either, defaults to the
+// transition into it as it stands, the edges that change nothing; only a position with another
+// starting before it has one. An editable field's Name is the field an [Edit] names; a read-only
+// field is one of the frame's keys photon tune shows but does not edit — cols, rows or
+// max_colors — named by that key alone.
 type Field struct {
 	Owner      Owner           `json:"owner"`
 	Name       string          `json:"name"`
@@ -119,7 +124,7 @@ func Fields(board *Storyboard) []Field {
 		fields = append(fields, beatFields(beat)...)
 	}
 	for index := range board.Camera.Positions {
-		fields = append(fields, positionFields(index)...)
+		fields = append(fields, positionFields(board.Camera.Positions, index)...)
 	}
 	fields = append(fields, positionInsertField(board.Frame))
 	for index := range board.Camera.Zooms {
@@ -220,19 +225,28 @@ func beatFields(beat Beat) []Field {
 	}
 }
 
-// positionFields describes the fields of the camera position at index: its start, its hold, both
-// at once, its ease, where it aims — a cell or a text target — and its remove.
-func positionFields(index int) []Field {
+// positionFields describes the fields of the camera position at index in positions: its start,
+// its hold, both at once, the transition into it unless it is the first by start, its ease,
+// where it aims — a cell or a text target — and its remove.
+func positionFields(positions []Position, index int) []Field {
 	owner := Owner{Kind: OwnerPosition, Index: index}
-	return []Field{
+	fields := []Field{
 		{Owner: owner, Name: FieldPositionAt, Kind: KindMoment, Default: raw(defaultClipStart)},
 		{Owner: owner, Name: FieldPositionHold, Kind: KindDuration, Default: raw(defaultZero)},
 		{Owner: owner, Name: FieldPositionSpan, Kind: KindSpan, Default: raw(defaultSpan)},
-		easeField(owner, FieldPositionEase),
-		{Owner: owner, Name: FieldPositionCell, Kind: KindCell, Default: raw(jsonNull)},
-		{Owner: owner, Name: FieldPositionTarget, Kind: KindTarget, Default: raw(jsonNull)},
-		removeField(owner, FieldPositionRemove),
 	}
+	if edges, hasTransition := currentTransition(positions, index); hasTransition {
+		fields = append(fields, Field{
+			Owner: owner, Name: FieldPositionTransition, Kind: KindTransition,
+			Default: raw(transitionJSON(edges)),
+		})
+	}
+	return append(fields,
+		easeField(owner, FieldPositionEase),
+		Field{Owner: owner, Name: FieldPositionCell, Kind: KindCell, Default: raw(jsonNull)},
+		Field{Owner: owner, Name: FieldPositionTarget, Kind: KindTarget, Default: raw(jsonNull)},
+		removeField(owner, FieldPositionRemove),
+	)
 }
 
 // zoomFields describes the fields of the camera zoom at index: its start, its length, its ease,

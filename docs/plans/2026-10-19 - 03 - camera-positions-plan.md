@@ -365,7 +365,10 @@ insert's Default round-trips through `Apply`.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard ./internal/yamledit`
 **Commit:** `feat(storyboard): add and remove camera positions and zooms`
 
-## 10. Storyboard: the transition edit
+## 10. Storyboard: the transition edit — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): `position.transition` is routed in `edit.go`'s `splicer.apply` (before `editPosition`, which lives in `edit_camera.go`, outside this item's Files); `setMoment`'s write half is extracted in `edit.go` as `splicer.writeMoment` so the transition's `at` moves share it.
+NOTES (2026-10-20): Fields describes `position.transition` (new kind `KindTransition`, `"transition"`) only on a position with another starting before it, placed after `position.span`; its default is the transition as it stands, `{"start_ms": <previous end>, "end_ms": <own start>}`, which writes nothing. An edge left where it is writes nothing either. A cut right after a point is refused as an overlap, since both positions would start together.
 
 Depends on item 9.
 

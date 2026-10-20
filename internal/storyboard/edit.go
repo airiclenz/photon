@@ -38,6 +38,9 @@ import (
 //   - position.target: a text target as a pick answers it, {"text": "ok", "nth": 2, "area":
 //     "list"}, its nth and area optional, an absent one removing its key, which removes the
 //     position's cell;
+//   - position.transition: the edges of the transition into the owner's position, {"start_ms":
+//     1200, "end_ms": 1800}, whole milliseconds of the output clock with the start no later than
+//     the end, an equal pair a hard cut;
 //   - zoom.over: a whole number of milliseconds;
 //   - zoom.to: a number, the zoom factor in [1, 3];
 //   - position.insert: a new position, {"at": {"beat": 0, "offset_ms": 1200}, "cell": {"x": 3,
@@ -100,9 +103,10 @@ const (
 var editFields = []string{
 	FieldDuration, FieldHold, FieldCut, FieldFrameWidth, FieldFrameFPS, FieldFramePadding,
 	FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldPositionAt, FieldPositionHold,
-	FieldPositionSpan, FieldPositionEase, FieldPositionCell, FieldPositionTarget, FieldZoomAt,
-	FieldZoomOver, FieldZoomEase, FieldZoomTo, FieldPositionInsert, FieldPositionRemove,
-	FieldZoomInsert, FieldZoomRemove, FieldCaptionAt, FieldCaptionFor,
+	FieldPositionSpan, FieldPositionTransition, FieldPositionEase, FieldPositionCell,
+	FieldPositionTarget, FieldZoomAt, FieldZoomOver, FieldZoomEase, FieldZoomTo,
+	FieldPositionInsert, FieldPositionRemove, FieldZoomInsert, FieldZoomRemove, FieldCaptionAt,
+	FieldCaptionFor,
 	FieldCaptionUntil, FieldCaptionShift, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign,
 	FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove, FieldCaptionFontSize,
 	FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity,
@@ -163,8 +167,12 @@ const (
 // caption.for deletes the caption's until and a caption.until its for, or, as null, writes the for
 // that keeps the caption's stretch in place of its until. A caption.shift rewrites the caption's at
 // and, if it has one, its until as caption.at and caption.until write them, each keeping its beat,
-// and a shift of 0 writes nothing. An insert writes its entry as one flow line — a caption from
-// presets, "Caption" for 2s, a position as its cell, a zoom from presets, to 1.5 over 600ms — and
+// and a shift of 0 writes nothing. A position.transition ends the position before its owner by
+// start at the transition's start and starts its owner at the transition's end, keeping the
+// owner's end: a point's at moves, keeping its beat, and a held position's hold changes, as
+// position.at and position.hold write them; an edge left where it is writes nothing. An insert
+// writes its entry as one flow line — a caption from presets, "Caption" for 2s, a position as
+// its cell, a zoom from presets, to 1.5 over 600ms — and
 // creates a list key the storyboard lacks as a flow list after the keys that precede it, a camera
 // list with a camera the storyboard lacks, or holds empty, as a flow mapping; a remove or move
 // splices only its list's items, removing a list's only entry deletes its key, and removing the
@@ -172,7 +180,8 @@ const (
 // field — the beat, camera position, camera zoom or caption, or nothing for a frame field — when
 // its value is of the wrong JSON type or misspelled, when its owner is of another kind than the
 // field's, when it names a beat, position, zoom or caption that is not there, an insert index past
-// the list's length among them, or when the result fails validation; the last wraps the
+// the list's length among them, a transition into the first position by start or one that
+// leaves a position a negative hold, or when the result fails validation; the last wraps the
 // *[ValidationError].
 func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 	board, err := Parse(src, path)
@@ -249,6 +258,9 @@ func (s *splicer) apply(board *Storyboard, edit Edit) error {
 	case OwnerClip:
 		return s.editFrame(edit)
 	case OwnerPosition:
+		if edit.Field == FieldPositionTransition {
+			return s.editTransition(board, edit.Owner.Index, edit.Value)
+		}
 		return s.editPosition(board, edit.Owner.Index, edit.Field, edit.Value)
 	case OwnerZoom:
 		return s.editZoom(board, edit.Owner.Index, edit.Field, edit.Value)
@@ -297,13 +309,19 @@ func (s *splicer) replaceOrInsert(mapping yamledit.Path, key, text string, order
 }
 
 // setMoment replaces the whole at of mapping, a caption, position or zoom, whatever its form,
-// with the moment value types, spelled as [momentFlow] does. A clip start on a mapping without at
-// writes nothing: an absent at already starts it there.
+// with the moment value types, as [splicer.writeMoment] writes it.
 func (s *splicer) setMoment(mapping yamledit.Path, order []string, value json.RawMessage) error {
 	moment, err := decodeMoment(value)
 	if err != nil {
 		return err
 	}
+	return s.writeMoment(mapping, order, moment)
+}
+
+// writeMoment replaces the whole at of mapping, whose keys follow order, whatever its form, with
+// moment, spelled as [momentFlow] does. A clip start on a mapping without at writes nothing: an
+// absent at already starts it there.
+func (s *splicer) writeMoment(mapping yamledit.Path, order []string, moment Moment) error {
 	if moment == (Moment{}) && !s.doc.Has(under(mapping, keyAt)) {
 		return nil
 	}
