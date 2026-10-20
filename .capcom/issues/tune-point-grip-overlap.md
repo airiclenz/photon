@@ -1,11 +1,13 @@
 ---
 title: Transition grips cover a point marker in photon tune
-status: open
+status: done
 type: bug
 priority: 3
 labels: [tune]
 plan: 2026-10-20 - 00 - tune-point-grip-overlap-plan
 created: 2026-10-20T10:57:41Z
+closed: 2026-10-20T20:56:43Z
+reason: "Resolved by plan 2026-10-20 - 00 - tune-point-grip-overlap-plan (archived in 11a6945): a transition has no grip on an edge that meets a point, so the marker takes the press and its drag sends position.at."
 ---
 
 In a real browser, a transition's edge grip covers the point marker the transition leads into.
