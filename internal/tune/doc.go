@@ -3,8 +3,9 @@
 // storyboard.
 //
 // An [Edit] is one typed change — a beat's duration, hold or cut, the clip's frame.width,
-// frame.fps, frame.font_size, frame.line_height, frame.padding or frame.scale, or a caption's
-// start, end, text, place or align — spelled as the page sends it, and [storyboard.Apply] applies
+// frame.fps, frame.font_size, frame.line_height, frame.padding or frame.scale, a camera
+// position's or zoom's timing, ease, aim or factor, or a caption's start, end, text, place or
+// align — spelled as the page sends it, and [storyboard.Apply] applies
 // it: it splices only the edited scalar, or the one node a moment or a caption's text replaces,
 // into the storyboard's source through yamledit, so comments, quoting, key order and flow or block
 // style stay as the person wrote them: a duration keeps its unit, a new key goes in the
@@ -17,12 +18,14 @@
 // rebuilds the render pipeline on the new bytes, as `photon render` builds it, handing render the
 // last good pipeline to reuse: its rasterizer and rasterized snapshots while the take and the
 // frame's raster geometry stay, and its caption faces, so the caption fonts load once a session; a
-// build that fails leaves each of its errors standing on the beat or caption it is located on
-// ([storyboard.OwnerOf]), or on the clip, and the last good pipeline stays the preview's.
+// build that fails leaves each of its errors standing on the beat, camera position, zoom or
+// caption it is located on ([storyboard.OwnerOf]), or on the clip, and the last good pipeline
+// stays the preview's.
 // [Session.Refresh] takes in outside writes — a rewritten take is read again, a changed storyboard
 // is loaded when nothing is unsaved and turns the session stale otherwise — and [Session.Save]
 // writes in place, refused while stale ([ErrStale]) or while an error stands ([ErrInvalid]).
-// [Session.State] reports everything the page shows, and [Session.Frame] the PNG of the exact frame
+// [Session.State] reports everything the page shows — the beats, camera positions and zooms,
+// captions and schedule — and [Session.Frame] the PNG of the exact frame
 // `photon render` composes at an output time, from the last good pipeline, its rasterized snapshots
 // kept in a cache bounded at 1 GiB that a new take or raster geometry starts afresh;
 // [Session.DraftFrame] the PNG of the draft frame the page shows while it plays or scrubs, drawn

@@ -49,6 +49,16 @@ const captionsStoryboard = sessionStoryboard + `captions:
   - {text: "All green\n", at: {beat: 2}, until: {beat: 2, offset: 1200ms}}
 `
 
+// cameraStoryboard is sessionStoryboard with a camera: a text position in beat 2 listed before a
+// cell position in beat 1, and a zoom. Beat 2 starts on the take's "> tests are failing".
+const cameraStoryboard = sessionStoryboard + `camera:
+  positions:
+    - {text: tests, at: {beat: 2}, hold: 500ms, ease: linear}
+    - {cell: {x: 3, y: 1}, at: {beat: 1, offset: 200ms}, hold: 300ms}
+  zooms:
+    - {to: 2, at: 100ms, over: 400ms}
+`
+
 // tooWideText is a caption's text whose box is wider than the session fixture's frame, so the
 // storyboard parses but its pipeline does not build.
 var tooWideText = strings.Repeat("too wide ", 20)
@@ -463,6 +473,27 @@ func TestSession_Refresh_InvalidOutsideWrite_ShowsEachProblemOnAPanel(t *testing
 			wantPrefix: "captions[0]:",
 			wantOwner:  storyboard.Owner{Kind: storyboard.OwnerCaption, Index: 0},
 		},
+		{
+			name:       "position on the shown list is on the position",
+			good:       cameraStoryboard,
+			written:    strings.Replace(cameraStoryboard, "hold: 300ms}", "hold: 300ms, ease: wobbly}", 1),
+			wantPrefix: "camera.positions[1]:",
+			wantOwner:  storyboard.Owner{Kind: storyboard.OwnerPosition, Index: 1},
+		},
+		{
+			name:       "zoom on the shown list is on the zoom",
+			good:       cameraStoryboard,
+			written:    strings.Replace(cameraStoryboard, "to: 2,", "to: 9,", 1),
+			wantPrefix: "camera.zooms[0]:",
+			wantOwner:  storyboard.Owner{Kind: storyboard.OwnerZoom, Index: 0},
+		},
+		{
+			name:       "zoom past the shown list is on the clip",
+			good:       sessionStoryboard,
+			written:    sessionStoryboard + "camera:\n  zooms:\n    - {to: 9, at: 100ms, over: 400ms}\n",
+			wantPrefix: "camera.zooms[0]:",
+			wantOwner:  clipOwner,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -499,6 +530,57 @@ func TestSession_CaptionBoxLargerThanTheFrame_IsOnTheCaption(t *testing.T) {
 	want := storyboard.Owner{Kind: storyboard.OwnerCaption, Index: 0}
 	if len(errs) != 1 || errs[0].Owner != want || !strings.HasPrefix(errs[0].Message, "caption: captions[0]: ") {
 		t.Errorf("errors %+v, want one caption problem on caption 0", errs)
+	}
+}
+
+func TestSession_State_ReportsPositionsAndZooms(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixtureOf(t, cameraStoryboard)
+
+	state := f.session.State()
+
+	wantPositions := []PositionState{
+		{
+			Index: 0, StartMS: 1000, EndMS: 1500, At: MomentState{2, 0}, HoldMS: 500, Ease: "linear",
+			PointState: PointState{Target: &TargetState{Text: "tests"}},
+		},
+		{
+			Index: 1, StartMS: 200, EndMS: 500, At: MomentState{1, 200}, HoldMS: 300, Ease: "smooth",
+			PointState: PointState{Cell: &CellState{X: 3, Y: 1}},
+		},
+	}
+	wantZooms := []ZoomState{
+		{Index: 0, StartMS: 100, EndMS: 500, At: MomentState{0, 100}, OverMS: 400, Ease: "smooth", Factor: 2},
+	}
+	if !reflect.DeepEqual(state.Positions, wantPositions) {
+		t.Errorf("positions\n got %+v\nwant %+v", state.Positions, wantPositions)
+	}
+	if !reflect.DeepEqual(state.Zooms, wantZooms) {
+		t.Errorf("zooms\n got %+v\nwant %+v", state.Zooms, wantZooms)
+	}
+}
+
+func TestSession_State_WithoutACamera_ReportsEmptyLists(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixture(t)
+
+	state := f.session.State()
+
+	if state.Positions == nil || len(state.Positions) != 0 || state.Zooms == nil || len(state.Zooms) != 0 {
+		t.Errorf("positions %#v, zooms %#v, want two empty lists", state.Positions, state.Zooms)
+	}
+}
+
+func TestSession_PositionTargetOffScreen_IsOnThePosition(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixtureOf(t, cameraStoryboard)
+	owner := storyboard.Owner{Kind: storyboard.OwnerPosition, Index: 0}
+
+	f.apply(t, Edit{Owner: owner, Field: storyboard.FieldPositionTarget, Value: typedValue(map[string]string{"text": "nowhere"})})
+
+	errs := f.session.State().Errors
+	if len(errs) != 1 || errs[0].Owner != owner || !strings.Contains(errs[0].Message, "nowhere") {
+		t.Errorf("errors %+v, want one naming the target on position 0", errs)
 	}
 }
 

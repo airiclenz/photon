@@ -393,7 +393,12 @@ its end edge onto a held N; shrink to a cut; each refusal; only the edited value
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard`
 **Commit:** `feat(storyboard): edit a camera transition's edges`
 
-## 11. Tune state reports positions and zooms
+## 11. Tune state reports positions and zooms — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): consequential edit — internal/tune/session.go: made necessary by hasOwner taking positions and zooms; the Apply doc comment named the removed "camera move" as an edit's owner, now "camera position, zoom".
+NOTES (2026-10-20): PositionState embeds the kept PointState, so its target or cell is sent at the top level beside the timing (`target`/`cell`, omitempty) and PointState is live again; a new pointState helper spells a storyboard.Point. Both lists are sent as `[]`, never null, when the storyboard has no camera.
+NOTES (2026-10-20): beyond the listed tests, TestSession_Refresh_InvalidOutsideWrite_ShowsEachProblemOnAPanel gained three cases (a position and a zoom problem on the shown list land on their owner; a zoom past the shown list lands on the clip), and TestSession_State_WithoutACamera_ReportsEmptyLists pins the empty lists.
+NOTES (2026-10-20): no CHANGELOG entry: /api/state is the page's own API and the page shows no camera until items 14-15, whose entries describe it.
 
 Depends on item 10.
 

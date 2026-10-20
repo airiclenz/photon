@@ -290,6 +290,50 @@ func TestHandler_EditsAsThePageSendsThem_AreApplied(t *testing.T) {
 	}
 }
 
+func TestHandler_CameraEditsAsThePageSendsThem_AreApplied(t *testing.T) {
+	t.Parallel()
+	handler := newHandler(newSessionFixtureOf(t, cameraStoryboard).session, testAddr)
+	edits := []string{
+		`{"owner":{"kind":"position","index":1},"field":"position.hold","value":600}`,
+		`{"owner":{"kind":"zoom","index":0},"field":"zoom.to","value":2.5}`,
+	}
+
+	var state State
+	for _, edit := range edits {
+		response := post(t, handler, "/api/edit", edit)
+		assertStatus(t, response, http.StatusOK)
+		decodeResponse(t, response, &state)
+	}
+
+	if got := state.Positions[1]; got.HoldMS != 600 || got.EndMS != 800 {
+		t.Errorf("position 1 after the edit: want a 600ms hold ending at 800ms, got %+v", got)
+	}
+	if got := state.Zooms[0].Factor; got != 2.5 {
+		t.Errorf("zoom 0 after the edit: want factor 2.5, got %g", got)
+	}
+}
+
+func TestHandler_PositionEditUndoneAndSaved_ChangesOnlyTheEditedValue(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixtureOf(t, cameraStoryboard)
+	handler := newHandler(f.session, testAddr)
+	steps := []struct{ route, body string }{
+		{"/api/edit", `{"owner":{"kind":"position","index":1},"field":"position.hold","value":600}`},
+		{"/api/edit", `{"owner":{"kind":"zoom","index":0},"field":"zoom.to","value":2.5}`},
+		{"/api/undo", `{}`},
+		{"/api/save", `{}`},
+	}
+
+	for _, step := range steps {
+		assertStatus(t, post(t, handler, step.route, step.body), http.StatusOK)
+	}
+
+	want := strings.Replace(cameraStoryboard, "hold: 300ms}", "hold: 600ms}", 1)
+	if got := f.readDisk(t); got != want {
+		t.Errorf("saved:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func TestHandler_RefusedEdit_Is422(t *testing.T) {
 	t.Parallel()
 	handler := newHandler(newSessionFixture(t).session, testAddr)

@@ -11,23 +11,25 @@ import (
 )
 
 // State is everything the page shows of a session, as `/api/state` sends it. Durations are
-// whole milliseconds, the spelling an [Edit] takes. Beats and Captions come from the current
-// storyboard, and so does Fields, the description of every field the page shows; Sections,
-// Warnings and Length from its schedule, or from the last good pipeline's while the current bytes
-// do not schedule; a caption's laid-out box from the current bytes' pipeline, only while it builds
-// in full. Version rises on every change, so a page that saw it already has nothing new
-// to draw. Build is the build string of the photon serving the page, as `photon version` prints
-// it.
+// whole milliseconds, the spelling an [Edit] takes. Beats, Positions, Zooms and Captions come
+// from the current storyboard, and so does Fields, the description of every field the page
+// shows; Sections, Warnings and Length from its schedule, or from the last good pipeline's while
+// the current bytes do not schedule; a caption's laid-out box from the current bytes' pipeline,
+// only while it builds in full. Version rises on every change, so a page that saw it already has
+// nothing new to draw. Build is the build string of the photon serving the page, as
+// `photon version` prints it.
 type State struct {
-	Version  int            `json:"version"`
-	Build    string         `json:"build"`
-	Beats    []BeatState    `json:"beats"`
-	Captions []CaptionState `json:"captions"`
-	Sections []SectionState `json:"sections"`
-	Warnings []string       `json:"warnings"`
-	LengthMS int64          `json:"length_ms"`
-	FPS      int            `json:"fps"`
-	Width    int            `json:"width"`
+	Version   int             `json:"version"`
+	Build     string          `json:"build"`
+	Beats     []BeatState     `json:"beats"`
+	Positions []PositionState `json:"positions"`
+	Zooms     []ZoomState     `json:"zooms"`
+	Captions  []CaptionState  `json:"captions"`
+	Sections  []SectionState  `json:"sections"`
+	Warnings  []string        `json:"warnings"`
+	LengthMS  int64           `json:"length_ms"`
+	FPS       int             `json:"fps"`
+	Width     int             `json:"width"`
 
 	// The frame's other fields: padding, font_size, line_height and scale, which photon tune
 	// edits as frame.<key>, and cols, rows and max_colors, which it shows but does not edit.
@@ -61,21 +63,48 @@ type BeatState struct {
 	PausesMS   []int64 `json:"pauses_ms"`
 }
 
-// TargetState is a pan's target: a regex over the screen's rows, which match counts (0 is the
-// first, -1 the last) and the area searched (empty is the whole screen).
+// PositionState is one camera position, in storyboard order: its Index in the storyboard's
+// camera.positions list, where it starts and ends on the output clock, its timing as the
+// storyboard spells it, and where it aims, a Target or a Cell, one of the two, each sent at the
+// top level beside the timing. A position of HoldMS 0 is a point in time: it ends where it starts.
+type PositionState struct {
+	Index   int         `json:"index"`
+	StartMS int64       `json:"start_ms"`
+	EndMS   int64       `json:"end_ms"`
+	At      MomentState `json:"at"`
+	HoldMS  int64       `json:"hold_ms"`
+	Ease    string      `json:"ease"`
+	PointState
+}
+
+// ZoomState is one camera zoom, in storyboard order: its Index in the storyboard's camera.zooms
+// list, where it starts and ends on the output clock, its timing as the storyboard spells it, and
+// Factor, the magnification it reaches.
+type ZoomState struct {
+	Index   int         `json:"index"`
+	StartMS int64       `json:"start_ms"`
+	EndMS   int64       `json:"end_ms"`
+	At      MomentState `json:"at"`
+	OverMS  int64       `json:"over_ms"`
+	Ease    string      `json:"ease"`
+	Factor  float64     `json:"factor"`
+}
+
+// TargetState is a position's text target: a regex over the screen's rows, which match counts
+// (0 is the first, -1 the last) and the area searched (empty is the whole screen).
 type TargetState struct {
 	Text string `json:"text"`
 	Nth  int    `json:"nth"`
 	Area string `json:"area"`
 }
 
-// PointState is one point a pan aims at: a Target or a Cell, one of the two.
+// PointState is where a camera position aims: a Target or a Cell, one of the two.
 type PointState struct {
 	Target *TargetState `json:"target,omitempty"`
 	Cell   *CellState   `json:"cell,omitempty"`
 }
 
-// CellState is one cell of the terminal grid a pan aims at: column X and row Y, both 0-based.
+// CellState is one cell of the terminal grid a position aims at: column X and row Y, both 0-based.
 type CellState struct {
 	X int `json:"x"`
 	Y int `json:"y"`
@@ -148,8 +177,8 @@ type SectionState struct {
 	Report     string  `json:"report"`
 }
 
-// Problem is one error standing on the storyboard: Owner is the beat or caption it belongs to,
-// or the clip as a whole.
+// Problem is one error standing on the storyboard: Owner is the beat, camera position, zoom or
+// caption it belongs to, or the clip as a whole.
 type Problem struct {
 	Owner   storyboard.Owner `json:"owner"`
 	Message string           `json:"message"`
@@ -174,6 +203,8 @@ func (s *Session) State() State {
 		Version:    s.version,
 		Build:      s.photonBuild,
 		Beats:      beatStates(board),
+		Positions:  positionStates(board),
+		Zooms:      zoomStates(board),
 		Captions:   captionStates(board, s.current.frames),
 		Sections:   sectionStates(clipSchedule),
 		Warnings:   append([]string{}, clipSchedule.Warnings...),
@@ -210,6 +241,48 @@ func beatStates(board *storyboard.Storyboard) []BeatState {
 		})
 	}
 	return beats
+}
+
+// positionStates lists board's camera positions in storyboard order.
+func positionStates(board *storyboard.Storyboard) []PositionState {
+	positions := make([]PositionState, 0, len(board.Camera.Positions))
+	for index, position := range board.Camera.Positions {
+		positions = append(positions, PositionState{
+			Index:      index,
+			StartMS:    position.Start().Milliseconds(),
+			EndMS:      (position.Start() + position.Hold).Milliseconds(),
+			At:         momentState(position.At),
+			HoldMS:     position.Hold.Milliseconds(),
+			Ease:       string(position.Ease),
+			PointState: pointState(position.Point),
+		})
+	}
+	return positions
+}
+
+// pointState spells point, where a camera position aims, as the page reads it.
+func pointState(point storyboard.Point) PointState {
+	if point.Cell != nil {
+		return PointState{Cell: &CellState{X: point.Cell.X, Y: point.Cell.Y}}
+	}
+	return PointState{Target: &TargetState{Text: point.Text, Nth: int(point.Nth), Area: point.Area}}
+}
+
+// zoomStates lists board's camera zooms in storyboard order.
+func zoomStates(board *storyboard.Storyboard) []ZoomState {
+	zooms := make([]ZoomState, 0, len(board.Camera.Zooms))
+	for index, zoom := range board.Camera.Zooms {
+		zooms = append(zooms, ZoomState{
+			Index:   index,
+			StartMS: zoom.Start().Milliseconds(),
+			EndMS:   (zoom.Start() + zoom.Over).Milliseconds(),
+			At:      momentState(zoom.At),
+			OverMS:  zoom.Over.Milliseconds(),
+			Ease:    string(zoom.Ease),
+			Factor:  zoom.To,
+		})
+	}
+	return zooms
 }
 
 // captionStates lists board's captions in storyboard order, each with the box frames lays it
@@ -321,9 +394,9 @@ func problemsOf(err error, board *storyboard.Storyboard) []Problem {
 	return problems
 }
 
-// ownerOn returns owner, or the clip when owner is a beat or caption board does not have, or any
-// other owner, so the problem still shows on a panel: an outside write that fails to parse adds
-// what the last good board, the one the page shows, lacks.
+// ownerOn returns owner, or the clip when owner is a beat, camera position, zoom or caption board
+// does not have, or any other owner, so the problem still shows on a panel: an outside write that
+// fails to parse adds what the last good board, the one the page shows, lacks.
 func ownerOn(owner storyboard.Owner, board *storyboard.Storyboard) storyboard.Owner {
 	if owner.Kind == storyboard.OwnerClip {
 		return owner
@@ -334,13 +407,17 @@ func ownerOn(owner storyboard.Owner, board *storyboard.Storyboard) storyboard.Ow
 	return owner
 }
 
-// hasOwner reports whether board has the beat or caption owner names.
+// hasOwner reports whether board has the beat, camera position, zoom or caption owner names.
 func hasOwner(board *storyboard.Storyboard, owner storyboard.Owner) bool {
 	switch owner.Kind {
 	case storyboard.OwnerBeat:
 		return slices.ContainsFunc(board.Beats, func(beat storyboard.Beat) bool {
 			return beat.ID == owner.Index
 		})
+	case storyboard.OwnerPosition:
+		return owner.Index >= 0 && owner.Index < len(board.Camera.Positions)
+	case storyboard.OwnerZoom:
+		return owner.Index >= 0 && owner.Index < len(board.Camera.Zooms)
 	case storyboard.OwnerCaption:
 		return owner.Index >= 0 && owner.Index < len(board.Captions)
 	default:
