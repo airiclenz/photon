@@ -132,7 +132,7 @@ type namedArea struct {
 
 // crossCheck returns a problem for every area the storyboard names that the config does not
 // declare, in storyboard order. An empty area and [storyboard.AreaAny] are the whole screen and
-// need no declaration. A problem whose area a beat or a camera move names is a
+// need no declaration. A problem whose area a beat or a camera position names is a
 // *[storyboard.LocatedError] filed under it.
 func crossCheck(board *storyboard.Storyboard, project *config.Config) []error {
 	var problems []error
@@ -185,22 +185,13 @@ func namedAreas(board *storyboard.Storyboard) []namedArea {
 	return append(named, cameraAreas(board)...)
 }
 
-// cameraAreas lists the area field of every point a camera pan aims at, set or not; a cell point
-// leaves its area empty.
+// cameraAreas lists the area field of every camera position, set or not; a cell position leaves
+// its area empty.
 func cameraAreas(board *storyboard.Storyboard) []namedArea {
-	var named []namedArea
-	for index, move := range board.Camera {
-		owner := storyboard.Owner{Kind: storyboard.OwnerCamera, Index: index}
-		if move.Pan == nil {
-			continue
-		}
-		if move.Pan.To != nil {
-			named = append(named, namedArea{owner, "pan.to.area", move.Pan.To.Area})
-		}
-		for point, via := range move.Pan.Via {
-			field := fmt.Sprintf("pan.via[%d].area", point)
-			named = append(named, namedArea{owner, field, via.Area})
-		}
+	named := make([]namedArea, 0, len(board.Camera.Positions))
+	for index, position := range board.Camera.Positions {
+		owner := storyboard.Owner{Kind: storyboard.OwnerPosition, Index: index}
+		named = append(named, namedArea{owner, "area", position.Area})
 	}
 	return named
 }

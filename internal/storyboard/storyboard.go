@@ -15,26 +15,26 @@ import (
 // Storyboard is one clip's storyboard: the single source of a clip. The header names the clip,
 // where its GIF ships and the terminal frame; each beat says what photon does (Do), how long the
 // beat plays in the clip (Duration, Hold, Cut) and what a keeper take must show (Expect).
-// Expect at the top level holds what the take as a whole must show, Camera the camera moves
-// placed on the clip's output clock, and Captions the text drawn over the composed frame on that
-// clock.
+// Expect at the top level holds what the take as a whole must show, Camera the positions that aim
+// the camera and the zooms that magnify it on the clip's output clock, and Captions the text drawn
+// over the composed frame on that clock.
 //
 // [Load] and [Parse] are the only ways to get one: a Storyboard in hand has passed validation,
 // its Ship is resolved against the file's directory, its camera eases and captions carry their
-// defaults, and its camera moves and captions carry their resolved places on the
-// output clock and, for a caption, its colours.
+// defaults, and its positions, zooms and captions carry their resolved places on the output clock
+// and, for a caption, its colours.
 type Storyboard struct {
 	// Path is the storyboard file Load read or Parse was handed, as the caller named it.
 	Path string `yaml:"-"`
 	Clip string `yaml:"clip"`
 	// Ship is written relative to the storyboard's own directory and resolved by Load, so a
 	// caller in any working directory finds it.
-	Ship     string       `yaml:"ship"`
-	Frame    Frame        `yaml:"frame"`
-	Expect   []Expect     `yaml:"expect"`
-	Beats    []Beat       `yaml:"beats"`
-	Camera   []CameraMove `yaml:"camera"`
-	Captions []Caption    `yaml:"captions"`
+	Ship     string    `yaml:"ship"`
+	Frame    Frame     `yaml:"frame"`
+	Expect   []Expect  `yaml:"expect"`
+	Beats    []Beat    `yaml:"beats"`
+	Camera   Camera    `yaml:"camera"`
+	Captions []Caption `yaml:"captions"`
 }
 
 // Frame is the recorded terminal and the shipped geometry: the pty's Cols × Rows, the
@@ -99,24 +99,26 @@ func (s *Storyboard) BeatIDs() []int {
 	return ids
 }
 
-// applyDefaults fills what a valid storyboard may leave out: a camera move without an ease eases
-// [EaseSmooth], and a caption takes the defaults [Caption] lists.
+// applyDefaults fills what a valid storyboard may leave out: a position or a zoom without an ease
+// eases [EaseSmooth], and a caption takes the defaults [Caption] lists.
 func (s *Storyboard) applyDefaults() {
 	for index := range s.Captions {
 		s.Captions[index].applyDefaults(s.Frame.FontSize)
 	}
-	for _, move := range s.Camera {
-		switch {
-		case move.Zoom != nil && move.Zoom.Ease == "":
-			move.Zoom.Ease = EaseSmooth
-		case move.Pan != nil && move.Pan.Ease == "":
-			move.Pan.Ease = EaseSmooth
+	for index := range s.Camera.Positions {
+		if position := &s.Camera.Positions[index]; position.Ease == "" {
+			position.Ease = EaseSmooth
+		}
+	}
+	for index := range s.Camera.Zooms {
+		if zoom := &s.Camera.Zooms[index]; zoom.Ease == "" {
+			zoom.Ease = EaseSmooth
 		}
 	}
 }
 
 // ValidationError lists every rule a storyboard breaks. A problem that belongs to one beat,
-// camera move or caption is a *[LocatedError]; [OwnerOf] names any problem's owner.
+// position, zoom or caption is a *[LocatedError]; [OwnerOf] names any problem's owner.
 type ValidationError struct {
 	Path     string
 	Problems []error

@@ -17,7 +17,7 @@ func TestLocatedError_Error_PrefixesTheOwner(t *testing.T) {
 		want string
 	}{
 		{"beat", AtBeat(3, problem), "beat 3: text: missing"},
-		{"camera", AtCamera(1, problem), "camera[1]: text: missing"},
+		{"position", AtPosition(1, problem), "camera.positions[1]: text: missing"},
 		{"caption", AtCaption(0, problem), "captions[0]: text: missing"},
 		{"clip", &LocatedError{Owner: Owner{Kind: OwnerClip}, Err: problem}, "text: missing"},
 	}
@@ -45,7 +45,7 @@ func TestOwnerOf(t *testing.T) {
 	}{
 		{"plain error", problem, Owner{Kind: OwnerClip}},
 		{"located", AtBeat(2, problem), Owner{Kind: OwnerBeat, Index: 2}},
-		{"wrapped by a caller", fmt.Errorf("compose: %w", AtCamera(4, problem)), Owner{Kind: OwnerCamera, Index: 4}},
+		{"wrapped by a caller", fmt.Errorf("compose: %w", AtPosition(4, problem)), Owner{Kind: OwnerPosition, Index: 4}},
 		{"outermost of two", AtCaption(1, AtBeat(2, problem)), Owner{Kind: OwnerCaption, Index: 1}},
 		{"leaf of a joined error", errors.Join(problem, AtCaption(5, problem)), Owner{Kind: OwnerCaption, Index: 5}},
 	}
@@ -62,11 +62,11 @@ func TestOwnerOf(t *testing.T) {
 	}
 }
 
-func TestAtCamera_ErrorsIs_ReachesAWrappedSentinel(t *testing.T) {
+func TestAtPosition_ErrorsIs_ReachesAWrappedSentinel(t *testing.T) {
 	t.Parallel()
 	sentinel := errors.New("not on screen")
 
-	err := AtCamera(0, fmt.Errorf("pan.to: %w", sentinel))
+	err := AtPosition(0, fmt.Errorf("target: %w", sentinel))
 
 	if !errors.Is(err, sentinel) {
 		t.Errorf("want errors.Is to reach the sentinel through %v", err)
@@ -76,12 +76,12 @@ func TestAtCamera_ErrorsIs_ReachesAWrappedSentinel(t *testing.T) {
 func TestOwner_JSON_SpellsKindAndIndex(t *testing.T) {
 	t.Parallel()
 
-	encoded, err := json.Marshal(Owner{Kind: OwnerCamera, Index: 2})
+	encoded, err := json.Marshal(Owner{Kind: OwnerPosition, Index: 2})
 
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if want := `{"kind":"camera","index":2}`; string(encoded) != want {
+	if want := `{"kind":"position","index":2}`; string(encoded) != want {
 		t.Errorf("want %s, got %s", want, encoded)
 	}
 }

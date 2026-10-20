@@ -285,10 +285,11 @@ func loadCaptionFaces(loaded *clip.Clip) (fonts.CaptionSet, error) {
 }
 
 // newCompositor plans the camera, the cursor and the captions over the rasterizer's cell layout,
-// resolving pan targets through resolver, clearing a zoomed frame to the theme
-// background and drawing captions in captionFaces. The rasterizer must be one built at the
-// clip's [rasterGeometry], so the layout matches the frames it draws. It fails when a camera pan's
-// target does not resolve and when a caption cannot be laid out.
+// resolving the camera positions' text targets through resolver, clearing a zoomed frame to the
+// theme background and drawing captions in captionFaces. The rasterizer must be one built at the
+// clip's [rasterGeometry], so the layout matches the frames it draws. It fails when a position's
+// text target does not resolve on the screen shown at its start, under camera.positions[i], and
+// when a caption cannot be laid out.
 func newCompositor(
 	loaded *clip.Clip,
 	recorded *take.Take,

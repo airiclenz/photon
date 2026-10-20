@@ -70,7 +70,7 @@ func (l Layout) home() pointF {
 }
 
 // Compositor turns each scheduled snapshot, rasterized, into a shipped frame: it crops through
-// the camera's zoom and pan, scales to the shipped width, draws the cursor of the clicks and
+// the camera's zoom and aim, scales to the shipped width, draws the cursor of the clicks and
 // drags on top at constant size and the storyboard's captions over everything. Everything it
 // needs is fixed at construction, so composing is a pure function of the output time and the
 // source frame, and a Compositor is safe for concurrent use.
@@ -87,14 +87,15 @@ type Compositor struct {
 }
 
 // New plans the camera and the cursor of a clip: board's frame gives the shipped width and its
-// camera the pan and zoom moves, recorded the clicks, the drags and the snapshots a pan target
-// resolves on (through resolver), clipSchedule the output clock, layout where cells sit in a
-// source frame, background the colour a zoomed frame is cleared to before the crop is drawn,
-// and captionFaces the faces board's captions are drawn in (unread when it has none, so it may
-// then be the zero set). board must be one [storyboard.Parse] returned, so
-// its camera moves and captions carry the starts, stops and colours Parse resolved. It fails on a
-// layout with no size, a frame width that is not positive, a pan target no screen of its move
-// shows, and a caption [caption.New] refuses.
+// camera the positions and zooms, recorded the clicks, the drags and the snapshots a position's
+// text target resolves on (through resolver), clipSchedule the output clock, layout where cells
+// sit in a source frame, background the colour a zoomed frame is cleared to before the crop is
+// drawn, and captionFaces the faces board's captions are drawn in (unread when it has none, so it
+// may then be the zero set). board must be one [storyboard.Parse] returned, so its positions,
+// zooms and captions carry the starts, stops and colours Parse resolved. It fails on a layout
+// with no size, a frame width that is not positive, a position's text target the screen shown at
+// its start does not show — under camera.positions[i], wrapping [target.ErrNotOnScreen] — and a
+// caption [caption.New] refuses.
 func New(
 	board *storyboard.Storyboard,
 	recorded *take.Take,
@@ -170,7 +171,7 @@ func (c *Compositor) CaptionBoxes() []image.Rectangle {
 
 // Compose builds the shipped frame at output time t from src, the rasterized snapshot the
 // schedule shows then: the camera's crop scaled to the shipped width, the cursor over it and the
-// captions showing at t last, in output space, so no zoom or pan moves or scales them. src is
+// captions showing at t last, in output space, so the camera neither moves nor scales them. src is
 // only read.
 func (c *Compositor) Compose(t time.Duration, src *image.RGBA) *image.RGBA {
 	return c.compose(t, src, draw.CatmullRom)
@@ -220,7 +221,7 @@ func (c *Compositor) compose(
 }
 
 // crop is the source rectangle the camera shows at output time t, as [cropAround] lays it from
-// the camera's factor and centre at t.
+// the camera's factor and aim at t, so the crop is clamped again on every frame.
 func (c *Compositor) crop(t time.Duration) rectF {
 	return cropAround(c.layout.Size, c.camera.factorAt(t), c.camera.centreAt(t))
 }
@@ -293,25 +294,6 @@ func (c *Compositor) Rect(t time.Duration, b take.Box) image.Rectangle {
 		int(math.Ceil(bottomRight.Y)),
 	)
 	return rect.Intersect(image.Rectangle{Max: c.out})
-}
-
-// Path returns the points the via pan at index of the storyboard's camera list passes through,
-// in order and the last its destination, each mapped through the zoom's crop at output time t and
-// the scale to the shipped width onto the shipped frame and rounded to whole pixels. A point the
-// crop leaves out comes back off the frame, unclipped. ok is false when the camera move at index
-// is not a via pan, or there is none.
-func (c *Compositor) Path(t time.Duration, index int) (points []image.Point, ok bool) {
-	waypoints, ok := c.camera.waypoints[index]
-	if !ok {
-		return nil, false
-	}
-	crop := c.crop(t)
-	points = make([]image.Point, 0, len(waypoints))
-	for _, waypoint := range waypoints {
-		shipped := c.toOutput(waypoint, crop)
-		points = append(points, image.Pt(int(math.Round(shipped.X)), int(math.Round(shipped.Y))))
-	}
-	return points, true
 }
 
 // drawCursor draws the ring of a click, press or release and then the dot at output time t, each

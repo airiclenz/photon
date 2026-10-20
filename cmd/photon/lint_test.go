@@ -72,21 +72,22 @@ func TestLint(t *testing.T) {
 			wantStderr: []string{"beat 1: do[0]: drag.to: want exactly one of text or offset"},
 		},
 		{
-			name:     "every bad camera move is listed under its field",
+			name:     "every bad camera position and zoom is listed under its field",
 			args:     []string{"lint", badCameraStoryboard, "--config", validConfig},
 			wantCode: exitRunFailed,
 			wantStderr: []string{
-				"camera[0]: zoom.over: want >0, got 0s",
-				"camera[1]: zoom.to: want in [1, 3], got 3.5",
-				"camera[2]: pan.at: want a start in [0s, 4s), got 9s",
-				"camera[4]: zoom: overlaps camera[3] on the zoom track",
+				"camera.positions[0]: at: want a start in [0s, 4s), got 9s",
+				"camera.positions[1]: hold: want ≥0, got -1s",
+				"camera.zooms[0]: over: want >0, got 0s",
+				"camera.zooms[1]: to: want in [1, 3], got 3.5",
+				"camera.zooms[3]: overlaps camera.zooms[2]",
 			},
 		},
 		{
 			name:       "an undeclared camera area is listed",
 			args:       []string{"lint", cameraAreaStoryboard, "--config", validConfig},
 			wantCode:   exitRunFailed,
-			wantStderr: []string{`camera[0]: pan.to.area: "sidebar" is not declared`},
+			wantStderr: []string{`camera.positions[0]: area: "sidebar" is not declared`},
 		},
 		{
 			name:     "every bad caption is listed under its field",

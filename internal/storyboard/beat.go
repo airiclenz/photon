@@ -12,7 +12,7 @@ import (
 // Beat is one step of a storyboard: the actions photon performs, the section's Duration in the
 // clip (Hold is its leading stretch shown at 1×; a beat with no hold has hold 0) and what a keeper
 // take shows. A Cut beat is recorded but dropped from the clip, so its Duration and Hold are not
-// required. A beat does not zoom: the camera's zoom and pan moves do. RemovedZoom marks a `zoom`
+// required. A beat does not zoom: the camera's zooms and positions do. RemovedZoom marks a `zoom`
 // key, which a beat no longer takes; validation refuses it.
 type Beat struct {
 	ID          int           `yaml:"id"`
@@ -25,6 +25,17 @@ type Beat struct {
 	Cut         bool          `yaml:"cut"`
 	RemovedZoom removedKey    `yaml:"zoom"`
 	Expect      []Expect      `yaml:"expect"`
+}
+
+// removedKey records that a key the schema no longer takes is present. It accepts any value, so
+// the strict decode lets the key through to validation, which refuses it naming what replaces
+// it; the generic unknown-field error would not.
+type removedKey bool
+
+// UnmarshalYAML marks the key present, whatever its value.
+func (k *removedKey) UnmarshalYAML(*yaml.Node) error {
+	*k = true
+	return nil
 }
 
 // Action is one thing a beat does. Exactly one of its forms is set.
@@ -113,7 +124,7 @@ type PauseAction struct {
 	For time.Duration `yaml:"for"`
 }
 
-// Target is an on-screen place a click, drag or pan resolves on the current screen: Text is a
+// Target is an on-screen place a click, drag or camera position resolves on a screen: Text is a
 // regex over the screen's rows, Nth picks which match counts and Area limits the rows searched to
 // an area the config declares (empty or [AreaAny] means the whole screen). It is also a target on
 // the JSON wire, {"text", "nth", "area"}, as photon tune's pick proposes it: a zero Nth and an

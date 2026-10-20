@@ -86,7 +86,7 @@ expect:
 `
 
 // parseBoard parses boardHeader followed by body, the storyboard's beats and any camera and
-// captions, so the board's camera moves and captions carry their resolved starts and colours.
+// captions, so the board's positions, zooms and captions carry their resolved starts and colours.
 func parseBoard(t *testing.T, body string) *storyboard.Storyboard {
 	t.Helper()
 	board, err := storyboard.Parse([]byte(boardHeader+body), "board.yaml")
@@ -107,19 +107,21 @@ const clickBeats = `beats:
       - click: {target: {text: target}}
 `
 
-// zoomCamera is the camera list that zooms 2× onto the centre cell of box through beat 2 of
-// clickBeats: a pan there over the second before the beat, a push over the beat's first second
+// zoomCamera is the camera that zooms 2× onto the centre cell of box through beat 2 of
+// clickBeats: a position there from a second before the beat, a push over the beat's first second
 // and a pull over its last.
 func zoomCamera(box take.Box) string {
 	return fmt.Sprintf(`camera:
-  - pan: {to: {cell: {x: %d, y: %d}}, at: {beat: 1, offset: 1s}, over: 1s}
-  - zoom: {to: 2, at: {beat: 2}, over: 1s}
-  - zoom: {to: 1, at: {beat: 2, offset: 3s}, over: 1s}
+  positions:
+    - {cell: {x: %d, y: %d}, at: {beat: 1, offset: 1s}}
+  zooms:
+    - {to: 2, at: {beat: 2}, over: 1s}
+    - {to: 1, at: {beat: 2, offset: 3s}, over: 1s}
 `, box.X+box.W/2, box.Y+box.H/2)
 }
 
 // zoomClickTake is a two-beat take: beat 1 idles for 2 s, beat 2 clicks box at 3 s and runs to
-// 6 s, zoomed 2× onto the clicked box's centre cell by camera moves. Every beat fits its
+// 6 s, zoomed 2× onto the clicked box's centre cell by its camera. Every beat fits its
 // duration, so source and output clocks agree.
 func zoomClickTake(t *testing.T, box take.Box) (*storyboard.Storyboard, *take.Take) {
 	t.Helper()

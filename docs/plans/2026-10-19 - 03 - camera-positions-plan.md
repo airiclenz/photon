@@ -252,7 +252,13 @@ and 5. Edit `.capcom/knowledge/glossary.md` by hand, then `capcom check`.
 - `grep -nE '\bpan\b|\bvia\b' .capcom/knowledge/glossary.md` prints nothing
 **Commit:** `docs: describe camera positions, transitions and zooms`
 
-## 7. The storyboard camera is positions and zooms; render follows the position track
+## 7. The storyboard camera is positions and zooms; render follows the position track — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): re-derived from the assumed `validateCamera` delegation: `Storyboard.validate` now calls item 4's `Camera.validate(s.Frame, s.Clock(), collect)` directly, and `validateCamera` is deleted along with `CameraMove`, `PanMove`, `trackZoom`/`trackPan`, `minViaPoints` and the move-form helpers; `moveTiming`/`placeMove` stay for the zooms.
+NOTES (2026-10-20): compose's `resolveShown` (the walk back across a move's screens) is deleted as dead; `zoomPlanner.aim` resolves a text target on `take.ScreenAt(shownAt(start))` only. `trackAt` lost its `timing()` constraint parameter, which existed only for the deleted pan segments.
+NOTES (2026-10-20): internal/storyboard/edit_list_test.go, located in Files, needed no change: its "captions after the camera" row passes on the rewritten `cameraEditBoard` mapping, and the table's shared check reads only `board.Captions`, never `board.Camera`. position.go, edit_beat.go and edit_caption.go carried no stale camera-move text either.
+NOTES (2026-10-20): `Point.validate` keeps its `field` parameter although its only remaining caller (`Position.validate`, item 4's position.go, outside Files) passes "".
+NOTES (2026-10-20): pan/via/camera-move wording outside this item's packages stays for its owners: internal/caption/doc.go, internal/target/doc.go, internal/check/doc.go, cmd/photon/tune.go and README's Features/tune/Captions lines (item 20), internal/tune/state.go and session.go (items 11 and 20). CHANGELOG [Unreleased] bullets naming pan moves and `camera[i]: zoom: target: removed` are stale until item 20's sidecar supersedes them, as the plan says.
 
 Depends on items 5, 6.
 

@@ -76,7 +76,7 @@ func (s *Storyboard) validate() []error {
 	for _, beat := range s.Beats {
 		beat.validate(collect.at(Owner{Kind: OwnerBeat, Index: beat.ID}))
 	}
-	s.validateCamera(collect)
+	s.Camera.validate(s.Frame, s.Clock(), collect)
 	s.validateCaptions(collect)
 	return problems
 }
@@ -156,7 +156,7 @@ func (b Beat) validate(report reporter) {
 		}
 	}
 	if b.RemovedZoom {
-		report("zoom: removed; use a camera %s move and a %s move", trackZoom, trackPan)
+		report("zoom: removed; zoom with camera.zooms and aim with camera.positions")
 	}
 	for index, action := range b.Do {
 		action.validate(prefixed(report, fmt.Sprintf("do[%d]: ", index)))

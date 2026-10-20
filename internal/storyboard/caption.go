@@ -9,7 +9,7 @@ import (
 )
 
 // Caption is a line or more of text drawn over the composed frame, placed on the clip's output
-// clock. It sits in output space: a zoom or pan does not move or scale it.
+// clock. It sits in output space: the camera neither moves nor scales it.
 //
 // Text holds its lines, separated by \n; [Load] trims one trailing newline, so a YAML block
 // scalar reads as written. The caption starts At and ends after For or at Until, exactly one of

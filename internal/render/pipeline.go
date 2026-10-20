@@ -93,12 +93,12 @@ type BuildOptions struct {
 // Build checks that the take at takePath, recorded, was recorded at the storyboard's frame size,
 // schedules it, and builds the rasterizer and the compositor over loaded's config: frames are
 // rasterized at frame.scale — padding and font size multiplied through — so a zoom has pixels to
-// draw on, and composed at frame.width, with pan targets resolved through the config's
-// areas. Rasterized snapshots are kept in options.Cache, or in the reused pipeline's cache along
-// with its rasterizer; with options.DraftCache set, the exact stage stands in when it already
-// draws at the shipped frame's size, and otherwise the reused pipeline's draft rasterizer and
-// draft cache are taken over or a draft rasterizer draws at that size into it; the caption fonts
-// are loaded only when options.Reuse holds none that match (see [BuildOptions]).
+// draw on, and composed at frame.width, with the camera positions' text targets resolved through
+// the config's areas. Rasterized snapshots are kept in options.Cache, or in the reused pipeline's
+// cache along with its rasterizer; with options.DraftCache set, the exact stage stands in when it
+// already draws at the shipped frame's size, and otherwise the reused pipeline's draft rasterizer
+// and draft cache are taken over or a draft rasterizer draws at that size into it; the caption
+// fonts are loaded only when options.Reuse holds none that match (see [BuildOptions]).
 //
 // It fails with a nil pipeline when the frame sizes differ or the take does not schedule. When a
 // later stage fails — a font or an area that does not load, a target not on screen, a caption
@@ -400,16 +400,6 @@ func (p *Pipeline) Rect(out time.Duration, box take.Box) image.Rectangle {
 		return image.Rectangle{}
 	}
 	return p.compositor.Rect(out, box)
-}
-
-// Path returns the points the via pan at index of the storyboard's camera list passes through, in
-// pixels of the shipped frame at output time out, as [compose.Compositor.Path] maps them. ok is
-// false when the camera move at index is not a via pan, and on a partial pipeline.
-func (p *Pipeline) Path(out time.Duration, index int) (points []image.Point, ok bool) {
-	if p.compositor == nil {
-		return nil, false
-	}
-	return p.compositor.Path(out, index)
 }
 
 // Size is the shipped frame's pixel size; the zero size on a partial pipeline.

@@ -507,69 +507,6 @@ not >0, an `ease` other than the four above, an `at` that names a missing or cut
 or zoom that starts outside the clip or ends after it, and two positions or two zooms that
 overlap.
 
-#### The list form
-
-`camera` may also be a list of moves, the shape positions and zooms replace.
-
-The top-level `camera` list moves the camera on the clip's own clock, the timeline of the
-shipped GIF, not the take's. The camera has two tracks: a **zoom** track (the magnification, at
-rest at 1×) and a **pan** track (the point the crop centres on, at rest at the frame's centre).
-Each entry of `camera` is exactly one move:
-
-- `zoom`: eases the magnification to `to`, a factor from 1 to 3. `to: 1` zooms back out. A zoom
-  holds the zoom track only and aims nowhere: it pushes in on wherever the pan track has the
-  centre, so a pan over the same stretch is what aims it.
-- `pan`: carries the centre to a point. Set exactly one of two forms:
-  - `to`: one point. The camera moves there in a straight line.
-  - `via`: a list of at least two points. The camera follows a smooth curve through them,
-    without a corner at any point. The last point is where it ends.
-
-Both forms take the same timing fields:
-
-| Field | Meaning |
-| --- | --- |
-| `at` | When the move starts. A bare time such as `4500ms` is that long after the clip's first frame. `{beat: N, offset: D}` is where beat N's section starts in the clip, plus `D`. `D` may be negative and defaults to 0. Leave `at` out to start at the clip's first frame. |
-| `over` | How long the move runs, >0. It must end by the clip's end. |
-| `ease` | `smooth` (default) speeds up and slows down. `linear` runs at a steady pace. |
-
-A pan's point is one of two kinds:
-
-- a [target](#targets-and-areas): `text`, with `nth` and `area`. The camera aims at the centre of
-  its box. photon looks for it on the screen shown when the move ends. If it is not there, photon
-  looks at earlier screens, back to the one shown when the move starts. `photon render` fails if
-  none of them shows it.
-- `cell: {x, y}`: one cell of the grid. `x` is the column and `y` the row, both counted from 0.
-  The camera aims at the cell's centre. A cell takes no `nth` or `area`.
-
-```yaml
-camera:
-  - zoom: {to: 2, at: {beat: 2}, over: 600ms}
-  - pan: {to: {text: 'beta', area: list}, at: {beat: 2, offset: 200ms}, over: 1s}
-  - pan:
-      via:
-        - {cell: {x: 10, y: 4}}
-        - {cell: {x: 80, y: 4}}
-        - {text: 'Saved'}
-      at: 7s
-      over: 2s
-      ease: linear
-  - zoom: {to: 1, at: 9500ms, over: 800ms}
-  - zoom: {to: 2, at: 11s, over: 600ms}
-  - pan: {to: {text: 'Saved'}, at: 11s, over: 600ms}
-```
-
-A zoom and a pan may overlap: that is how the camera pushes in while it moves, and how it pushes
-into a target. Two moves on the same track may not. Between moves, each track holds where the
-last move left it. A pan shows only while the camera is zoomed in: at 1× the whole frame is in
-view. A pan at 1× still sets where the next zoom aims.
-
-`photon lint` reports a move that sets both or neither of `zoom` and `pan`, a `zoom.to` outside
-1-3, a pan with both or neither of `to` and `via`, a `via` with fewer than two points, a point
-with both or neither of `text` and `cell`, a `target` on a zoom (it names a pan move to aim with
-instead), a cell outside the grid, an `ease` other than `smooth` or `linear`, an `over` that is not
->0, an `at` that names a missing or cut beat, a move that starts outside the clip or ends after
-it, and every overlap above.
-
 ### Captions
 
 The top-level `captions` list draws text over the clip, on the same clock as the

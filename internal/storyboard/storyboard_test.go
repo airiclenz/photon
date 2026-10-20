@@ -140,31 +140,39 @@ func TestLoadEveryForm(t *testing.T) {
 	}
 
 	// Beats 1, 2 and 3 start at 0s, 2s and 6s on the output clock; beat 4 is cut.
-	wantCamera := []CameraMove{
-		{Zoom: &ZoomMove{
-			To: 1.5, At: Moment{Offset: 200 * time.Millisecond}, Over: 600 * time.Millisecond, Ease: EaseLinear,
-			start: 200 * time.Millisecond,
-		}},
-		{Zoom: &ZoomMove{
-			To: 1, At: Moment{Beat: 1, Offset: time.Second}, Over: 500 * time.Millisecond, Ease: EaseSmooth,
-			start: time.Second,
-		}},
-		{Pan: &PanMove{
-			To: &Point{Cell: &Cell{X: 40, Y: 12}}, At: Moment{Beat: 1, Offset: 100 * time.Millisecond},
-			Over: 500 * time.Millisecond, Ease: EaseSmooth, start: 100 * time.Millisecond,
-		}},
-		{Pan: &PanMove{
-			To: &Point{Target: Target{Text: "Item 1", Nth: NthLast, Area: "list"}}, At: Moment{Offset: 600 * time.Millisecond},
-			Over: 400 * time.Millisecond, Ease: EaseSmooth, start: 600 * time.Millisecond,
-		}},
-		{Pan: &PanMove{
-			Via: []Point{{Target: Target{Text: "Items", Nth: NthFirst, Area: AreaAny}}, {Cell: &Cell{X: 10, Y: 5}}},
-			At:  Moment{Offset: time.Second}, Over: 800 * time.Millisecond, Ease: EaseSmooth, start: time.Second,
-		}},
-		{Zoom: &ZoomMove{
-			To: 2, At: Moment{Offset: 1800 * time.Millisecond},
-			Over: 200 * time.Millisecond, Ease: EaseSmooth, start: 1800 * time.Millisecond,
-		}},
+	wantCamera := Camera{
+		Positions: []Position{
+			{
+				Point: Point{Cell: &Cell{X: 40, Y: 12}}, At: Moment{Beat: 1, Offset: 100 * time.Millisecond},
+				Hold: 400 * time.Millisecond, Ease: EaseSmooth, start: 100 * time.Millisecond,
+			},
+			{
+				Point: Point{Cell: &Cell{X: 10, Y: 5}}, At: Moment{Beat: 2},
+				Hold: time.Second, Ease: EaseLinear, start: 2 * time.Second,
+			},
+			{
+				Point: Point{Target: Target{Text: "Item 1", Nth: NthLast, Area: "list"}}, At: Moment{Offset: 600 * time.Millisecond},
+				Hold: 300 * time.Millisecond, Ease: EaseOut, start: 600 * time.Millisecond,
+			},
+			{
+				Point: Point{Target: Target{Text: "Items", Nth: NthFirst, Area: AreaAny}}, At: Moment{Offset: time.Second},
+				Ease: EaseIn, start: time.Second,
+			},
+		},
+		Zooms: []ZoomMove{
+			{
+				To: 1.5, At: Moment{Offset: 200 * time.Millisecond}, Over: 600 * time.Millisecond, Ease: EaseLinear,
+				start: 200 * time.Millisecond,
+			},
+			{
+				To: 1, At: Moment{Beat: 1, Offset: time.Second}, Over: 500 * time.Millisecond, Ease: EaseSmooth,
+				start: time.Second,
+			},
+			{
+				To: 2, At: Moment{Offset: 1800 * time.Millisecond}, Over: 200 * time.Millisecond, Ease: EaseSmooth,
+				start: 1800 * time.Millisecond,
+			},
+		},
 	}
 	if !reflect.DeepEqual(board.Camera, wantCamera) {
 		t.Errorf("camera: want %+v with smooth by default and resolved starts, got %+v", wantCamera, board.Camera)
@@ -197,19 +205,18 @@ func TestLoadEveryForm(t *testing.T) {
 	}
 }
 
-// cameraBase is validBase with a camera that breaks no rule: every move sits in beat 2's [3s, 5s)
-// of the 5s clip. Each row of TestLoadRejects_Camera swaps one fragment of it, which must occur in
-// it exactly once.
+// cameraBase is validBase with a camera that breaks no rule on its 5s clip. Each row of
+// TestLoadRejects_Camera swaps one fragment of it, which must occur in it exactly once.
 const cameraBase = validBase + `camera:
-  - zoom: {to: 2, at: {beat: 2, offset: 100ms}, over: 500ms, ease: linear}
-  - pan: {to: {cell: {x: 40, y: 12}}, at: 3s, over: 400ms}
-  - pan: {via: [{text: 'Grip', area: list}, {cell: {x: 2, y: 3}}], at: 4s, over: 1s}
+  positions:
+    - {cell: {x: 40, y: 12}, at: 3s, hold: 400ms}
+    - {text: 'Grip', area: list, at: 4s}
+  zooms:
+    - {to: 2, at: {beat: 2, offset: 100ms}, over: 500ms, ease: linear}
 `
 
 func TestLoadRejects_Camera(t *testing.T) {
 	t.Parallel()
-	const panToCell = "  - pan: {to: {cell: {x: 40, y: 12}}, at: 3s, over: 400ms}"
-
 	cases := []struct {
 		name     string
 		old, new string
@@ -217,41 +224,15 @@ func TestLoadRejects_Camera(t *testing.T) {
 		// decode marks a rule the strict decode enforces, which fails before validation runs.
 		decode bool
 	}{
-		{"unknown move field", "ease: linear}", "ease: linear, speed: 2}", "field speed not found", true},
-		{"unknown cell field", "{x: 40, y: 12}", "{x: 40, y: 12, z: 1}", "field z not found", true},
-		{"both forms", "  - zoom: {to: 2,", "  - pan: {to: {cell: {x: 1, y: 1}}}\n    zoom: {to: 2,",
-			"camera[0]: want exactly one of zoom or pan", false},
-		{"no form", panToCell, "  - {}", "camera[1]: want exactly one of zoom or pan", false},
-		{"zoom factor too large", "to: 2,", "to: 3.5,", "camera[0]: zoom.to: want in [1, 3], got 3.5", false},
-		{"zoom factor missing", "to: 2, ", "", "camera[0]: zoom.to: want in [1, 3], got 0", false},
-		{"length zero", "over: 500ms", "over: 0s", "camera[0]: zoom.over: want >0, got 0s", false},
-		{"ease unknown", "ease: linear", "ease: bounce", `camera[0]: zoom.ease: want smooth, linear, ease-in or ease-out, got "bounce"`, false},
-		{"start at an unknown beat", "beat: 2,", "beat: 9,", "camera[0]: zoom.at: beat 9 is not in the storyboard", false},
-		{"start at the clip's end", "at: 3s", "at: 5s", "camera[1]: pan.at: want a start in [0s, 5s), got 5s", false},
-		{"start before the clip", "at: 3s", "at: -1s", "camera[1]: pan.at: want a start in [0s, 5s), got -1s", false},
-		{"end past the clip", "at: 4s, over: 1s", "at: 4s, over: 2s",
-			"camera[2]: pan.over: want the move to end by the clip's end 5s, got an end at 6s", false},
-		{"pan with to and via", "pan: {to: {cell: {x: 40", "pan: {via: [{cell: {x: 1, y: 1}}, {cell: {x: 2, y: 2}}], to: {cell: {x: 40",
-			"camera[1]: pan: want exactly one of to or via", false},
-		{"pan with neither", "to: {cell: {x: 40, y: 12}}, ", "", "camera[1]: pan: want exactly one of to or via", false},
-		{"via of one point", "{text: 'Grip', area: list}, ", "", "camera[2]: pan.via: want at least 2 points, got 1", false},
-		{"point with text and cell", "{x: 40, y: 12}}", "{x: 40, y: 12}, text: 'A'}", "camera[1]: pan.to: want exactly one of text or cell", false},
-		{"point with neither", "to: {cell: {x: 40, y: 12}}", "to: {}", "camera[1]: pan.to: want exactly one of text or cell", false},
-		{"cell past the last column", "{x: 40, y: 12}", "{x: 80, y: 12}",
-			"camera[1]: pan.to.cell: want x in [0, 80) and y in [0, 24), got x 80, y 12", false},
-		{"cell above the first row", "{x: 40, y: 12}", "{x: 40, y: -1}",
-			"camera[1]: pan.to.cell: want x in [0, 80) and y in [0, 24), got x 40, y -1", false},
-		{"cell with an nth", "{x: 40, y: 12}}", "{x: 40, y: 12}, nth: 2}", "camera[1]: pan.to.nth: only a text point takes an nth", false},
-		{"cell with an area", "{x: 40, y: 12}}", "{x: 40, y: 12}, area: list}", "camera[1]: pan.to.area: only a text point takes an area", false},
-		{"via point regex", "{text: 'Grip', area: list}", "{text: '(', area: list}", "camera[2]: pan.via[0].text: error parsing regexp", false},
-		{"via point area", "area: list}, {cell", "area: 'a b'}, {cell",
-			`camera[2]: pan.via[0].area: want an area name or any, got "a b"`, false},
-		{"two zooms overlap", panToCell, "  - zoom: {to: 1, at: 3s, over: 400ms}",
-			"camera[1]: zoom: overlaps camera[0] on the zoom track ([3.1s, 3.6s) and [3s, 3.4s))", false},
-		{"two pans overlap", "at: 4s, over: 1s", "at: 3200ms, over: 1s",
-			"camera[2]: pan: overlaps camera[1] on the pan track ([3s, 3.4s) and [3.2s, 4.2s))", false},
-		{"zoom with a target", "to: 2,", "to: 2, target: {text: 'Grip'},",
-			"camera[0]: zoom: target: removed; aim with a pan move over the same stretch", false},
+		{"a camera list", cameraBase[len(validBase):], "camera:\n  - zoom: {to: 2, at: 3s, over: 1s}\n",
+			"cannot unmarshal !!seq into storyboard.Camera", true},
+		{"a pan list", "  zooms:\n", "  pan:\n    - {to: {cell: {x: 1, y: 1}}, over: 1s}\n  zooms:\n",
+			"field pan not found", true},
+		{"a via key", "at: 4s}", "at: 4s, via: [{cell: {x: 1, y: 1}}]}", "field via not found", true},
+		{"a zoom target", "to: 2,", "to: 2, target: {text: 'Grip'},", "field target not found", true},
+		{"a position problem", "{x: 40, y: 12}", "{x: 80, y: 12}",
+			"camera.positions[0]: cell: want x in [0, 80) and y in [0, 24), got x 80, y 12", false},
+		{"a zoom problem", "to: 2,", "to: 3.5,", "camera.zooms[0]: to: want in [1, 3], got 3.5", false},
 	}
 	if _, err := Parse([]byte(cameraBase), "camera.yaml"); err != nil {
 		t.Fatalf("the camera base storyboard must parse clean: %v", err)
@@ -269,22 +250,11 @@ func TestLoadRejects_Camera(t *testing.T) {
 				t.Fatalf("want an error containing %q, got:\n%v", tc.want, err)
 			}
 			var invalid *ValidationError
-			isValidation := errors.As(err, &invalid)
-			if tc.decode {
-				if isValidation {
-					t.Fatalf("want a decode error, got a *ValidationError:\n%v", err)
-				}
-				return
+			if isValidation := errors.As(err, &invalid); isValidation == tc.decode {
+				t.Fatalf("want a validation error %v, got %T: %v", !tc.decode, err, err)
 			}
-			if !isValidation {
-				t.Fatalf("want a *ValidationError, got %T: %v", err, err)
-			}
-			if got := len(invalid.Problems); got != 1 {
-				t.Fatalf("problems: want exactly the one broken rule, got %d:\n%v", got, err)
-			}
-			owner := OwnerOf(invalid.Problems[0])
-			if owner.Kind != OwnerCamera || !strings.HasPrefix(tc.want, fmt.Sprintf("camera[%d]: ", owner.Index)) {
-				t.Errorf("owner: want the one %q names, got %+v", tc.want, owner)
+			if !tc.decode && len(invalid.Problems) != 1 {
+				t.Fatalf("problems: want exactly the one broken rule, got %d:\n%v", len(invalid.Problems), err)
 			}
 		})
 	}
@@ -474,9 +444,11 @@ beats:
   - {id: 2, title: skipped, cut: true}
   - {id: 3, title: close, duration: 2s}
 camera:
-  - zoom: {to: 2, over: 1s}
-  - zoom: {to: 1, at: {beat: 3, offset: 500ms}, over: 1s}
-  - pan: {to: {cell: {x: 1, y: 1}}, at: 1500ms, over: 1s}
+  positions:
+    - {cell: {x: 1, y: 1}, at: 1500ms, hold: 1s}
+  zooms:
+    - {to: 2, over: 1s}
+    - {to: 1, at: {beat: 3, offset: 500ms}, over: 1s}
 `
 
 	parsed, err := Parse([]byte(body), "resolve.yaml")
@@ -484,7 +456,8 @@ camera:
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	got := []time.Duration{parsed.Camera[0].Zoom.Start(), parsed.Camera[1].Zoom.Start(), parsed.Camera[2].Pan.Start()}
+	camera := parsed.Camera
+	got := []time.Duration{camera.Zooms[0].Start(), camera.Zooms[1].Start(), camera.Positions[0].Start()}
 	want := []time.Duration{0, 3500 * time.Millisecond, 1500 * time.Millisecond}
 	if !slices.Equal(got, want) {
 		t.Errorf("starts: want %v, got %v", want, got)
@@ -586,7 +559,7 @@ func TestLoadRejects(t *testing.T) {
 		{"duration missing", "    duration: 2s\n", "", "beat 2: duration: want >0, got 0s", false},
 		{"hold not under duration", "hold: 1s", "hold: 3s", "beat 1: hold: want less than duration 3s, got 3s", false},
 		{"beat zoom", "hold: 1s\n", "hold: 1s\n    zoom: {target: {text: 'Item'}, factor: 2}\n",
-			"beat 1: zoom: removed; use a camera zoom move and a pan move", false},
+			"beat 1: zoom: removed; zoom with camera.zooms and aim with camera.positions", false},
 		{"two action forms", "      - pause: {for: 1s}", "      - pause: {for: 1s}\n        type: {text: x}",
 			"beat 1: do[4]: want exactly one of type, key, click, drag, wait or pause", false},
 		{"no action form", "      - pause: {for: 1s}", "      - {}",

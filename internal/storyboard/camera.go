@@ -5,22 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
-
-// CameraMove is one move of the clip's camera, placed on the clip's output clock. Exactly one of
-// Zoom and Pan is set. The camera has two tracks: a zoom move runs on the zoom track and a pan
-// move on the pan track, so a zoom and a pan may overlap, while two moves on one track may not.
-// A move whose `at` is absent starts at the clip's first frame.
-//
-// A move's authored At stays as written; [Load] also resolves it onto the output clock, which
-// [ZoomMove.Start] and [PanMove.Start] report. A move built as a struct literal rather than loaded
-// reports a zero start.
-type CameraMove struct {
-	Zoom *ZoomMove `yaml:"zoom"`
-	Pan  *PanMove  `yaml:"pan"`
-}
 
 // Camera is the clip's camera on two tracks: Positions say where it aims and Zooms how far it
 // magnifies. Either list may be given in any order; validation places each entry on the clip's
@@ -31,39 +16,9 @@ type Camera struct {
 }
 
 // ZoomMove changes the magnification to To, a factor in [1, 3], starting At and lasting Over. It
-// holds the zoom track only and aims nowhere: a pan move over the same stretch aims the camera.
-// RemovedTarget marks a `target` key, which a zoom move no longer takes; validation refuses it.
+// holds the zoom track only and aims nowhere: the camera's positions aim it.
 type ZoomMove struct {
-	To            float64       `yaml:"to"`
-	RemovedTarget removedKey    `yaml:"target"`
-	At            Moment        `yaml:"at"`
-	Over          time.Duration `yaml:"over"`
-	Ease          Ease          `yaml:"ease"`
-
-	start time.Duration
-}
-
-// removedKey records that a key the schema no longer takes is present. It accepts any value, so
-// the strict decode lets the key through to validation, which refuses it naming what replaces
-// it; the generic unknown-field error would not.
-type removedKey bool
-
-// UnmarshalYAML marks the key present, whatever its value.
-func (k *removedKey) UnmarshalYAML(*yaml.Node) error {
-	*k = true
-	return nil
-}
-
-// Start is where the zoom move starts on the clip's output clock: its At, resolved.
-func (z ZoomMove) Start() time.Duration { return z.start }
-
-// PanMove moves the camera's centre to a point, starting At and lasting Over. Exactly one of To
-// and Via is set: To is the destination of a straight move, and Via is a path of at least two
-// points whose last is the destination. A target point resolves on the screen shown at the
-// move's end, walking back to the move's start when it is absent there.
-type PanMove struct {
-	To   *Point        `yaml:"to"`
-	Via  []Point       `yaml:"via"`
+	To   float64       `yaml:"to"`
 	At   Moment        `yaml:"at"`
 	Over time.Duration `yaml:"over"`
 	Ease Ease          `yaml:"ease"`
@@ -71,11 +26,12 @@ type PanMove struct {
 	start time.Duration
 }
 
-// Start is where the pan move starts on the clip's output clock: its At, resolved.
-func (p PanMove) Start() time.Duration { return p.start }
+// Start is where the zoom move starts on the clip's output clock: its At, resolved.
+func (z ZoomMove) Start() time.Duration { return z.start }
 
-// Point is where a pan aims: either an on-screen target (its fields sit inline, so `to: {text:
-// …}` reads as a target) or a Cell of the terminal grid. Exactly one of Text and Cell is set.
+// Point is where a camera position aims: either an on-screen target (its fields sit inline, so
+// `{text: …}` reads as a target) or a Cell of the terminal grid. Exactly one of Text and Cell is
+// set.
 type Point struct {
 	Target `yaml:",inline"`
 	Cell   *Cell `yaml:"cell"`
@@ -87,8 +43,8 @@ type Cell struct {
 	Y int `yaml:"y"`
 }
 
-// Ease is how a camera move's progress, or a transition's into a position, runs over its length.
-// [Load] sets an absent one on a camera move to [EaseSmooth].
+// Ease is how a zoom's progress, or a transition's into a position, runs over its length. [Load]
+// sets an absent one on a position or a zoom to [EaseSmooth].
 type Ease string
 
 // The spellings of Ease: [EaseLinear] runs at an even pace, [EaseSmooth] starts and ends gently,
@@ -108,15 +64,6 @@ func validateEase(ease Ease, report reporter) {
 	}
 	report("ease: want %s, %s, %s or %s, got %q", EaseSmooth, EaseLinear, EaseIn, EaseOut, ease)
 }
-
-// Pan path bounds: a via path runs from at least one waypoint to its destination.
-const minViaPoints = 2
-
-// The camera's tracks, as validation names them.
-const (
-	trackZoom = "zoom"
-	trackPan  = "pan"
-)
 
 // span is a stretch [start, end) of the clip's output clock that holds a camera track, with the
 // name validation gives its holder.
@@ -191,108 +138,18 @@ func (c Camera) validate(frame Frame, clock OutputClock, collect collector) {
 	reportOverlaps(zooms, collect)
 }
 
-// moveTiming is the part every camera move form shares: where it starts, how long it runs and
-// how it eases.
+// moveTiming is the part of a zoom that places it on the clip's clock: where it starts, how long
+// it runs and how it eases.
 type moveTiming struct {
 	at   Moment
 	over time.Duration
 	ease Ease
 }
 
-// validateCamera checks every camera move's form and its place on the clip's clock, keeping the
-// start it resolves, then that no two moves holding one track overlap. Problems are filed under
-// camera[i], an overlap under the later move.
-func (s *Storyboard) validateCamera(collect collector) {
-	held := map[string][]span{trackZoom: nil, trackPan: nil}
-	clock := s.Clock()
-	for index, move := range s.Camera {
-		holder := fmt.Sprintf("camera[%d]", index)
-		moveReport := collect.at(Owner{Kind: OwnerCamera, Index: index})
-		track, timing, isFormValid := move.validateForm(s.Frame, moveReport)
-		if !isFormValid {
-			continue
-		}
-		placed, isPlaced := placeMove(clock, timing, prefixed(moveReport, track+"."))
-		if !isPlaced {
-			continue
-		}
-		move.place(placed.start)
-		placed.holder = holder
-		for _, heldTrack := range move.tracks() {
-			for _, other := range held[heldTrack] {
-				if placed.overlaps(other) {
-					moveReport("%s: overlaps %s on the %s track (%s and %s)",
-						track, other.holder, heldTrack, other, placed)
-				}
-			}
-			held[heldTrack] = append(held[heldTrack], placed)
-		}
-	}
-}
-
-// tracks names the camera tracks a move with a valid form holds: a pan holds the pan track and a
-// zoom the zoom track.
-func (m CameraMove) tracks() []string {
-	if m.Pan != nil {
-		return []string{trackPan}
-	}
-	return []string{trackZoom}
-}
-
-// validateForm checks that exactly one move form is set and that its fields fit it, refusing a
-// zoom's removed target, and returns the form's track and timing. isFormValid is false only when
-// no single form is set.
-func (m CameraMove) validateForm(
-	frame Frame, report reporter,
-) (track string, timing moveTiming, isFormValid bool) {
-	if (m.Zoom == nil) == (m.Pan == nil) {
-		report("want exactly one of %s or %s", trackZoom, trackPan)
-		return "", moveTiming{}, false
-	}
-	if m.Zoom != nil {
-		if m.Zoom.RemovedTarget {
-			report("%s: target: removed; aim with a %s move over the same stretch",
-				trackZoom, trackPan)
-		}
-		m.Zoom.validate(prefixed(report, trackZoom+"."))
-		return trackZoom, moveTiming{m.Zoom.At, m.Zoom.Over, m.Zoom.Ease}, true
-	}
-	m.Pan.validate(frame, report)
-	return trackPan, moveTiming{m.Pan.At, m.Pan.Over, m.Pan.Ease}, true
-}
-
-// place keeps start, the move's At resolved on the output clock, on whichever form is set.
-func (m CameraMove) place(start time.Duration) {
-	if m.Zoom != nil {
-		m.Zoom.start = start
-		return
-	}
-	m.Pan.start = start
-}
-
 // validate checks the zoom move's factor.
 func (z ZoomMove) validate(report reporter) {
 	if z.To < minZoomFactor || z.To > maxZoomFactor {
 		report("to: want in [%d, %d], got %g", minZoomFactor, maxZoomFactor, z.To)
-	}
-}
-
-// validate checks that the pan sets exactly one of to and via, that a via path is long enough
-// and every point. Problems are filed under pan.
-func (p PanMove) validate(frame Frame, report reporter) {
-	if (p.To == nil) == (p.Via == nil) {
-		report("%s: want exactly one of to or via", trackPan)
-		return
-	}
-	if p.To != nil {
-		p.To.validate(trackPan+".to", frame, report)
-		return
-	}
-	if len(p.Via) < minViaPoints {
-		report("%s.via: want at least %d points, got %d", trackPan, minViaPoints, len(p.Via))
-	}
-	for index, point := range p.Via {
-		point.validate(fmt.Sprintf("%s.via[%d]", trackPan, index), frame, report)
 	}
 }
 
@@ -326,10 +183,9 @@ func (p Point) validate(field string, frame Frame, report reporter) {
 	}
 }
 
-// placeMove checks the move's length, start, end and ease, and returns the stretch it holds on
-// the output clock. isPlaced is false when the move has no length or does not fit in the clip,
-// so it holds no stretch to check for overlaps. Problems are filed through report, which names
-// the move.
+// placeMove checks a zoom's length, start, end and ease, and returns the stretch it holds on the
+// output clock. isPlaced is false when the zoom has no length or does not fit in the clip, so it
+// holds no stretch to check for overlaps. Problems are filed through report, which names the zoom.
 func placeMove(
 	clock OutputClock, timing moveTiming, report reporter,
 ) (placed span, isPlaced bool) {

@@ -22,12 +22,13 @@ import (
 // zoomedCaptionedStoryboard is captionedStoryboard with a camera zoom over beat 1, so the parity
 // check covers the camera, the captions and their fades.
 const zoomedCaptionedStoryboard = captionedStoryboard + `camera:
-  - zoom: {to: 2, at: 100ms, over: 300ms}
+  zooms:
+    - {to: 2, at: 100ms, over: 300ms}
 `
 
 // lostZoomStoryboard is renderStoryboard with beat 1 squeezed into 300ms — its 2s of take play
-// above 6×, which the schedule warns about — and a camera pan through beat 2 to a text no
-// screen shows.
+// above 6×, which the schedule warns about — and a camera position at beat 2 on a text no screen
+// shows.
 const lostZoomStoryboard = `clip: rendered
 ship: out/rendered.gif
 frame: {cols: 20, rows: 4, padding: 4, font_size: 10, line_height: 1.2, scale: 2, width: 160, fps: 10, max_colors: 16}
@@ -39,7 +40,8 @@ beats:
     title: hold
     duration: 1500ms
 camera:
-  - pan: {to: {text: 'nowhere'}, at: {beat: 2}, over: 500ms}
+  positions:
+    - {text: 'nowhere', at: {beat: 2}}
 `
 
 // loadRenderTake writes the render tests' take of cols columns and loads it back, returning its
@@ -171,15 +173,15 @@ func TestBuild_ATakeOfAnotherFrame_IsRefusedWithoutAPipeline(t *testing.T) {
 	}
 }
 
-func TestBuild_AZoomTargetNotOnScreen_LeavesAPartialPipeline(t *testing.T) {
+func TestBuild_APositionTargetNotOnScreen_LeavesAPartialPipeline(t *testing.T) {
 	t.Parallel()
 	loaded := loadRenderClipOf(t, lostZoomStoryboard)
 	takePath, recorded := loadRenderTake(t, 20)
 
 	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster()})
 
-	if !errors.Is(err, target.ErrNotOnScreen) {
-		t.Fatalf("want the pan target not on screen, got %v", err)
+	if !errors.Is(err, target.ErrNotOnScreen) || !strings.Contains(err.Error(), "camera.positions[0]: ") {
+		t.Fatalf("want camera.positions[0]'s target not on screen, got %v", err)
 	}
 	if built == nil || built.Schedule() == nil {
 		t.Fatal("want a partial pipeline holding its schedule")
@@ -362,7 +364,7 @@ func TestRun_ScheduleWarnings_PrintBeforeAComposeError(t *testing.T) {
 	err := Run(context.Background(), loaded, options, &bytes.Buffer{}, &stderr)
 
 	if !errors.Is(err, target.ErrNotOnScreen) {
-		t.Fatalf("want the pan target not on screen, got %v", err)
+		t.Fatalf("want the position's target not on screen, got %v", err)
 	}
 	if !strings.HasPrefix(stderr.String(), "warning: beat 1 plays at ") {
 		t.Errorf("want beat 1's speed warning on stderr, got %q", stderr.String())

@@ -212,8 +212,8 @@ func TestApply_EditOnWhatIsNotThere_IsRefused(t *testing.T) {
 		{"a frame field on a beat", beatEdit(1, FieldFrameFPS, 30), "beat 1: frame.fps: want a clip owner"},
 		{"a frame field on a clip index past 0", Edit{Owner: Owner{Kind: OwnerClip, Index: 1},
 			Field: FieldFrameFPS, Value: typedValue(30)}, "frame.fps: want the clip at index 0"},
-		{"a beat field on a camera owner", Edit{Owner: Owner{Kind: OwnerCamera}, Field: FieldDuration, Value: typedValue("1000")}, "duration: want a beat owner, got \"camera\""},
-		{"a camera field", Edit{Owner: Owner{Kind: OwnerCamera}, Field: "camera.at", Value: moment(0, 0)}, "camera.at: unknown field"},
+		{"a beat field on a position owner", Edit{Owner: Owner{Kind: OwnerPosition}, Field: FieldDuration, Value: typedValue("1000")}, "duration: want a beat owner, got \"position\""},
+		{"a camera field", Edit{Owner: Owner{Kind: OwnerPosition}, Field: "camera.at", Value: moment(0, 0)}, "camera.at: unknown field"},
 		{"a null duration", beatEdit(2, FieldDuration, nil), "beat 2: duration: want a value, got null"},
 		{"an absent duration", Edit{Owner: Owner{Kind: OwnerBeat, Index: 2}, Field: FieldDuration},
 			"beat 2: duration: want a value, got none"},
@@ -358,8 +358,8 @@ func TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder(t *testing.T) {
 		{"a storyboard skips its path", reflect.TypeFor[Storyboard](),
 			[]string{"clip", "ship", "frame", "expect", "beats", "camera", "captions"}},
 		{"a point leaves its inline target out", reflect.TypeFor[Point](), []string{"cell"}},
-		{"a zoom move skips its unexported start", reflect.TypeFor[ZoomMove](), []string{"to", "target", "at", "over", "ease"}},
-		{"a pan move", reflect.TypeFor[PanMove](), []string{"to", "via", "at", "over", "ease"}},
+		{"the camera", reflect.TypeFor[Camera](), []string{"positions", "zooms"}},
+		{"a zoom move skips its unexported start", reflect.TypeFor[ZoomMove](), []string{"to", "at", "over", "ease"}},
 		{"a caption skips its resolved times and colours", reflect.TypeFor[Caption](), []string{
 			"text", "at", "for", "until", "font", "place", "align", "offset", "position", "color", "box", "fade",
 		}},
@@ -400,24 +400,23 @@ func moment(beat int, offsetMS int64) json.RawMessage {
 	return typedValue(map[string]int64{"beat": int64(beat), "offset_ms": offsetMS})
 }
 
-// cameraEditBoard is editBaseBoard with a camera of block and flow moves, all inside beat 1: a
-// storyboard key a new captions list is written after.
+// cameraEditBoard is editBaseBoard with a camera of block and flow positions and zooms, all
+// inside beat 1: a storyboard key a new captions list is written after.
 const cameraEditBoard = editBaseBoard + `camera:
-  - zoom:
-      to: 1.5
+  positions:
+    - text: 'failing'
+      at: 200ms # after the zoom starts
+      hold: 600ms
+    - {cell: {x: 3, y: 2}, at: 900ms}
+  zooms:
+    - to: 1.5
       at:
         beat: 1
         offset: 100ms
       over: 300ms
       ease: linear
-  - pan:
-      to:
-        text: 'failing'
-      at: 200ms # after the zoom starts
-      over: 600ms
-  - pan: {to: {cell: {x: 3, y: 2}}, at: 900ms, over: 100ms}
-  - zoom: {to: 2, at: {beat: 1, offset: 500ms}, over: 400ms, ease: linear}
-  - zoom: {to: 1.2, over: 50ms}
+    - {to: 2, at: {beat: 1, offset: 500ms}, over: 400ms, ease: linear}
+    - {to: 1.2, over: 50ms}
 `
 
 // captionEditPath is the name the caption edit tests parse their storyboard under.

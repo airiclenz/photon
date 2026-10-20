@@ -37,7 +37,7 @@
 // file alone decides. The font-bound tier is [CheckCaptions]: the captions laid out with the
 // clip's real fonts on the shipped frame, which finds a caption box larger than the frame before
 // any take exists; `photon lint` runs it. The take-bound tier is [compose.New] in [Build]: the
-// camera's pan targets resolved on the take's screens.
+// camera positions' text targets resolved on the take's screens.
 //
 // It imports clip, schedule, raster, compose, caption, fonts, target, storyboard and take, and
 // runs ffmpeg and gifsicle as programs.

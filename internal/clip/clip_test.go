@@ -261,23 +261,27 @@ func TestWithStoryboard_UndeclaredCameraAreaFailsNamingIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read the storyboard: %v", err)
 	}
-	// A second beat lengthens the clip to hold the moves, which start at 4s.
+	// A second beat lengthens the clip to hold the positions and zooms, which start at 4s.
 	withCamera := string(raw) + `  - id: 2
     title: look around
     duration: 4s
 camera:
-  - pan: {to: {text: 'Saved', area: footer}, at: 4s, over: 1s}
-  - zoom: {to: 2, at: 5s, over: 1s}
-  - pan: {via: [{text: 'Item', area: list}, {text: 'Bin', area: trash}, {cell: {x: 1, y: 1}}], at: 6s, over: 1s}
-  - zoom: {to: 1, at: 7s, over: 500ms}
+  positions:
+    - {text: 'Saved', area: footer, at: 4s, hold: 1s}
+    - {text: 'Item', area: list, at: 5s}
+    - {text: 'Bin', area: trash, at: 6s}
+    - {cell: {x: 1, y: 1}, at: 7s}
+  zooms:
+    - {to: 2, at: 5s, over: 1s}
+    - {to: 1, at: 7s, over: 500ms}
 `
 	board, err := storyboard.Parse([]byte(withCamera), validStoryboard)
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
 	want := []string{
-		`camera[0]: pan.to.area: "footer" is not declared`,
-		`camera[2]: pan.via[1].area: "trash" is not declared`,
+		`camera.positions[0]: area: "footer" is not declared`,
+		`camera.positions[2]: area: "trash" is not declared`,
 	}
 
 	_, err = loaded.WithStoryboard(board)
@@ -295,8 +299,8 @@ camera:
 		}
 	}
 	wantOwners := []storyboard.Owner{
-		{Kind: storyboard.OwnerCamera, Index: 0},
-		{Kind: storyboard.OwnerCamera, Index: 2},
+		{Kind: storyboard.OwnerPosition, Index: 0},
+		{Kind: storyboard.OwnerPosition, Index: 2},
 	}
 	for index, wantOwner := range wantOwners {
 		if got := storyboard.OwnerOf(crossCheckErr.Problems[index]); got != wantOwner {

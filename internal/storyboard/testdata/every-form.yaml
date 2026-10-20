@@ -1,6 +1,7 @@
-# Every action, target form, cut, expect kind, camera move and caption form the schema has, in one
-# valid storyboard. The camera moves sit in beat 1's [0s, 2s); the last zoom takes the zoom track's
-# [1.8s, 2s). Captions sit in output space, so they may sit anywhere.
+# Every action, target form, cut, expect kind, camera position and zoom and caption form the
+# schema has, in one valid storyboard. The positions and zooms sit in beats 1 and 2, listed out of
+# start order; the last zoom takes [1.8s, 2s). Captions sit in output space, so they may sit
+# anywhere.
 clip: every-form
 ship: out/every-form.gif
 frame:
@@ -59,17 +60,19 @@ beats:
     do:
       - key: {name: ctrl+c}
 camera:
-  - zoom: {to: 1.5, at: 200ms, over: 600ms, ease: linear}
-  - zoom: {to: 1, at: {beat: 1, offset: 1s}, over: 500ms}
-  - pan: {to: {cell: {x: 40, y: 12}}, at: {beat: 1, offset: 100ms}, over: 500ms}
-  - pan: {to: {text: 'Item 1', nth: last, area: list}, at: 600ms, over: 400ms, ease: smooth}
-  - pan:
-      via:
-        - {text: 'Items', nth: first, area: any}
-        - {cell: {x: 10, y: 5}}
+  positions:
+    - {cell: {x: 40, y: 12}, at: {beat: 1, offset: 100ms}, hold: 400ms}
+    - {cell: {x: 10, y: 5}, at: {beat: 2}, hold: 1s, ease: linear}
+    - {text: 'Item 1', nth: last, area: list, at: 600ms, hold: 300ms, ease: ease-out}
+    - text: 'Items'
+      nth: first
+      area: any
       at: 1s
-      over: 800ms
-  - zoom: {to: 2, at: 1800ms, over: 200ms}
+      ease: ease-in
+  zooms:
+    - {to: 1.5, at: 200ms, over: 600ms, ease: linear}
+    - {to: 1, at: {beat: 1, offset: 1s}, over: 500ms}
+    - {to: 2, at: 1800ms, over: 200ms, ease: smooth}
 captions:
   - text: "Pick an item\nthen save it"
     at: {beat: 2, offset: 200ms}
