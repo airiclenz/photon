@@ -577,7 +577,11 @@ transition edge, shrink to a cut, a refused edit snapping back.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune -run 'TestPage'`
 **Commit:** `feat(tune): drag positions and transitions`
 
-## 17. Tune page: add a position on the camera's centre
+## 17. Tune page: add a position on the camera's centre — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): re-derived from the Read-first anchor `TestPageJS_RefusedLaneAdd_ShowsInTheStatusUntilAnAcceptedEdit`, which item 1 (da397bc) removed with the pan and zoom move lanes; the refused-add coverage is a new `TestPageJS_RefusedPositionAdd_ShowsInTheStatus` beside the other position tests.
+NOTES (2026-10-20): `adding` now rounds the playhead once and uses that ms for the insert index, `at` and the camera query, and its edit is async (resolves with the edit) for every lane; window.tune gains `camera(ms)`, documented in app.js's contract header. `tune.time()` already rounds the playhead, so the fractional-playhead test passes through that rounding too.
+NOTES (2026-10-20): README.md's tune section (":175", a lane's `+` adds "a zoom, a pan or a caption") still names pans and omits positions; item 20 owns that doc pass, so it is left alone here.
 
 Depends on items 13, 16.
 

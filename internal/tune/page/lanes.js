@@ -8,8 +8,10 @@
 // its axis, makes selectable as entry, {kind, index}, the shape window.tune's selectEntry takes,
 // drags to shift that entry's start, and gives a grip on each edge edges names, "start" or "end",
 // which a drag resizes it by; a bar without edges has no grips. add, which a lane may leave
-// out, is the lane's add button, {title, edit(state, ms)}: edit is the window.tune edit that adds
-// a new entry starting at ms on the output clock, its owner the entry it becomes. Nothing here
+// out, is the lane's add button, {title, edit(state, ms)}: edit resolves with the window.tune
+// edit that adds a new entry starting at ms on the output clock, its owner the entry it becomes,
+// and rejects when it cannot be built. A new position is a point on the cell the camera centres
+// on at ms, window.tune's camera(ms), so adding one does not move the camera. Nothing here
 // touches the page or computes timing: every bar spans a start and stop the state reports, and
 // the transitions are kinds.js's, read through window.tunePage, which loads before this file.
 "use strict";
@@ -24,7 +26,11 @@
   const EDGE_START = "start";
   const EDGE_END = "end";
   // The state's list of each entry kind a lane adds to.
-  const STATE_LISTS = Object.freeze({ [ENTRY_ZOOM]: "zooms", [ENTRY_CAPTION]: "captions" });
+  const STATE_LISTS = Object.freeze({
+    [ENTRY_POSITION]: "positions",
+    [ENTRY_ZOOM]: "zooms",
+    [ENTRY_CAPTION]: "captions",
+  });
   // A moment's beat 0 is a clip time, offset_ms after the clip's first frame.
   const CLIP_TIME_BEAT = 0;
 
@@ -90,18 +96,28 @@
     }));
   }
 
-  // adding is the add button of a lane whose new entry, newEntry(at) starting at the moment at,
-  // field inserts into list: its title names noun, and its edit places the entry in start-time
-  // order, after every entry of the list that starts at or before the playhead.
+  // adding is the add button of a lane whose new entry, newEntry(at, ms) starting at the moment
+  // at, field inserts into list: its title names noun, and its edit places the entry in
+  // start-time order, after every entry of the list that starts at or before the playhead. The
+  // playhead is rounded to the whole millisecond ms once, so at and whatever newEntry asks for
+  // name the same moment; newEntry returns the entry, or a Promise of it.
   function adding(noun, list, field, newEntry) {
     return {
       title: "Add a " + noun + " at the playhead",
-      edit: (state, ms) => {
+      edit: async (state, playhead) => {
+        const ms = Math.round(playhead);
         const index = state[STATE_LISTS[list]].filter((entry) => entry.start_ms <= ms).length;
-        const at = { beat: CLIP_TIME_BEAT, offset_ms: Math.round(ms) };
-        return { owner: { kind: list, index }, field, value: newEntry(at) };
+        const at = { beat: CLIP_TIME_BEAT, offset_ms: ms };
+        return { owner: { kind: list, index }, field, value: await newEntry(at, ms) };
       },
     };
+  }
+
+  // newPosition is a point at the moment at, ms on the output clock, on the cell the camera
+  // centres on there, as the camera route answers it before any clamp to the frame's edges.
+  async function newPosition(at, ms) {
+    const camera = await window.tune.camera(ms);
+    return { at, cell: camera.centre };
   }
 
   // window.tuneLanes are the lanes timeline.js draws under its own, top to bottom.
@@ -109,6 +125,7 @@
     {
       name: "position",
       draw: positionBars,
+      add: adding(ENTRY_POSITION, ENTRY_POSITION, "position.insert", newPosition),
     },
     {
       name: "zoom",

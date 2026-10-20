@@ -4,7 +4,7 @@
 // selectEntry(entry) for the position, transition, zoom or caption it shows instead, seek(ms)
 // for the axis, and edit(edit) for a lane's add, which the server applies, validates and
 // schedules; a drag sends its edit through window.tuneDrag. From the page's internal window.tunePage it takes
-// reportStatus, to show a refused add or bar drag in the transport bar, and beginScrub and
+// reportStatus, to show a refused or failed add or a refused bar drag in the transport bar, and beginScrub and
 // endScrub, to tell the transport a scrub's pointer went down or up. A scrub starts on a press on
 // the axis and ends on a pointer release or cancel anywhere in the window, so a redraw that
 // replaces the axis mid-drag does not leave it running. Nothing here computes timing: every
@@ -17,7 +17,8 @@
 // lane is {name, draw(state), add}, where draw returns its bars as data, {from, to, className,
 // label, title, entry, edges}, each placed from its from to its to and selecting its entry, {kind,
 // index}, on a click, and add, {title, edit(state, ms)}, is a button beside the lane's name that
-// sends edit(state, playhead) and selects the entry the edit's owner names; a lane without add has
+// sends the edit edit(state, playhead) returns or resolves with and selects the entry the edit's
+// owner names; a lane without add has
 // no button. Dragging such a bar shifts its entry's start and keeps its length: one shift edit for
 // a caption, one at edit keeping its beat for a zoom or a position, one transition edit with both
 // edges moved for a transition. A grip on each edge a bar's edges names, "start" or "end", resizes
@@ -202,18 +203,16 @@
     return laneElement(lane.name, track, ...controls);
   }
 
-  // addButton sends add's edit for the playhead and selects the new entry. A refused add stands
-  // on the entry index it named, which the inspector need not show, so its message goes to the
-  // transport bar's status as well.
+  // addButton sends add's edit for the playhead, once it resolves, and selects the new entry. A
+  // refused add stands on the entry index it named, which the inspector need not show, so its
+  // message goes to the transport bar's status as well, as does an edit that cannot be built.
   function addButton(add) {
     const properties = { type: "button", className: "lane-add", title: add.title };
     const button = element("button", properties, ADD_GLYPH);
     button.addEventListener("click", () => {
-      const change = add.edit(tune.state(), tune.time());
-      tune.edit(change).then(
-        () => tune.selectEntry(change.owner),
-        (error) => page.reportStatus(error.message, true),
-      );
+      Promise.resolve(add.edit(tune.state(), tune.time()))
+        .then((change) => tune.edit(change).then(() => tune.selectEntry(change.owner)))
+        .catch((error) => page.reportStatus(error.message, true));
     });
     return button;
   }

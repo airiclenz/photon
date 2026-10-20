@@ -19,6 +19,9 @@
 //   edit(edit)   apply {owner: {kind, index}, field, value}: owner a beat by its id, the clip
 //                with index 0, or a position, zoom or caption by its index, value typed per
 //                field; a Promise of the new state, rejected when refused
+//   camera(ms)   the camera at ms, whole output milliseconds, as /api/camera?t=<ms> answers
+//                it: a Promise of {centre, crop, grid}, centre the cell it centres on, rejected
+//                with the server's message when refused; the position lane's add asks it
 //   onState(fn)  call fn(state) with every new state
 //   frame        the preview <img> element
 //
@@ -29,8 +32,8 @@
 // entries.js (the position, transition, zoom and caption panels) — share its state through window.tunePage, an internal
 // namespace no part of the contract: app.js puts in it the state they read and the helpers they build with, and each of them adds what it does. Of
 // the other scripts picker.js adds the standing pick's proposal, and timeline.js marks a scrub
-// through transport.js's beginScrub and endScrub and reports a refused lane add or bar drag
-// through its reportStatus; fit.js, the preview fit, reads window.tune alone. app.js calls those only once every script has run, so the wiring, and
+// through transport.js's beginScrub and endScrub and reports a refused or failed lane add or a
+// refused bar drag through its reportStatus; fit.js, the preview fit, reads window.tune alone. app.js calls those only once every script has run, so the wiring, and
 // with it the first /api/state request, waits for DOMContentLoaded.
 "use strict";
 
@@ -43,7 +46,10 @@
     revert: "/api/revert",
     reload: "/api/reload",
     save: "/api/save",
+    camera: "/api/camera",
   };
+  // TIME_QUERY starts the query naming a route's output time in whole milliseconds.
+  const TIME_QUERY = "?t=";
   const POLL_INTERVAL_MS = 1000;
   const MILLISECONDS_PER_SECOND = 1000;
   const MILLISECONDS_PER_MINUTE = 60000;
@@ -361,6 +367,7 @@
     seek: (ms) => page.seek(ms),
     pause: () => page.pause(),
     edit: edit,
+    camera: (ms) => request(API.camera + TIME_QUERY + ms),
     onState: (listener) => {
       listeners.push(listener);
     },

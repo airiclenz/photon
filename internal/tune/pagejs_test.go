@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dop251/goja"
 
@@ -1168,6 +1169,151 @@ func TestPageJS_RemoveAPosition(t *testing.T) {
 		storyboard.OwnerPosition, pointPosition, storyboard.FieldPositionRemove))
 	if got := len(session.State().Positions); got != positions-1 {
 		t.Errorf("the positions after the remove: want %d, got %d", positions-1, got)
+	}
+}
+
+// heldLastStoryboard is sessionStoryboard with two camera positions: a point at 100ms and, last,
+// the off-centre cell heldCell held from 300ms to 600ms.
+const heldLastStoryboard = sessionStoryboard + `camera:
+  positions:
+    - {cell: {x: 0, y: 0}, at: 100ms}
+    - {cell: {x: 3, y: 1}, at: 300ms, hold: 300ms}
+`
+
+// The position adds: heldCell is the cell heldLastStoryboard's last position holds, which the
+// camera still centres on at afterHoldMS; a position added there is addedAfterHold. A position
+// added at glideAtMS on positionedStoryboard, between the point and the held text target, is
+// addedInGlide; one added at insideHoldMS lands inside the held cell's hold. fractionalMS is a
+// playhead between two milliseconds, which roundedMS names.
+var heldCell = image.Point{X: 3, Y: 1}
+
+const (
+	afterHoldMS    = 1500
+	addedAfterHold = 2
+	glideAtMS      = 800
+	addedInGlide   = 2
+	insideHoldMS   = 300
+	fractionalMS   = 1234.6
+	roundedMS      = 1235
+)
+
+// cameraAPI is the path of the camera route's request for the output time ms.
+func cameraAPI(ms int) string {
+	return fmt.Sprintf("/api/camera?t=%d", ms)
+}
+
+// cameraCentre is the cell session's camera centres on at ms.
+func cameraCentre(t *testing.T, session *Session, ms int) image.Point {
+	t.Helper()
+	view, err := session.Camera(time.Duration(ms)*time.Millisecond, nil)
+	if err != nil {
+		t.Fatalf("the camera at %dms: %v", ms, err)
+	}
+	return view.View.Centre
+}
+
+// assertPositionInsert fails the test unless the page's last edit inserted, and the session
+// applied, a point at ms on cell as position index, and the page selected it.
+func (p *pageHarness) assertPositionInsert(index, ms int, cell image.Point) {
+	p.t.Helper()
+	p.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,`+
+		`"value":{"at":{"beat":0,"offset_ms":%d},"cell":{"x":%d,"y":%d}}}`,
+		storyboard.OwnerPosition, index, storyboard.FieldPositionInsert, ms, cell.X, cell.Y))
+	want := fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerPosition, index)
+	if got := p.selectedEntry(); got != want {
+		p.t.Errorf("the selection after the add: want %s, got %s", want, got)
+	}
+}
+
+// addPositionAt seeks the playhead to ms and clicks the position lane's add button.
+func (p *pageHarness) addPositionAt(ms float64) {
+	p.t.Helper()
+	p.eval(fmt.Sprintf("window.tune.seek(%v)", ms))
+	p.settle()
+	p.click(elementTimeline, "Add a position at the playhead")
+	p.settle()
+}
+
+// assertStatusFailure fails the test unless the transport bar's status is a failure containing
+// want.
+func (p *pageHarness) assertStatusFailure(want string) {
+	p.t.Helper()
+	if status := p.text(elementStatus); !strings.Contains(status, want) {
+		p.t.Errorf("the status: want it containing %q, got %q", want, status)
+	}
+	if !p.eval(fmt.Sprintf(`document.getElementById(%q).classList.contains("failed")`,
+		elementStatus)).ToBoolean() {
+		p.t.Error("the status is not styled as a failure")
+	}
+}
+
+func TestPageJS_AddPosition_InsertsAPointOnTheCameraCentre(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, positionedStoryboard).session
+	page := loadPage(t, session)
+	centre := cameraCentre(t, session, glideAtMS)
+
+	page.addPositionAt(glideAtMS)
+
+	page.lastRequest(cameraAPI(glideAtMS))
+	page.assertPositionInsert(addedInGlide, glideAtMS, centre)
+	if got := cameraCentre(t, session, glideAtMS); got != centre {
+		t.Errorf("the camera centre after the add: want it unmoved at %v, got %v", centre, got)
+	}
+}
+
+func TestPageJS_AddPositionAfterTheLastHold_AimsAtItsCell(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixtureOf(t, heldLastStoryboard).session)
+
+	page.addPositionAt(afterHoldMS)
+
+	page.assertPositionInsert(addedAfterHold, afterHoldMS, heldCell)
+}
+
+func TestPageJS_AddPositionAtAFractionalPlayhead_AsksAndInsertsOneWholeMillisecond(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixtureOf(t, heldLastStoryboard).session)
+
+	page.addPositionAt(fractionalMS)
+
+	page.lastRequest(cameraAPI(roundedMS))
+	page.assertPositionInsert(addedAfterHold, roundedMS, heldCell)
+}
+
+func TestPageJS_RefusedPositionAdd_ShowsInTheStatus(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixtureOf(t, positionedStoryboard).session)
+
+	page.addPositionAt(insideHoldMS)
+
+	if refused := page.lastRequest("/api/edit"); refused.status == http.StatusOK {
+		t.Fatalf("the add inside a hold: want it refused, got 200: %s", refused.answer)
+	}
+	page.assertStatusFailure("overlaps")
+	if got := page.selectedEntry(); got != "null" {
+		t.Errorf("the selection after the refused add: want none, got %s", got)
+	}
+}
+
+func TestPageJS_FailedCameraFetch_ShowsInTheStatusAndSendsNoEdit(t *testing.T) {
+	t.Parallel()
+	const refusal = "the camera is away"
+	page := loadPage(t, newSessionFixtureOf(t, heldLastStoryboard).session)
+	served := page.handler
+	page.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/camera" {
+			writeError(w, http.StatusInternalServerError, refusal)
+			return
+		}
+		served.ServeHTTP(w, r)
+	})
+
+	page.addPositionAt(afterHoldMS)
+
+	page.assertStatusFailure(refusal)
+	if got := page.editCount(); got != 0 {
+		t.Errorf("the edits after the failed camera fetch: want none, got %d", got)
 	}
 }
 
