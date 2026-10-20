@@ -64,13 +64,30 @@ const (
 	pickRows = 9
 )
 
+// zoomedPickStoryboard is pickStoryboard zoomed to 2 from 100ms on, so a pick at
+// [zoomedPickTime] maps through the camera's crop and the full view differently.
+const zoomedPickStoryboard = pickStoryboard + `camera:
+  zooms:
+    - {to: 2, at: 0ms, over: 100ms}
+`
+
+// zoomedPickTime is an output time zoomedPickStoryboard's zoom covers.
+const zoomedPickTime = time.Second
+
 // newPickSession starts a session on pickConfig, pickStoryboard and a take showing pickScreen.
 func newPickSession(t *testing.T) *Session {
+	t.Helper()
+	return newPickSessionOf(t, pickStoryboard)
+}
+
+// newPickSessionOf starts a session on pickConfig, board as the storyboard and a take showing
+// pickScreen.
+func newPickSessionOf(t *testing.T, board string) *Session {
 	t.Helper()
 	project := t.TempDir()
 	writeTestFile(t, filepath.Join(project, "photon.yaml"), pickConfig)
 	boardPath := filepath.Join(project, "picked.yaml")
-	writeTestFile(t, boardPath, pickStoryboard)
+	writeTestFile(t, boardPath, board)
 	takePath := filepath.Join(t.TempDir(), "picked.take")
 	recorded := &take.Take{
 		Cols: pickCols, Rows: pickRows, FPS: 10,
@@ -97,6 +114,16 @@ func cellPixel(t *testing.T, session *Session, col, row int) image.Point {
 	rect := session.goodPipeline().frames.Rect(0, take.Box{X: col, Y: row, W: 1, H: 1})
 	if rect.Empty() {
 		t.Fatalf("cell %d,%d is not on the frame", col, row)
+	}
+	return rect.Min.Add(rect.Max).Div(2)
+}
+
+// fullViewCellPixel is the full-view pixel at the centre of the cell at col, row.
+func fullViewCellPixel(t *testing.T, session *Session, col, row int) image.Point {
+	t.Helper()
+	rect := session.goodPipeline().frames.FullViewRect(take.Box{X: col, Y: row, W: 1, H: 1})
+	if rect.Empty() {
+		t.Fatalf("cell %d,%d is not on the full view", col, row)
 	}
 	return rect.Min.Add(rect.Max).Div(2)
 }
@@ -174,7 +201,7 @@ func TestSession_Pick_ProposesAResolverCheckedTarget(t *testing.T) {
 			from := cellPixel(t, session, test.fromCol, test.row)
 			to := cellPixel(t, session, test.toCol, test.row)
 
-			proposal, err := session.Pick(0, from, to)
+			proposal, err := session.Pick(0, ViewCamera, from, to)
 
 			if err != nil {
 				t.Fatalf("Pick: %v", err)
@@ -198,7 +225,7 @@ func TestSession_Pick_WritesTheSnippets(t *testing.T) {
 	t.Parallel()
 	session := newPickSession(t)
 
-	proposal, err := session.Pick(0, cellPixel(t, session, 7, 2), cellPixel(t, session, 10, 2))
+	proposal, err := session.Pick(0, ViewCamera, cellPixel(t, session, 7, 2), cellPixel(t, session, 10, 2))
 
 	if err != nil {
 		t.Fatalf("Pick: %v", err)
@@ -251,11 +278,37 @@ func TestSession_Pick_NoTarget_IsRefused(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := session.Pick(test.out, test.from(), test.to())
+			_, err := session.Pick(test.out, ViewCamera, test.from(), test.to())
 
 			if !errors.Is(err, test.want) {
 				t.Errorf("Pick: want %v, got %v", test.want, err)
 			}
 		})
+	}
+}
+
+func TestSession_Pick_FullView_MapsThroughTheWholeFrame(t *testing.T) {
+	t.Parallel()
+	session := newPickSessionOf(t, zoomedPickStoryboard)
+	frames := session.goodPipeline().frames
+	from := fullViewCellPixel(t, session, 0, 5)
+	to := fullViewCellPixel(t, session, 5, 5)
+
+	proposal, err := session.Pick(zoomedPickTime, ViewFull, from, to)
+
+	if err != nil {
+		t.Fatalf("Pick: %v", err)
+	}
+	if proposal.Target != (storyboard.Target{Text: "unique"}) {
+		t.Errorf("target: want unique, got %+v", proposal.Target)
+	}
+	if want := frames.FullViewRect(proposal.Box); proposal.Rect != want {
+		t.Errorf("rect: want the full view's %v, got %v", want, proposal.Rect)
+	}
+	if cropped := frames.Rect(zoomedPickTime, proposal.Box); proposal.Rect == cropped {
+		t.Errorf("rect %v: want it apart from the crop's mapping, which is the same", proposal.Rect)
+	}
+	if col, row, _ := frames.Cell(zoomedPickTime, from); col == 0 && row == 5 {
+		t.Errorf("the crop maps %v onto cell 0,5 too; the fixture does not tell the views apart", from)
 	}
 }

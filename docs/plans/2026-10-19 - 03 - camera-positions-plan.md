@@ -454,7 +454,13 @@ full-view Cell and Rect at a zoomed moment resolve the cell and box under a full
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/compose ./internal/render`
 **Commit:** `feat(render): expose the camera view, the full frame and position aims`
 
-## 13. Tune: camera route and full-view frames
+## 13. Tune: camera route and full-view frames — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): API shape chosen here: `Session.FullFrame(out)` (exact PNG of the full view) and `Session.Camera(out, position *int) (CameraView, error)` in frame.go, `CameraView{View compose.View; Aim *image.Point}` with nil Aim when no position is asked, so the view and the aim come from one good pipeline; `ErrNoPosition` (422 through statusOf) for an index the list lacks. `Camera` checks t against the schedule itself (`render.ErrOutsideClip`), since `Pipeline.ViewAt` does not. session.go needed no change.
+NOTES (2026-10-20): `Session.Pick` gains a `FrameView` argument (`ViewCamera`, `ViewFull`) between the time and the corners; the pick body carries it as `"view": "full"` (absent for the camera's frame), anything else 400. `/api/camera` answers `aim` only with `?position=`; a position that is not a whole number of 0 or more is 400, an index past the list 422.
+NOTES (2026-10-20): the newHandler doc comment named a "path" the session cannot give (the path route item 2 removed); its rewrite for the camera route drops it.
+NOTES (2026-10-20): no CHANGELOG entry: /api/camera and view=full are the page's own API, which the page uses from items 14-18 on, whose entries describe the feature.
+NOTES (2026-10-20): `make lint` still fails only on the pre-existing internal/tune/pagejs_test.go:1068 ineffassign noted under item 5.
 
 Depends on items 11, 12.
 

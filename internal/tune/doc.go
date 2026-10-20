@@ -31,23 +31,28 @@
 // [Session.DraftFrame] the PNG of the draft frame the page shows while it plays or scrubs, drawn
 // from a raster at the shipped size with a fast scaler and sent uncompressed, its draft rasters
 // kept in a draft cache bounded at 256 MiB that carries across rebuilds as the exact one does; once
-// stopped the page settles on the exact frame. [Session.Pick] turns cells picked on that frame into
-// a [Proposal]: the picked text, escaped, as a target the resolver resolves back onto them, with
-// its area and nth, and its YAML for the camera, a click, a seen expect and either end of a drag.
+// stopped the page settles on the exact frame. [Session.FullFrame] is the PNG of the full view, the
+// whole frame at the exact frame's size whatever the camera's zoom and aim, and [Session.Camera]
+// where the camera looks over it at an output time — its crop, the cell it centres on and the
+// grid's place — and the cell a camera position aims at. [Session.Pick] turns cells picked on the
+// camera's frame or on the full view into a [Proposal]: the picked text, escaped, as a target the
+// resolver resolves back onto them, with its area and nth, and its YAML for the camera, a click, a
+// seen expect and either end of a drag.
 //
 // [Run] serves a session to a browser on this machine: it listens on 127.0.0.1 only, prints the
 // page's address, and serves the embedded page under page/ and a JSON API over the session — its
-// state, exact and draft frames as PNG, edits, undo, redo, revert, reload, save and picks — until
-// its context ends. A request naming any Host but the printed address or localhost on its port is
-// refused, as is a POST whose body is not JSON, so another site's page reaches neither.
+// state, exact, draft and full-view frames as PNG, the camera's view, edits, undo, redo, revert,
+// reload, save and picks — until its context ends. A request naming any Host but the printed
+// address or localhost on its port is refused, as is a POST whose body is not JSON, so another
+// site's page reaches neither.
 //
 // The file map:
 //   - cache.go: the bounded, least-recently-used cache of a take's rasterized snapshots, sized for
 //     the exact frames' 1 GiB raster cache and [Session.DraftFrame]'s 256 MiB draft cache.
 //   - doc.go: this package comment and file map.
 //   - edit.go: the [Edit], the storyboard.Edit the page sends and storyboard.Apply applies.
-//   - frame.go: [Session.Frame] and [Session.DraftFrame], one exact or draft frame of the preview
-//     as a PNG.
+//   - frame.go: [Session.Frame], [Session.DraftFrame] and [Session.FullFrame], one exact, draft or
+//     full-view frame of the preview as a PNG, and [Session.Camera], the camera's [CameraView].
 //   - history.go: a session's storyboard versions, for undo and redo.
 //   - pick.go: [Session.Pick], a resolver-checked target [Proposal] from picked cells.
 //   - run.go: [Run] and its [Options]: listen on 127.0.0.1, print the address, serve until done.

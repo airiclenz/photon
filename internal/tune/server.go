@@ -35,6 +35,7 @@ const (
 	assetsPrefix = "/assets/"
 	routeState   = "GET /api/state"
 	routeFrame   = "GET /api/frame"
+	routeCamera  = "GET /api/camera"
 	routeEdit    = "POST /api/edit"
 	routeUndo    = "POST /api/undo"
 	routeRedo    = "POST /api/redo"
@@ -62,6 +63,17 @@ const frameTimeParam = "t"
 // absent or 0 for the exact frame.
 const frameDraftParam = "draft"
 
+// frameViewParam is the frame route's query parameter naming the frame's view: absent asks for
+// the camera's frame, [viewFull] for the full view. A pick names its view in its body alike.
+const frameViewParam = "view"
+
+// viewFull is the value of [frameViewParam] asking for the full view.
+const viewFull = "full"
+
+// cameraPositionParam is the camera route's query parameter asking for a position's aim: its
+// index in camera.positions.
+const cameraPositionParam = "position"
+
 // draftOn and draftOff are the values of [frameDraftParam] asking for a draft and the exact frame.
 const (
 	draftOn  = "1"
@@ -88,10 +100,12 @@ type apiError struct {
 	Error string `json:"error"`
 }
 
-// pickRequest is a pick's body: the output time in milliseconds and the rectangle's two
-// corners, in output-frame pixels.
+// pickRequest is a pick's body: the output time in milliseconds, the view the pick is made on
+// (absent for the camera's frame, [viewFull] for the full view) and the rectangle's two corners,
+// in pixels of that frame.
 type pickRequest struct {
 	TimeMS int64      `json:"t"`
+	View   string     `json:"view,omitempty"`
 	From   pixelPoint `json:"from"`
 	To     pixelPoint `json:"to"`
 }
@@ -120,6 +134,57 @@ func pickTargetOf(target storyboard.Target) storyboard.Target {
 	return target
 }
 
+// cameraResponse is the camera route's answer: the cell the camera centres on, its crop and the
+// grid's place in full-view pixels, and the asked position's aimed cell.
+type cameraResponse struct {
+	Centre cellPoint  `json:"centre"`
+	Crop   cropRect   `json:"crop"`
+	Grid   gridPlace  `json:"grid"`
+	Aim    *cellPoint `json:"aim,omitempty"`
+}
+
+// cellPoint is a terminal cell: its column and row.
+type cellPoint struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
+// cropRect is the camera's crop on the full view, in fractional pixels.
+type cropRect struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+}
+
+// gridPlace is where the grid's cells sit on the full view: the top-left corner of cell 0, 0
+// and one cell's size, in fractional pixels.
+type gridPlace struct {
+	X          float64 `json:"x"`
+	Y          float64 `json:"y"`
+	CellWidth  float64 `json:"cell_width"`
+	CellHeight float64 `json:"cell_height"`
+}
+
+// cameraResponseOf is view as the camera route answers it.
+func cameraResponseOf(view CameraView) cameraResponse {
+	shown := view.View
+	answer := cameraResponse{
+		Centre: cellPoint{X: shown.Centre.X, Y: shown.Centre.Y},
+		Crop: cropRect{
+			X: shown.Crop.X, Y: shown.Crop.Y, Width: shown.Crop.W, Height: shown.Crop.H,
+		},
+		Grid: gridPlace{
+			X: shown.Origin.X, Y: shown.Origin.Y,
+			CellWidth: shown.CellSize.X, CellHeight: shown.CellSize.Y,
+		},
+	}
+	if view.Aim != nil {
+		answer.Aim = &cellPoint{X: view.Aim.X, Y: view.Aim.Y}
+	}
+	return answer
+}
+
 // pixelRect is a rectangle on the output frame, in pixels.
 type pixelRect struct {
 	X int `json:"x"`
@@ -134,10 +199,11 @@ type pixelRect struct {
 // A request whose Host is neither addr nor localhost on addr's port is refused with 403, and a
 // POST whose body is not application/json with 415, so another site's page can reach neither
 // the session nor the storyboard on disk. Every POST answers with the session's state after it
-// but a pick, which answers with its proposal. A refused edit, undo or redo, a frame, pick or
-// path the session cannot give, and a save refused while an error stands answer 422; a save
-// refused while the storyboard changed on disk answers 409. Every failure's body is
-// {"error": "…"}.
+// but a pick, which answers with its proposal. A malformed query or body answers 400. A refused
+// edit, undo or redo, a frame, camera view or pick the session cannot give — a time outside the
+// clip, a camera position the storyboard does not list — and a save refused while an error stands
+// answer 422; a save refused while the storyboard changed on disk answers 409. Every failure's
+// body is {"error": "…"}.
 func newHandler(session *Session, addr string) http.Handler {
 	serving := &server{session: session, hosts: map[string]bool{addr: true}, page: pageFS()}
 	if _, port, err := net.SplitHostPort(addr); err == nil {
@@ -149,6 +215,7 @@ func newHandler(session *Session, addr string) http.Handler {
 	mux.Handle(routeAssets, http.StripPrefix(assetsPrefix, http.FileServerFS(serving.page)))
 	mux.HandleFunc(routeState, serving.handleState)
 	mux.HandleFunc(routeFrame, serving.handleFrame)
+	mux.HandleFunc(routeCamera, serving.handleCamera)
 	mux.HandleFunc(routeEdit, serving.handleEdit)
 	mux.HandleFunc(routeUndo, serving.stateAfter(session.Undo))
 	mux.HandleFunc(routeRedo, serving.stateAfter(session.Redo))
@@ -212,7 +279,8 @@ func (s *server) handleState(w http.ResponseWriter, _ *http.Request) {
 }
 
 // handleFrame answers the PNG of the frame at the output time ?t=, in whole milliseconds: the
-// draft frame with ?draft=1, the exact frame without it or with ?draft=0.
+// draft frame with ?draft=1, the exact frame without it or with ?draft=0, and the full view's
+// exact frame with ?view=full. The full view has no draft, so ?view=full&draft=1 answers 400.
 func (s *server) handleFrame(w http.ResponseWriter, r *http.Request) {
 	out, ok := frameTimeOf(w, r)
 	if !ok {
@@ -222,8 +290,20 @@ func (s *server) handleFrame(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	view, ok := frameViewOf(r.URL.Query().Get(frameViewParam))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "view must be "+viewFull+" or absent")
+		return
+	}
+	if view == ViewFull && isDraft {
+		writeError(w, http.StatusBadRequest, "the full view has no draft frame")
+		return
+	}
 	encodeAt := s.session.Frame
-	if isDraft {
+	switch {
+	case view == ViewFull:
+		encodeAt = s.session.FullFrame
+	case isDraft:
 		encodeAt = s.session.DraftFrame
 	}
 	frame, err := encodeAt(out)
@@ -264,6 +344,53 @@ func frameDraftOf(w http.ResponseWriter, r *http.Request) (isDraft, ok bool) {
 	}
 }
 
+// frameViewOf is the [FrameView] value names: empty names the camera's frame and [viewFull] the
+// full view. Any other value reports false.
+func frameViewOf(value string) (FrameView, bool) {
+	switch value {
+	case "":
+		return ViewCamera, true
+	case viewFull:
+		return ViewFull, true
+	default:
+		return ViewCamera, false
+	}
+}
+
+// handleCamera answers where the camera looks at the output time ?t=, in whole milliseconds, and
+// with ?position=<i> also the cell the position at index i in camera.positions aims at.
+func (s *server) handleCamera(w http.ResponseWriter, r *http.Request) {
+	out, ok := frameTimeOf(w, r)
+	if !ok {
+		return
+	}
+	position, ok := cameraPositionOf(w, r)
+	if !ok {
+		return
+	}
+	view, err := s.session.Camera(out, position)
+	if err != nil {
+		writeError(w, statusOf(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, cameraResponseOf(view))
+}
+
+// cameraPositionOf is r's position index ?position=, or nil when it is absent; when it is not a
+// whole number of 0 or more, it answers 400 and reports false.
+func cameraPositionOf(w http.ResponseWriter, r *http.Request) (*int, bool) {
+	query := r.URL.Query()
+	if !query.Has(cameraPositionParam) {
+		return nil, true
+	}
+	index, err := strconv.Atoi(query.Get(cameraPositionParam))
+	if err != nil || index < 0 {
+		writeError(w, http.StatusBadRequest, "the position must be a whole number of 0 or more")
+		return nil, false
+	}
+	return &index, true
+}
+
 // handleEdit applies the [Edit] in the body and answers the state, or 422 when it is refused.
 func (s *server) handleEdit(w http.ResponseWriter, r *http.Request) {
 	var edit Edit
@@ -288,14 +415,21 @@ func (s *server) stateAfter(change func() error) http.HandlerFunc {
 	}
 }
 
-// handlePick answers the [Proposal] for the pick in the body, or 422 when there is none.
+// handlePick answers the [Proposal] for the pick in the body, or 422 when there is none; a view
+// but the camera's frame or the full view answers 400.
 func (s *server) handlePick(w http.ResponseWriter, r *http.Request) {
 	var pick pickRequest
 	if !decodeBody(w, r, &pick) {
 		return
 	}
+	view, ok := frameViewOf(pick.View)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "view must be "+viewFull+" or absent")
+		return
+	}
 	proposal, err := s.session.Pick(
 		time.Duration(pick.TimeMS)*time.Millisecond,
+		view,
 		image.Pt(pick.From.X, pick.From.Y),
 		image.Pt(pick.To.X, pick.To.Y),
 	)
@@ -345,7 +479,8 @@ func statusOf(err error) int {
 	case errors.Is(err, ErrStale):
 		return http.StatusConflict
 	case errors.Is(err, ErrInvalid), errors.Is(err, ErrNoUndo), errors.Is(err, ErrNoRedo),
-		errors.Is(err, render.ErrOutsideClip), errors.Is(err, ErrNoProposal):
+		errors.Is(err, render.ErrOutsideClip), errors.Is(err, ErrNoProposal),
+		errors.Is(err, ErrNoPosition):
 		return http.StatusUnprocessableEntity
 	default:
 		return http.StatusInternalServerError

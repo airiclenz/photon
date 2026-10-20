@@ -257,6 +257,110 @@ func TestHandler_Frame_BadTime_IsRefused(t *testing.T) {
 	}
 }
 
+func TestHandler_Frame_FullView_IsTheSessionsFullFrame(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixtureOf(t, cameraStoryboard)
+	handler := newHandler(fixture.session, testAddr)
+
+	frame := frameOf(t, handler, "1000&view=full")
+
+	want, err := fixture.session.FullFrame(time.Second)
+	if err != nil {
+		t.Fatalf("FullFrame: %v", err)
+	}
+	if !bytes.Equal(frame, want) {
+		t.Error("the served frame is not the session's full view")
+	}
+}
+
+func TestHandler_Frame_BadView_IsRefused(t *testing.T) {
+	t.Parallel()
+	handler := newHandler(newSessionFixture(t).session, testAddr)
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{name: "unknown view", query: "t=500&view=crop"},
+		{name: "full view's draft", query: "t=500&view=full&draft=1"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			response := get(t, handler, "/api/frame?"+test.query)
+
+			assertStatus(t, response, http.StatusBadRequest)
+		})
+	}
+}
+
+func TestHandler_Camera_AnswersTheViewAsThePageReadsIt(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixtureOf(t, cameraStoryboard)
+	handler := newHandler(fixture.session, testAddr)
+	frames := fixture.session.goodPipeline().frames
+
+	response := get(t, handler, "/api/camera?t=1000")
+
+	assertStatus(t, response, http.StatusOK)
+	var answer map[string]map[string]float64
+	decodeResponse(t, response, &answer)
+	view, _ := frames.ViewAt(time.Second)
+	want := map[string]map[string]float64{
+		"centre": {"x": float64(view.Centre.X), "y": float64(view.Centre.Y)},
+		"crop": {
+			"x": view.Crop.X, "y": view.Crop.Y, "width": view.Crop.W, "height": view.Crop.H,
+		},
+		"grid": {
+			"x": view.Origin.X, "y": view.Origin.Y,
+			"cell_width": view.CellSize.X, "cell_height": view.CellSize.Y,
+		},
+	}
+	if fmt.Sprint(answer) != fmt.Sprint(want) {
+		t.Errorf("camera: want %v, got %v", want, answer)
+	}
+}
+
+func TestHandler_Camera_WithPosition_AnswersItsAim(t *testing.T) {
+	t.Parallel()
+	handler := newHandler(newSessionFixtureOf(t, cameraStoryboard).session, testAddr)
+
+	response := get(t, handler, "/api/camera?t=1000&position=1")
+
+	assertStatus(t, response, http.StatusOK)
+	var answer cameraResponse
+	decodeResponse(t, response, &answer)
+	if answer.Aim == nil || *answer.Aim != (cellPoint{X: 3, Y: 1}) {
+		t.Errorf("aim of position 1: want its cell 3,1, got %v", answer.Aim)
+	}
+}
+
+func TestHandler_Camera_BadQueries_AreRefused(t *testing.T) {
+	t.Parallel()
+	handler := newHandler(newSessionFixtureOf(t, cameraStoryboard).session, testAddr)
+	tests := []struct {
+		name   string
+		query  string
+		status int
+	}{
+		{name: "no time", query: "", status: http.StatusBadRequest},
+		{name: "time not a number", query: "t=soon", status: http.StatusBadRequest},
+		{name: "position not a number", query: "t=0&position=first", status: http.StatusBadRequest},
+		{name: "negative position", query: "t=0&position=-1", status: http.StatusBadRequest},
+		{name: "time outside the clip", query: "t=60000", status: http.StatusUnprocessableEntity},
+		{name: "unknown position", query: "t=0&position=2", status: http.StatusUnprocessableEntity},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			response := get(t, handler, "/api/camera?"+test.query)
+
+			assertStatus(t, response, test.status)
+		})
+	}
+}
+
 func TestHandler_EditThenFrame_ChangesTheFrame(t *testing.T) {
 	t.Parallel()
 	handler := newHandler(newSessionFixture(t).session, testAddr)
@@ -486,6 +590,45 @@ func TestHandler_Pick_ReturnsTheProposal(t *testing.T) {
 	}
 }
 
+func TestHandler_Pick_FullView_MapsThroughTheFullView(t *testing.T) {
+	t.Parallel()
+	session := newPickSessionOf(t, zoomedPickStoryboard)
+	handler := newHandler(session, testAddr)
+	frames := session.goodPipeline().frames
+	from := fullViewCellPixel(t, session, 0, 5)
+	body := pickBodyOn(t, zoomedPickTime.Milliseconds(), viewFull, from, fullViewCellPixel(t, session, 5, 5))
+
+	response := post(t, handler, "/api/pick", body)
+
+	assertStatus(t, response, http.StatusOK)
+	var proposal pickResponse
+	decodeResponse(t, response, &proposal)
+	if proposal.Target != (storyboard.Target{Text: "unique"}) {
+		t.Errorf("target: want unique, got %+v", proposal.Target)
+	}
+	rect := image.Rect(proposal.Rect.X, proposal.Rect.Y, proposal.Rect.X+proposal.Rect.W, proposal.Rect.Y+proposal.Rect.H)
+	if want := frames.FullViewRect(proposal.Box); rect != want {
+		t.Errorf("rect: want the full view's %v, got %v", want, rect)
+	}
+	if cropped := frames.Rect(zoomedPickTime, proposal.Box); rect == cropped {
+		t.Errorf("rect %v: want it apart from the crop's mapping, which is the same", rect)
+	}
+	if col, row, _ := frames.Cell(zoomedPickTime, from); col == 0 && row == 5 {
+		t.Errorf("the crop maps %v onto cell 0,5 too; the fixture does not tell the views apart", from)
+	}
+}
+
+func TestHandler_Pick_UnknownView_IsRefused(t *testing.T) {
+	t.Parallel()
+	session := newPickSession(t)
+	handler := newHandler(session, testAddr)
+	body := pickBodyOn(t, 0, "crop", cellPixel(t, session, 0, 5), cellPixel(t, session, 5, 5))
+
+	response := post(t, handler, "/api/pick", body)
+
+	assertStatus(t, response, http.StatusBadRequest)
+}
+
 func TestHandler_PickOnBlanks_Is422(t *testing.T) {
 	t.Parallel()
 	session := newPickSession(t)
@@ -579,8 +722,15 @@ func listenAddressOf(t *testing.T, line string) string {
 // pickBody is the JSON body of a pick at ms from from to to.
 func pickBody(t *testing.T, ms int64, from, to image.Point) string {
 	t.Helper()
+	return pickBodyOn(t, ms, "", from, to)
+}
+
+// pickBodyOn is the JSON body of a pick at ms on the view named view, from from to to.
+func pickBodyOn(t *testing.T, ms int64, view string, from, to image.Point) string {
+	t.Helper()
 	encoded, err := json.Marshal(pickRequest{
 		TimeMS: ms,
+		View:   view,
 		From:   pixelPoint{X: from.X, Y: from.Y},
 		To:     pixelPoint{X: to.X, Y: to.Y},
 	})

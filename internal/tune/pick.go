@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/airiclenz/photon/internal/config"
+	"github.com/airiclenz/photon/internal/render"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 	"github.com/airiclenz/photon/internal/target"
@@ -31,9 +32,40 @@ const (
 	snippetDragTo   = "drag-to"
 )
 
+// FrameView is which frame a pick is made on: the camera's frame [Session.Frame] draws, or the
+// full view [Session.FullFrame] draws.
+type FrameView int
+
+const (
+	// ViewCamera is the frame the camera shows, its crop zoomed and aimed.
+	ViewCamera FrameView = iota
+	// ViewFull is the full view: the whole frame, whatever the camera's zoom and aim.
+	ViewFull
+)
+
+// cell is the terminal cell under p, a pixel of the frame v names at output time out, as
+// [render.Pipeline.Cell] or [render.Pipeline.FullViewCell] maps it.
+func (v FrameView) cell(
+	frames *render.Pipeline, out time.Duration, p image.Point,
+) (col, row int, ok bool) {
+	if v == ViewFull {
+		return frames.FullViewCell(p)
+	}
+	return frames.Cell(out, p)
+}
+
+// rect is the pixel rectangle of the frame v names at output time out that the cell box b
+// covers, as [render.Pipeline.Rect] or [render.Pipeline.FullViewRect] maps it.
+func (v FrameView) rect(frames *render.Pipeline, out time.Duration, b take.Box) image.Rectangle {
+	if v == ViewFull {
+		return frames.FullViewRect(b)
+	}
+	return frames.Rect(out, b)
+}
+
 // Proposal is the target a pick proposes: the Target, the cell Box it resolves to on the picked
-// snapshot, that box's Rect in output-frame pixels at the picked time, and the YAML that writes
-// the target in each place a storyboard takes one, keyed by place:
+// snapshot, that box's Rect in pixels of the picked frame at the picked time, and the YAML that
+// writes the target in each place a storyboard takes one, keyed by place:
 //   - zoom: the bare target flow mapping ({text: 'ok', nth: 2, area: 'list'});
 //   - click: a click action, click: {target: {…}};
 //   - seen: an expect, seen: '…', or {seen: '…', area: '…'} when the target names an area;
@@ -46,7 +78,8 @@ type Proposal struct {
 }
 
 // Pick proposes a target for the cells a rectangle from from to to picks, in output-frame pixels on
-// the frame shown at output time out, mapped to cells through the last good pipeline's camera; the
+// the frame view shows at output time out, mapped to cells through the last good pipeline's camera,
+// or through the whole frame on the full view, and the proposal's Rect is mapped alike; the
 // row is the one under from, the columns span from from to to, clamped to that row, and blank cells
 // at either edge are dropped. The target is the picked text, regex-escaped. It is searched in the
 // declared areas holding the row, fewest rows first and equal heights in name order, and the first
@@ -55,20 +88,22 @@ type Proposal struct {
 // only when the resolver resolves that target to a box covering the picked cells. It fails with
 // [render.ErrOutsideClip] when out is not in [0, length) and with [ErrNoProposal] when the pick
 // starts off the screen, picks only blanks or does not resolve.
-func (s *Session) Pick(out time.Duration, from, to image.Point) (Proposal, error) {
+func (s *Session) Pick(
+	out time.Duration, view FrameView, from, to image.Point,
+) (Proposal, error) {
 	shown := s.goodPipeline()
 
 	screen, err := shown.frames.ScreenAt(out)
 	if err != nil {
 		return Proposal{}, err
 	}
-	startCol, row, ok := shown.frames.Cell(out, from)
+	startCol, row, ok := view.cell(shown.frames, out, from)
 	if !ok {
 		return Proposal{}, fmt.Errorf(
 			"%w: the pick starts off the screen at %v", ErrNoProposal, from,
 		)
 	}
-	endCol, _, _ := shown.frames.Cell(out, to)
+	endCol, _, _ := view.cell(shown.frames, out, to)
 	picked, text, err := pickedCells(screen, row, min(startCol, endCol), max(startCol, endCol))
 	if err != nil {
 		return Proposal{}, err
@@ -88,7 +123,7 @@ func (s *Session) Pick(out time.Duration, from, to image.Point) (Proposal, error
 	return Proposal{
 		Target:   proposed,
 		Box:      resolved,
-		Rect:     shown.frames.Rect(out, resolved),
+		Rect:     view.rect(shown.frames, out, resolved),
 		Snippets: snippetsOf(proposed),
 	}, nil
 }

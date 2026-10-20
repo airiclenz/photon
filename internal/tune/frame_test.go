@@ -114,6 +114,109 @@ func TestSession_Frame_OutsideTheClip_IsRefused(t *testing.T) {
 	}
 }
 
+// cameraFixtureTime is an output time cameraStoryboard's zoom covers, past its 500ms end.
+const cameraFixtureTime = time.Second
+
+func TestSession_FullFrame_IsTheWholeFrameWhileZoomed(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixtureOf(t, cameraStoryboard)
+
+	encoded, err := fixture.session.FullFrame(cameraFixtureTime)
+
+	if err != nil {
+		t.Fatalf("FullFrame: %v", err)
+	}
+	full := decodedFrame(t, encoded)
+	loaded, err := clip.Load(fixture.boardPath, "", t.TempDir())
+	if err != nil {
+		t.Fatalf("clip.Load: %v", err)
+	}
+	recorded, err := take.Load(fixture.takePath)
+	if err != nil {
+		t.Fatalf("take.Load: %v", err)
+	}
+	built, err := render.Build(
+		loaded, fixture.takePath, recorded,
+		render.BuildOptions{Cache: newRasterCache(rasterCacheBytes)},
+	)
+	if err != nil {
+		t.Fatalf("render.Build: %v", err)
+	}
+	want, err := built.FullFrameAt(cameraFixtureTime)
+	if err != nil {
+		t.Fatalf("FullFrameAt: %v", err)
+	}
+	assertSameFrame(t, full, want)
+	if zoomed := fixture.frameAt(t, cameraFixtureTime); bytes.Equal(zoomed.Pix, full.Pix) {
+		t.Error("the full view shows the zoomed frame's pixels")
+	}
+}
+
+func TestSession_FullFrame_OutsideTheClip_IsRefused(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixture(t)
+	length := time.Duration(fixture.session.State().LengthMS) * time.Millisecond
+
+	_, err := fixture.session.FullFrame(length)
+
+	if !errors.Is(err, render.ErrOutsideClip) {
+		t.Errorf("FullFrame(%s) error = %v, want ErrOutsideClip", length, err)
+	}
+}
+
+func TestSession_Camera_ReportsTheViewAndTheAskedAim(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixtureOf(t, cameraStoryboard)
+	frames := fixture.session.goodPipeline().frames
+	cellPosition := 1
+
+	bare, bareErr := fixture.session.Camera(cameraFixtureTime, nil)
+	aimed, aimedErr := fixture.session.Camera(cameraFixtureTime, &cellPosition)
+
+	if bareErr != nil || aimedErr != nil {
+		t.Fatalf("Camera: %v, %v", bareErr, aimedErr)
+	}
+	want, _ := frames.ViewAt(cameraFixtureTime)
+	if bare.View != want || aimed.View != want {
+		t.Errorf("view: want %+v, got %+v and %+v", want, bare.View, aimed.View)
+	}
+	if bare.Aim != nil {
+		t.Errorf("aim without a position: want none, got %v", *bare.Aim)
+	}
+	if aimed.Aim == nil || *aimed.Aim != image.Pt(3, 1) {
+		t.Errorf("aim of position %d: want its cell 3,1, got %v", cellPosition, aimed.Aim)
+	}
+}
+
+func TestSession_Camera_Refusals(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixtureOf(t, cameraStoryboard)
+	length := time.Duration(fixture.session.State().LengthMS) * time.Millisecond
+	listed, unlisted, negative := 0, 2, -1
+	tests := []struct {
+		name     string
+		out      time.Duration
+		position *int
+		want     error
+	}{
+		{name: "before the clip", out: -time.Millisecond, want: render.ErrOutsideClip},
+		{name: "at the clip's end", out: length, position: &listed, want: render.ErrOutsideClip},
+		{name: "past the positions", out: 0, position: &unlisted, want: ErrNoPosition},
+		{name: "a negative index", out: 0, position: &negative, want: ErrNoPosition},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := fixture.session.Camera(test.out, test.position)
+
+			if !errors.Is(err, test.want) {
+				t.Errorf("Camera error = %v, want %v", err, test.want)
+			}
+		})
+	}
+}
+
 func TestSession_Frame_RewrittenTake_ShowsTheNewTake(t *testing.T) {
 	t.Parallel()
 	fixture := newSessionFixture(t)
