@@ -3,6 +3,7 @@ package compose
 import (
 	"errors"
 	"fmt"
+	"image"
 	"image/color"
 	"math"
 	"strings"
@@ -269,5 +270,129 @@ func TestComposeCursorMapsThroughACropAimedByAPosition(t *testing.T) {
 	}
 	if want := (pointF{X: 310, Y: 190}); math.Hypot(cursor.X-want.X, cursor.Y-want.Y) > 1 {
 		t.Errorf("cursor at the press: want %+v through the aimed crop, got %+v", want, cursor)
+	}
+}
+
+func TestCompositorViewCentreIsThePositionTracksAimBeforeTheClamp(t *testing.T) {
+	t.Parallel()
+	// unzoomed holds an off-centre cell over [1s, 2s] and another from 3s, at 1×.
+	const unzoomed = `  positions:
+    - {cell: {x: 5, y: 2}, at: 1s, hold: 1s}
+    - {cell: {x: 40, y: 11}, at: 3s, hold: 500ms}
+`
+	// zoomed holds a corner cell over [500ms, 1s] and another from 3s, both at 2× and so clamped,
+	// and pulls back to 1× through the middle of the linear glide between them.
+	const zoomed = `  positions:
+    - {cell: {x: 5, y: 2}, at: 500ms, hold: 500ms}
+    - {cell: {x: 5, y: 11}, at: 3s, hold: 500ms, ease: linear}
+  zooms:
+    - {to: 2, at: 0s, over: 100ms}
+    - {to: 1, at: 1500ms, over: 100ms}
+    - {to: 2, at: 2400ms, over: 100ms}
+`
+	// The glide runs from the crop centre clamped around (5, 2) at 2×, (250, 150), to the one
+	// around (5, 11), (250, 450): half-way it is at (250, 300).
+	glided, _, _ := testLayout.cellAt(pointF{X: 250, Y: 300})
+	for _, tc := range []struct {
+		name   string
+		camera string
+		at     time.Duration
+		want   image.Point
+	}{
+		{name: "inside an off-centre hold at 1x", camera: unzoomed, at: 1500 * time.Millisecond, want: image.Pt(5, 2)},
+		{name: "before the first position", camera: unzoomed, at: 500 * time.Millisecond, want: image.Pt(5, 2)},
+		{name: "after the last position", camera: unzoomed, at: 4 * sec, want: image.Pt(40, 11)},
+		{name: "a clamped, zoomed hold", camera: zoomed, at: 750 * time.Millisecond, want: image.Pt(5, 2)},
+		{name: "mid-glide", camera: zoomed, at: 2 * sec, want: image.Pt(glided, 7)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			board, recorded := cameraTake(t, []take.Snapshot{{At: 0}, {At: 4 * sec}}, tc.camera, 5*sec)
+			compositor, _ := newTestCompositor(t, board, recorded)
+			cropCol, cropRow, _ := testLayout.cellAt(compositor.crop(tc.at).centre())
+			if image.Pt(cropCol, cropRow) == tc.want {
+				t.Fatalf("at %s the clamped crop's centre is on %v too, so the case tells nothing", tc.at, tc.want)
+			}
+
+			got := compositor.ViewAt(tc.at).Centre
+
+			if got != tc.want {
+				t.Errorf("ViewAt(%s).Centre: want %v, got %v", tc.at, tc.want, got)
+			}
+		})
+	}
+}
+
+func TestCompositorViewCentreWithoutPositionsIsTheFramesCentre(t *testing.T) {
+	t.Parallel()
+	const camera = "  zooms:\n    - {to: 2, at: {beat: 1, offset: 1s}, over: 2s}\n"
+	board, recorded := cameraTake(t, []take.Snapshot{{At: 0}, {At: 4 * sec}}, camera, 4*sec)
+	compositor, _ := newTestCompositor(t, board, recorded)
+
+	got := compositor.ViewAt(2 * sec).Centre
+
+	// The frame's centre, (500, 300), is in cell (24, 7).
+	if want := image.Pt(24, 7); got != want {
+		t.Errorf("ViewAt.Centre: want the frame centre's cell %v, got %v", want, got)
+	}
+}
+
+func TestCompositorViewAtAZoomedClampedMoment(t *testing.T) {
+	t.Parallel()
+	const camera = `  positions:
+    - {cell: {x: 2, y: 1}, at: 0s}
+  zooms:
+    - {to: 2, at: 0s, over: 500ms}
+`
+	board, recorded := cameraTake(t, []take.Snapshot{{At: 0}, {At: 4 * sec}}, camera, 4*sec)
+	compositor, _ := newTestCompositor(t, board, recorded)
+
+	got := compositor.ViewAt(sec)
+
+	// At 2× the crop is 500 × 300 source pixels clamped into the top-left corner; the 500 × 300
+	// full view shows the 1000 × 600 frame at half size, so the crop is its top-left quarter, the
+	// 10-pixel padding is 5 pixels and a 20 × 40 cell is 10 × 20.
+	want := View{
+		Crop:     FloatRect{X: 0, Y: 0, W: 250, H: 150},
+		Centre:   image.Pt(2, 1),
+		Origin:   FloatPoint{X: 5, Y: 5},
+		CellSize: FloatPoint{X: 10, Y: 20},
+	}
+	if got != want {
+		t.Errorf("ViewAt(1s): want %+v, got %+v", want, got)
+	}
+}
+
+func TestCompositorPositionCell(t *testing.T) {
+	t.Parallel()
+	shown := map[int]string{7: "                              alpha"}
+	// Listed out of start order: the text target first, the cell second.
+	const camera = `  positions:
+    - {text: alpha, at: 3s}
+    - {cell: {x: 5, y: 2}, at: 1s, hold: 1s}
+`
+	board, recorded := cameraTake(t, []take.Snapshot{screen(0, shown), screen(4*sec, shown)}, camera, 4*sec)
+	compositor, _ := newTestCompositor(t, board, recorded)
+	for _, tc := range []struct {
+		name   string
+		index  int
+		want   image.Point
+		wantOK bool
+	}{
+		// alpha fills columns 30 to 34 of row 7; its box's centre falls in column 32.
+		{name: "a text position", index: 0, want: image.Pt(32, 7), wantOK: true},
+		{name: "a cell position", index: 1, want: image.Pt(5, 2), wantOK: true},
+		{name: "past the list", index: 2},
+		{name: "before the list", index: -1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			col, row, ok := compositor.PositionCell(tc.index)
+
+			if image.Pt(col, row) != tc.want || ok != tc.wantOK {
+				t.Errorf("PositionCell(%d): want (%v, %t), got (%v, %t)", tc.index, tc.want, tc.wantOK, image.Pt(col, row), ok)
+			}
+		})
 	}
 }

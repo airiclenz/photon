@@ -56,6 +56,18 @@ func (l Layout) cellCentre(x, y int) pointF {
 	}
 }
 
+// cellAt is the cell, column and row, holding the source pixel p, and whether p lies on the
+// grid; off the grid it is the nearest cell, clamped into the grid.
+func (l Layout) cellAt(p pointF) (col, row int, isOnGrid bool) {
+	column := math.Floor((p.X - float64(l.Padding)) / float64(l.CellWidth))
+	line := math.Floor((p.Y - float64(l.Padding)) / float64(l.LineHeight))
+	grid := l.grid()
+	isOnGrid = column >= 0 && line >= 0 && int(column) < grid.X && int(line) < grid.Y
+	col = min(max(int(column), 0), grid.X-1)
+	row = min(max(int(line), 0), grid.Y-1)
+	return col, row, isOnGrid
+}
+
 // grid is the number of whole columns and rows of cells the frame holds inside its padding.
 func (l Layout) grid() image.Point {
 	return image.Pt((l.Size.X-2*l.Padding)/l.CellWidth, (l.Size.Y-2*l.Padding)/l.LineHeight)
@@ -174,7 +186,14 @@ func (c *Compositor) CaptionBoxes() []image.Rectangle {
 // captions showing at t last, in output space, so the camera neither moves nor scales them. src is
 // only read.
 func (c *Compositor) Compose(t time.Duration, src *image.RGBA) *image.RGBA {
-	return c.compose(t, src, draw.CatmullRom)
+	return c.compose(t, src, c.crop(t), draw.CatmullRom)
+}
+
+// ComposeFull builds the full view at output time t from src: the frame [Compositor.Compose]
+// builds, at [Compositor.Size] and with the same cursor and captions, but with the whole frame as
+// the crop, so the camera's zoom and aim never enter. src is only read.
+func (c *Compositor) ComposeFull(t time.Duration, src *image.RGBA) *image.RGBA {
+	return c.compose(t, src, c.fullCrop(), draw.CatmullRom)
 }
 
 // ComposeDraft builds a draft of the shipped frame at output time t: the frame
@@ -184,19 +203,19 @@ func (c *Compositor) Compose(t time.Duration, src *image.RGBA) *image.RGBA {
 // mapped onto it by its size against the layout's per axis, so its terminal text may sit a pixel
 // or so off the exact frame's. src is only read.
 func (c *Compositor) ComposeDraft(t time.Duration, src *image.RGBA) *image.RGBA {
-	return c.compose(t, src, draw.ApproxBiLinear)
+	return c.compose(t, src, c.crop(t), draw.ApproxBiLinear)
 }
 
-// compose builds the shipped frame at output time t from src with scaler: the camera's crop, in
-// layout pixels, mapped onto src by src's size against the layout's per axis and scaled to the
-// shipped width, then the cursor and the captions in output space.
+// compose builds the shipped frame at output time t from src with scaler: crop, in layout
+// pixels, mapped onto src by src's size against the layout's per axis and scaled to the shipped
+// width, then the cursor through crop and the captions in output space.
 func (c *Compositor) compose(
 	t time.Duration,
 	src *image.RGBA,
+	crop rectF,
 	scaler draw.Interpolator,
 ) *image.RGBA {
 	dst := image.NewRGBA(image.Rectangle{Max: c.out})
-	crop := c.crop(t)
 	if crop.W >= float64(c.layout.Size.X) {
 		scaler.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Src, nil)
 	} else {
@@ -224,6 +243,11 @@ func (c *Compositor) compose(
 // the camera's factor and aim at t, so the crop is clamped again on every frame.
 func (c *Compositor) crop(t time.Duration) rectF {
 	return cropAround(c.layout.Size, c.camera.factorAt(t), c.camera.centreAt(t))
+}
+
+// fullCrop is the crop of the whole source frame, the one the full view shows.
+func (c *Compositor) fullCrop() rectF {
+	return rectF{W: float64(c.layout.Size.X), H: float64(c.layout.Size.Y)}
 }
 
 // cropAround is the source rectangle a camera magnified by factor shows around centre on a frame
@@ -267,15 +291,23 @@ func (c *Compositor) fromOutput(p pointF, crop rectF) pointF {
 // then the nearest cell, clamped into the grid, so a drag that runs off the grid still spans the
 // cells up to its edge.
 func (c *Compositor) Cell(t time.Duration, p image.Point) (col, row int, ok bool) {
-	source := c.fromOutput(pointF{X: float64(p.X) + 0.5, Y: float64(p.Y) + 0.5}, c.crop(t))
-	column := math.Floor((source.X - float64(c.layout.Padding)) / float64(c.layout.CellWidth))
-	line := math.Floor((source.Y - float64(c.layout.Padding)) / float64(c.layout.LineHeight))
-	grid := c.layout.grid()
-	isOnGrid := column >= 0 && line >= 0 && int(column) < grid.X && int(line) < grid.Y
-	ok = p.In(image.Rectangle{Max: c.out}) && isOnGrid
-	col = min(max(int(column), 0), grid.X-1)
-	row = min(max(int(line), 0), grid.Y-1)
-	return col, row, ok
+	return c.cellThrough(c.crop(t), p)
+}
+
+// FullViewCell returns the terminal cell under p, a pixel of the full view
+// [Compositor.ComposeFull] builds, as [Compositor.Cell] maps it but through the whole frame, so a
+// pick on the full view lands on the cell it shows there whatever the zoom. ok and the clamped
+// col and row are as [Compositor.Cell] reports them.
+func (c *Compositor) FullViewCell(p image.Point) (col, row int, ok bool) {
+	return c.cellThrough(c.fullCrop(), p)
+}
+
+// cellThrough is the terminal cell under p, a pixel of a shipped frame showing crop: the pixel's
+// centre mapped back through crop, as [Compositor.Cell] reports it.
+func (c *Compositor) cellThrough(crop rectF, p image.Point) (col, row int, ok bool) {
+	source := c.fromOutput(pointF{X: float64(p.X) + 0.5, Y: float64(p.Y) + 0.5}, crop)
+	col, row, isOnGrid := c.layout.cellAt(source)
+	return col, row, p.In(image.Rectangle{Max: c.out}) && isOnGrid
 }
 
 // Rect returns the pixel rectangle of the shipped frame at output time t that the cell box b
@@ -283,7 +315,18 @@ func (c *Compositor) Cell(t time.Duration, p image.Point) (col, row int, ok bool
 // whole pixels and clipped to the frame; a box the crop leaves out entirely is the empty
 // rectangle.
 func (c *Compositor) Rect(t time.Duration, b take.Box) image.Rectangle {
-	crop := c.crop(t)
+	return c.rectThrough(c.crop(t), b)
+}
+
+// FullViewRect returns the pixel rectangle of the full view [Compositor.ComposeFull] builds that
+// the cell box b covers, as [Compositor.Rect] maps it but through the whole frame.
+func (c *Compositor) FullViewRect(b take.Box) image.Rectangle {
+	return c.rectThrough(c.fullCrop(), b)
+}
+
+// rectThrough is the pixel rectangle of a shipped frame showing crop that the cell box b covers,
+// as [Compositor.Rect] reports it.
+func (c *Compositor) rectThrough(crop rectF, b take.Box) image.Rectangle {
 	covered := c.layout.boxRect(b)
 	topLeft := c.toOutput(pointF{X: covered.X, Y: covered.Y}, crop)
 	bottomRight := c.toOutput(pointF{X: covered.X + covered.W, Y: covered.Y + covered.H}, crop)

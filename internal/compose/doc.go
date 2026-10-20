@@ -40,11 +40,13 @@
 //
 // The file map:
 //   - doc.go: this package comment and file map.
-//   - compose.go: [New], [Output], the [Compositor], its [Layout], cropping, drawing the cursor
-//     and mapping between shipped pixels and cells ([Compositor.Cell], [Compositor.Rect]).
+//   - compose.go: [New], [Output], the [Compositor], its [Layout], cropping, the full view
+//     ([Compositor.ComposeFull]), drawing the cursor and mapping between shipped or full-view
+//     pixels and cells ([Compositor.Cell], [Compositor.Rect] and their full-view variants).
 //   - camera.go: the camera's zoom track of moves and its position track, their factor and aim
 //     at a time, the eases, and planning the storyboard's zooms and positions onto them,
-//     resolving a position's text target on the screen shown at its start.
+//     resolving a position's text target on the screen shown at its start; the camera's [View]
+//     over the full view and each position's aimed cell ([Compositor.PositionCell]).
 //   - position.go: the position track of the camera's aims on the output clock, held at each
 //     position and glided across the gaps between them.
 //   - cursor.go: the cursor's track of clicks and drags, its position, opacity and ring,

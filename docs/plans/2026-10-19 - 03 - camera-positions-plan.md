@@ -419,7 +419,13 @@ them; save round trip; a text target off screen shows its problem on that positi
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune`
 **Commit:** `feat(tune): report camera positions and zooms`
 
-## 12. Compose and render: camera view, full frame and position aim
+## 12. Compose and render: camera view, full frame and position aim — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): consequential edit — internal/compose/doc.go: made necessary by the full view (`ComposeFull`, the full-view Cell/Rect variants) in compose.go and `View`/`PositionCell` in camera.go; the file map now names them.
+NOTES (2026-10-20): consequential edit — internal/render/doc.go: made necessary by the Pipeline's new `FullFrameAt`, `ViewAt` and `PositionCell`; the package comment now says what the pipeline answers of the full view.
+NOTES (2026-10-20): API shape chosen here: `Compositor.ComposeFull(t, src)`, `Compositor.FullViewCell(p)` and `FullViewRect(b)` (no time: the full view's mapping never depends on it), `Compositor.ViewAt(t) View` and `Compositor.PositionCell(index) (col, row, ok)`; `View` is `{Crop FloatRect; Centre image.Point; Origin, CellSize FloatPoint}` in full-view pixels, the two float types exported beside it in camera.go. Pipeline mirrors each (`FullFrameAt`, `FullViewCell`, `FullViewRect`, `ViewAt` returning `(View, ok)`, `PositionCell`), reporting nothing on a partial pipeline.
+NOTES (2026-10-20): the cell lookup Cell did inline is now `Layout.cellAt`, shared by Cell, FullViewCell, the view's centre and PositionCell; Cell's and Rect's bodies moved into `cellThrough`/`rectThrough` taking the crop, and `compose` now takes its crop, so Compose, ComposeDraft and ComposeFull differ only in crop and scaler. The camera keeps each position's aim in list order (`camera.aims`, filled in `newCamera`).
+NOTES (2026-10-20): `make lint` still fails only on the pre-existing internal/tune/pagejs_test.go:1068 ineffassign noted under item 5.
 
 Depends on item 7.
 

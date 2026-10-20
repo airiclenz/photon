@@ -756,3 +756,66 @@ func TestComposeDraftDrawsTheCursorAndCaptionsAsCompose(t *testing.T) {
 		})
 	}
 }
+
+func TestComposeFullEqualsAFactorOneComposition(t *testing.T) {
+	t.Parallel()
+	clicked := take.Box{X: 30, Y: 3, W: 6, H: 1}
+	_, recorded := zoomClickTake(t, clicked)
+	zoomed, _ := newTestCompositor(t, draftBoard(t, clicked, true), recorded)
+	unzoomed, _ := newTestCompositor(t, draftBoard(t, clicked, false), recorded)
+	src := stripedFrame()
+	// At 3s the zoomed board is pushed in 2× and the click's cursor and the caption both show.
+	const at = 3 * sec
+
+	got := zoomed.ComposeFull(at, src)
+
+	if want := unzoomed.Compose(at, src); got.Rect != want.Rect || !bytes.Equal(got.Pix, want.Pix) {
+		t.Error("ComposeFull: want the bytes of the same frame composed at a factor of 1, got different pixels")
+	}
+	if shipped := zoomed.Compose(at, src); bytes.Equal(got.Pix, shipped.Pix) {
+		t.Error("ComposeFull: want the whole frame, got the zoomed crop")
+	}
+}
+
+func TestCompositorFullViewCellAndRect(t *testing.T) {
+	t.Parallel()
+	box := take.Box{X: 30, Y: 7, W: 1, H: 1}
+	board, recorded := zoomClickTake(t, box)
+	compositor, _ := newTestCompositor(t, board, recorded)
+	// At 4s the shipped frame is zoomed 2× onto box, so its centre pixel shows cell (30, 7); the
+	// full view's centre pixel shows the frame's centre cell whatever the zoom.
+	const zoomedAt = 4 * sec
+	if col, row, _ := compositor.Cell(zoomedAt, image.Pt(250, 150)); col != 30 || row != 7 {
+		t.Fatalf("Cell(%s) at the centre: want the zoomed (30, 7), got (%d, %d)", zoomedAt, col, row)
+	}
+	tests := []struct {
+		name    string
+		pixel   image.Point
+		wantCol int
+		wantRow int
+		wantOK  bool
+	}{
+		{name: "first cell", pixel: image.Pt(5, 5), wantCol: 0, wantRow: 0, wantOK: true},
+		{name: "frame centre", pixel: image.Pt(250, 150), wantCol: 24, wantRow: 7, wantOK: true},
+		{name: "on the padding", pixel: image.Pt(0, 0), wantCol: 0, wantRow: 0, wantOK: false},
+		{name: "right of the frame", pixel: image.Pt(testWidth+4, 150), wantCol: testCols - 1, wantRow: 7, wantOK: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			col, row, ok := compositor.FullViewCell(test.pixel)
+
+			if col != test.wantCol || row != test.wantRow || ok != test.wantOK {
+				t.Errorf("FullViewCell(%v): want (%d, %d, %t), got (%d, %d, %t)",
+					test.pixel, test.wantCol, test.wantRow, test.wantOK, col, row, ok)
+			}
+		})
+	}
+
+	got := compositor.FullViewRect(box)
+
+	if want := image.Rect(305, 145, 315, 165); got != want {
+		t.Errorf("FullViewRect(%+v): want the unzoomed %v, got %v", box, want, got)
+	}
+}

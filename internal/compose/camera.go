@@ -3,6 +3,7 @@ package compose
 import (
 	"cmp"
 	"fmt"
+	"image"
 	"math"
 	"slices"
 	"time"
@@ -24,18 +25,24 @@ type move[V any] struct {
 
 // camera is what the crop looks through: a zoom track of the magnification and a position track
 // of where it aims. The zoom track is a list of moves sorted by start that never overlap; between
-// moves it holds the factor its last move ended on, and before its first it rests at factor 1. A
-// camera is built once and only read after, so it is safe for concurrent use.
+// moves it holds the factor its last move ended on, and before its first it rests at factor 1.
+// aims keeps each position's aim in the storyboard's list order. A camera is built once and only
+// read after, so it is safe for concurrent use.
 type camera struct {
 	zoom      []move[float64]
 	positions positionTrack
+	aims      []pointF
 }
 
 // newCamera is the camera of zooms and positions over a frame laid out as layout, the zooms sorted
-// by start and the positions laid on their track.
+// by start, the positions laid on their track and their aims kept in the given order.
 func newCamera(layout Layout, zooms []move[float64], positions []position) camera {
 	sortByStart(zooms)
-	return camera{zoom: zooms, positions: newPositionTrack(layout.Size, positions)}
+	aims := make([]pointF, 0, len(positions))
+	for _, placed := range positions {
+		aims = append(aims, placed.Aim)
+	}
+	return camera{zoom: zooms, positions: newPositionTrack(layout.Size, positions), aims: aims}
 }
 
 // factorAt is the magnification at output time t. A zoom move eases the factor's exponent, so
@@ -172,4 +179,58 @@ func shownAt(clipSchedule *schedule.Schedule, out time.Duration) time.Duration {
 		return 0
 	}
 	return source
+}
+
+// FloatPoint is a fractional pixel position, or a fractional pixel size.
+type FloatPoint struct{ X, Y float64 }
+
+// FloatRect is a fractional pixel rectangle: its top-left corner and its size.
+type FloatRect struct{ X, Y, W, H float64 }
+
+// View is where the camera looks at one output time, laid over the full view
+// [Compositor.ComposeFull] builds — the whole frame at the shipped size — in its pixels.
+type View struct {
+	// Crop is the rectangle of the full view the camera shows, clamped inside it.
+	Crop FloatRect
+	// Centre is the cell, X its column and Y its row, holding the point the position track aims
+	// at before the crop is clamped: a hold's aim, a glide's point, the nearest position's aim
+	// before the first and after the last, and the frame's centre without positions.
+	Centre image.Point
+	// Origin is the top-left corner of the grid's first cell.
+	Origin FloatPoint
+	// CellSize is one cell's width and height.
+	CellSize FloatPoint
+}
+
+// ViewAt returns where the camera looks at output time t, in pixels of the full view: the crop
+// [Compositor.Compose] shows then, the cell the camera centres on and where the grid's cells sit.
+func (c *Compositor) ViewAt(t time.Duration) View {
+	full := c.fullCrop()
+	crop := c.crop(t)
+	corner := c.toOutput(pointF{X: crop.X, Y: crop.Y}, full)
+	far := c.toOutput(pointF{X: crop.X + crop.W, Y: crop.Y + crop.H}, full)
+	padding := float64(c.layout.Padding)
+	origin := c.toOutput(pointF{X: padding, Y: padding}, full)
+	cellEnd := c.toOutput(pointF{
+		X: padding + float64(c.layout.CellWidth),
+		Y: padding + float64(c.layout.LineHeight),
+	}, full)
+	col, row, _ := c.layout.cellAt(c.camera.centreAt(t))
+	return View{
+		Crop:     FloatRect{X: corner.X, Y: corner.Y, W: far.X - corner.X, H: far.Y - corner.Y},
+		Centre:   image.Pt(col, row),
+		Origin:   FloatPoint(origin),
+		CellSize: FloatPoint{X: cellEnd.X - origin.X, Y: cellEnd.Y - origin.Y},
+	}
+}
+
+// PositionCell returns the cell, column and row, holding the aim of the storyboard's position at
+// index in camera.positions: its cell, or the centre of the box its text target resolved to. ok
+// is false for an index outside the list.
+func (c *Compositor) PositionCell(index int) (col, row int, ok bool) {
+	if index < 0 || index >= len(c.camera.aims) {
+		return 0, 0, false
+	}
+	col, row, _ = c.layout.cellAt(c.camera.aims[index])
+	return col, row, true
 }

@@ -39,11 +39,15 @@ type RasterCache interface {
 // draws draft frames ([Pipeline.DraftAt]) from a draft rasterizer drawing at about the shipped
 // frame's size, at most frame.width wide, its rasters kept in the draft cache; when the exact
 // rasters are no wider than frame.width the draft stage is the exact one. `photon render` draws
-// none.
+// none. Beside each frame it answers the full view ([Pipeline.FullFrameAt]): the whole frame at
+// the shipped size, with the camera's view over it ([Pipeline.ViewAt]) and each position's aim
+// ([Pipeline.PositionCell]).
 //
 // A pipeline [Build] could not finish holds its schedule and the error that stopped it: its
-// frame methods return that error, [Pipeline.Cell] reports no cell, [Pipeline.Rect] the empty
-// rectangle, [Pipeline.Size] the zero size, [Pipeline.Unit] 0 and [Pipeline.CaptionBoxes] none.
+// frame methods return that error, [Pipeline.Cell], [Pipeline.FullViewCell],
+// [Pipeline.ViewAt] and [Pipeline.PositionCell] report nothing, [Pipeline.Rect] and
+// [Pipeline.FullViewRect] the empty rectangle, [Pipeline.Size] the zero size, [Pipeline.Unit] 0
+// and [Pipeline.CaptionBoxes] none.
 // It is safe for concurrent use when its raster cache and its draft cache are.
 type Pipeline struct {
 	// loaded is the clip the pipeline was built over: its frame and config decide what a later
@@ -324,6 +328,18 @@ func (p *Pipeline) FrameAt(out time.Duration) (*image.RGBA, error) {
 	return p.compositor.Compose(out, rasterAt(p.recorded, index, p.rasterizer, p.cache)), nil
 }
 
+// FullFrameAt returns the full view at output time out: the snapshot on screen then, rasterized
+// or taken from the raster cache, composed at out by [compose.Compositor.ComposeFull] — the whole
+// frame at [Pipeline.Size], the cursor and the captions drawn as [Pipeline.FrameAt] draws them. It
+// fails as [Pipeline.FrameAt] does.
+func (p *Pipeline) FullFrameAt(out time.Duration) (*image.RGBA, error) {
+	index, err := p.screenIndexAt(out)
+	if err != nil {
+		return nil, err
+	}
+	return p.compositor.ComposeFull(out, rasterAt(p.recorded, index, p.rasterizer, p.cache)), nil
+}
+
 // DraftAt returns a draft of the frame at output time out, of [Pipeline.Size] and with the same
 // cursor and captions as [Pipeline.FrameAt]'s: the snapshot on screen then, rasterized at the
 // draft geometry or taken from the draft cache, composed at out by
@@ -400,6 +416,45 @@ func (p *Pipeline) Rect(out time.Duration, box take.Box) image.Rectangle {
 		return image.Rectangle{}
 	}
 	return p.compositor.Rect(out, box)
+}
+
+// FullViewCell returns the terminal cell under pixel point of the full view
+// [Pipeline.FullFrameAt] draws, as [compose.Compositor.FullViewCell] maps it. ok is false on a
+// partial pipeline.
+func (p *Pipeline) FullViewCell(point image.Point) (col, row int, ok bool) {
+	if p.compositor == nil {
+		return 0, 0, false
+	}
+	return p.compositor.FullViewCell(point)
+}
+
+// FullViewRect returns the pixel rectangle of the full view [Pipeline.FullFrameAt] draws that the
+// cell box covers, as [compose.Compositor.FullViewRect] maps it; the empty rectangle on a partial
+// pipeline.
+func (p *Pipeline) FullViewRect(box take.Box) image.Rectangle {
+	if p.compositor == nil {
+		return image.Rectangle{}
+	}
+	return p.compositor.FullViewRect(box)
+}
+
+// ViewAt returns where the camera looks at output time out over the full view, as
+// [compose.Compositor.ViewAt] reports it. ok is false on a partial pipeline.
+func (p *Pipeline) ViewAt(out time.Duration) (view compose.View, ok bool) {
+	if p.compositor == nil {
+		return compose.View{}, false
+	}
+	return p.compositor.ViewAt(out), true
+}
+
+// PositionCell returns the cell the aim of the storyboard's position at index in
+// camera.positions resolves to, as [compose.Compositor.PositionCell] reports it. ok is false on a
+// partial pipeline and for an index outside the list.
+func (p *Pipeline) PositionCell(index int) (col, row int, ok bool) {
+	if p.compositor == nil {
+		return 0, 0, false
+	}
+	return p.compositor.PositionCell(index)
 }
 
 // Size is the shipped frame's pixel size; the zero size on a partial pipeline.

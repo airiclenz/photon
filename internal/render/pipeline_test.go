@@ -195,6 +195,21 @@ func TestBuild_APositionTargetNotOnScreen_LeavesAPartialPipeline(t *testing.T) {
 	if _, _, ok := built.Cell(0, image.Point{}); ok {
 		t.Error("Cell: want no cell on a partial pipeline")
 	}
+	if _, fullErr := built.FullFrameAt(0); !errors.Is(fullErr, err) {
+		t.Errorf("FullFrameAt: want the build's error, got %v", fullErr)
+	}
+	if _, _, ok := built.FullViewCell(image.Point{}); ok {
+		t.Error("FullViewCell: want no cell on a partial pipeline")
+	}
+	if rect := built.FullViewRect(take.Box{W: 1, H: 1}); !rect.Empty() {
+		t.Errorf("FullViewRect: want the empty rectangle on a partial pipeline, got %v", rect)
+	}
+	if _, ok := built.ViewAt(0); ok {
+		t.Error("ViewAt: want no view on a partial pipeline")
+	}
+	if _, _, ok := built.PositionCell(0); ok {
+		t.Error("PositionCell: want no cell on a partial pipeline")
+	}
 	if size := built.Size(); size != (image.Point{}) {
 		t.Errorf("Size: want zero on a partial pipeline, got %v", size)
 	}
@@ -400,5 +415,76 @@ func TestPipeline_CaptionBoxes_AreWhereTheFrameShowsTheBoxes(t *testing.T) {
 		if got := frame.RGBAAt(corner.X, corner.Y); got != red {
 			t.Errorf("pixel %v of the frame at %s is %v, want the caption's red box", corner, shown, got)
 		}
+	}
+}
+
+// aimedZoomedStoryboard is zoomedCaptionedStoryboard with the camera aimed at cell (15, 2) from
+// the start, so it is pushed in 2× on that cell from 400ms.
+const aimedZoomedStoryboard = zoomedCaptionedStoryboard + `  positions:
+    - {cell: {x: 15, y: 2}, at: 0s}
+`
+
+func TestPipeline_FullFrameAt_IsTheFrameComposedAtAFactorOfOne(t *testing.T) {
+	t.Parallel()
+	takePath, recorded := loadRenderTake(t, 20)
+	zoomed, err := Build(loadRenderClipOf(t, aimedZoomedStoryboard), takePath, recorded, BuildOptions{Cache: newLastRaster()})
+	if err != nil {
+		t.Fatalf("Build zoomed: %v", err)
+	}
+	unzoomed, err := Build(loadRenderClipOf(t, captionedStoryboard), takePath, recorded, BuildOptions{Cache: newLastRaster()})
+	if err != nil {
+		t.Fatalf("Build unzoomed: %v", err)
+	}
+	// At 500ms the zoomed clip is pushed in 2× and caption one shows.
+	const at = 500 * time.Millisecond
+
+	got, err := zoomed.FullFrameAt(at)
+
+	if err != nil {
+		t.Fatalf("FullFrameAt: %v", err)
+	}
+	want, err := unzoomed.FrameAt(at)
+	if err != nil {
+		t.Fatalf("FrameAt unzoomed: %v", err)
+	}
+	if got.Rect != want.Rect || !bytes.Equal(got.Pix, want.Pix) {
+		t.Error("FullFrameAt: want the unzoomed clip's frame, got different pixels")
+	}
+	if _, err := zoomed.FullFrameAt(wantLength); !errors.Is(err, ErrOutsideClip) {
+		t.Errorf("FullFrameAt(length): want ErrOutsideClip, got %v", err)
+	}
+}
+
+func TestPipeline_TheCameraView_PassesTheCompositorThrough(t *testing.T) {
+	t.Parallel()
+	takePath, recorded := loadRenderTake(t, 20)
+	built, err := Build(loadRenderClipOf(t, aimedZoomedStoryboard), takePath, recorded, BuildOptions{Cache: newLastRaster()})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	view, ok := built.ViewAt(500 * time.Millisecond)
+
+	if !ok {
+		t.Fatal("ViewAt: want a view")
+	}
+	if want := image.Pt(15, 2); view.Centre != want {
+		t.Errorf("ViewAt.Centre: want the aimed cell %v, got %v", want, view.Centre)
+	}
+	if half := float64(built.Size().X) / 2; view.Crop.W < half-1e-9 || view.Crop.W > half+1e-9 {
+		t.Errorf("ViewAt.Crop.W: want half the full view's %d pixels at 2×, got %g", built.Size().X, view.Crop.W)
+	}
+	if col, row, ok := built.PositionCell(0); !ok || col != 15 || row != 2 {
+		t.Errorf("PositionCell(0): want (15, 2, true), got (%d, %d, %t)", col, row, ok)
+	}
+	// At 0s the camera is still at 1×, so the full view maps cells as the shipped frame does.
+	box := take.Box{X: 3, Y: 1, W: 4, H: 2}
+	if got, want := built.FullViewRect(box), built.Rect(0, box); got != want || got.Empty() {
+		t.Errorf("FullViewRect(%+v): want the unzoomed %v, got %v", box, want, got)
+	}
+	pixel := image.Pt(40, 20)
+	wantCol, wantRow, wantOK := built.Cell(0, pixel)
+	if col, row, ok := built.FullViewCell(pixel); col != wantCol || row != wantRow || ok != wantOK {
+		t.Errorf("FullViewCell(%v): want (%d, %d, %t), got (%d, %d, %t)", pixel, wantCol, wantRow, wantOK, col, row, ok)
 	}
 }

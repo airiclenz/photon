@@ -20,7 +20,10 @@
 // Every frame comes from one [Pipeline]: [Build] checks the take's frame size, schedules it and
 // builds the rasterizer, the caption faces, the target resolver and the compositor, and the
 // pipeline answers the frame, the screen, a cell or a cell box's pixels by output time,
-// rasterized snapshots kept in the [RasterCache] it is given (a render keeps the last one).
+// rasterized snapshots kept in the [RasterCache] it is given (a render keeps the last one). It
+// answers the full view alike ([Pipeline.FullFrameAt]: the whole frame at the shipped size, with
+// its cells and cell boxes), the camera's view over it at a time ([Pipeline.ViewAt]) and the cell
+// each camera position aims at ([Pipeline.PositionCell]); a render draws no full view.
 // Given a draft cache too, the pipeline answers draft frames ([Pipeline.DraftAt]): snapshots
 // rasterized at the shipped frame's size — padding and font size scaled by frame.width over the
 // exact raster's width, never up, the raster at most frame.width wide — kept in the draft cache
