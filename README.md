@@ -42,7 +42,9 @@ always matches the current app.
   app save the file? did the fake backend get the request?). `record` exits 0 only on a clean take.
 - **One-line retake loop.** `until photon record clip.yaml; do :; done`.
 - **Fixed section lengths.** Each beat plays for exactly its `duration`. Slow parts speed up to fit.
-- **Camera and cursor.** Zoom in and pan to an on-screen target. A drawn cursor glides to each
+- **Camera and cursor.** Camera positions aim at a cell or on-screen text and glide from one to
+  the next; zooms push in on them. `photon tune` edits both on timeline lanes, with a marker you
+  drag on the preview and a picker that sets a position's target. A drawn cursor glides to each
   click and follows each drag.
 - **Helper services.** Start a fake API or other helper before the take, on a free port, and stop
   it after.
@@ -142,7 +144,7 @@ storyboard's folder. Each command's `--help` says the same as this section.
 | `photon record <storyboard>` | Records one take to `<work>/<clip>.take`, checks it and prints the check table. |
 | `photon check <storyboard> [<take>]` | Checks a take (default `<work>/<clip>.take`) against the storyboard's expects and prints the check table. |
 | `photon render <storyboard> [<take>]` | Renders a take (default `<work>/<clip>.take`) to the GIF at the storyboard's `ship` path. |
-| `photon tune <storyboard> [<take>]` | Serves a page on `127.0.0.1` to tune the storyboard's timing, camera moves and frame against a take (default `<work>/<clip>.take`), and saves the edits back into the storyboard. Runs until Ctrl-C. |
+| `photon tune <storyboard> [<take>]` | Serves a page on `127.0.0.1` to tune the storyboard's timing, camera positions and zooms, and frame against a take (default `<work>/<clip>.take`), and saves the edits back into the storyboard. Runs until Ctrl-C. |
 | `photon version` | Prints photon's build string, such as `photon 1.0.0 (a1b2c3d)`: the version, the commit it was built from and `, dirty` when that tree had uncommitted changes; `photon 1.0.0` alone when the binary carries no VCS info. `photon --version` does the same. |
 
 Flags:
@@ -167,15 +169,24 @@ while it plays or scrubs it shows draft frames, drawn from a raster at the shipp
 fast scaler, and once stopped it settles on the exact frame `photon render` composes. Its timeline edits
 each beat's `duration`, `hold` and `cut`, and its inspector the clip's `frame.width`,
 `fps`, `font_size`, `line_height`, `padding` and `scale`; `cols`, `rows` and `max_colors` show read-only. The
-storyboard's `camera` moves and `captions` show as bars on lanes of their own under the beats,
-and a click on a bar shows that entry in the inspector, which edits a camera move's `at`,
-`over`, `ease` and `to`, a pan's `via` waypoints and whether it moves straight `to` its point or
-along a `via` path, and a caption's `text`, `at`, `for` or `until`,
-`place`, `align`, `offset` or `position`, font, colours, box and fade. While a `via` pan is selected, the preview draws
-the path it runs. A lane's `+` adds a zoom, a pan or a caption at the playhead, and the
-inspector moves the entry it shows up or down its list, or removes it.
-A pick on the paused preview proposes a target for the picked cells, ready to use as the
-selected pan's `to` or one of its `via` waypoints, or to copy as a `click`, `seen` or `drag` end.
+storyboard's `camera.positions`, `camera.zooms` and `captions` show on lanes of their own under
+the beats. The position lane draws each position as a bar over its `hold`, or as a point when it
+has none, and each transition, the gap into the next position by start, as a bar in its own
+colour; the zoom lane draws one bar per zoom, labelled with the factor it zooms to. A click on a
+bar shows that entry in the inspector, which edits a position's `at`, `hold` and its `cell` or
+text target (`text`, `nth`, `area`), a transition's start, length and ease (the `ease` of the
+position it leads into), a zoom's `at`, `over`, `to` and `ease`, and a caption's `text`, `at`,
+`for` or `until`, `place`, `align`, `offset` or `position`, font, colours, box and fade. Dragging
+a bar moves it in 50ms steps. A position's or a transition's edge grips move just that edge, and
+a transition shrunk to 0 is a hard cut. The zoom and captions lanes' `+` adds a zoom or a caption
+at the playhead; the position lane's `+` adds a point there on the cell the camera is centred on,
+so the camera does not move. The inspector removes the entry it shows, and moves a caption up or
+down its list. While a position is selected and the preview paused, the preview shows the full
+view: the whole frame, with the camera's crop drawn as a dashed rectangle and a marker on the
+cell the position aims at. Dragging the marker to another cell sets the position's `cell`.
+A pick on the paused preview proposes a target for the picked cells, ready to set as the selected
+position's text target with **Set as position target**, or to copy as a `click`, `seen` or `drag`
+end.
 `pause` and the `do` actions show read-only: changing them needs a new `photon record`. Save
 writes the storyboard in place and changes only
 the edited values, so comments and layout stay. It is refused while an edit leaves the
@@ -510,14 +521,14 @@ overlap.
 ### Captions
 
 The top-level `captions` list draws text over the clip, on the same clock as the
-[camera](#camera). A caption sits on the shipped frame itself: it is drawn after the zoom, the
-pan and the downscale to `frame.width`, and over the cursor. A zoom or pan never moves or scales
-it. Captions may overlap one another; one listed later draws over one listed earlier.
+[camera](#camera). A caption sits on the shipped frame itself: it is drawn after the camera's crop
+and the downscale to `frame.width`, and over the cursor. A zoom or a position never moves or
+scales it. Captions may overlap one another; one listed later draws over one listed earlier.
 
 | Field | Meaning |
 | --- | --- |
 | `text` | Required. The caption's text. Each line of a YAML block (`text: \|`) is a line of the caption. Lines are not wrapped. |
-| `at` | When the caption appears, in the same two forms as a camera move's `at`: a bare time such as `4500ms`, or `{beat: N, offset: D}`. Leave it out to start at the clip's first frame. |
+| `at` | When the caption appears, in the same two forms as a camera position's `at`: a bare time such as `4500ms`, or `{beat: N, offset: D}`. Leave it out to start at the clip's first frame. |
 | `for`, `until` | When it goes. Set exactly one: `for` is how long it shows, >0; `until` is the moment it ends, in the same forms as `at`. It must end after it starts and by the clip's end. |
 | `font.size` | The text size, in the same unit as `frame.font_size`, 6..72. Default `frame.font_size`, which matches the terminal text's size. |
 | `font.weight` | `regular` (default) or `bold`. See [Fonts and licences](#fonts-and-licences). |
@@ -579,7 +590,7 @@ the frame.
 
 ## Targets and areas
 
-A **target** is a place on screen that a `click`, `drag`, camera position or `pan` aims at:
+A **target** is a place on screen that a `click`, `drag` or camera position aims at:
 
 | Field | Meaning |
 | --- | --- |
@@ -620,7 +631,7 @@ If an anchor finds no row, or the top lands below the bottom, the area is not on
 `click` or `drag` there fails, and a `seen` expect does not match. Area names start with a letter
 and use letters, digits, `-` and `_`. `any` is reserved for the whole screen. A storyboard may
 only use areas its config declares, and `photon lint` checks this. Clicks, drags, camera
-positions, pans and `seen` expects all use the same area logic, so they always agree.
+positions and `seen` expects all use the same area logic, so they always agree.
 
 ## Expects
 
@@ -687,11 +698,10 @@ the beat took in the take:
 `photon render` prints one row per beat: `beat N  <speed>×  <take> of take in <duration>`, or
 `beat N  cut`.
 
-A beat does not zoom or aim the camera: the storyboard's [camera](#camera) moves do, on the
-clip's clock. A `zoom` sets the magnification and a `pan` aims it at a target or a cell. A `zoom`
-key on a beat is a load error that names those two camera moves. Between moves the camera holds
-its last state: a factor stays put until the next zoom, and the centre stays put until the next
-pan. The crop never leaves the frame. When the centre is near an edge, the crop stops at that
+A beat does not zoom or aim the camera: the storyboard's [camera](#camera) positions and zooms
+do, on the clip's clock. A position aims it at a target or a cell, and a zoom sets the
+magnification. A `zoom` key on a beat is a load error that names `camera.zooms` and
+`camera.positions`. The crop never leaves the frame. When the centre is near an edge, the crop stops at that
 edge, so the aimed point sits off-centre rather than showing empty space. The cursor follows the
 camera: it is drawn through the same crop, so it stays on the cell it points at.
 

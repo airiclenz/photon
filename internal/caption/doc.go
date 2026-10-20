@@ -1,6 +1,6 @@
 // Package caption draws a storyboard's captions over the shipped frame. A caption sits in output
-// space: it is drawn after the camera's crop and the scale to the shipped width, so a zoom or pan
-// never moves or scales it.
+// space: it is drawn after the camera's crop and the scale to the shipped width, so a zoom or a
+// camera position never moves or scales it.
 //
 // [New] does all the work once, from a storyboard [storyboard.Parse] returned, whose captions carry
 // their start and end on the clip's output clock and their colours already resolved. It draws each

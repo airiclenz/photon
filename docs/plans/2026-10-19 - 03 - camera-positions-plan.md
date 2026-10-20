@@ -666,7 +666,12 @@ position target; a pick on the full view under a zoom.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune`
 **Commit:** `feat(tune): set a position's text target from the picker`
 
-## 20. Docs: tune, help text and package map name positions
+## 20. Docs: tune, help text and package map name positions — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): consequential edit — internal/tune/session.go: made necessary by the item's binding grep, which prints its `rebuild` comment "beats, camera moves and captions"; it now names camera positions and zooms.
+NOTES (2026-10-20): README lines outside the tune section, Commands table and Features bullet were rewritten because the binding grep prints them: Captions ("the zoom, the pan", "a camera move's `at`"), Targets and areas ("camera position or `pan`", "positions, pans"), and Sections and cursor (the zoom/pan move paragraph, now naming `camera.zooms` and `camera.positions` and dropping the "between moves" hold sentence the Camera section covers).
+NOTES (2026-10-20): internal/tune/pick.go and internal/storyboard/edit_caption.go, named in Files, needed no change: earlier items already removed their pan/camera-move wording and the grep prints nothing for them.
+NOTES (2026-10-20): the CHANGELOG entry supersedes these [Unreleased] bullets, which the closeout should drop or trim when it applies it: "`photon tune`'s page no longer aims zooms…", "A camera `zoom` move no longer takes a `target`…", "Breaking for storyboards written for v0.1.0: a beat no longer takes a `zoom`…" (its error text is item 7's), "The README, the glossary and `photon render --help` now describe zooming with camera `zoom` moves…", "a bar in the camera zoom, pan or captions lane can be dragged…", "photon tune adds a zoom, a pan or a caption at the playhead…", "camera move panel edits a pan's path…", "a camera move's or caption's error from rendering…", "camera move panel sets a move's start…", "A storyboard may declare a top-level `camera:` list…", "Storyboards take a top-level `camera` list of zoom and pan moves…", "timeline shows the storyboard's camera moves and captions as bars on `camera zoom`, `pan` and `captions` lanes…", "inspector now edits a selected camera move's…; a pick can be set as the selected pan's `to`"; and trim "and via path" from the window-fit bullet and "or pan" from the captions-drawing bullet.
 
 Depends on items 18, 19.
 

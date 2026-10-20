@@ -325,8 +325,8 @@ func (s *Session) rebuild() {
 	if err == nil {
 		s.good = built
 	}
-	// A storyboard that no longer parses still has its problems shown on the beats, camera moves
-	// and captions last seen, or on the clip for those it adds.
+	// A storyboard that no longer parses still has its problems shown on the beats, camera
+	// positions, zooms and captions last seen, or on the clip for those it adds.
 	board := built.board
 	if board == nil {
 		board = s.good.board

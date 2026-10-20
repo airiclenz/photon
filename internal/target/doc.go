@@ -1,7 +1,7 @@
 // Package target finds things on a snapshot: where a storyboard target sits, which rows an area
 // covers, and the text an area shows. It is the only place targets and areas are resolved — the
-// engine aims clicks, drags and waits with it, compose aims pans with it and check reads `seen`
-// expects through it — so all of them agree on what a pattern and an area mean.
+// engine aims clicks, drags and waits with it, compose aims camera positions with it and check
+// reads `seen` expects through it — so all of them agree on what a pattern and an area mean.
 //
 // A snapshot is read row by row as plain text, trailing blanks trimmed, a wide grapheme counted
 // once. A regex is matched against one row at a time and never spans rows. An area is a band of
