@@ -124,7 +124,15 @@ internal/tune/page_test.go — entryReaders; internal/tune/pick_test.go — pick
 - `grep -rnE 'CameraState|api/path|ErrNoPath|camera:' internal/tune/*.go` prints nothing
 **Commit:** `refactor(tune): drop camera move state and the via path route`
 
-## 3. Storyboard drops the camera move edits
+## 3. Storyboard drops the camera move edits — ✅ DONE (2026-10-20)
+
+NOTES (2026-10-20): consequential edit — internal/storyboard/edit_beat.go: made necessary by deleting edit_camera.go (keyZoom lost its last reader and is deleted; the Target.YAMLFlow comment no longer names a pan's camera.to or waypoint edit)
+NOTES (2026-10-20): consequential edit — internal/storyboard/edit_caption.go: made necessary by dropping the camera list (the key-block and isCaptionField comments no longer name a camera move; the editList call drops the board argument editList and insertEntry no longer read)
+NOTES (2026-10-20): consequential edit — internal/storyboard/beat.go: made necessary by deleting camera.to (the Target comment no longer names a pan's camera.to edit)
+NOTES (2026-10-20): consequential edit — internal/tune/pick.go: made necessary by deleting camera.to (the Proposal comment no longer names the text a pan's camera.to edit writes)
+NOTES (2026-10-20): editName drops its camera-owner branch along with ownerKindOf's, so a camera owner on a beat or caption field is now named by the field alone; edit_test.go asserts that and that camera.at is an unknown field. KindPoint is kept: exported and named by no camera field in its comment, left for the position edits.
+NOTES (2026-10-20): the camera-only overlap insert test became TestApply_InsertEndingPastTheClip_IsRefusedNamingIt, the same ValidationError path on a caption; cameraEditBoard stays for the "captions after the camera" row.
+NOTES (2026-10-20): `make lint` reports one issue, an ineffassign at internal/tune/pagejs_test.go:1068, which predates this run (2d20645, an ancestor of base c096441); the storyboard package lints clean.
 
 Depends on item 2.
 

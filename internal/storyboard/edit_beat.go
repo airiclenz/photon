@@ -16,7 +16,6 @@ const (
 	keyBeats = "beats"
 	keyFrame = "frame"
 	keyCut   = "cut"
-	keyZoom  = "zoom"
 )
 
 // valueTrue is the YAML text of cut switched on.
@@ -81,8 +80,8 @@ func (s *splicer) setCut(beat yamledit.Path, value json.RawMessage) error {
 }
 
 // YAMLFlow writes t as a YAML flow mapping, the one spelling of a target that photon tune's pick
-// snippets and a pan's camera.to or waypoint [Edit] write: the last match is nth: last, and an
-// nth of first and an empty area are left out.
+// snippets write: the last match is nth: last, and an nth of first and an empty area are left
+// out.
 func (t Target) YAMLFlow() string {
 	fields := []string{"text: " + yamledit.Quote(t.Text)}
 	switch {

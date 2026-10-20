@@ -27,7 +27,7 @@ const (
 // captionFieldPrefix starts the name of every caption field.
 const captionFieldPrefix = "caption."
 
-// The storyboard keys a caption edit addresses, past the at key a camera move shares.
+// The storyboard keys a caption edit addresses, past the at key [keyAt].
 const (
 	keyCaptions = "captions"
 	keyText     = "text"
@@ -47,8 +47,7 @@ var (
 	alignSpellings = []string{string(AlignLeft), string(AlignMiddle), string(AlignRight)}
 )
 
-// isCaptionField reports whether field edits a caption rather than a beat, the frame or a
-// camera move.
+// isCaptionField reports whether field edits a caption rather than a beat or the frame.
 func isCaptionField(field string) bool {
 	return strings.HasPrefix(field, captionFieldPrefix)
 }
@@ -61,7 +60,7 @@ func (s *splicer) editCaption(
 	board *Storyboard, index int, field string, value json.RawMessage,
 ) error {
 	if isListField(field) {
-		return s.editList(board, captionList(board), index, field, value)
+		return s.editList(captionList(board), index, field, value)
 	}
 	if index < 0 || index >= len(board.Captions) {
 		return fmt.Errorf("the storyboard has no caption at index %d", index)

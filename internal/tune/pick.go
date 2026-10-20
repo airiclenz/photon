@@ -34,8 +34,7 @@ const (
 // Proposal is the target a pick proposes: the Target, the cell Box it resolves to on the picked
 // snapshot, that box's Rect in output-frame pixels at the picked time, and the YAML that writes
 // the target in each place a storyboard takes one, keyed by place:
-//   - zoom: the bare target flow mapping ({text: 'ok', nth: 2, area: 'list'}), the text a
-//     pan's camera.to [Edit] writes;
+//   - zoom: the bare target flow mapping ({text: 'ok', nth: 2, area: 'list'});
 //   - click: a click action, click: {target: {…}};
 //   - seen: an expect, seen: '…', or {seen: '…', area: '…'} when the target names an area;
 //   - drag-from and drag-to: a drag's two ends, from: {…} and to: {…}.

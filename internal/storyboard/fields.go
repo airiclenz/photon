@@ -31,8 +31,8 @@ const (
 	KindTarget FieldKind = "target"
 	// KindPoint is a target or a cell of the terminal grid, {"cell": {"x": 3, "y": 4}}.
 	KindPoint FieldKind = "point"
-	// KindEntry is a new camera move or caption, {"kind": "zoom", "at": {"beat": 0,
-	// "offset_ms": 0}}, its kind one of the field's Choices.
+	// KindEntry is a new caption, {"kind": "caption", "at": {"beat": 0, "offset_ms": 0}}, its
+	// kind one of the field's Choices.
 	KindEntry FieldKind = "entry"
 	// KindRemoval is null, which removes the owner.
 	KindRemoval FieldKind = "removal"
@@ -43,22 +43,15 @@ const (
 	// KindPixels is a pair of whole lengths in design pixels, {"x": 8, "y": -4}: X to the right
 	// and Y down.
 	KindPixels FieldKind = "pixels"
-	// KindWaypoint is a waypoint of a pan's via path, {"index": 1, "point": {"cell": {"x": 3,
-	// "y": 4}}}: its index and its point, a target or a cell.
-	KindWaypoint FieldKind = "waypoint"
-	// KindWaypointRemoval is a waypoint's index, {"index": 1}, which removes that waypoint.
-	KindWaypointRemoval FieldKind = "waypoint_removal"
 )
 
-// Field describes one field of a storyboard's owner — the clip, a beat, a camera move or a
-// caption — as photon tune's page shows it: its Name, the kind of value it holds, the Choices of
-// an enum, and its Default, the value it holds when the storyboard leaves its key out (the zero
-// value, or what [Load] fills in), typed as an [Edit] types it; null is a field an absent key
-// leaves unset. A list field, which adds, removes or reorders an entry and has no key, defaults to
-// a value it takes: an insert's entry of its first choice at the clip's start, a remove's null,
-// a move's own index. A waypoint field, which sets, adds or removes the waypoint its value
-// indexes, defaults to null, and a pan's camera.path, which has no key either, to the path the
-// pan follows. A caption's caption.shift, which has no key either, defaults to 0, the shift that
+// Field describes one field of a storyboard's owner — the clip, a beat or a caption — as photon
+// tune's page shows it: its Name, the kind of value it holds, the Choices of an enum, and its
+// Default, the value it holds when the storyboard leaves its key out (the zero value, or what
+// [Load] fills in), typed as an [Edit] types it; null is a field an absent key leaves unset. A
+// list field, which adds, removes or reorders an entry and has no key, defaults to a value it
+// takes: an insert's entry of its first choice at the clip's start, a remove's null, a move's own
+// index. A caption's caption.shift, which has no key either, defaults to 0, the shift that
 // changes nothing. An editable field's Name is the field an [Edit] names; a read-only field is
 // one of the frame's keys photon tune shows but does not edit — cols, rows or max_colors — named
 // by that key alone.
@@ -91,29 +84,22 @@ func newEntryDefault(kind string) json.RawMessage {
 
 // The choices of the enum fields, in the order the page offers them.
 var (
-	easeChoices   = []string{string(EaseSmooth), string(EaseLinear)}
 	placeChoices  = []string{string(PlaceTop), string(PlaceMiddle), string(PlaceBottom)}
 	alignChoices  = []string{string(AlignLeft), string(AlignMiddle), string(AlignRight)}
 	weightChoices = []string{string(WeightRegular), string(WeightBold)}
 )
 
 // Fields describes every field of board's owners, the editable and the read-only: the clip's
-// frame fields in the frame's key order, then each beat's, camera move's and caption's in
-// storyboard order, the camera's and the captions' insert after their entries', owned by index 0,
-// whether or not the list holds an entry. A camera move's camera.to is a decimal on a zoom move
-// and a point on a pan, and a pan lists its camera.path, a via pan its waypoint fields too. The
-// frame's cols and rows are read-only because they size the terminal the take was recorded in,
-// so a change needs a new `photon record`, and its max_colors because the page draws its preview
-// before the palette is quantized, so the preview could not show a change.
+// frame fields in the frame's key order, then each beat's and caption's in storyboard order, the
+// captions' insert after their entries', owned by index 0, whether or not the list holds an
+// entry. The frame's cols and rows are read-only because they size the terminal the take was
+// recorded in, so a change needs a new `photon record`, and its max_colors because the page draws
+// its preview before the palette is quantized, so the preview could not show a change.
 func Fields(board *Storyboard) []Field {
 	fields := clipFields()
 	for _, beat := range board.Beats {
 		fields = append(fields, beatFields(beat)...)
 	}
-	for index, move := range board.Camera {
-		fields = append(fields, cameraFields(index, move)...)
-	}
-	fields = append(fields, insertField(OwnerCamera, FieldCameraInsert, cameraEntryKinds))
 	for index := range board.Captions {
 		fields = append(fields, captionFields(index, board.Frame.FontSize)...)
 	}
@@ -173,60 +159,6 @@ func beatFields(beat Beat) []Field {
 		{Owner: owner, Name: FieldHold, Kind: KindDuration, Default: raw(defaultZero)},
 		{Owner: owner, Name: FieldCut, Kind: KindBool, Default: raw(defaultFalse)},
 	}
-}
-
-// cameraFields describes the fields of move, the camera move at index: its start, length and
-// ease, its destination — a zoom move's factor, or a pan's target or cell, which a via path has
-// none of — a pan's path and a via path's waypoints, and its remove and move.
-func cameraFields(index int, move CameraMove) []Field {
-	owner := Owner{Kind: OwnerCamera, Index: index}
-	to := Field{Owner: owner, Name: FieldCameraTo, Kind: KindDecimal, Default: raw(defaultZero)}
-	if move.Pan != nil {
-		to.Kind, to.Default = KindPoint, raw(jsonNull)
-	}
-	fields := []Field{
-		{Owner: owner, Name: FieldCameraAt, Kind: KindMoment, Default: raw(defaultClipStart)},
-		{Owner: owner, Name: FieldCameraOver, Kind: KindDuration, Default: raw(defaultZero)},
-		{
-			Owner: owner, Name: FieldCameraEase, Kind: KindEnum,
-			Choices: slices.Clone(easeChoices), Default: quoted(string(EaseSmooth)),
-		},
-		to,
-	}
-	if move.Pan != nil {
-		fields = append(fields, pathFields(owner, *move.Pan)...)
-	}
-	return append(fields, listEntryFields(owner, FieldCameraRemove, FieldCameraMove)...)
-}
-
-// pathFields describes the path of pan, the move owner names: its camera.path, defaulting to the
-// path it follows, and on a via path the set, insert and remove of a waypoint, each defaulting
-// to null.
-func pathFields(owner Owner, pan PanMove) []Field {
-	path := pathTo
-	if pan.Via != nil {
-		path = pathVia
-	}
-	fields := []Field{{
-		Owner:   owner,
-		Name:    FieldCameraPath,
-		Kind:    KindEnum,
-		Choices: slices.Clone(pathChoices),
-		Default: quoted(path),
-	}}
-	if pan.Via == nil {
-		return fields
-	}
-	return append(fields,
-		Field{Owner: owner, Name: FieldCameraVia, Kind: KindWaypoint, Default: raw(jsonNull)},
-		Field{Owner: owner, Name: FieldCameraViaInsert, Kind: KindWaypoint, Default: raw(jsonNull)},
-		Field{
-			Owner:   owner,
-			Name:    FieldCameraViaRemove,
-			Kind:    KindWaypointRemoval,
-			Default: raw(jsonNull),
-		},
-	)
 }
 
 // captionFields describes the fields of the caption at index: its start, its end — a for or an

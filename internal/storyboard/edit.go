@@ -20,29 +20,14 @@ import (
 // {"owner": {"kind": "<kind>", "index": <n>}, "field": "<name>", "value": <JSON>}. Owner is
 // what the field edits: the beat by its id for a beat field, the clip with index 0 for
 // frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width and frame.fps, and
-// the camera move or caption by its index in the storyboard's camera or captions list, from 0,
-// for a camera or caption field. Value is typed per field:
+// the caption by its index in the storyboard's captions list, from 0, for a caption field. Value
+// is typed per field:
 //   - duration, hold: a whole number of milliseconds (1850);
 //   - cut: true or false;
 //   - frame.padding, frame.scale, frame.width, frame.fps: a whole number;
 //   - frame.font_size, frame.line_height: a number above 0, the font size in [6, 72];
-//   - camera.at: a moment, {"beat": 3, "offset_ms": 200}, beat 0 for a clip time offset_ms
-//     after the clip's first frame, which replaces the move's whole at;
-//   - camera.over: a whole number of milliseconds;
-//   - camera.ease: "smooth", which removes the key, or "linear";
-//   - camera.to: a number, the factor, for a zoom move; for a pan, a target, {"text": "ok",
-//     "nth": 2, "area": "list"}, its nth a whole number from 1 or "last" and left out for the
-//     first match, its area left out for the whole screen — the target a pick answers — or a
-//     cell, {"cell": {"x": 3, "y": 4}}, refused on a pan along a via path;
-//   - camera.via, camera.via.insert: a waypoint of a pan's via path, {"index": 1, "point":
-//     {"cell": {"x": 3, "y": 4}}}, its point a target or cell as a pan's camera.to takes it, set
-//     at one of the path's indexes, or added so that it is the waypoint at an index from 0
-//     through their count; each is refused on a straight pan;
-//   - camera.via.remove: {"index": 1}, which removes the waypoint at that index;
-//   - camera.path: "to" or "via", a pan's path: a straight pan made a via path passes the
-//     frame's centre cell on its way to its old to, a via pan made straight goes to its last
-//     waypoint;
-//   - caption.at: a moment as camera.at takes it, which replaces the caption's whole at;
+//   - caption.at: a moment, {"beat": 3, "offset_ms": 200}, beat 0 for a clip time offset_ms
+//     after the clip's first frame, which replaces the caption's whole at;
 //   - caption.for: a whole number of milliseconds above 0, which removes the caption's until;
 //   - caption.until: a moment, which removes the caption's for; null clears the until, the
 //     caption then ending after a for of the length it shows now;
@@ -62,12 +47,11 @@ import (
 //     text and "#000000" for the box, in either case — removing the key;
 //   - caption.box.opacity: a number from 0 to 1, 0.6 removing the key;
 //   - caption.fade.in, caption.fade.out: a whole number of milliseconds, 0 removing the key;
-//   - camera.insert, caption.insert: a new entry, {"kind": "zoom", "at": {"beat": 0,
-//     "offset_ms": 1200}}, its kind zoom or pan for the camera and caption for the captions and
-//     its at a moment, added so that it is the entry at the owner's index, 0 through the list's
+//   - caption.insert: a new entry, {"kind": "caption", "at": {"beat": 0, "offset_ms": 1200}},
+//     its at a moment, added so that it is the caption at the owner's index, 0 through the list's
 //     length;
-//   - camera.remove, caption.remove: null, which removes the owner's entry;
-//   - camera.move, caption.move: a whole number, the index the owner's entry moves to.
+//   - caption.remove: null, which removes the owner's caption;
+//   - caption.move: a whole number, the index the owner's caption moves to.
 //
 // A value of another JSON type or spelling, a null or absent value but caption.until's,
 // caption.position's and a remove's, and an owner of another kind than the field's are refused
@@ -95,14 +79,11 @@ const (
 // editFields lists every field Apply takes, as the unknown-field error offers them.
 var editFields = []string{
 	FieldDuration, FieldHold, FieldCut, FieldFrameWidth, FieldFrameFPS, FieldFramePadding,
-	FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldCameraAt, FieldCameraOver,
-	FieldCameraEase, FieldCameraTo, FieldCaptionAt, FieldCaptionFor, FieldCaptionUntil,
-	FieldCaptionShift, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign, FieldCameraInsert,
-	FieldCameraRemove, FieldCameraMove, FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove,
-	FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor,
-	FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionOffset,
-	FieldCaptionPosition, FieldCameraVia, FieldCameraViaInsert, FieldCameraViaRemove,
-	FieldCameraPath,
+	FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldCaptionAt, FieldCaptionFor,
+	FieldCaptionUntil, FieldCaptionShift, FieldCaptionText, FieldCaptionPlace, FieldCaptionAlign,
+	FieldCaptionInsert, FieldCaptionRemove, FieldCaptionMove, FieldCaptionFontSize,
+	FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor, FieldCaptionBoxOpacity,
+	FieldCaptionFadeIn, FieldCaptionFadeOut, FieldCaptionOffset, FieldCaptionPosition,
 }
 
 // EditFields returns every field an [Edit] names for [Apply], in a new slice.
@@ -118,6 +99,9 @@ const millisecondsPerSecond = int64(time.Second / time.Millisecond)
 
 // secondsForm is a duration written as plain seconds (`2s`, `2.35s`), which an edit keeps.
 var secondsForm = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?s$`)
+
+// keyAt is the storyboard key of a caption's start.
+const keyAt = "at"
 
 // jsonNull is the JSON null literal.
 const jsonNull = "null"
@@ -137,35 +121,27 @@ const (
 // ms, one in plain seconds in seconds with the fewest decimals, any other or new value as
 // time.Duration.String(). A new key goes after the keys that precede it in the storyboard's
 // field order, its yaml struct tags; a value equal to the default of a key that is absent writes
-// nothing; cut false, camera.ease smooth, caption.place bottom,
-// caption.align middle, caption.offset {0, 0} and a caption's font, colour, box or fade at the
-// default [Load] fills in delete their key, and a caption's font, box or fade mapping left
-// holding no key goes with it, while a style value a caption lacks the mapping for creates it as
-// a one-key flow mapping. A colour is written quoted, '#ffcc00', and compared to its default
-// case-insensitively. A target is written as the flow mapping [Target.YAMLFlow] spells. A
-// camera.at, caption.at or caption.until is written as a clip time in ms or a
-// {beat: 3, offset: 200ms} flow mapping, and a pan's cell as {cell: {x: 3, y: 4}}; a camera.at, a
-// caption.at or caption.until, or a pan's camera.to replaces its whole node with the value's flow
-// text, and a caption.text replaces its whole node, a block scalar too, with one double-quoted
-// line; a caption.offset or caption.position is written as an {x: 8, y: -4} flow mapping in place
-// of its whole node, a position deletes the caption's place, align and offset, a place, align or
-// offset deletes its position, and a null position deletes the key; a caption.for deletes the
-// caption's until and a caption.until its for, or, as null, writes the for that keeps the caption's
-// stretch in place of its until. A caption.shift rewrites the caption's at and, if it has one, its
-// until as caption.at and caption.until write them, each keeping its beat, and a shift of 0 writes
-// nothing. An insert writes its entry as one flow line from presets — a zoom to 1.5 or a pan to
-// the frame's centre cell, over 600ms, or a caption "Caption" for 2s — and
-// creates a camera or captions key the storyboard lacks as a flow list after the keys that precede
-// it; a remove or move splices only its list's items, and removing a list's only entry deletes its
-// key. A waypoint set, insert or remove splices only its item of the via list, a camera.path to via
-// writes `via: [<centre cell>, <old to>]` in place of the pan's to, and one to "to" writes
-// `to: <last waypoint>` in place of its via. The edit is refused with an error led by its owner and
-// field — the beat, camera move or caption, or nothing for a frame field — when its value is of the
-// wrong JSON type or misspelled, when its owner is of another kind than the field's, when it
-// names a beat, camera move, caption or waypoint that is not there, an insert index past the
-// list's length among them, or when the result fails validation, an inserted move overlapping
-// another on its track and a via path left with one waypoint among them; the last wraps the
-// *[ValidationError].
+// nothing; cut false, caption.place bottom, caption.align middle, caption.offset {0, 0} and a
+// caption's font, colour, box or fade at the default [Load] fills in delete their key, and a
+// caption's font, box or fade mapping left holding no key goes with it, while a style value a
+// caption lacks the mapping for creates it as a one-key flow mapping. A colour is written quoted,
+// '#ffcc00', and compared to its default case-insensitively. A caption.at or caption.until is
+// written as a clip time in ms or a {beat: 3, offset: 200ms} flow mapping and replaces its whole
+// node with the value's flow text, and a caption.text replaces its whole node, a block scalar
+// too, with one double-quoted line; a caption.offset or caption.position is written as an
+// {x: 8, y: -4} flow mapping in place of its whole node, a position deletes the caption's place,
+// align and offset, a place, align or offset deletes its position, and a null position deletes
+// the key; a caption.for deletes the caption's until and a caption.until its for, or, as null,
+// writes the for that keeps the caption's stretch in place of its until. A caption.shift rewrites
+// the caption's at and, if it has one, its until as caption.at and caption.until write them, each
+// keeping its beat, and a shift of 0 writes nothing. An insert writes its caption as one flow line
+// from presets — a caption "Caption" for 2s — and creates a captions key the storyboard lacks as
+// a flow list after the keys that precede it; a remove or move splices only its list's items, and
+// removing a list's only entry deletes its key. The edit is refused with an error led by its owner
+// and field — the beat or caption, or nothing for a frame field — when its value is of the wrong
+// JSON type or misspelled, when its owner is of another kind than the field's, when it names a
+// beat or caption that is not there, an insert index past the list's length among them, or when
+// the result fails validation; the last wraps the *[ValidationError].
 func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 	board, err := Parse(src, path)
 	if err != nil {
@@ -189,13 +165,11 @@ func Apply(src []byte, path string, edit Edit) ([]byte, *Storyboard, error) {
 }
 
 // editName names what edit changes, as its errors lead with it: `beat 2: hold`, `frame.fps`,
-// `camera[1]: camera.at`, `captions[0]: caption.text`.
+// `captions[0]: caption.text`.
 func editName(edit Edit) string {
 	switch edit.Owner.Kind {
 	case OwnerBeat:
 		return fmt.Sprintf("beat %d: %s", edit.Owner.Index, edit.Field)
-	case OwnerCamera:
-		return fmt.Sprintf("camera[%d]: %s", edit.Owner.Index, edit.Field)
 	case OwnerCaption:
 		return fmt.Sprintf("captions[%d]: %s", edit.Owner.Index, edit.Field)
 	default:
@@ -203,14 +177,12 @@ func editName(edit Edit) string {
 	}
 }
 
-// ownerKindOf is the kind of owner field edits: the clip for a frame field, a camera move for a
-// camera field, a caption for a caption field and a beat for every other.
+// ownerKindOf is the kind of owner field edits: the clip for a frame field, a caption for a
+// caption field and a beat for every other.
 func ownerKindOf(field string) OwnerKind {
 	switch {
 	case strings.HasPrefix(field, frameFieldPrefix):
 		return OwnerClip
-	case isCameraField(field):
-		return OwnerCamera
 	case isCaptionField(field):
 		return OwnerCaption
 	default:
@@ -224,7 +196,7 @@ type splicer struct {
 	doc *yamledit.Document
 }
 
-// apply routes edit to the frame or to its beat, camera move or caption in board, the storyboard
+// apply routes edit to the frame or to its beat or caption in board, the storyboard
 // doc holds, once its field, its owner's kind and the presence of its value check out.
 func (s *splicer) apply(board *Storyboard, edit Edit) error {
 	if !slices.Contains(editFields, edit.Field) {
@@ -245,8 +217,6 @@ func (s *splicer) apply(board *Storyboard, edit Edit) error {
 	switch edit.Owner.Kind {
 	case OwnerClip:
 		return s.editFrame(edit)
-	case OwnerCamera:
-		return s.editCamera(board, edit.Owner.Index, edit.Field, edit.Value)
 	case OwnerCaption:
 		return s.editCaption(board, edit.Owner.Index, edit.Field, edit.Value)
 	}
@@ -291,9 +261,9 @@ func (s *splicer) replaceOrInsert(mapping yamledit.Path, key, text string, order
 	return s.doc.Upsert(mapping, key, text, order)
 }
 
-// setMoment replaces the whole at of mapping, a camera move or a caption, whatever its form,
-// with the moment value types, spelled as [momentFlow] does. A clip start on a mapping without at
-// writes nothing: an absent at already starts it there.
+// setMoment replaces the whole at of mapping, a caption, whatever its form, with the moment value
+// types, spelled as [momentFlow] does. A clip start on a mapping without at writes nothing: an
+// absent at already starts it there.
 func (s *splicer) setMoment(mapping yamledit.Path, order []string, value json.RawMessage) error {
 	moment, err := decodeMoment(value)
 	if err != nil {
