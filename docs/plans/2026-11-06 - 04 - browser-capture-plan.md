@@ -225,7 +225,10 @@ NOTES (2026-11-06): Type and Key dispatch several CDP key events per call (Point
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/browser/`, then `GOMEMLIMIT=2GiB go test -tags browser ./internal/browser/`
 **Commit:** `feat(browser): type, press keys and click on the page`
 
-## 11. A fixture web app for tests
+## 11. A fixture web app for tests — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the nav holds the items alpha/beta/gamma (a click shows "selected: <item>"), mirroring the fixture TUI's list, so later items have a selector target that also answers a click; typing shows "you typed: <text>", the Run button shows "working" plus the spinner for 1 s, then "clicked: Run".
+NOTES (2026-11-06): buildFixture now takes the package, binary name and temp-dir pattern so BuildFixtureTUI and BuildFixtureWeb share it (each with its own sync.OnceValues); the page is a Go string constant in main.go rather than a go:embed file, keeping the plan's file list.
 
 **What:**
 **Goal:** `internal/testkit/fixtureweb` is a small Go program serving a fixture page on `$PHOTON_PORT` (an input, a button with text, a `nav` for a selector, a spinner, a status line that echoes input and clicks), and `testkit.BuildFixtureWeb` builds it as `BuildFixtureTUI` does.

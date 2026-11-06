@@ -3,8 +3,9 @@
 // without a cycle.
 //
 // The file map:
-//   - build.go: [BuildFixtureTUI], which builds the fixture TUI (package fixturetui beside this
-//     one) once per test binary and returns its path.
+//   - build.go: [BuildFixtureTUI] and [BuildFixtureWeb], which build the fixture TUI and the
+//     fixture web app (packages fixturetui and fixtureweb beside this one) once per test binary
+//     and return their paths.
 //   - doc.go: this package comment and file map.
 //   - docmap.go: [CheckDocMap], the structural test that a package's doc.go names every
 //     non-test file beside it.
