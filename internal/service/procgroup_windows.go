@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -15,6 +16,9 @@ import (
 // errNoInterrupt is what terminate returns: Windows cannot ask a process tree to stop, so the
 // caller kills it.
 var errNoInterrupt = errors.New("windows cannot interrupt a service")
+
+// errNoThread is what resume returns when the suspended process has no thread to resume.
+var errNoThread = errors.New("the process has no thread")
 
 // jobAccounting is the Win32 JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, which x/sys/windows lacks.
 type jobAccounting struct {
@@ -34,11 +38,14 @@ type group struct {
 	job windows.Handle
 }
 
-// prepareGroup does nothing on Windows: the job is made once the process exists.
-func prepareGroup(*exec.Cmd) {}
+// prepareGroup makes cmd start suspended: the job is made once the process exists, and a shell
+// left running could start a child before then, which would stay outside the job.
+func prepareGroup(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_SUSPENDED}
+}
 
-// joinGroup puts process in a new job. A child the shell starts before this returns stays
-// outside the job; the shell starts none that early in practice.
+// joinGroup puts the suspended process in a new job, then resumes it, so every process it
+// starts is in the job too.
 func joinGroup(process *os.Process) (*group, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
@@ -60,7 +67,57 @@ func joinGroup(process *os.Process) (*group, error) {
 		}
 		return nil, errors.Join(assignErr, closeErr, windows.CloseHandle(job))
 	}
+	if err := resume(uint32(process.Pid)); err != nil {
+		return nil, errors.Join(fmt.Errorf("resume the process: %w", err), windows.CloseHandle(job))
+	}
 	return &group{job: job}, nil
+}
+
+// resume resumes every thread of the process pid; a process started suspended has one, and
+// os.StartProcess does not keep its handle.
+func resume(pid uint32) error {
+	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPTHREAD, 0)
+	if err != nil {
+		return fmt.Errorf("list the threads: %w", err)
+	}
+	var errs []error
+	resumed := 0
+	entry := windows.ThreadEntry32{Size: uint32(unsafe.Sizeof(windows.ThreadEntry32{}))}
+	next := windows.Thread32First
+	for err = next(snapshot, &entry); err == nil; err = next(snapshot, &entry) {
+		next = windows.Thread32Next
+		if entry.OwnerProcessID != pid {
+			continue
+		}
+		if resumeErr := resumeThread(entry.ThreadID); resumeErr != nil {
+			errs = append(errs, resumeErr)
+			continue
+		}
+		resumed++
+	}
+	if !errors.Is(err, windows.ERROR_NO_MORE_FILES) {
+		errs = append(errs, fmt.Errorf("list the threads: %w", err))
+	}
+	if resumed == 0 && len(errs) == 0 {
+		errs = append(errs, errNoThread)
+	}
+	if closeErr := windows.CloseHandle(snapshot); closeErr != nil {
+		errs = append(errs, fmt.Errorf("close the thread list: %w", closeErr))
+	}
+	return errors.Join(errs...)
+}
+
+// resumeThread resumes the thread id.
+func resumeThread(id uint32) error {
+	thread, err := windows.OpenThread(windows.THREAD_SUSPEND_RESUME, false, id)
+	if err != nil {
+		return fmt.Errorf("open thread %d: %w", id, err)
+	}
+	_, resumeErr := windows.ResumeThread(thread)
+	if resumeErr != nil {
+		resumeErr = fmt.Errorf("resume thread %d: %w", id, resumeErr)
+	}
+	return errors.Join(resumeErr, windows.CloseHandle(thread))
 }
 
 // terminate reports errNoInterrupt, so the caller kills the job straight away.
