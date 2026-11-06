@@ -18,8 +18,13 @@ import (
 // it this photon writes and reads.
 const (
 	FormatName    = "photon-take"
-	FormatVersion = 1
+	FormatVersion = 2
 )
+
+// terminalFormatVersion is the version a take carrying none of the version-2 fields is written
+// as, so a terminal take's file stays what it was before version 2: version 2 adds a snapshot's
+// image layer entry (img) and text runs (runs), and the header's cell geometry (cell).
+const terminalFormatVersion = 1
 
 // ErrFormat is what a file that is not a readable take gets: another format, a missing or
 // unknown version, a corrupt or truncated stream.
@@ -51,6 +56,7 @@ type header struct {
 	Rows    int       `json:"rows"`
 	FPS     int       `json:"fps"`
 	Started time.Time `json:"started"`
+	Cell    *CellSize `json:"cell,omitempty"`
 }
 
 // line is one line of a take file after the header: exactly one of its fields is set.
@@ -61,13 +67,17 @@ type line struct {
 
 // Write writes t to w as a gzip-compressed JSON-lines stream: the header first, then every
 // snapshot and every event in time order, one per line. Lines keep a take streamable, and gzip
-// keeps the repeated cell spellings cheap.
+// keeps the repeated cell spellings cheap. The header names the oldest version that holds t
+// ([writeVersion]).
 func Write(w io.Writer, t *Take) error {
 	zw := gzip.NewWriter(w)
 	enc := json.NewEncoder(zw)
 	head := header{
-		Format: FormatName, Version: FormatVersion,
+		Format: FormatName, Version: writeVersion(t),
 		Cols: t.Cols, Rows: t.Rows, FPS: t.FPS, Started: t.Started,
+	}
+	if t.Cell != (CellSize{}) {
+		head.Cell = &t.Cell
 	}
 	if err := enc.Encode(head); err != nil {
 		return fmt.Errorf("write the take header: %w", err)
@@ -96,6 +106,20 @@ func Write(w io.Writer, t *Take) error {
 	return nil
 }
 
+// writeVersion is the format version [Write] gives t: [FormatVersion] when t has cell geometry or
+// a snapshot with an image layer entry or text runs, else [terminalFormatVersion].
+func writeVersion(t *Take) int {
+	if t.Cell != (CellSize{}) {
+		return FormatVersion
+	}
+	for i := range t.Snapshots {
+		if t.Snapshots[i].Image != nil || len(t.Snapshots[i].Runs) > 0 {
+			return FormatVersion
+		}
+	}
+	return terminalFormatVersion
+}
+
 // Read reads a take [Write] wrote. A stream that is not one is an [ErrFormat] error, one from a
 // newer photon an [ErrNewerVersion] error. The lines after the header are decoded in parallel;
 // the error a bad stream gets names its lowest-numbered failing line, and every goroutine Read
@@ -112,46 +136,56 @@ func Read(r io.Reader) (*Take, error) {
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("%w: read the header: %w", ErrFormat, err)
 	}
-	t, err := readHeader(first)
+	t, version, err := readHeader(first)
 	if err != nil {
 		return nil, err
 	}
-	if err := readLines(stream, t); err != nil {
+	if err := readLines(stream, t, version); err != nil {
 		return nil, err
 	}
 	return t, nil
 }
 
-// readHeader checks the first line's bytes, returning a take holding its fields. The format and
-// version are read leniently first, so a newer photon's header, which may carry fields this one
-// does not know, still reports [ErrNewerVersion]; only then is the line decoded strictly.
-func readHeader(raw []byte) (*Take, error) {
+// readHeader checks the first line's bytes, returning a take holding its fields and the file's
+// format version. The format and version are read leniently first, so a newer photon's header,
+// which may carry fields this one does not know, still reports [ErrNewerVersion]; only then is
+// the line decoded strictly, and a version-1 header giving cell geometry is refused.
+func readHeader(raw []byte) (*Take, int, error) {
 	var stamp struct {
 		Format  string `json:"format"`
 		Version int    `json:"version"`
 	}
 	if err := json.Unmarshal(raw, &stamp); err != nil {
-		return nil, fmt.Errorf("%w: read the header: %w", ErrFormat, err)
+		return nil, 0, fmt.Errorf("%w: read the header: %w", ErrFormat, err)
 	}
 	switch {
 	case stamp.Format != FormatName:
-		return nil, fmt.Errorf("%w: the header names format %q", ErrFormat, stamp.Format)
+		return nil, 0, fmt.Errorf("%w: the header names format %q", ErrFormat, stamp.Format)
 	case stamp.Version > FormatVersion:
-		return nil, fmt.Errorf("%w: version %d, this photon reads up to %d",
+		return nil, 0, fmt.Errorf("%w: version %d, this photon reads up to %d",
 			ErrNewerVersion, stamp.Version, FormatVersion)
 	case stamp.Version < 1:
-		return nil, fmt.Errorf("%w: the header gives version %d", ErrFormat, stamp.Version)
+		return nil, 0, fmt.Errorf("%w: the header gives version %d", ErrFormat, stamp.Version)
 	}
 
 	var head header
 	if err := decodeStrict(raw, &head); err != nil {
-		return nil, fmt.Errorf("%w: read the header: %w", ErrFormat, err)
+		return nil, 0, fmt.Errorf("%w: read the header: %w", ErrFormat, err)
 	}
 	if head.Cols <= 0 || head.Rows <= 0 {
-		return nil, fmt.Errorf("%w: the header gives a %dx%d terminal",
+		return nil, 0, fmt.Errorf("%w: the header gives a %dx%d terminal",
 			ErrFormat, head.Cols, head.Rows)
 	}
-	return &Take{Cols: head.Cols, Rows: head.Rows, FPS: head.FPS, Started: head.Started}, nil
+	t := &Take{Cols: head.Cols, Rows: head.Rows, FPS: head.FPS, Started: head.Started}
+	if head.Cell != nil {
+		if stamp.Version == terminalFormatVersion {
+			return nil, 0, fmt.Errorf(
+				"%w: the header gives cell geometry, which a version-%d take does not carry",
+				ErrFormat, terminalFormatVersion)
+		}
+		t.Cell = *head.Cell
+	}
+	return t, stamp.Version, nil
 }
 
 // decodeStrict decodes data, one JSON value and nothing after it but whitespace, into value,
@@ -184,12 +218,13 @@ type lineJob struct {
 	result chan<- lineResult
 }
 
-// readLines decodes every line after the header into t, to the end of the stream. One goroutine
+// readLines decodes every line after the header of a take file of format version into t, to the
+// end of the stream. One goroutine
 // reads the lines, and for each one first reserves a result slot in line order; workers decode
 // the lines into their slots; readLines takes the slots in order, so the take keeps the stream's
 // order and the first error it meets is the lowest-numbered failing line's. A stream cut short
 // fails: gzip reports a missing trailer as an unexpected end.
-func readLines(stream *bufio.Reader, t *Take) error {
+func readLines(stream *bufio.Reader, t *Take, version int) error {
 	workers := min(runtime.GOMAXPROCS(0), maxLineWorkers)
 	// A line is in flight from its slot's reservation until readLines takes the slot, and one
 	// taken slot sits outside the channel: hence the one less.
@@ -203,7 +238,7 @@ func readLines(stream *bufio.Reader, t *Take) error {
 	for range workers {
 		running.Go(func() {
 			for job := range jobs {
-				decoded, err := decodeLine(job.number, job.data)
+				decoded, err := decodeLine(job.number, job.data, version)
 				job.result <- lineResult{decoded: decoded, err: err}
 			}
 		})
@@ -234,8 +269,9 @@ func collectLines(order <-chan chan lineResult, t *Take) error {
 	}
 }
 
-// decodeLine decodes the bytes of line number strictly: exactly one snapshot or one event.
-func decodeLine(number int, data []byte) (line, error) {
+// decodeLine decodes the bytes of line number of a take file of format version strictly: exactly
+// one snapshot or one event, carrying no field its version lacks ([checkLineVersion]).
+func decodeLine(number int, data []byte, version int) (line, error) {
 	var decoded line
 	if err := decodeStrict(data, &decoded); err != nil {
 		return line{}, fmt.Errorf("%w: line %d: %w", ErrFormat, number, err)
@@ -244,7 +280,29 @@ func decodeLine(number int, data []byte) (line, error) {
 		return line{}, fmt.Errorf("%w: line %d is neither one snapshot nor one event",
 			ErrFormat, number)
 	}
+	if err := checkLineVersion(number, decoded, version); err != nil {
+		return line{}, err
+	}
 	return decoded, nil
+}
+
+// checkLineVersion refuses, with [ErrFormat], decoded line number of a version-1 take when its
+// snapshot carries an image layer entry or text runs, which only version 2 has.
+func checkLineVersion(number int, decoded line, version int) error {
+	if version != terminalFormatVersion || decoded.Snapshot == nil {
+		return nil
+	}
+	var field string
+	switch {
+	case decoded.Snapshot.Image != nil:
+		field = "img"
+	case decoded.Snapshot.Runs != nil:
+		field = "runs"
+	default:
+		return nil
+	}
+	return fmt.Errorf("%w: line %d: a version-%d take carries no %q",
+		ErrFormat, number, terminalFormatVersion, field)
 }
 
 // lineFeed reads the lines after a take's header and hands them out for decoding.

@@ -42,8 +42,8 @@ type Take struct {
 // CellSize is the pixel width W and height H of one grid cell. Each is fractional, so a cell of
 // one CSS pixel can sit at any device scale.
 type CellSize struct {
-	W float64
-	H float64
+	W float64 `json:"w"`
+	H float64 `json:"h"`
 }
 
 // Snapshot is what the terminal showed from At (measured from the take's start) until the next
@@ -51,14 +51,26 @@ type CellSize struct {
 //
 // Its text layer ([Snapshot.Text]) is derived from Cells when it has any; a snapshot without
 // cells carries its text layer as Runs instead. Selectors holds, per selector the clip names, the
-// boxes of the elements it matched when the snapshot was taken, in reading order. A terminal take
-// sets neither Runs nor Selectors.
+// boxes of the elements it matched when the snapshot was taken, in reading order. Image is the
+// snapshot's entry in the take's image layer, nil when the take has none. A terminal take sets
+// none of Runs, Selectors and Image.
 type Snapshot struct {
 	At        time.Duration    `json:"at"`
 	Cursor    Cursor           `json:"cursor"`
 	Cells     [][]Cell         `json:"cells"`
 	Runs      []TextRun        `json:"runs,omitempty"`
 	Selectors map[string][]Box `json:"sel,omitempty"`
+	Image     *ImageEntry      `json:"img,omitempty"`
+}
+
+// ImageEntry is one snapshot's picture in the take's image layer, kept as encoded PNG bytes: a
+// key frame (Key) holds the whole frame, any other entry a patch of the rectangle Rect, in the
+// frame's pixels, that changed since the snapshot before it. The take only carries the bytes;
+// encoding, decoding and seeking them is the image layer's own package's work.
+type ImageEntry struct {
+	Key  bool   `json:"key,omitempty"`
+	Rect Box    `json:"rect"`
+	PNG  []byte `json:"png"`
 }
 
 // Cursor is the cell the terminal's cursor sat on (0-based) and whether the program showed it.

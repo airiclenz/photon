@@ -143,7 +143,10 @@ internal/render/render.go — cellLayout, newCompositor; internal/render/check.g
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/compose/`, then `GOMEMLIMIT=2GiB go test ./internal/render/`, then `GOMEMLIMIT=2GiB go test ./internal/tune/`
 **Commit:** `refactor(compose): read cell geometry from the take's grid`
 
-## 6. Take format v2 for an image layer
+## 6. Take format v2 for an image layer — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): retry kept the previous attempt's internal/take/take.go edit (ImageEntry, Snapshot.Image `img`, json tags w/h on CellSize), which serves this item.
+NOTES (2026-11-06): the v1 refusal lives in a new checkLineVersion helper that decodeLine and the test-only reference decoder (readSequentially) both call; readHeader now also returns the file's version. A v1 line refuses a non-null `img` or `runs` (a JSON null reads as absent); Write triggers v2 on a non-empty Runs, matching its omitempty.
 
 **What:**
 **Goal:** a take with an image layer or cell geometry writes format version 2 and reads back field for field; a take without them still writes version 1 byte-identically; every version-1 file reads; a v1 file carrying a v2-only field is refused.
