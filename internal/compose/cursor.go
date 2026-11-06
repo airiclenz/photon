@@ -29,7 +29,7 @@ const (
 // point, glides to each click or drag press over cursorGlide ending at the press, rings for
 // ringPulse after each press and release, and starts fading out — over cursorFadeOut —
 // cursorLinger after the beat's last press or release. A drag's motion takes its own span: from
-// the press to the drag's final move.
+// the press through each via point to the drag's final move, one eased segment per leg.
 const (
 	cursorFadeIn  = 400 * time.Millisecond
 	cursorGlide   = 900 * time.Millisecond
@@ -52,14 +52,16 @@ const (
 	// markGlide is a click or a drag's press: the cursor glides to it over cursorGlide, ending
 	// at the press, and rings.
 	markGlide markKind = iota
-	// markFollow is a drag's final move: the cursor eases to it from the previous mark (the
-	// drag's press) over the whole span between their times, and does not ring.
+	// markFollow is a drag's move onto a via point or its final move: the cursor eases to it
+	// from the previous mark (the drag's press or its previous via point) over the whole span
+	// between their times, and does not ring.
 	markFollow
 	// markRing is a drag's release: the cursor sits at it and rings.
 	markRing
 )
 
-// clickMark is one place the cursor goes — a click, or a drag's press, final move or release:
+// clickMark is one place the cursor goes — a click, or a drag's press, via point, final move or
+// release:
 // its Kind, its time on the output clock, the beat it belongs to and the cell's centre in source
 // pixels.
 type clickMark struct {
@@ -77,11 +79,12 @@ type cursorTrack struct {
 }
 
 // trackCursor collects the take's clicks and drags onto the output clock. Of a drag's moves only
-// the last is kept: the cursor eases from the press to it in one curve, whatever cells the
-// moves between report. An event the schedule gives no output time — one inside a cut beat —
-// is dropped: the clip never shows it.
+// those reaching a via point ([take.MoveVia]) and the last are kept: the cursor eases along each
+// segment of the drag's path in one curve, whatever cells the moves between report. An event the
+// schedule gives no output time — one inside a cut beat — is dropped: the clip never shows it.
 func trackCursor(recorded *take.Take, clipSchedule *schedule.Schedule, layout Layout) cursorTrack {
 	track := cursorTrack{Home: layout.home()}
+	isLastVia := false
 	for _, event := range recorded.Events {
 		kind, isMark := markKindOf(event.Kind)
 		if !isMark || event.Cell == nil {
@@ -97,12 +100,14 @@ func trackCursor(recorded *take.Take, clipSchedule *schedule.Schedule, layout La
 			Beat:  event.Beat,
 			Point: layout.cellCentre(event.Cell.X, event.Cell.Y),
 		}
-		if last := len(track.Marks) - 1; kind == markFollow && last >= 0 &&
+		// A move replaces the segment's previous move, never a via point the path turns at.
+		if last := len(track.Marks) - 1; kind == markFollow && !isLastVia && last >= 0 &&
 			track.Marks[last].Kind == markFollow && track.Marks[last].Beat == mark.Beat {
 			track.Marks[last] = mark
-			continue
+		} else {
+			track.Marks = append(track.Marks, mark)
 		}
-		track.Marks = append(track.Marks, mark)
+		isLastVia = kind == markFollow && event.Text == take.MoveVia
 	}
 	return track
 }
@@ -125,8 +130,9 @@ func markKindOf(kind take.EventKind) (mark markKind, isMark bool) {
 // position is where the cursor sits at output time t: at the previous mark's point (home before
 // the first) until the motion to the next mark starts, eased along the segment during it. A
 // glide to a click or a press starts cursorGlide before the press, or at the previous mark when
-// they are closer; a drag's final move eases from the press over the span between them; a
-// release is no motion, as the final move already sits on its cell.
+// they are closer; a drag's via point or final move eases from the mark before it (the press or
+// the previous via point) over the span between them; a release is no motion, as the final move
+// already sits on its cell.
 func (c cursorTrack) position(t time.Duration) pointF {
 	from := c.Home
 	previous := time.Duration(math.MinInt64)

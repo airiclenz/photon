@@ -221,7 +221,7 @@ internal/take/event.go — EventMove
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/engine/ && GOMEMLIMIT=2GiB go test ./internal/keys/ && GOMEMLIMIT=2GiB go test ./internal/testkit/...`
 **Commit:** `feat(engine): drag through via points with any button and modifiers`
 
-## 7. Draw the cursor along every drag segment
+## 7. Draw the cursor along every drag segment — ✅ DONE (2026-11-06)
 
 **What:** Depends on item 6.
 **Goal:** the drawn cursor passes through each via point, easing segment by segment at the drag's pace; a drag without via renders as today.

@@ -23,8 +23,9 @@
 // The cursor is drawn, not recorded: a white dot in a dark outline that fades in, glides
 // (smootherstep) from the previous point — the bottom row's centre before the first — to each
 // click and each drag's press, and rings on the press. Through a drag it eases (smootherstep)
-// from the press cell to the drag's final move over the span between them, sits at the release
-// cell and rings again on the release, never on a move. It fades out after the beat's last press
+// from the press cell through each via point to the drag's final move, one segment per leg over
+// the span between their moves, sits at the release cell and rings again on the release, never
+// on a move or a via point. It fades out after the beat's last press
 // or release. Its size is fixed in design pixels, scaled only by the frame's raster scale and the
 // downscale to the shipped width, never by the zoom. A click or drag inside a cut beat draws
 // nothing.

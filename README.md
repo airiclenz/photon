@@ -768,8 +768,9 @@ camera: it is drawn through the same crop, so it stays on the cell it points at.
 The **cursor** is drawn, not recorded. It is a white dot with a dark outline. It fades in, glides
 from the last point (the bottom row's centre at first) to each click and each drag's press, and
 shows a ring on each press. It fades out after the beat's last press or release. During a drag it
-follows the button: it eases from the press cell to the drag's last move, at the drag's own pace,
-then rings again on release. Moves do not ring. Its size is fixed and does not grow with a zoom.
+follows the button: it eases from the press cell through each `via` corner to the drag's last
+move, one leg at a time at the drag's own pace, then rings again on release. Moves and `via`
+corners do not ring. Its size is fixed and does not grow with a zoom.
 Clicks and drags in a cut beat draw nothing.
 
 To render, photon draws every frame at `frame.scale`, adds the zoom and the cursor, downscales to

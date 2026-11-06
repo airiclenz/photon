@@ -107,6 +107,50 @@ func TestCursorEasesIntoADrag(t *testing.T) {
 	}
 }
 
+func TestCursorTurnsAtADragsViaPoint(t *testing.T) {
+	t.Parallel()
+	via := take.Point{X: 8, Y: 2}
+	end := take.Point{X: 8, Y: 5}
+	drag := dragAt(dragPressAt, 1, dragPress, take.Point{X: 6, Y: 2}, via, take.Point{X: 8, Y: 3}, end)
+	for index := range drag {
+		if drag[index].Kind == take.EventMove && *drag[index].Cell == via {
+			drag[index].Text = take.MoveVia
+		}
+	}
+	board := &storyboard.Storyboard{Beats: []storyboard.Beat{{ID: 1, Duration: 10 * sec}}}
+	recorded := &take.Take{
+		Snapshots: []take.Snapshot{{At: 0}, {At: 10 * sec}},
+		Events:    append([]take.Event{beatStart(0, 1)}, drag...),
+	}
+	compositor, _ := newTestCompositor(t, board, recorded)
+	press := testLayout.cellCentre(dragPress.X, dragPress.Y)
+	turn := testLayout.cellCentre(via.X, via.Y)
+	final := testLayout.cellCentre(end.X, end.Y)
+	viaAt := dragPressAt + 2*dragTestGap
+
+	for _, tc := range []struct {
+		name string
+		at   time.Duration
+		want pointF
+	}{
+		{name: "at the press", at: dragPressAt, want: press},
+		{name: "a quarter into the first segment", at: dragPressAt + dragTestGap/2, want: lerp(press, turn, easeInOut(0.25))},
+		{name: "half-way to the via point", at: dragPressAt + dragTestGap, want: lerp(press, turn, 0.5)},
+		{name: "at the via point", at: viaAt, want: turn},
+		{name: "a quarter into the second segment", at: viaAt + dragTestGap/2, want: lerp(turn, final, easeInOut(0.25))},
+		{name: "half-way to the final move", at: viaAt + dragTestGap, want: lerp(turn, final, 0.5)},
+		{name: "at the final move", at: dragFinalAt, want: final},
+		{name: "at the release", at: dragFinalAt + dragTestGap, want: final},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := compositor.cursor.position(tc.at)
+			if math.Hypot(got.X-tc.want.X, got.Y-tc.want.Y) > 1e-9 {
+				t.Errorf("position at %s: want %+v, got %+v", tc.at, tc.want, got)
+			}
+		})
+	}
+}
+
 func TestCursorRingsOnADragsPressAndRelease(t *testing.T) {
 	t.Parallel()
 	compositor := newDragCompositor(t)
