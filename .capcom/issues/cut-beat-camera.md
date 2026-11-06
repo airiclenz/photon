@@ -4,6 +4,7 @@ status: open
 type: task
 priority: 2
 labels: [render]
+plan: 2026-11-06 - 02 - remaining-issues-plan
 created: 2026-11-06T07:11:17Z
 ---
 
