@@ -1,11 +1,13 @@
 ---
 title: Re-render on change with render --watch
-status: open
+status: done
 type: task
 priority: 2
 labels: [render]
 plan: 2026-11-06 - 00 - authoring-loop-plan
 created: 2026-11-06T07:11:17Z
+closed: 2026-11-06T09:25:15Z
+reason: Resolved by plan 2026-11-06 - 00 - authoring-loop-plan (archived at 8e4aeec)
 ---
 
 `photon render` runs once. A `--watch` flag that re-renders when the storyboard, config or take

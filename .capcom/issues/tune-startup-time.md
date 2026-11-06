@@ -1,11 +1,13 @@
 ---
 title: Speed up tune start-up
-status: open
+status: done
 type: task
 priority: 2
 labels: [tune]
 plan: 2026-11-06 - 00 - authoring-loop-plan
 created: 2026-11-06T07:11:17Z
+closed: 2026-11-06T09:25:15Z
+reason: Resolved by plan 2026-11-06 - 00 - authoring-loop-plan (archived at 8e4aeec)
 ---
 
 `photon tune` takes noticeable time to start because it decodes the take's JSON up front.
