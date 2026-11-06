@@ -2746,8 +2746,8 @@ const (
 	exportLabel   = "Export GIF"
 )
 
-// exportFailure is the error a failing render seam returns.
-var exportFailure = errors.New("the encoder is gone")
+// errExportFailed is the error a failing render seam returns.
+var errExportFailed = errors.New("the encoder is gone")
 
 // isElementDisabled says the element of id is disabled.
 func (p *pageHarness) isElementDisabled(id string) bool {
@@ -2838,7 +2838,7 @@ func TestPageJS_ExportButton_ReportsAFailedRenderAndLeavesTheSessionClean(t *tes
 	t.Parallel()
 	session := newSessionFixture(t).session
 	session.renderClip = func(context.Context, *clip.Clip, render.Options, io.Writer, io.Writer) error {
-		return exportFailure
+		return errExportFailed
 	}
 	t.Cleanup(session.waitExport)
 	page := loadPage(t, session)
@@ -2848,7 +2848,7 @@ func TestPageJS_ExportButton_ReportsAFailedRenderAndLeavesTheSessionClean(t *tes
 	session.waitExport()
 	page.pollOnce()
 
-	page.assertStatusFailure("Export failed: " + exportFailure.Error())
+	page.assertStatusFailure("Export failed: " + errExportFailed.Error())
 	if page.isElementDisabled(elementExport) {
 		t.Error("Export GIF after a failed export: want it enabled, got it disabled")
 	}
