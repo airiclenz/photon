@@ -84,9 +84,10 @@ type Launch struct {
 }
 
 // End is how a take ends: once the program has painted nothing for Idle — waiting at most
-// SettleTimeout for that — photon sends Keys, and kills the program if it has not exited
-// KillAfter later. [Load] fills each field the file leaves out from the Default* constants and
-// [DefaultEndKeys].
+// SettleTimeout for that — photon sends Keys on a command launch, and kills the program if it has
+// not exited KillAfter later. A url launch takes no Keys: its take ends once the page settles.
+// [Load] fills each field the file leaves out from the Default* constants and, on a command
+// launch, [DefaultEndKeys].
 type End struct {
 	Keys          []string      `yaml:"keys"`
 	Idle          time.Duration `yaml:"idle"`
@@ -102,8 +103,8 @@ const (
 	DefaultKillAfter     = 10 * time.Second
 )
 
-// DefaultEndKeys is the quit a take ends with when the config names none: one ctrl+c, which
-// ends most terminal programs.
+// DefaultEndKeys is the quit a take ends with on a command launch when the config names none:
+// one ctrl+c, which ends most terminal programs.
 var DefaultEndKeys = []string{"ctrl+c"}
 
 // Theme is the palette the raster draws with: FG and BG, the default foreground and background,
@@ -228,10 +229,10 @@ func (c *Config) resolvePaths() {
 	}
 }
 
-// applyDefaults fills what a valid config may leave out: the end of take, the theme, a
-// service's timeout and an anchor's pick.
+// applyDefaults fills what a valid config may leave out: the end of take (its keys on a command
+// launch only), the theme, a service's timeout and an anchor's pick.
 func (c *Config) applyDefaults() {
-	if len(c.End.Keys) == 0 {
+	if len(c.End.Keys) == 0 && !c.IsBrowser() {
 		c.End.Keys = slices.Clone(DefaultEndKeys)
 	}
 	c.End.Idle = cmp.Or(c.End.Idle, DefaultIdle)
@@ -308,7 +309,7 @@ func (c *Config) validate() []error {
 	c.Launch.validate(report)
 	validateServices(c.Services, report)
 	validateProfiles(c.Profiles, c.Services, report)
-	c.End.validate(prefixed(report, "end."))
+	c.End.validate(c.IsBrowser(), prefixed(report, "end."))
 	validateAreas(c.Areas, c.IsBrowser(), report)
 	c.Theme.validate(prefixed(report, "theme."))
 	return problems
@@ -365,8 +366,12 @@ func validateURL(raw string, report reporter) {
 	}
 }
 
-// validate checks that every end key is one photon can send and that no timeout is negative.
-func (e End) validate(report reporter) {
+// validate checks that a url launch names no end keys, that every end key is one photon can send
+// and that no timeout is negative.
+func (e End) validate(isBrowser bool, report reporter) {
+	if isBrowser && len(e.Keys) > 0 {
+		report("keys: only a command launch takes end keys; a url launch ends when the page settles")
+	}
 	for index, name := range e.Keys {
 		if _, known := keys.Lookup(name); !known {
 			report("keys[%d]: unknown key %q, want one of %s",

@@ -395,6 +395,8 @@ func TestLoadRejectsOnAURLLaunch(t *testing.T) {
 		{"browser blank", "browser: /usr/bin/chromium", "browser: ' '", `launch.browser: want a path, got " "`, false},
 		{"strip", "  browser: /usr/bin/chromium\n", "  browser: /usr/bin/chromium\n  strip: ['APP_*']\n",
 			"launch.strip: only a command launch takes strip", false},
+		{"end keys", "areas:\n", "end:\n  keys: [ctrl+c]\nareas:\n",
+			"end.keys: only a command launch takes end keys", false},
 	}
 	assertRejects(t, urlBase, cases)
 }
@@ -413,6 +415,9 @@ func TestLoadURLLaunch(t *testing.T) {
 	want := Launch{URL: "http://127.0.0.1:${PHOTON_PORT_WEB}/inbox", Browser: "/usr/bin/chromium"}
 	if config.Launch.URL != want.URL || config.Launch.Browser != want.Browser || config.Launch.Command != "" {
 		t.Errorf("launch: want url %q and browser %q kept as written, got %+v", want.URL, want.Browser, config.Launch)
+	}
+	if len(config.End.Keys) != 0 {
+		t.Errorf("end.keys: want none on a url launch, got %v", config.End.Keys)
 	}
 }
 

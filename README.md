@@ -242,9 +242,9 @@ Errors go to stderr as `photon: <error>`.
 4. Runs every beat's actions in order. If an action fails, its beat fails and the take ends.
    Examples: a `wait` times out, or a `click` or `drag` target is not on screen.
 5. Ends the take. It waits until the program paints nothing for `end.idle` (at most
-   `end.settle_timeout`). It freezes the take, so nothing painted on the way out is kept. It types
-   `end.keys`. If the program is still running `end.kill_after` later, it kills its whole process
-   group.
+   `end.settle_timeout`). It freezes the take, so nothing painted on the way out is kept. On a
+   command launch it types `end.keys`. If the program is still running `end.kill_after` later, it
+   kills its whole process group.
 6. Writes the take to `<work>/<clip>.take` and prints its path on stderr.
 7. If every beat passed: checks the take while the services still run, prints the check table on
    stdout, stops the services and runs the profile's `on_success`.
@@ -335,8 +335,8 @@ fonts: fonts/
 | `services` | Helper processes a take starts, by name. See [Services and profiles](#services-and-profiles). |
 | `profiles` | Named variants of the services, picked with `photon record --profile`. |
 | `end` | How a take ends. |
-| `end.keys` | Keys typed to quit the program, by [key name](#key-names). Default `[ctrl+c]`. |
-| `end.idle` | How long the program must paint nothing before the keys are sent. Default `1s`. |
+| `end.keys` | Keys typed to quit the program on a command launch, by [key name](#key-names). Default `[ctrl+c]`. Refused with `launch.url`: a url take ends when the page settles. |
+| `end.idle` | How long the program must paint nothing before the take ends: on a command launch, before the keys are sent. Default `1s`. |
 | `end.settle_timeout` | The longest photon waits for that idle. Default `15s`. |
 | `end.kill_after` | How long after the keys a still-running program is killed. Default `10s`. |
 | `areas` | Named bands of screen rows. See [Targets and areas](#targets-and-areas). |

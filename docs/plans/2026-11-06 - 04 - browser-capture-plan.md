@@ -66,7 +66,7 @@ NOTES (2026-11-06): internal/config/config_test.go is listed in Files but needed
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/config/`, then `./internal/target/`, then `./internal/clip/`
 **Commit:** `fix(config): refuse an explicit empty area selector`
 
-## 2. Refuse end keys on a url launch
+## 2. Refuse end keys on a url launch — ✅ DONE (2026-11-06)
 
 **What:**
 **Goal:** a `photon.yaml` with `launch.url` and `end.keys` is refused with a problem under `end.keys`; a url launch gets no default end keys; a command launch keeps `DefaultEndKeys`.
