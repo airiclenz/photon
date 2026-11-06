@@ -164,7 +164,10 @@ internal/keys/doc.go — package comment; internal/storyboard/validate.go — Ke
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/keys/`
 **Commit:** `feat(keys): encode mouse buttons and modifier keys`
 
-## 5. Declare button, modifiers and via points in the storyboard
+## 5. Declare button, modifiers and via points in the storyboard — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): `button` and `with` live on one inline-embedded `storyboard.Press` struct shared by ClickAction and DragAction (not two field pairs); `Press.Mouse()` returns `(keys.Mouse, error)` rather than a bare `keys.Mouse`, so no parse error is discarded — the error is unreachable on a loaded storyboard, and item 6 calls it.
+NOTES (2026-11-06): README line on the drawn cursor ("eases from the press cell to the drag's last move") is cursor prose, not an offset claim; left for item 7, which draws the cursor along every drag segment.
 
 **What:** Depends on item 4.
 **Goal:** `click` and `drag` accept `button` and `with`; `drag` accepts `via`, a list of targets or offsets; invalid values are refused on load; README documents all three.

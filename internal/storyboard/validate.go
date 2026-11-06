@@ -193,6 +193,7 @@ func (a Action) validate(report reporter) {
 		if a.Click.Times < 0 {
 			report("click.times: want ≥0, got %d", a.Click.Times)
 		}
+		a.Click.Press.validate(prefixed(report, "click."))
 	case a.Drag != nil:
 		a.Drag.validate(prefixed(report, "drag."))
 	case a.Wait != nil:
@@ -218,35 +219,51 @@ func (k KeyAction) validate(report reporter) {
 	}
 }
 
-// validate checks the drag's from target, its to end and that an explicit steps is at least 1.
+// validate checks the drag's from target, each via point, its to end, that an explicit steps is
+// at least 1, and its button and modifiers.
 func (d DragAction) validate(report reporter) {
 	d.From.validate(prefixed(report, "from."))
-	d.To.validate(report)
+	for index, via := range d.Via {
+		via.validate(fmt.Sprintf("via[%d]", index), report)
+	}
+	d.To.validate("to", report)
 	if d.Steps != nil && *d.Steps < 1 {
 		report("steps: want ≥1, got %d", *d.Steps)
 	}
+	d.Press.validate(report)
 }
 
-// validate checks that the drag end sets exactly one of text or offset, then the target's fields
-// or the offset's. An offset is relative to the press cell, so a target's nth and area do not
-// apply to it. Problems are filed under to, as the drag's own field.
-func (e DragEnd) validate(report reporter) {
+// validate checks that the drag point sets exactly one of text or offset, then the target's fields
+// or the offset's. An offset is relative to the drag's previous point, so a target's nth and area
+// do not apply to it. Problems are filed under field, the point's own field of the drag (`to`,
+// `via[1]`).
+func (e DragEnd) validate(field string, report reporter) {
 	if (e.Text == "") == (e.Offset == nil) {
-		report("to: want exactly one of text or offset")
+		report("%s: want exactly one of text or offset", field)
 		return
 	}
 	if e.Offset == nil {
-		e.Target.validate(prefixed(report, "to."))
+		e.Target.validate(prefixed(report, field+"."))
 		return
 	}
 	if *e.Offset == (Offset{}) {
-		report("to.offset: want a non-zero x or y")
+		report("%s.offset: want a non-zero x or y", field)
 	}
 	if e.Nth != 0 {
-		report("to.nth: only a to.text takes an nth")
+		report("%s.nth: only a %s.text takes an nth", field, field)
 	}
 	if e.Area != "" {
-		report("to.area: only a to.text takes an area")
+		report("%s.area: only a %s.text takes an area", field, field)
+	}
+}
+
+// validate checks that the button and the modifiers are spellings the keys package accepts.
+func (p Press) validate(report reporter) {
+	if _, err := keys.ParseButton(p.Button); err != nil {
+		report("button: %v", err)
+	}
+	if _, err := keys.ParseMods(p.With); err != nil {
+		report("with: %v", err)
 	}
 }
 

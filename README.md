@@ -436,22 +436,38 @@ Each entry of `do` sets exactly one of these.
 | --- | --- | --- |
 | `type` | `text` (required), `humanize` (default `true`) | Types the text. Human-like typing spaces letters 25-45 ms apart, spaces 60-90 ms, punctuation 90-140 ms, with an occasional pause at a space. It uses a fixed seed, so every take types the same. `humanize: false` sends the text in one write. |
 | `key` | `name` (required), `repeat` (default 1) | Presses a [named key](#key-names) `repeat` times. |
-| `click` | `target` (required), `times` (default 1) | Finds the target on the current screen and sends `times` left clicks at its centre cell, as real SGR mouse press and release reports. Fails if the target is not on screen, so put a `wait` first. |
-| `drag` | `from` (required), `to` (required), `steps` (default 12) | Finds `from` on the current screen and presses the left button at its centre. Moves to `to` in `steps` moves that speed up and slow down, then releases. All as real SGR mouse reports. Fails if a target is not on screen. |
+| `click` | `target` (required), `times` (default 1), `button` (default `left`), `with` | Finds the target on the current screen and sends `times` clicks of `button` at its centre cell, holding the `with` modifiers, as real SGR mouse press and release reports. Fails if the target is not on screen, so put a `wait` first. |
+| `drag` | `from` (required), `via`, `to` (required), `steps` (default 12), `button` (default `left`), `with` | Finds `from` on the current screen and presses `button` at its centre, holding the `with` modifiers. Moves through each `via` point in turn to `to`, each leg in `steps` moves that speed up and slow down, then releases. All as real SGR mouse reports. Fails if a target is not on screen. |
 | `wait` | `screen` (required), `gone`, `timeout` (required, at most `180s`) | Waits until the `screen` regex matches the screen text (rows joined by newlines). With `gone: true`, waits until it no longer matches. Fails at the timeout, or at once if the program exits. |
 | `pause` | `for` (required) | Waits for the given time. |
 
-A drag's `to` is one of two kinds:
+`button` is `left`, `middle` or `right`. `with` names the modifier keys held while the button
+acts: `shift`, `alt` and `ctrl`, joined with `+` in any order (`ctrl+shift`). Leave it out to hold
+none.
 
-- `to.text`: a [target](#targets-and-areas), with `to.nth` and `to.area`. The drag releases at
-  its centre cell.
-- `to.offset`: a move in cells from the press cell. `to.offset.x` is columns right and
+A drag's `to` is where it releases. Its `via` is a list of points it passes through on the way,
+in order, with the button held. `to` and each `via` entry are one of two kinds:
+
+- `to.text` or `via.text`: a [target](#targets-and-areas), with `to.nth` and `to.area` (`via.nth`
+  and `via.area`). The drag releases at, or passes through, its centre cell.
+- `to.offset` or `via.offset`: a move in cells from the drag's previous point: the `via` entry
+  before it, or the press cell when none comes before it. `to.offset.x` is columns right and
   `to.offset.y` is rows down. Negative goes left and up. At least one must be non-zero. An offset
   takes no `nth` or `area`.
+
+Every point, `to` included, is found on the screen as it stands when the drag presses. Each leg
+between two points takes its own `steps` moves.
 
 ```yaml
 - drag: {from: {text: '│', area: panes}, to: {offset: {x: 12}}, steps: 8}
 - drag: {from: {text: 'draft.txt'}, to: {text: 'Trash', area: sidebar}}
+- click: {target: {text: 'notes.md'}, button: right}
+- drag:
+    from: {text: 'photo.png'}
+    via: [{offset: {x: 6, y: -2}}, {text: 'Archive', area: sidebar}]
+    to: {text: 'Trash', area: sidebar}
+    button: right
+    with: ctrl+shift
 ```
 
 Your program must turn on mouse reporting itself for a click or drag to reach it. photon only

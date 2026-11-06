@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/airiclenz/photon/internal/keys"
 )
 
 // Beat is one step of a storyboard: the actions photon performs, the section's Duration in the
@@ -66,19 +68,47 @@ type KeyAction struct {
 	Repeat int    `yaml:"repeat"`
 }
 
-// ClickAction clicks the resolved Target Times times; a Times of 0 clicks once.
+// ClickAction clicks the resolved Target Times times with its [Press] button and modifiers; a
+// Times of 0 clicks once.
 type ClickAction struct {
 	Target Target `yaml:"target"`
 	Times  int    `yaml:"times"`
+	Press  `yaml:",inline"`
 }
 
-// DragAction presses the left button at the resolved From target, moves with it held to To in
-// Steps steps and releases it there. Steps is a pointer so an absent key reads as the default,
-// [DefaultDragSteps], while an explicit value below 1 is a validation problem.
+// DragAction presses its [Press] button, with its modifiers held, at the resolved From target,
+// moves with it held through each Via point in turn to To, Steps eased moves per segment, and
+// releases it there. Every point resolves on the screen as it stands at the press. Steps is a
+// pointer so an absent key reads as the default, [DefaultDragSteps], while an explicit value below
+// 1 is a validation problem.
 type DragAction struct {
-	From  Target  `yaml:"from"`
-	To    DragEnd `yaml:"to"`
-	Steps *int    `yaml:"steps"`
+	From  Target    `yaml:"from"`
+	Via   []DragEnd `yaml:"via"`
+	To    DragEnd   `yaml:"to"`
+	Steps *int      `yaml:"steps"`
+	Press `yaml:",inline"`
+}
+
+// Press is the mouse button a click or drag presses and the modifier keys held with it, as the
+// storyboard spells them: Button is `left`, `middle` or `right`, With is `+`-joined `shift`, `alt`
+// and `ctrl`. Empty fields press the left button with no modifier.
+type Press struct {
+	Button string `yaml:"button"`
+	With   string `yaml:"with"`
+}
+
+// Mouse returns the button and modifiers as the keys package sends them. It fails only on a
+// spelling the keys package refuses, which a loaded storyboard never holds: validation refuses it.
+func (p Press) Mouse() (keys.Mouse, error) {
+	button, err := keys.ParseButton(p.Button)
+	if err != nil {
+		return keys.Mouse{}, fmt.Errorf("button: %w", err)
+	}
+	mods, err := keys.ParseMods(p.With)
+	if err != nil {
+		return keys.Mouse{}, fmt.Errorf("with: %w", err)
+	}
+	return keys.Mouse{Button: button, Mods: mods}, nil
 }
 
 // DefaultDragSteps is how many held-button moves a drag makes when the storyboard gives no steps.
@@ -93,9 +123,10 @@ func (d DragAction) StepCount() int {
 	return *d.Steps
 }
 
-// DragEnd is where a drag releases: either a target resolved on the screen as it stands (its
-// fields sit inline, so `to: {text: …}` reads as a target) or an Offset from the press cell.
-// Exactly one of Text and Offset is set.
+// DragEnd is a point a drag passes through (a via point) or releases at (its to): either a target
+// resolved on the screen as it stands (its fields sit inline, so `to: {text: …}` reads as a
+// target) or an Offset from the drag's previous point — the press cell for the first via point,
+// or for the to of a drag with none. Exactly one of Text and Offset is set.
 type DragEnd struct {
 	Target `yaml:",inline"`
 	Offset *Offset `yaml:"offset"`

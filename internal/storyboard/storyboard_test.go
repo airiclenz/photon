@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/airiclenz/photon/internal/keys"
 )
 
 // validBase is a small storyboard that breaks no rule. Each row of TestLoadRejects swaps one
@@ -85,6 +87,7 @@ func TestLoadEveryForm(t *testing.T) {
 		{Target: Target{Text: "Item 2", Nth: NthFirst, Area: "list"}, Times: 2},
 		{Target: Target{Text: "Item", Nth: 3, Area: AreaAny}},
 		{Target: Target{Text: "Save"}},
+		{Target: Target{Text: "Item 4"}, Press: Press{Button: "right", With: "ctrl+shift"}},
 	}
 	for index, want := range wantClicks {
 		if click := pick.Do[index].Click; click == nil || *click != want {
@@ -100,6 +103,15 @@ func TestLoadEveryForm(t *testing.T) {
 			Steps: new(4),
 		}, 4},
 		{DragAction{From: Target{Text: "Item 2"}, To: DragEnd{Offset: &Offset{X: -3, Y: 1}}}, DefaultDragSteps},
+		{DragAction{
+			From: Target{Text: "Item 3"},
+			Via: []DragEnd{
+				{Offset: &Offset{X: 4}},
+				{Target: Target{Text: "Item 1", Nth: NthFirst, Area: "list"}},
+			},
+			To:    DragEnd{Offset: &Offset{Y: 2}},
+			Press: Press{Button: "middle", With: "alt"},
+		}, DefaultDragSteps},
 	}
 	for offset, want := range wantDrags {
 		index := len(wantClicks) + offset
@@ -628,6 +640,28 @@ func TestLoadRejects(t *testing.T) {
 		{"drag to regex", "to: {offset: {x: 4}}", "to: {text: '('}", "beat 1: do[5]: drag.to.text: error parsing regexp", false},
 		{"drag from text missing", "from: {text: 'Grip'}", "from: {area: list}", "beat 1: do[5]: drag.from.text: missing", false},
 		{"drag steps zero", "steps: 2", "steps: 0", "beat 1: do[5]: drag.steps: want ≥1, got 0", false},
+		{"drag via with both forms", "to: {offset", "via: [{offset: {x: 1}}, {text: 'Edge', offset: {x: 4}}], to: {offset",
+			"beat 1: do[5]: drag.via[1]: want exactly one of text or offset", false},
+		{"drag via with neither form", "to: {offset", "via: [{}], to: {offset", "beat 1: do[5]: drag.via[0]: want exactly one of text or offset", false},
+		{"drag via offset zero", "to: {offset", "via: [{offset: {x: 0}}], to: {offset", "beat 1: do[5]: drag.via[0].offset: want a non-zero x or y", false},
+		{"drag via offset with an nth", "to: {offset", "via: [{nth: 2, offset: {x: 1}}], to: {offset",
+			"beat 1: do[5]: drag.via[0].nth: only a via[0].text takes an nth", false},
+		{"drag via offset with an area", "to: {offset", "via: [{area: list, offset: {x: 1}}], to: {offset",
+			"beat 1: do[5]: drag.via[0].area: only a via[0].text takes an area", false},
+		{"drag via regex", "to: {offset", "via: [{text: '('}], to: {offset", "beat 1: do[5]: drag.via[0].text: error parsing regexp", false},
+		{"drag via area", "to: {offset", "via: [{text: 'Edge', area: 'the list'}], to: {offset",
+			`beat 1: do[5]: drag.via[0].area: want an area name or any, got "the list"`, false},
+		{"unknown via field", "to: {offset", "via: [{offset: {x: 1}, z: 1}], to: {offset", "field z not found", true},
+		{"drag button unknown", "steps: 2", "steps: 2, button: back",
+			`beat 1: do[5]: drag.button: unknown button "back", want one of left, middle, right`, false},
+		{"drag modifier unknown", "steps: 2", "steps: 2, with: meta",
+			`beat 1: do[5]: drag.with: unknown modifier "meta", want one of shift, alt, ctrl`, false},
+		{"click button unknown", "times: 1", "times: 1, button: Left",
+			`beat 1: do[2]: click.button: unknown button "Left", want one of left, middle, right`, false},
+		{"click modifier given twice", "times: 1", "times: 1, with: ctrl+ctrl",
+			`beat 1: do[2]: click.with: modifier "ctrl" given twice`, false},
+		{"click modifier empty between signs", "times: 1", "times: 1, with: ctrl+",
+			`beat 1: do[2]: click.with: unknown modifier "", want one of shift, alt, ctrl`, false},
 		{"unknown offset field", "{x: 4}", "{x: 4, z: 1}", "field z not found", true},
 		{"expect without a form", "- run: 'true'", "- area: list", "beat 1: expect[1]: want exactly one of seen or run", false},
 		{"expect with both forms", "run: 'true'", "run: 'true'\n        seen: x", "beat 1: expect[1]: want exactly one of seen or run", false},
@@ -809,6 +843,40 @@ func TestParseMatchesLoad(t *testing.T) {
 			var parseInvalid, loadInvalid *ValidationError
 			if errors.As(parseErr, &parseInvalid) != errors.As(loadErr, &loadInvalid) {
 				t.Errorf("error type: Parse gave %T, Load gave %T", parseErr, loadErr)
+			}
+		})
+	}
+}
+
+func TestPressMouse(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		press   Press
+		want    keys.Mouse
+		wantErr string
+	}{
+		{"nothing named is the left button bare", Press{}, keys.Mouse{}, ""},
+		{"a button and modifiers", Press{Button: "right", With: "ctrl+shift"},
+			keys.Mouse{Button: keys.RightButton, Mods: keys.Ctrl | keys.Shift}, ""},
+		{"a modifier alone", Press{With: "alt"}, keys.Mouse{Mods: keys.Alt}, ""},
+		{"an unknown button", Press{Button: "back"}, keys.Mouse{}, `button: unknown button "back"`},
+		{"an unknown modifier", Press{Button: "middle", With: "meta"}, keys.Mouse{}, `with: unknown modifier "meta"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tc.press.Mouse()
+
+			if tc.wantErr != "" {
+				if err == nil || !strings.HasPrefix(err.Error(), tc.wantErr) {
+					t.Fatalf("Mouse() error = %v, want one starting %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Errorf("Mouse() = %+v, %v, want %+v", got, err, tc.want)
 			}
 		})
 	}

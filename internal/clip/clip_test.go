@@ -115,6 +115,7 @@ func TestLoad_UndeclaredAreaFailsNamingIt(t *testing.T) {
 	want := []string{
 		`expect[0]: area: "footer" is not declared`,
 		`beat 1: do[0]: click.target.area: "sidebar" is not declared`,
+		`beat 1: do[1]: drag.via[1].area: "shelf" is not declared`,
 		`beat 1: do[1]: drag.to.area: "trash" is not declared`,
 	}
 

@@ -170,11 +170,7 @@ func namedAreas(board *storyboard.Storyboard) []namedArea {
 				named = append(named, namedArea{owner, field, action.Click.Target.Area})
 			}
 			if action.Drag != nil {
-				field := fmt.Sprintf("do[%d]: drag.", index)
-				named = append(named,
-					namedArea{owner, field + "from.area", action.Drag.From.Area},
-					namedArea{owner, field + "to.area", action.Drag.To.Area},
-				)
+				named = append(named, dragAreas(owner, index, *action.Drag)...)
 			}
 		}
 		for index, expect := range beat.Expect {
@@ -183,6 +179,19 @@ func namedAreas(board *storyboard.Storyboard) []namedArea {
 		}
 	}
 	return append(named, cameraAreas(board)...)
+}
+
+// dragAreas lists the area field of the drag at do[index]: its from, each via point in turn and
+// its to.
+func dragAreas(owner storyboard.Owner, index int, drag storyboard.DragAction) []namedArea {
+	field := fmt.Sprintf("do[%d]: drag.", index)
+	named := make([]namedArea, 0, len(drag.Via)+2)
+	named = append(named, namedArea{owner, field + "from.area", drag.From.Area})
+	for viaIndex, via := range drag.Via {
+		viaField := fmt.Sprintf("%svia[%d].area", field, viaIndex)
+		named = append(named, namedArea{owner, viaField, via.Area})
+	}
+	return append(named, namedArea{owner, field + "to.area", drag.To.Area})
 }
 
 // cameraAreas lists the area field of every camera position, set or not; a cell position leaves
