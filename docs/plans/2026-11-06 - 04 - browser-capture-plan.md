@@ -109,7 +109,9 @@ NOTES (2026-11-06): no CHANGELOG entry — pageOutput's size and unit are unchan
 **Acceptance:** `GOMEMLIMIT=2GiB go test -run 'Page|Caption' ./internal/render/`
 **Commit:** `fix(render): a page cell spans device scale times frame scale`
 
-## 5. An image entry carries several patch rectangles
+## 5. An image entry carries several patch rectangles — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the patch list's JSON key is `patches` (each patch keeps the short `rect`/`png` keys); `ErrMalformed`'s doc comment now also names a key frame that is not one patch at (0, 0). A non-key entry with an empty patch list decodes as no change rather than being refused (the encoder never writes one).
 
 **What:**
 **Goal:** a `take.ImageEntry` holds a key frame or a list of patches, each a rectangle and its PNG; a take written with several patches per snapshot loads back identically and decodes to the encoded frames.

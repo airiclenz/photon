@@ -143,9 +143,11 @@ func imageLayerTake() *Take {
 		},
 		Selectors: map[string][]Box{"#go": {{X: 2, Y: 6, W: 18, H: 22}}},
 		Image: &ImageEntry{
-			Key:  true,
-			Rect: Box{W: 30, H: 40},
-			PNG:  []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff},
+			Key: true,
+			Patches: []Patch{{
+				Rect: Box{W: 30, H: 40},
+				PNG:  []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff},
+			}},
 		},
 	})
 	return take
@@ -170,7 +172,15 @@ func TestFile_VersionTwoRoundTrip(t *testing.T) {
 		}},
 		{"image patch alone", func() *Take {
 			take := sampleTake()
-			take.Snapshots[1].Image = &ImageEntry{Rect: Box{X: 3, Y: 4, W: 5, H: 6}, PNG: []byte{1, 2, 3}}
+			take.Snapshots[1].Image = &ImageEntry{Patches: []Patch{{Rect: Box{X: 3, Y: 4, W: 5, H: 6}, PNG: []byte{1, 2, 3}}}}
+			return take
+		}},
+		{"image entry with two patches", func() *Take {
+			take := sampleTake()
+			take.Snapshots[1].Image = &ImageEntry{Patches: []Patch{
+				{Rect: Box{X: 3, Y: 4, W: 5, H: 6}, PNG: []byte{1, 2, 3}},
+				{Rect: Box{X: 40, Y: 2, W: 7, H: 1}, PNG: []byte{4, 5}},
+			}}
 			return take
 		}},
 	}
@@ -246,7 +256,7 @@ func TestLoad_RefusesWhatItCannotRead(t *testing.T) {
 			gzipLines(t, `{"format":"photon-take","version":1,"cols":3,"rows":2,"cell":{"w":2,"h":2}}`),
 			ErrFormat, []string{"cell geometry"}},
 		{"image entry on version 1", gzipLines(t, head, event,
-			`{"snap":{"at":0,"cursor":{"x":0,"y":0,"visible":false},"cells":[],"img":{"key":true,"rect":{"x":0,"y":0,"w":1,"h":1},"png":""}}}`),
+			`{"snap":{"at":0,"cursor":{"x":0,"y":0,"visible":false},"cells":[],"img":{"key":true,"patches":[{"rect":{"x":0,"y":0,"w":1,"h":1},"png":""}]}}}`),
 			ErrFormat, []string{"line 3:", `"img"`}},
 		{"text runs on version 1", gzipLines(t, head,
 			`{"snap":{"at":0,"cursor":{"x":0,"y":0,"visible":false},"cells":[],"runs":[]}}`),

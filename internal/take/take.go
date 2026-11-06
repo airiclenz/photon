@@ -63,12 +63,18 @@ type Snapshot struct {
 	Image     *ImageEntry      `json:"img,omitempty"`
 }
 
-// ImageEntry is one snapshot's picture in the take's image layer, kept as encoded PNG bytes: a
-// key frame (Key) holds the whole frame, any other entry a patch of the rectangle Rect, in the
-// frame's pixels, that changed since the snapshot before it. The take only carries the bytes;
-// encoding, decoding and seeking them is the image layer's own package's work.
+// ImageEntry is one snapshot's picture in the take's image layer, kept as encoded PNG bytes in
+// Patches: a key frame (Key) is one patch at (0, 0) covering the whole frame, any other entry the
+// patches of the rectangles that changed since the snapshot before it. The take only carries the
+// bytes; encoding, decoding and seeking them is the image layer's own package's work.
 type ImageEntry struct {
-	Key  bool   `json:"key,omitempty"`
+	Key     bool    `json:"key,omitempty"`
+	Patches []Patch `json:"patches"`
+}
+
+// Patch is one rectangle of an [ImageEntry]: Rect, in the frame's pixels, and the PNG of its
+// pixels.
+type Patch struct {
 	Rect Box    `json:"rect"`
 	PNG  []byte `json:"png"`
 }

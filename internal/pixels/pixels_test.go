@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -173,12 +174,21 @@ func TestEncoder_KeyFrameCadence(t *testing.T) {
 				if got != s.want {
 					t.Fatalf("step %d: Encode gave a %s entry, want %s", index, got, s.want)
 				}
-				if entry != nil && entry.Rect != s.rect {
-					t.Errorf("step %d: entry rectangle %+v, want %+v", index, entry.Rect, s.rect)
+				if entry != nil && !slices.Equal(rects(entry), []take.Box{s.rect}) {
+					t.Errorf("step %d: entry rectangles %+v, want [%+v]", index, rects(entry), s.rect)
 				}
 			}
 		})
 	}
+}
+
+// rects returns the rectangles of entry's patches.
+func rects(entry *take.ImageEntry) []take.Box {
+	var boxes []take.Box
+	for _, patch := range entry.Patches {
+		boxes = append(boxes, patch.Rect)
+	}
+	return boxes
 }
 
 // kindOf names what entry is: a key frame, a patch or no entry.
@@ -190,6 +200,51 @@ func kindOf(entry *take.ImageEntry) string {
 		return kindKey
 	default:
 		return kindPatch
+	}
+}
+
+func TestDecoder_AppliesEveryPatchOfAnEntry(t *testing.T) {
+	var encoder Encoder
+	frame := image.NewRGBA(image.Rect(0, 0, 40, 20))
+	fill(frame, frame.Rect, color.RGBA{R: 10, G: 20, B: 30, A: 255})
+	key, err := encoder.Encode(0, frame)
+	if err != nil {
+		t.Fatalf("Encode(key): %v", err)
+	}
+	// Two far-apart changes, encoded one frame apart, are joined into one entry of two patches.
+	var patches []take.Patch
+	for index, rect := range []image.Rectangle{image.Rect(2, 2, 5, 4), image.Rect(30, 14, 36, 18)} {
+		fill(frame, rect, color.RGBA{R: 200, G: uint8(60 * index), B: 9, A: 255})
+		entry, err := encoder.Encode(time.Duration(index+1)*100*time.Millisecond, frame)
+		if err != nil || entry == nil || entry.Key {
+			t.Fatalf("Encode(change %d) = %+v, %v, want a patch", index, entry, err)
+		}
+		patches = append(patches, entry.Patches...)
+	}
+	recorded := &take.Take{Cols: 40, Rows: 20, FPS: 10, Cell: take.CellSize{W: 1, H: 1},
+		Snapshots: []take.Snapshot{
+			{At: 0, Image: key},
+			{At: 100 * time.Millisecond, Image: &take.ImageEntry{Patches: patches}},
+		}}
+	var file bytes.Buffer
+	if err := take.Write(&file, recorded); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	reread, err := take.Read(&file)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if got := len(reread.Snapshots[1].Image.Patches); got != 2 {
+		t.Fatalf("the reread entry has %d patches, want 2", got)
+	}
+
+	got, err := NewDecoder(reread).Frame(1)
+
+	if err != nil {
+		t.Fatalf("Frame(1): %v", err)
+	}
+	if !sameFrame(got, frame) {
+		t.Fatal("Frame(1) differs from the frame both patches were encoded from")
 	}
 }
 
@@ -214,8 +269,13 @@ func TestDecoder_RefusesAMalformedLayer(t *testing.T) {
 	}
 	withRect := func(entry *take.ImageEntry, rect take.Box) *take.ImageEntry {
 		moved := *entry
-		moved.Rect = rect
+		moved.Patches = []take.Patch{{Rect: rect, PNG: entry.Patches[0].PNG}}
 		return &moved
+	}
+	withPatches := func(entry *take.ImageEntry, patches ...take.Patch) *take.ImageEntry {
+		changed := *entry
+		changed.Patches = patches
+		return &changed
 	}
 	tests := []struct {
 		name    string
@@ -225,7 +285,11 @@ func TestDecoder_RefusesAMalformedLayer(t *testing.T) {
 		{"a patch outside the frame", []*take.ImageEntry{key, withRect(patch, take.Box{X: 3, Y: 3, W: 2, H: 2})}},
 		{"a patch the wrong size for its rectangle", []*take.ImageEntry{key, withRect(patch, take.Box{X: 1, Y: 1, W: 3, H: 2})}},
 		{"a key frame off the origin", []*take.ImageEntry{withRect(key, take.Box{X: 1, W: 4, H: 4}), patch}},
-		{"bytes that are not a PNG", []*take.ImageEntry{{Key: true, Rect: take.Box{W: 4, H: 4}, PNG: []byte("not a png")}, patch}},
+		{"a second patch outside the frame", []*take.ImageEntry{key,
+			withPatches(patch, patch.Patches[0], take.Patch{Rect: take.Box{X: 3, Y: 3, W: 2, H: 2}, PNG: patch.Patches[0].PNG})}},
+		{"a key frame with no patch", []*take.ImageEntry{withPatches(key), patch}},
+		{"a key frame with two patches", []*take.ImageEntry{withPatches(key, key.Patches[0], key.Patches[0]), patch}},
+		{"bytes that are not a PNG", []*take.ImageEntry{{Key: true, Patches: []take.Patch{{Rect: take.Box{W: 4, H: 4}, PNG: []byte("not a png")}}}, patch}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
