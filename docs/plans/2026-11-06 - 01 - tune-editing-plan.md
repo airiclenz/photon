@@ -245,7 +245,12 @@ row-of-index and index-at-row invert each other.
 - `GOMEMLIMIT=2GiB go test ./internal/tune -run 'Page'`
 **Commit:** `feat(tune): stack the caption lane one row per caption`
 
-## 7. tune page: drag a caption up or down its lane to reorder it
+## 7. tune page: drag a caption up or down its lane to reorder it — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): window.tuneDrag.attach takes an optional `reorder` {owner, field, rows, row, indexAt(row)} (generic list move, built by drag.js), which timeline.js's attachShift passes for caption bars only via a small captionReorder; the row → index mapping is window.tuneLanes.captionAtRow and the row height comes from the track's bounding rect over its row count, never from DOM style.
+NOTES (2026-11-06): the destination row moves one row each time the dragged bar's leading edge passes the next row's midpoint (row + round(dy / rowHeight), clamped); while reordering, the bar is moved with a translateY and the ghost covers the destination row, labelled "caption <index>".
+NOTES (2026-11-06): timeline.js's header comment paragraph was rewrapped to stay within 100 columns after the added sentence about caption reorder drags.
+NOTES (2026-11-06): the 3 px wobble test also passes on the pre-item tree (it guards the shift path); the move and refused-move tests fail without the drag.js/timeline.js change.
 
 **What:**
 **Goal:** a vertical drag of a caption bar past a neighbouring row's midpoint sends one

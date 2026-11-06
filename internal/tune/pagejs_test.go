@@ -721,6 +721,116 @@ func TestPageJS_CaptionLane_DragAStackedCaptionAcross_SendsOneCaptionShift(t *te
 	}
 }
 
+// laneRowPX is how tall the drag tests lay out a lane row, in pixels.
+const laneRowPX = 20
+
+// The reorder drags of stackedStoryboard's caption lane, a row per caption, the last listed on
+// top: its top row's caption, dragged down a row to stackedMovedToCaption, and the 3 px wobble down
+// a horizontal drag of the middle row's caption keeps under the 6 px it takes to commit to a
+// reorder.
+const (
+	stackedTopCaption     = 2
+	stackedMovedToCaption = 1
+	wobblePX              = 3
+)
+
+// rowCentre is the height of row's centre on a lane track laid out laneRowPX a row.
+func rowCentre(row int) int {
+	return row*laneRowPX + laneRowPX/2
+}
+
+// dragBarTo drags the bar of the entry of kind and index on the lane named lane, grabbed at grab
+// and let go at release, and settles the page; a point's X is output time and its Y the height on
+// the lane's track, which is laid out one pixel per millisecond across and rows rows of laneRowPX
+// down.
+func (p *pageHarness) dragBarTo(lane string, kind storyboard.OwnerKind, index, rows int, grab, release image.Point) {
+	p.t.Helper()
+	found := p.eval(fmt.Sprintf(`{
+		const lane = document.getElementById(%q).querySelectorAll(".lane")
+			.find((row) => row.querySelectorAll(".lane-name")[0].textContent.startsWith(%q));
+		const track = lane ? lane.querySelectorAll(".lane-track")[0] : null;
+		const bar = track ? track.children.find((node) => node.dataset.entry === %q) : null;
+		if (bar) {
+			track.layout = { left: 0, top: 0, width: window.tune.state().length_ms, height: %d };
+			const fire = (type, x, y) => bar.dispatchEvent(new Event(type, { clientX: x, clientY: y }));
+			fire("pointerdown", %d, %d);
+			fire("pointermove", %d, %d);
+			fire("pointerup", %d, %d);
+		}
+		Boolean(bar);
+	}`, elementTimeline, lane, entryValueOf(kind, index), rows*laneRowPX,
+		grab.X, grab.Y, release.X, release.Y, release.X, release.Y)).ToBoolean()
+	if !found {
+		p.t.Fatalf("the %s lane has no bar for %s", lane, entryValueOf(kind, index))
+	}
+	p.settle()
+}
+
+func TestPageJS_CaptionLane_DragTheTopCaptionDownARow_MovesItThere(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, stackedStoryboard).session
+	rows := len(session.State().Captions)
+	text := session.State().Captions[stackedTopCaption].Text
+	page := loadPage(t, session)
+
+	page.dragBarTo(laneCaptions, storyboard.OwnerCaption, stackedTopCaption, rows,
+		image.Pt(captionGrabMS, rowCentre(0)), image.Pt(captionGrabMS, rowCentre(1)))
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%d}`,
+		storyboard.OwnerCaption, stackedTopCaption, storyboard.FieldCaptionMove, stackedMovedToCaption))
+	if got := session.State().Captions[stackedMovedToCaption].Text; got != text {
+		t.Errorf("the caption at %d after the move: want %q, got %q", stackedMovedToCaption, text, got)
+	}
+	moved := fmt.Sprintf(`{"kind":%q,"index":%d}`, storyboard.OwnerCaption, stackedMovedToCaption)
+	if got := page.selectedEntry(); got != moved {
+		t.Errorf("the selection after the move: want %s, got %s", moved, got)
+	}
+}
+
+func TestPageJS_CaptionLane_AVerticalWobbleOnAHorizontalDrag_SendsOnlyACaptionShift(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, stackedStoryboard).session
+	rows := len(session.State().Captions)
+	page := loadPage(t, session)
+
+	page.dragBarTo(laneCaptions, storyboard.OwnerCaption, stackedShiftedCaption, rows,
+		image.Pt(captionGrabMS, rowCentre(1)), image.Pt(captionReleaseMS, rowCentre(1)+wobblePX))
+
+	if got := page.editCount(); got != 1 {
+		t.Errorf("the edits the drag sent: want 1, got %d", got)
+	}
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%d}`,
+		storyboard.OwnerCaption, stackedShiftedCaption, storyboard.FieldCaptionShift, captionShiftMS))
+}
+
+func TestPageJS_CaptionLane_ARefusedMove_ReportsItAndChangesNothing(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, captionedStoryboard).session
+	rows := len(session.State().Captions)
+	page := loadPage(t, session)
+	removed := Edit{
+		Owner: storyboard.Owner{Kind: storyboard.OwnerCaption, Index: rows - 1},
+		Field: storyboard.FieldCaptionRemove,
+		Value: json.RawMessage("null"),
+	}
+	if err := session.Apply(removed); err != nil {
+		t.Fatalf("remove the last caption: %v", err)
+	}
+	before := session.State()
+
+	page.dragBarTo(laneCaptions, storyboard.OwnerCaption, 0, rows,
+		image.Pt(captionGrabMS, rowCentre(1)), image.Pt(captionGrabMS, rowCentre(0)))
+
+	edit := page.lastRequest("/api/edit")
+	if edit.status == http.StatusOK {
+		t.Errorf("the move to the removed caption's index: want it refused, got %s", edit.answer)
+	}
+	page.assertStatusFailure(storyboard.FieldCaptionMove)
+	if after := session.State(); !reflect.DeepEqual(after, before) {
+		t.Errorf("the state after the refused move: want it unchanged\nbefore %+v\nafter  %+v", before, after)
+	}
+}
+
 func TestPageJS_TuneLanes_CaptionRowAndCaptionAtRow_InvertEachOther(t *testing.T) {
 	t.Parallel()
 	page := loadPage(t, newSessionFixtureOf(t, sessionStoryboard).session)

@@ -184,7 +184,9 @@ bar shows that entry in the inspector, which edits a position's `at`, `hold` and
 text target (`text`, `nth`, `area`), a transition's start, length and ease (the `ease` of the
 position it leads into), a zoom's `at`, `over`, `to` and `ease`, and a caption's `text`, `at`,
 `for` or `until`, `place`, `align`, `offset` or `position`, font, colours, box and fade. Dragging
-a bar moves it in 50ms steps. A position's or a transition's edge grips move just that edge, and
+a bar moves it in 50ms steps. Dragging a caption up or down its lane instead reorders it: it moves
+to the list place of the row it is let go in, and the drag takes whichever way the pointer moved
+further in its first 6 px. A position's or a transition's edge grips move just that edge, and
 a transition shrunk to 0 is a hard cut. A transition has no grip on an edge that meets a point:
 that edge moves with the point's marker. The zoom and captions lanes' `+` adds a zoom or a caption
 at the playhead; the position lane's `+` adds a point there on the cell the camera is centred on,
@@ -536,6 +538,8 @@ The top-level `captions` list draws text over the clip, on the same clock as the
 [camera](#camera). A caption sits on the shipped frame itself: it is drawn after the camera's crop
 and the downscale to `frame.width`, and over the cursor. A zoom or a position never moves or
 scales it. Captions may overlap one another; one listed later draws over one listed earlier.
+To reorder captions in `photon tune`, drag one up or down the captions lane, or use the
+inspector's **Move up** and **Move down**.
 
 | Field | Meaning |
 | --- | --- |

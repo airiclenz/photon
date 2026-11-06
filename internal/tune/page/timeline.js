@@ -22,12 +22,14 @@
 // owner names; a lane without add has
 // no button. Dragging such a bar shifts its entry's start and keeps its length: one shift edit for
 // a caption, one at edit keeping its beat for a zoom or a position, one transition edit with both
-// edges moved for a transition. A grip on each edge a bar's edges names, "start" or "end", resizes
-// it: one transition edit with that edge moved for a transition; for a position, one hold edit for
-// its end, and one span edit for its start that keeps its end. A position or a transition may
-// shrink to 0, a point or a hard cut, whose grips sit beside its marker; a transition names no
-// edge that meets a point, so no grip sits on a point's marker and its shift drag moves that
-// edge. Another lane is one more entry in either list.
+// edges moved for a transition. Dragging a caption's bar up or down its lane instead moves it to
+// the list index of the row it is let go in: one move edit. A grip on each edge a bar's edges
+// names, "start" or "end", resizes it: one transition edit with that edge moved for a
+// transition; for a position, one hold edit for its end, and one span edit for its start that
+// keeps its end. A position or a transition may shrink to 0, a point or a hard cut, whose grips
+// sit beside its marker; a transition names no edge that meets a point, so no grip sits on a
+// point's marker and its shift drag moves that edge. Another lane is one more entry in either
+// list.
 //
 // A handle is {beat, field, anchor, sign, value, min, max}: the edit's beat and field, the value
 // it holds now in milliseconds, the bounds a drag keeps it in, and where its edge sits on the
@@ -49,12 +51,14 @@
   const TOO_FAST_GLYPH = "⚠";
   const OWNER_BEAT = "beat";
   const FIELD_CAPTION_SHIFT = "caption.shift";
+  const FIELD_CAPTION_MOVE = "caption.move";
   const FIELD_ZOOM_AT = "zoom.at";
   const FIELD_POSITION_AT = "position.at";
   const FIELD_POSITION_HOLD = "position.hold";
   const FIELD_POSITION_SPAN = "position.span";
   const FIELD_POSITION_TRANSITION = "position.transition";
   const ENTRY_ZOOM = "zoom";
+  const ENTRY_CAPTION = "caption";
   const ENTRY_POSITION = page.ENTRY_POSITION;
   const ENTRY_TRANSITION = page.ENTRY_TRANSITION;
   // The entry kinds a shift moves the at of, keeping its beat: the state list each kind's entries
@@ -239,7 +243,8 @@
     return node;
   }
 
-  // attachShift drags node, bar's node on track, to shift bar's entry.
+  // attachShift drags node, bar's node on track, to shift bar's entry, or a caption's up or down
+  // the lane to move it to another row's list index, window.tuneLanes' captionAtRow.
   function attachShift(bar, node, track) {
     dragging.attach({
       node,
@@ -254,7 +259,15 @@
       edit: (delta) => shiftEdit(bar, delta),
       redraw: () => render(tune.state()),
       refused: (message) => page.reportStatus(message, true),
+      reorder: bar.entry.kind === ENTRY_CAPTION ? captionReorder(bar) : null,
     });
+  }
+
+  // captionReorder is the reorder of bar, a caption's, among the lane's rows, a row per caption.
+  function captionReorder(bar) {
+    const count = tune.state().captions.length;
+    const indexAt = (row) => registeredLanes.captionAtRow(row, count);
+    return { owner: bar.entry, field: FIELD_CAPTION_MOVE, rows: count, row: bar.row, indexAt };
   }
 
   // barExtent draws bar shifted by delta: its left edge, and a ghost over its new stretch
