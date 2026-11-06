@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-06
+
 - A caption's `text` may style spans of itself with inline tags: `[#rrggbb]`, `[bold]` or `[bold #rrggbb]` opens a span and `[/]` closes it; spans do not nest. A literal `[` is now written `[[`: a caption holding a bare `[` (such as `Press [Enter]`) fails to load with a message that names the `[[` escape.
 - Styled caption spans are drawn: each span in its own colour and, for `[bold]`, in the bold caption face, and a long span wraps at its spaces across lines like the rest of the text. A line mixing regular and bold text takes the taller face's line height. Captions without spans draw exactly as before. README's Captions section documents the markup under "Styled spans".
 - A camera position, zoom or caption whose `at` or `until` names a cut beat now loads: it lands where the cut is, at the next kept beat's start (or the clip's end after the last kept beat, so a trailing cut beat needs a negative offset), instead of being refused.
