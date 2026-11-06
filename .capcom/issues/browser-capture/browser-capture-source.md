@@ -1,12 +1,14 @@
 ---
 title: Capture a web app in headless Chromium
-status: open
+status: done
 type: feature
 priority: 3
 labels: [browser]
 deps: [snapshot-two-layers, take-cell-geometry, text-layer-resolver, pixel-take-storage, browser-launch-config]
 plan: 2026-11-06 - 04 - browser-capture-plan
 created: 2026-11-06T13:42:51Z
+closed: 2026-11-06T20:17:34Z
+reason: resolved by 2026-11-06 - 04 - browser-capture-plan (e406ff0)
 ---
 
 A second capture source beside the pty terminal: start Chromium headless at the configured

@@ -1,12 +1,14 @@
 ---
 title: Store a browser take's image frames compactly
-status: open
+status: done
 type: task
 priority: 3
 labels: [browser, take]
 deps: [snapshot-two-layers]
 plan: 2026-11-06 - 04 - browser-capture-plan
 created: 2026-11-06T13:42:51Z
+closed: 2026-11-06T20:17:34Z
+reason: resolved by 2026-11-06 - 04 - browser-capture-plan (e406ff0)
 ---
 
 A terminal snapshot is a few kilobytes of cells; a browser frame is a full screenshot. Add a

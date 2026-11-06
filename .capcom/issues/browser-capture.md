@@ -29,3 +29,7 @@ terminal behaviour, then the browser source, then tune and a first clip.
 
 photon cannot film its own `photon tune` page, or any web UI. Today the project has to reach
 for a screen recorder and loses the storyboard, the checked take and the timing editor.
+
+## Log
+
+- 2026-11-06 Airic Lenz: 2026-11-06 - 04 - browser-capture-plan (e406ff0) landed the browser source, render, tune and the tune-page clip; open: page-pipeline-cache-reuse, tune-terminal-take-viewport

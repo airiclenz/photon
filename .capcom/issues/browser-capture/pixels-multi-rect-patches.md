@@ -1,11 +1,13 @@
 ---
 title: Image layer patches keep one bounding rectangle per frame
-status: open
+status: done
 type: bug
 priority: 3
 labels: [browser]
 plan: 2026-11-06 - 04 - browser-capture-plan
 created: 2026-11-06T15:52:57Z
+closed: 2026-11-06T20:17:34Z
+reason: resolved by 2026-11-06 - 04 - browser-capture-plan (e406ff0)
 ---
 
 The image layer encoder (`internal/pixels/pixels.go:53`) writes one bounding rectangle of the changed pixels per patch, and takes a key frame when that rectangle covers more than half the frame. Two far-apart changes in one frame (typing plus a moving spinner) span most of the frame, so every frame becomes a key frame: measured 30.3 MB/min against the 25 MB budget. Multi-rectangle patches would fix it. Found closing out plan `2026-11-06 - 03 - grid-layers-plan` (item 7).

@@ -1,12 +1,14 @@
 ---
 title: Render and tune a browser take
-status: open
+status: done
 type: task
 priority: 3
 labels: [browser, render, tune]
 deps: [browser-capture-source]
 plan: 2026-11-06 - 04 - browser-capture-plan
 created: 2026-11-06T13:42:51Z
+closed: 2026-11-06T20:17:34Z
+reason: resolved by 2026-11-06 - 04 - browser-capture-plan (e406ff0)
 ---
 
 Render a browser take: the image layer passes through to compose (camera, zoom, cursor,

@@ -1,12 +1,14 @@
 ---
 title: Configure a browser launch, its areas and selector targets
-status: open
+status: done
 type: task
 priority: 3
 labels: [browser, config, storyboard]
 deps: [grid-surfaces-decision, text-layer-resolver]
 plan: 2026-11-06 - 04 - browser-capture-plan
 created: 2026-11-06T13:42:51Z
+closed: 2026-11-06T20:17:34Z
+reason: resolved by 2026-11-06 - 04 - browser-capture-plan (e406ff0)
 ---
 
 Extend `photon.yaml` and the storyboard for a web app: a browser launch (URL, viewport size,
