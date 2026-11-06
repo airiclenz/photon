@@ -18,6 +18,7 @@ import (
 	"github.com/creack/pty"
 	"golang.org/x/sys/unix"
 
+	"github.com/airiclenz/photon/internal/keys"
 	"github.com/airiclenz/photon/internal/take"
 )
 
@@ -90,7 +91,8 @@ func (o Options) validate() error {
 
 // Terminal is a program running under a pseudo-terminal, emulated by x/vt and recorded into a
 // [take.Take] as it paints. The program's output goes into the emulator, the emulator's replies
-// to its queries go back to it as input, and photon's input goes in through [Terminal.Send].
+// to its queries go back to it as input, and photon's input goes in through [Terminal.Type],
+// [Terminal.Key] and [Terminal.Pointer], encoded as the bytes a real terminal writes.
 // Every method is safe to call from any goroutine.
 type Terminal struct {
 	opts   Options
@@ -249,7 +251,31 @@ func abandon(cmd *exec.Cmd) error {
 	return errors.Join(killErr, waitErr)
 }
 
-// Send writes p to the program as input: typed text, a key's sequence, a mouse report.
+// Type writes text to the program as typed input, in one write.
+func (t *Terminal) Type(text string) error { return t.Send([]byte(text)) }
+
+// Key writes the named key's xterm sequence ([keys.Lookup]) to the program, in one write. A name
+// keys does not accept is an error, and nothing is written.
+func (t *Terminal) Key(name string) error {
+	sequence, isKnown := keys.Lookup(name)
+	if !isKnown {
+		return fmt.Errorf("unknown key name %q", name)
+	}
+	return t.Send(sequence)
+}
+
+// Pointer writes event's SGR mouse report ([keys.Pointer.Report]) to the program, in one write.
+// An event of an unknown kind is an error, and nothing is written.
+func (t *Terminal) Pointer(event keys.Pointer) error {
+	report, err := event.Report()
+	if err != nil {
+		return err
+	}
+	return t.Send(report)
+}
+
+// Send writes p to the program as input, in one write: raw bytes, such as an end key's sequence
+// or a reply the emulator produced.
 func (t *Terminal) Send(p []byte) error {
 	t.writeMu.Lock()
 	defer t.writeMu.Unlock()

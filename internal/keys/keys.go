@@ -92,6 +92,40 @@ type Mouse struct {
 	Mods   Mods
 }
 
+// PointerKind is what a [Pointer] event does: its button goes down, the pointer moves with the
+// button held, or the button comes up.
+type PointerKind int
+
+// The pointer event kinds, in the order a click or a drag performs them.
+const (
+	PointerPress PointerKind = iota
+	PointerMove
+	PointerRelease
+)
+
+// Pointer is one pointer event at a zero-based grid cell: Kind says what happens, X and Y are the
+// cell's column and row (both non-negative), and Mouse is the button and the modifier keys held.
+// A click is a press and a release at one cell; a drag puts moves between them.
+type Pointer struct {
+	Kind  PointerKind
+	X, Y  int
+	Mouse Mouse
+}
+
+// Report returns the SGR report a terminal sends for the event: [MousePress], [MouseMotion] or
+// [MouseRelease] at its cell. A Kind outside the three is an error.
+func (p Pointer) Report() ([]byte, error) {
+	switch p.Kind {
+	case PointerPress:
+		return MousePress(p.X, p.Y, p.Mouse), nil
+	case PointerMove:
+		return MouseMotion(p.X, p.Y, p.Mouse), nil
+	case PointerRelease:
+		return MouseRelease(p.X, p.Y, p.Mouse), nil
+	}
+	return nil, fmt.Errorf("unknown pointer event kind %d", p.Kind)
+}
+
 // buttonName is one [Button] and the name a storyboard gives it.
 type buttonName struct {
 	name   string

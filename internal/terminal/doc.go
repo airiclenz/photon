@@ -3,8 +3,10 @@
 //
 // Bytes the program writes go into the emulator; the replies the emulator produces to the
 // program's queries (DA1, DECRQM, a cursor position report) go back to the program as input, so a
-// program that asks the terminal who it is never hangs waiting; photon's own input (typed text, a
-// key's sequence, a mouse report) goes in through [Terminal.Send]. A sampler copies the screen
+// program that asks the terminal who it is never hangs waiting; photon's own input goes in through
+// [Terminal.Type], [Terminal.Key] and [Terminal.Pointer], which encode typed text, a named key and
+// a pointer event as the bytes a real terminal writes (the key's xterm sequence, an SGR mouse
+// report), or as raw bytes through [Terminal.Send]. A sampler copies the screen
 // into the take no faster than the take's fps, and only when it changed: two snapshots in a row
 // never show the same picture.
 //
@@ -21,11 +23,11 @@
 // types. On Windows there is no unix pty: [Start] returns [ErrNoPTY] and the rest of the package
 // is a stand-in that only builds.
 //
-// It imports take and nothing above it.
+// It imports take and keys and nothing above them.
 //
 // The file map:
 //   - doc.go: this package comment and file map.
-//   - terminal.go: the [Terminal] and its [Options]: [Start], input, events, the pumps,
+//   - terminal.go: the [Terminal] and its [Options]: [Start], typed input, events, the pumps,
 //     [Terminal.Close].
 //   - sample.go: the sampler, snapshots of the emulator and the collapse of identical grids.
 //   - cell.go: an emulator cell and colour as a [take.Cell] and [take.Color]; a whole grid.

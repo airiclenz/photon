@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -22,8 +23,9 @@ const fakeCols = 40
 // fakeScreen is what the fake terminal shows unless a test changes it.
 var fakeScreen = []string{"title", "  alpha", "  beta", "ready"}
 
-// fakeTerminal is the engine's test adapter: it shows a screen the test sets and records every
-// write, every event and every screen a match recorded.
+// fakeTerminal is the engine's test [Source]: it shows a screen the test sets, encodes every input
+// as the pty terminal does and records each one as a write, and records every event and every
+// screen a match recorded.
 type fakeTerminal struct {
 	mu      sync.Mutex
 	screen  take.Snapshot
@@ -37,10 +39,29 @@ func newFakeTerminal(lines ...string) *fakeTerminal {
 	return &fakeTerminal{screen: screenOf(lines...), done: make(chan struct{})}
 }
 
-func (f *fakeTerminal) Send(p []byte) error {
+func (f *fakeTerminal) Type(text string) error { return f.send([]byte(text)) }
+
+func (f *fakeTerminal) Key(name string) error {
+	sequence, isKnown := keys.Lookup(name)
+	if !isKnown {
+		return fmt.Errorf("unknown key name %q", name)
+	}
+	return f.send(sequence)
+}
+
+func (f *fakeTerminal) Pointer(event PointerEvent) error {
+	report, err := event.Report()
+	if err != nil {
+		return err
+	}
+	return f.send(report)
+}
+
+// send records p as one write.
+func (f *fakeTerminal) send(p []byte) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.sent = append(f.sent, append([]byte(nil), p...))
+	f.sent = append(f.sent, p)
 	return nil
 }
 

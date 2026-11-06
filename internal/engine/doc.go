@@ -1,22 +1,25 @@
 // Package engine performs a storyboard's beats against a running program: it types (humanized
-// from a fixed, seeded profile, or flat), presses named keys, clicks on-screen targets with real
-// SGR mouse press and release reports of any button with any modifiers held, drags from one
-// target through any via points to another target or an offset with a press, eased held-button
-// motion reports along each segment and a release, waits on the screen and pauses.
+// from a fixed, seeded profile, or flat), presses named keys, clicks on-screen targets with
+// pointer press and release events of any button with any modifiers held, drags from one target
+// through any via points to another target or an offset with a press, eased held-button moves
+// along each segment and a release, waits on the screen and pauses.
 // Every beat start, action start and end, resolved target, clicked cell and drag's pressed,
 // moved-onto and released cell goes into the take's event log, where check and render read
 // them. A failing action ends the run with a [BeatError] naming the beat and the
 // action.
 //
-// The engine drives the program through its own [Terminal] interface, which the pty terminal
-// and a test fake both satisfy; it never imports the terminal package. Targets are resolved by
+// The engine drives the program through its own [Source] interface, which the pty terminal and a
+// test fake both satisfy; it never imports the terminal package. It builds no input bytes: it
+// hands the source typed text, a key name and a [PointerEvent] at a grid cell, and the source
+// encodes them (the pty terminal as xterm bytes and SGR mouse reports). Targets are resolved by
 // the target package, the one resolver photon has.
 //
 // It imports take, target, storyboard and keys.
 //
 // The file map:
 //   - doc.go: this package comment and file map.
-//   - engine.go: the [Terminal] interface, the [Engine] ([New], [Engine.Run]) and [BeatError].
+//   - engine.go: the [Source] interface and its [PointerEvent], the [Engine] ([New],
+//     [Engine.Run]) and [BeatError].
 //   - action.go: performing each action form, and the engine's pacing gaps.
 //   - drag.go: performing a drag, and its eased path.
 //   - typing.go: the humanized-typing profile and its seeded MINSTD generator.

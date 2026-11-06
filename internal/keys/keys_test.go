@@ -220,6 +220,43 @@ func TestClickMotionAndReleaseMatchTheZeroMouse(t *testing.T) {
 	}
 }
 
+func TestPointerReportIsTheSGRReportOfItsKind(t *testing.T) {
+	t.Parallel()
+
+	mouse := Mouse{Button: RightButton, Mods: Ctrl}
+	cases := []struct {
+		name string
+		kind PointerKind
+		want []byte
+	}{
+		{name: "press", kind: PointerPress, want: MousePress(2, 1, mouse)},
+		{name: "move", kind: PointerMove, want: MouseMotion(2, 1, mouse)},
+		{name: "release", kind: PointerRelease, want: MouseRelease(2, 1, mouse)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := Pointer{Kind: tc.kind, X: 2, Y: 1, Mouse: mouse}.Report()
+			if err != nil {
+				t.Fatalf("Report() error = %v", err)
+			}
+			if !bytes.Equal(got, tc.want) {
+				t.Errorf("Report() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPointerReportRefusesAnUnknownKind(t *testing.T) {
+	t.Parallel()
+
+	got, err := Pointer{Kind: PointerRelease + 1}.Report()
+	if err == nil {
+		t.Fatalf("Report() = %q, want an error", got)
+	}
+}
+
 func TestParseButtonReadsTheStoryboardSpelling(t *testing.T) {
 	t.Parallel()
 

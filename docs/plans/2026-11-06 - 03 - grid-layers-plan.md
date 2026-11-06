@@ -198,7 +198,12 @@ internal/render/pipeline_test.go — oracleFrames, TestPipeline_FrameAt_EverySch
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/render/`, then `GOMEMLIMIT=2GiB go test ./internal/tune/`, then `GOMEMLIMIT=2GiB go test -race -run <the concurrent FrameAt test> ./internal/render/` (render alone, never `./...`)
 **Commit:** `feat(render): draw a snapshot from its image layer when it has one`
 
-## 9. Generalize the engine's Terminal into a Source
+## 9. Generalize the engine's Terminal into a Source — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): keys gains `PointerKind` (PointerPress, PointerMove, PointerRelease), `Pointer{Kind, X, Y, Mouse}` and `Pointer.Report()`, the one switch from a pointer event to its SGR report (MousePress/MouseMotion/MouseRelease), shared by the pty terminal and the engine's test fake; keys_test.go gains two tests for it.
+NOTES (2026-11-06): the engine's field `term` is renamed `source` and `New`'s parameter with it, to follow the interface's rename; `fakeTerminal` keeps its name and now implements Type/Key/Pointer, encoding as the pty does, so every byte expectation is unchanged.
+NOTES (2026-11-06): internal/rig/record.go needs no edit: `*terminal.Terminal` satisfies `engine.Source` as passed in `performBeats`; `Terminal.Send` stays exported for the end keys (`Quit`), the reply pump and terminal's own tests.
+NOTES (2026-11-06): package-layout's closing "Grid surfaces" paragraph now says the interface became `Source` (past tense), alongside the keys, terminal and engine row updates and the interface rule.
 
 **What:**
 **Goal:** the engine drives an `engine.Source` with `Type(text string) error`, `Key(name string) error`, `Pointer(engine.PointerEvent) error`, `Current`, `Match`, `Done`, `Event`; the engine builds no input bytes; the pty terminal implements it; every recorded byte and take event is unchanged.

@@ -9,7 +9,7 @@ imports upward, and there are no cycles.
 
 | package | owns | imports |
 |---|---|---|
-| `internal/keys` | named keys to bytes, SGR mouse press, motion and release | — |
+| `internal/keys` | named keys to bytes, SGR mouse press, motion and release; the pointer event (`Pointer`: press, move or release at a grid cell) and its SGR report | — |
 | `internal/take` | the Take: snapshots, cells, colours, typed events, `Box`, beat spans; its versioned file format | — |
 | `internal/pixels` | a take's image layer: frames encoded as PNG key frames (the first frame, every 2 s, a new frame size, or a change over half the frame) and patches of the changed rectangle, and decoded back at any snapshot | `take` |
 | `internal/yamledit` | YAML source splicing: replace, insert or remove one scalar or key, leaving the rest of the bytes as written | — |
@@ -17,8 +17,8 @@ imports upward, and there are no cycles.
 | `internal/config` | the project's `photon.yaml` (rig, launch, services, profiles, end, areas, theme, fonts) and its lookup | `keys` |
 | `internal/clip` | a storyboard and its config loaded together, cross-checked; work dir and take path | `storyboard`, `config` |
 | `internal/target` | a target's cell box and an area's rows on a snapshot; the only resolver (clicks, drags, camera positions, `seen`) | `take`, `storyboard`, `config` |
-| `internal/terminal` | the program in a pty, the vt emulator, sampled snapshots, first paint, settle, quit, the EPERM probe; a Windows stand-in that refuses | `take` |
-| `internal/engine` | performing a beat's actions; defines the `Terminal` interface it drives (pty terminal plus a test fake) | `take`, `target`, `storyboard`, `keys` |
+| `internal/terminal` | the program in a pty, the vt emulator, sampled snapshots, first paint, settle, quit, the EPERM probe; typed text, named keys and pointer events encoded as xterm bytes and SGR reports (the engine's `Source`); a Windows stand-in that refuses | `take`, `keys` |
+| `internal/engine` | performing a beat's actions; defines the `Source` interface it drives (`Type`, `Key`, `Pointer` with `PointerEvent` = `keys.Pointer`, plus `Current`, `Match`, `Done`, `Event`; pty terminal plus a test fake) and builds no input bytes | `take`, `target`, `storyboard`, `keys` |
 | `internal/service` | a take's services: start, readiness, ports, logs, stop; profiles | `config` |
 | `internal/check` | judging a take: one PASS/FAIL row per expect | `take`, `target`, `storyboard` |
 | `internal/rig` | one take end to end: reset, services, launch, beats, end of take, save, `on_success`, check; `setup` | `clip`, `terminal`, `engine`, `service`, `check`, `take`, `config`, `storyboard`, `target`, `keys` |
@@ -37,8 +37,8 @@ imports upward, and there are no cycles.
 Rules: `cmd/photon` holds no logic beyond flags and wiring. `cmd/release` is a dev tool run as
 `go run ./cmd/release <verb>`: no shipped package imports it, it imports no photon package
 outside its tests, and its files never land in a release archive. An interface type appears only where
-two adapters exist, e.g. the engine's `Terminal` (the pty terminal plus a test fake); `engine`
-never imports `terminal`. A domain package (`storyboard`, `config`, `take`, `clip`) imports no
+two adapters exist, e.g. the engine's `Source` (the pty terminal plus a test fake); `engine`
+never imports `terminal`, and `terminal` never imports `engine` (the pointer event lives in `keys`). A domain package (`storyboard`, `config`, `take`, `clip`) imports no
 process, pty or image code; the emulator-cell conversion lives in `terminal`, palette resolution
 in `raster`.
 
@@ -52,6 +52,6 @@ updates `VERSION` and nothing in Go code.
 image layer on one grid. `take` owns both layers, text runs, recorded selector boxes and the
 cell geometry, and stays free of image code; a new `internal/pixels` owns encoding, decoding and
 seeking the image layer's frames; a planned `internal/browser`, the Chromium capture source,
-imports `take`, `pixels` and `keys`. The engine's `Terminal` interface becomes `Source` (the pty
-terminal and the browser are its two adapters, plus a test fake); `engine` never imports
+imports `take`, `pixels` and `keys`. The engine's `Terminal` interface became `Source` (grid-layers
+plan item 9; the pty terminal and the browser are its two adapters, plus a test fake); `engine` never imports
 `terminal` or `browser`. The rows above change as each package's imports change.

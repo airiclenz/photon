@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/airiclenz/photon/internal/keys"
 	"github.com/airiclenz/photon/internal/take"
 )
 
@@ -33,6 +34,15 @@ type Terminal struct{}
 
 // Start refuses with [ErrNoPTY]: there is no pty to run a program under.
 func Start(string, []string, Options) (*Terminal, error) { return nil, ErrNoPTY }
+
+// Type refuses with [ErrNoPTY].
+func (*Terminal) Type(string) error { return ErrNoPTY }
+
+// Key refuses with [ErrNoPTY].
+func (*Terminal) Key(string) error { return ErrNoPTY }
+
+// Pointer refuses with [ErrNoPTY].
+func (*Terminal) Pointer(keys.Pointer) error { return ErrNoPTY }
 
 // Send refuses with [ErrNoPTY].
 func (*Terminal) Send([]byte) error { return ErrNoPTY }

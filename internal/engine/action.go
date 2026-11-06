@@ -18,8 +18,8 @@ const (
 	// clickHoldGap parts a click's press from its release: a program that acts on the release
 	// must read the two as two reports, never one read.
 	clickHoldGap = 40 * time.Millisecond
-	// dragStepGap precedes each of a drag's steps and its release, so every motion report
-	// reaches the program as its own read and the eased path plays out at even time gaps.
+	// dragStepGap precedes each of a drag's steps and its release, so every move reaches the
+	// program as its own read and the eased path plays out at even time gaps.
 	dragStepGap = 40 * time.Millisecond
 	// clickRepeatGap parts one click's release from the next click's press, so `times: 2` is two
 	// clicks rather than a double-click.
@@ -95,15 +95,15 @@ func (e *Engine) perform(ctx context.Context, step take.Event, action storyboard
 	return errNoForm
 }
 
-// typeText sends the text one character per write, paced by the humanized profile, or — with
-// humanize off — as a single write.
+// typeText types the text one character per [Source.Type], paced by the humanized profile, or —
+// with humanize off — in a single one.
 func (e *Engine) typeText(ctx context.Context, action storyboard.TypeAction) error {
 	if !action.IsHumanized() {
-		return e.term.Send([]byte(action.Text))
+		return e.source.Type(action.Text)
 	}
 	gaps := humanize(action.Text)
 	for index, character := range []rune(action.Text) {
-		if err := e.term.Send([]byte(string(character))); err != nil {
+		if err := e.source.Type(string(character)); err != nil {
 			return err
 		}
 		if index < len(gaps) {
@@ -115,16 +115,16 @@ func (e *Engine) typeText(ctx context.Context, action storyboard.TypeAction) err
 	return nil
 }
 
-// pressKey sends the named key's sequence Repeat times (once for a Repeat of 0), each press one
-// write and each followed by keyRepeatGap: an escape sequence split across writes, or an esc
-// glued to whatever is written next, would reach the program as a different key.
+// pressKey presses the named key Repeat times (once for a Repeat of 0), each press one
+// [Source.Key] and each followed by keyRepeatGap: an escape sequence split across writes, or an
+// esc glued to whatever is written next, would reach the program as a different key. A name
+// [keys.Lookup] does not accept fails before anything is sent, whatever the source.
 func (e *Engine) pressKey(ctx context.Context, action storyboard.KeyAction) error {
-	sequence, isKnown := keys.Lookup(action.Name)
-	if !isKnown {
+	if _, isKnown := keys.Lookup(action.Name); !isKnown {
 		return fmt.Errorf("key: unknown key name %q", action.Name)
 	}
 	for range max(action.Repeat, 1) {
-		if err := e.term.Send(sequence); err != nil {
+		if err := e.source.Key(action.Name); err != nil {
 			return err
 		}
 		if err := sleepContext(ctx, keyRepeatGap); err != nil {
@@ -136,13 +136,13 @@ func (e *Engine) pressKey(ctx context.Context, action storyboard.KeyAction) erro
 
 // click resolves the target on the screen as it stands, logs the box, then sends Times clicks
 // (once for a Times of 0) of the action's button, its modifiers held, at its centre cell — each
-// an SGR press and, clickHoldGap later, its release — logging the cell before each press.
+// a pointer press and, clickHoldGap later, its release — logging the cell before each press.
 func (e *Engine) click(ctx context.Context, step take.Event, action storyboard.ClickAction) error {
 	mouse, err := action.Mouse()
 	if err != nil {
 		return fmt.Errorf("click: %w", err)
 	}
-	box, err := e.resolver.Target(e.term.Current(), action.Target)
+	box, err := e.resolver.Target(e.source.Current(), action.Target)
 	if err != nil {
 		return fmt.Errorf("click: %w", err)
 	}
@@ -176,17 +176,19 @@ func centreOf(box take.Box) take.Point {
 // sendClick sends one click of mouse's button, its modifiers held, at cell: the press,
 // clickHoldGap, then the release.
 func (e *Engine) sendClick(ctx context.Context, cell take.Point, mouse keys.Mouse) error {
-	if err := e.term.Send(keys.MousePress(cell.X, cell.Y, mouse)); err != nil {
+	press := PointerEvent{Kind: keys.PointerPress, X: cell.X, Y: cell.Y, Mouse: mouse}
+	if err := e.source.Pointer(press); err != nil {
 		return err
 	}
 	if err := sleepContext(ctx, clickHoldGap); err != nil {
 		return err
 	}
-	return e.term.Send(keys.MouseRelease(cell.X, cell.Y, mouse))
+	release := PointerEvent{Kind: keys.PointerRelease, X: cell.X, Y: cell.Y, Mouse: mouse}
+	return e.source.Pointer(release)
 }
 
 // wait polls the whole screen until the regex matches it (or, with Gone, no longer does). The
-// screen that satisfies it is recorded into the take ([Terminal.Match]), so a `seen` expect on a
+// screen that satisfies it is recorded into the take ([Source.Match]), so a `seen` expect on a
 // beat that ends on a wait always finds the screen the wait saw. It fails at the timeout, or at
 // once when the program exits first.
 func (e *Engine) wait(ctx context.Context, action storyboard.WaitAction) error {
@@ -219,7 +221,7 @@ func (e *Engine) wait(ctx context.Context, action storyboard.WaitAction) error {
 		case <-deadline.C:
 			return fmt.Errorf("wait for /%s/ %s: timed out after %s",
 				action.Screen, want, action.Timeout)
-		case <-e.term.Done():
+		case <-e.source.Done():
 			return fmt.Errorf("wait for /%s/ %s: the program exited", action.Screen, want)
 		case <-ctx.Done():
 			return fmt.Errorf("wait for /%s/ %s: %w", action.Screen, want, ctx.Err())
@@ -231,7 +233,7 @@ func (e *Engine) wait(ctx context.Context, action storyboard.WaitAction) error {
 // whether it does not), recording that screen when it does.
 func (e *Engine) screenSatisfies(pattern *regexp.Regexp, gone bool) (bool, error) {
 	var textErr error
-	isSatisfied := e.term.Match(func(screen take.Snapshot) bool {
+	isSatisfied := e.source.Match(func(screen take.Snapshot) bool {
 		text, err := e.resolver.Text(screen, storyboard.AreaAny)
 		if err != nil {
 			textErr = err

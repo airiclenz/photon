@@ -4,17 +4,28 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/airiclenz/photon/internal/keys"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 	"github.com/airiclenz/photon/internal/target"
 )
 
-// Terminal is the running program the engine drives. The pty terminal is the production
-// adapter; tests drive a fake. Every method must be safe to call from any goroutine.
-type Terminal interface {
-	// Send writes p to the program as input, in one write.
-	Send(p []byte) error
-	// Current is what the terminal shows right now. It is read, not recorded.
+// PointerEvent is one pointer press, move or release at a grid cell, with its button and the
+// modifier keys held: the engine's name for [keys.Pointer], which a [Source] encodes its own way.
+type PointerEvent = keys.Pointer
+
+// Source is the running program the engine drives: it takes typed input and shows a grid. The
+// pty terminal is the production adapter; tests drive a fake. The engine builds no input bytes —
+// each Source encodes text, a named key and a pointer event the way its program reads them.
+// Every method must be safe to call from any goroutine.
+type Source interface {
+	// Type sends text to the program as typed input, in one write.
+	Type(text string) error
+	// Key sends one press of the named key, in one write. name is one [keys.Lookup] accepts.
+	Key(name string) error
+	// Pointer sends one pointer event at its grid cell, in one write.
+	Pointer(event PointerEvent) error
+	// Current is what the source shows right now. It is read, not recorded.
 	Current() take.Snapshot
 	// Match reports whether match holds for the screen as it stands and, when it does, records
 	// that screen into the take, so a screen a wait saw is a screen the take holds.
@@ -25,21 +36,20 @@ type Terminal interface {
 	Event(event take.Event)
 }
 
-// Engine performs a storyboard's beats against a live [Terminal]: it types, presses keys, clicks
-// and drags on-screen targets with real SGR mouse reports and waits on the screen, logging every
-// beat start, action start and end, resolved target, click and drag cell into the terminal's
-// take. It reads the
-// screen only through [Terminal.Current] and [Terminal.Match] and writes only through
-// [Terminal.Send], so what it sees is what the take records and what it sends is what the
-// program reads.
+// Engine performs a storyboard's beats against a live [Source]: it types, presses keys, clicks
+// and drags on-screen targets with pointer events and waits on the screen, logging every beat
+// start, action start and end, resolved target, click and drag cell into the source's take. It
+// reads the screen only through [Source.Current] and [Source.Match] and sends input only through
+// [Source.Type], [Source.Key] and [Source.Pointer], so what it sees is what the take records and
+// what it sends is what the program reads.
 type Engine struct {
-	term     Terminal
+	source   Source
 	resolver target.Resolver
 }
 
-// New returns an engine driving term, resolving click and drag targets with resolver.
-func New(term Terminal, resolver target.Resolver) *Engine {
-	return &Engine{term: term, resolver: resolver}
+// New returns an engine driving source, resolving click and drag targets with resolver.
+func New(source Source, resolver target.Resolver) *Engine {
+	return &Engine{source: source, resolver: resolver}
 }
 
 // Run performs beats in order and stops at the first that fails, returning its *[BeatError].
@@ -56,7 +66,7 @@ func (e *Engine) Run(ctx context.Context, beats []storyboard.Beat) error {
 // runBeat performs one beat's actions in order. A failing action ends the beat with a
 // *BeatError naming the beat and the action; its action-end event is then never logged.
 func (e *Engine) runBeat(ctx context.Context, beat storyboard.Beat) error {
-	e.term.Event(take.Event{Kind: take.EventBeatStart, Beat: beat.ID, Text: beat.Title})
+	e.source.Event(take.Event{Kind: take.EventBeatStart, Beat: beat.ID, Text: beat.Title})
 	for index, action := range beat.Do {
 		step := take.Event{Beat: beat.ID, Action: index, Form: formOf(action), Text: textOf(action)}
 		e.logStep(take.EventActionStart, step)
@@ -73,7 +83,7 @@ func (e *Engine) runBeat(ctx context.Context, beat storyboard.Beat) error {
 // logStep logs step as an event of kind.
 func (e *Engine) logStep(kind take.EventKind, step take.Event) {
 	step.Kind = kind
-	e.term.Event(step)
+	e.source.Event(step)
 }
 
 // BeatError is a beat that failed: which beat, which of its actions (its 0-based index in the

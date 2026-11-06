@@ -28,7 +28,7 @@ type dragMove struct {
 // drag resolves every point of the drag on the screen as it stands at the press — the From
 // target, each via point and the to end, an offset counting from the point before it — clamps
 // each to the screen and logs each resolved target's box, then sends the press with the drag's
-// button and modifiers, the eased motion reports through every via point and the release,
+// button and modifiers, the eased moves through every via point and the release,
 // logging each cell before it is sent. A point that does not resolve fails the drag before
 // anything is sent.
 func (e *Engine) drag(ctx context.Context, step take.Event, action storyboard.DragAction) error {
@@ -36,7 +36,7 @@ func (e *Engine) drag(ctx context.Context, step take.Event, action storyboard.Dr
 	if err != nil {
 		return fmt.Errorf("drag: %w", err)
 	}
-	screen := e.term.Current()
+	screen := e.source.Current()
 	fromBox, err := e.resolver.Target(screen, action.From)
 	if err != nil {
 		return fmt.Errorf("drag: from: %w", err)
@@ -96,7 +96,8 @@ func (e *Engine) sendDrag(
 ) error {
 	from, to := points[0], points[len(points)-1]
 	e.logCell(take.EventPress, step, from)
-	if err := e.term.Send(keys.MousePress(from.X, from.Y, mouse)); err != nil {
+	press := PointerEvent{Kind: keys.PointerPress, X: from.X, Y: from.Y, Mouse: mouse}
+	if err := e.source.Pointer(press); err != nil {
 		return err
 	}
 
@@ -115,7 +116,8 @@ func (e *Engine) sendDrag(
 			moved.Text = take.MoveVia
 		}
 		e.logCell(take.EventMove, moved, move.cell)
-		if err := e.term.Send(keys.MouseMotion(move.cell.X, move.cell.Y, mouse)); err != nil {
+		motion := PointerEvent{Kind: keys.PointerMove, X: move.cell.X, Y: move.cell.Y, Mouse: mouse}
+		if err := e.source.Pointer(motion); err != nil {
 			return err
 		}
 	}
@@ -124,7 +126,8 @@ func (e *Engine) sendDrag(
 		return err
 	}
 	e.logCell(take.EventRelease, step, to)
-	return e.term.Send(keys.MouseRelease(to.X, to.Y, mouse))
+	release := PointerEvent{Kind: keys.PointerRelease, X: to.X, Y: to.Y, Mouse: mouse}
+	return e.source.Pointer(release)
 }
 
 // logTarget logs a drag's target event: the resolved box, with text naming the end it is.
