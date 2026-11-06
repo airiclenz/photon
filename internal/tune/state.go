@@ -15,9 +15,10 @@ import (
 // from the current storyboard, and so does Fields, the description of every field the page
 // shows; Sections, Warnings and Length from its schedule, or from the last good pipeline's while
 // the current bytes do not schedule; a caption's laid-out box from the current bytes' pipeline,
-// only while it builds in full. Version rises on every change, so a page that saw it already has
-// nothing new to draw. Build is the build string of the photon serving the page, as
-// `photon version` prints it.
+// only while it builds in full. Export is the GIF export's progress and outcome. Version rises on
+// every change but the export's, so a page that saw it already has nothing new to draw; an export
+// leaves every frame as it was, so its progress keeps the version and the page's frames. Build is
+// the build string of the photon serving the page, as `photon version` prints it.
 type State struct {
 	Version   int             `json:"version"`
 	Build     string          `json:"build"`
@@ -50,6 +51,8 @@ type State struct {
 	IsStale bool      `json:"stale"`
 	CanUndo bool      `json:"can_undo"`
 	CanRedo bool      `json:"can_redo"`
+
+	Export ExportState `json:"export"`
 }
 
 // BeatState is one beat's tunable timing and the pauses its actions hold, which are read-only:
@@ -224,6 +227,7 @@ func (s *Session) State() State {
 		IsStale:    s.isStale,
 		CanUndo:    s.history.canUndo(),
 		CanRedo:    s.history.canRedo(),
+		Export:     s.export.snapshot(),
 	}
 }
 

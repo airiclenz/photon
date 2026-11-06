@@ -43,6 +43,7 @@ const (
 	routeReload  = "POST /api/reload"
 	routeSave    = "POST /api/save"
 	routePick    = "POST /api/pick"
+	routeExport  = "POST /api/export"
 )
 
 // The headers and media types the API reads and writes.
@@ -199,11 +200,13 @@ type pixelRect struct {
 // A request whose Host is neither addr nor localhost on addr's port is refused with 403, and a
 // POST whose body is not application/json with 415, so another site's page can reach neither
 // the session nor the storyboard on disk. Every POST answers with the session's state after it
-// but a pick, which answers with its proposal. A malformed query or body answers 400. A refused
-// edit, undo or redo, a frame, camera view or pick the session cannot give — a time outside the
-// clip, a camera position the storyboard does not list — and a save refused while an error stands
-// answer 422; a save refused while the storyboard changed on disk answers 409. Every failure's
-// body is {"error": "…"}.
+// but a pick, which answers with its proposal; an export answers 202, its render started in the
+// background. A malformed query or body answers 400. A refused edit, undo or redo, a frame, camera
+// view or pick the session cannot give — a time outside the clip, a camera position the
+// storyboard does not list — and a save refused while an error stands answer 422; a save refused
+// while the storyboard changed on disk answers 409, and so does an export refused while it changed
+// on disk, while edits are unsaved, while an error stands or while another export runs. Every
+// failure's body is {"error": "…"}.
 func newHandler(session *Session, addr string) http.Handler {
 	serving := &server{session: session, hosts: map[string]bool{addr: true}, page: pageFS()}
 	if _, port, err := net.SplitHostPort(addr); err == nil {
@@ -226,6 +229,7 @@ func newHandler(session *Session, addr string) http.Handler {
 	mux.HandleFunc(routeReload, serving.stateAfter(session.Reload))
 	mux.HandleFunc(routeSave, serving.stateAfter(session.Save))
 	mux.HandleFunc(routePick, serving.handlePick)
+	mux.HandleFunc(routeExport, serving.stateAfterAs(http.StatusAccepted, session.Export))
 	return serving.guard(mux)
 }
 
@@ -402,14 +406,21 @@ func (s *server) handleEdit(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.session.State())
 }
 
-// stateAfter is the handler that runs change on the session and answers the state after it.
+// stateAfter is the handler that runs change on the session and answers 200 with the state after
+// it.
 func (s *server) stateAfter(change func() error) http.HandlerFunc {
+	return s.stateAfterAs(http.StatusOK, change)
+}
+
+// stateAfterAs is the handler that runs change on the session and answers status with the state
+// after it.
+func (s *server) stateAfterAs(status int, change func() error) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		if err := change(); err != nil {
 			writeError(w, statusOf(err), err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, s.session.State())
+		writeJSON(w, status, s.session.State())
 	}
 }
 
@@ -470,11 +481,12 @@ func decodeBody(w http.ResponseWriter, r *http.Request, into any) bool {
 	return false
 }
 
-// statusOf is the status a session error answers with: 409 while stale, 422 for what the
-// session refuses, 500 for anything else.
+// statusOf is the status a session error answers with: 409 while stale and for a refused export,
+// 422 for what else the session refuses, 500 for anything else.
 func statusOf(err error) int {
 	switch {
-	case errors.Is(err, ErrStale):
+	case errors.Is(err, ErrStale), errors.Is(err, ErrUnsaved), errors.Is(err, ErrProblems),
+		errors.Is(err, ErrExporting):
 		return http.StatusConflict
 	case errors.Is(err, ErrInvalid), errors.Is(err, ErrNoUndo), errors.Is(err, ErrNoRedo),
 		errors.Is(err, render.ErrOutsideClip), errors.Is(err, ErrNoProposal),

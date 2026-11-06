@@ -44,9 +44,10 @@ const (
 
 // Run tunes loaded against its take: it starts a [Session] that reports options.Build, listens
 // on 127.0.0.1 at options.Port only, prints `photon tune: http://127.0.0.1:<port>/` to stdout,
-// and serves the page and its API (see [newHandler]) until ctx ends, then shuts the server down
-// and returns nil. The HTTP server's own errors go to stderr. It fails when the session cannot
-// start, when the port cannot be listened on, and when serving stops on its own.
+// and serves the page and its API (see [newHandler]) until ctx ends, then shuts the server down,
+// waits for an export still rendering, which ctx ending stops, and returns nil. The HTTP
+// server's own errors go to stderr. It fails when the session cannot start, when the port cannot
+// be listened on, and when serving stops on its own.
 func Run(
 	ctx context.Context,
 	loaded *clip.Clip,
@@ -58,12 +59,16 @@ func Run(
 		return err
 	}
 	session.photonBuild = options.Build
+	session.runContext = ctx
 	address := net.JoinHostPort(listenHost, strconv.Itoa(options.Port))
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", address)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", address, err)
 	}
-	return serve(ctx, listener, session, stdout, stderr)
+	err = serve(ctx, listener, session, stdout, stderr)
+	// The export's render cleans up after itself, its palette file included, before it returns.
+	session.waitExport()
+	return err
 }
 
 // serve serves session on listener until ctx ends, after printing the page's address.

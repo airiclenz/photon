@@ -2,8 +2,10 @@ package tune
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -37,7 +39,8 @@ const tempPattern = ".*.tune"
 // standing, the edit history, and the on-disk baseline a save checks against.
 //
 // Every exported method takes the session's one lock, so the methods are safe to call from
-// several goroutines; the lock guards the bytes, the pipelines, the history and the errors.
+// several goroutines; the lock guards the bytes, the pipelines, the history and the errors. An
+// export keeps its progress under a lock of its own, so a render never waits on a rebuild.
 type Session struct {
 	mu sync.Mutex
 	// path is the storyboard's file and takePath the take's.
@@ -70,6 +73,13 @@ type Session struct {
 	version int
 	// photonBuild is the build string of the photon serving the page; [Run] sets it before serving.
 	photonBuild string
+	// runContext ends when the tuning run does, and an export's render with it; [Run] sets it
+	// before serving, and [NewSession] starts it as context.Background.
+	runContext context.Context
+	// renderClip is [render.Run]; a test wraps it to hold an export running or see its error.
+	renderClip func(context.Context, *clip.Clip, render.Options, io.Writer, io.Writer) error
+	// export is the session's one GIF export, running or last finished.
+	export exportJob
 }
 
 // pipeline is one version of the storyboard as the preview builds on it: the board parsed, the
@@ -123,6 +133,8 @@ func NewSession(loaded *clip.Clip, takePath string) (*Session, error) {
 		recorded:      recorded,
 		buildPipeline: render.Build,
 		history:       newHistory(src),
+		runContext:    context.Background(),
+		renderClip:    render.Run,
 	}
 	built, err := s.build(src)
 	if err != nil {
@@ -245,16 +257,8 @@ func (s *Session) Save() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	onDisk, err := os.ReadFile(s.path)
-	if err != nil {
-		return fmt.Errorf("read the storyboard: %w", err)
-	}
-	if !bytes.Equal(onDisk, s.disk) {
-		if !s.isStale {
-			s.isStale = true
-			s.version++
-		}
-		return ErrStale
+	if err := s.checkDisk(); err != nil {
+		return err
 	}
 	if len(s.problems) > 0 {
 		return fmt.Errorf("%w: %s", ErrInvalid, s.problems[0].Message)
@@ -272,6 +276,24 @@ func (s *Session) Save() error {
 	s.disk = src
 	s.version++
 	return nil
+}
+
+// checkDisk reads the storyboard on disk again and refuses with [ErrStale], turning the session
+// stale, when it is not the one the session loaded or last saved. It fails too when the storyboard
+// cannot be read.
+func (s *Session) checkDisk() error {
+	onDisk, err := os.ReadFile(s.path)
+	if err != nil {
+		return fmt.Errorf("read the storyboard: %w", err)
+	}
+	if bytes.Equal(onDisk, s.disk) {
+		return nil
+	}
+	if !s.isStale {
+		s.isStale = true
+		s.version++
+	}
+	return ErrStale
 }
 
 // validate checks src once more as the storyboard loader and the clip's cross-check do.

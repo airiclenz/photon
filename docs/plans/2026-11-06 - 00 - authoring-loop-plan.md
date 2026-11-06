@@ -221,7 +221,11 @@ unchanged.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/render -run 'Run'`
 **Commit:** `feat(render): report frame progress through Options.Progress`
 
-## 6. Export job in the tune session
+## 6. Export job in the tune session — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): problems refuse with a third sentinel, `ErrProblems` (409), beside `ErrUnsaved`/`ErrExporting`; Save's on-disk stale check moved into `Session.checkDisk`, which Save and Export share, so Save's behaviour is unchanged.
+NOTES (2026-11-06): the render's stdout/stderr go to io.Discard (no buffers): `error` is the returned error's text. `Run` now waits for a running export after the server shuts down, so the render (killed by ctx) removes its palette file before photon exits; tests await the job through the same `waitExport`.
+NOTES (2026-11-06): POST /api/export is routed through a new `stateAfterAs(status, change)` that `stateAfter` now delegates to (200), answering 202 with the State. Export start, progress and finish never bump `version`; State's doc says so.
 
 **What:**
 **Goal:** `POST /api/export` starts one background render of the saved clip to its configured
