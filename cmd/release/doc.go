@@ -43,6 +43,8 @@
 //   - `homebrew.go` — the homebrew channel: its probe, describe, converge, formula rendering and
 //     smoke check
 //   - `main.go` — main, the root command and the exit code a run failure maps to
+//   - `npm.go` — the npm channel's packages: staging the wrapper and the six platform packages
+//     of a release from its archives, checked against SHA256SUMS
 //   - `prepare.go` — release prepare: the CHANGELOG rollup and VERSION bump commits
 //   - `publish.go` — release publish: the verb, the run and its step loop, the gate checks and the
 //     step table

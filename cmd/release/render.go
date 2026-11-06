@@ -11,18 +11,22 @@ import (
 )
 
 // The package-channel files publish writes, rendered whole from the templates below at each
-// release. The templates are the source of truth: the tap's formula, the bucket's manifest and
-// the winget manifests say they are generated here, so a fix to any of them lands in this
-// repository, never in theirs. Every template base name is distinct, since templates are looked
-// up by base name whichever directory they sit in.
+// release. The templates are the source of truth: the tap's formula, the bucket's manifest, the
+// winget manifests and the npm launcher say they are generated here, so a fix to any of them
+// lands in this repository, never in theirs. Every template base name is distinct, since
+// templates are looked up by base name whichever directory they sit in.
 const (
 	formulaTemplate         = "photon.rb.tmpl"
 	scoopTemplate           = "scoop.json.tmpl"
 	wingetVersionTemplate   = "photon.version.yaml.tmpl"
 	wingetInstallerTemplate = "photon.installer.yaml.tmpl"
 	wingetLocaleTemplate    = "photon.locale.en-US.yaml.tmpl"
+	npmWrapperTemplate      = "package.json.tmpl"
+	npmLauncherTemplate     = "photon.js.tmpl"
+	npmPlatformTemplate     = "platform.package.json.tmpl"
 	packageTemplatesPattern = "templates/*.tmpl"
 	wingetTemplatesPattern  = "templates/winget/*.tmpl"
+	npmTemplatesPattern     = "templates/npm/*.tmpl"
 )
 
 // wingetPackageID is the package identifier photon is published under in winget-pkgs.
@@ -35,13 +39,15 @@ const (
 	releasePageBase     = "https://github.com/" + photonRepo + "/releases/tag/"
 )
 
-//go:embed templates/*.tmpl templates/winget/*.tmpl
+//go:embed templates/*.tmpl templates/winget/*.tmpl templates/npm/*.tmpl
 var templateFiles embed.FS
 
 // packageTemplates holds every package-channel template, parsed once. A template that fails to
 // parse is a defect of this program, caught by every render test, so it panics at start-up.
 var packageTemplates = template.Must(
-	template.ParseFS(templateFiles, packageTemplatesPattern, wingetTemplatesPattern),
+	template.ParseFS(
+		templateFiles, packageTemplatesPattern, wingetTemplatesPattern, npmTemplatesPattern,
+	),
 )
 
 // renderedFile is one rendered package-channel file and the name it is written under.

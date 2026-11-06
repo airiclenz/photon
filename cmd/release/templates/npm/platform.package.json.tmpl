@@ -1,0 +1,20 @@
+{
+  "name": "{{.Platform.Name}}",
+  "version": "{{.Version}}",
+  "description": "The photon binary for {{.Platform.OS}} {{.Platform.CPU}}, installed by {{.Wrapper}}",
+  "homepage": "https://github.com/airiclenz/photon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/airiclenz/photon.git"
+  },
+  "license": "MIT",
+  "os": [
+    "{{.Platform.OS}}"
+  ],
+  "cpu": [
+    "{{.Platform.CPU}}"
+  ],
+  "files": [
+    "bin/"
+  ]
+}

@@ -308,7 +308,12 @@ cmd/release/publish_test.go — mutatingCommands, runTestPublishWith; cmd/releas
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./cmd/release/`
 **Commit:** `feat(release): publish releases to winget`
 
-## 11. Build the npm packages
+## 11. Build the npm packages — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): platform packages are named with npm's own os/cpu values, `@airiclenz/photon-<linux|darwin|win32>-<x64|arm64>` (the plan fixes only the `<os>-<arch>` shape), so each name matches its os/cpu fields and the launcher's `process.platform`-`process.arch` key; each stages in outDir/<name without scope> (wrapper in outDir/photon).
+NOTES (2026-11-06): the API item 12 calls is `stageNpmPackages(version, archiveDir, sums, outDir) ([]npmPackage, error)` — npmPackage{name, dir} in publish order, six platform packages then the wrapper; it verifies all six archives against SHA256SUMS before writing anything (sentinel errNpmArchiveMismatch; errNoChecksum/errMalformedChecksum from checksumFor).
+NOTES (2026-11-06): extraction reuses smoke.go's existing extractTarGzEntry/extractZipEntry (missing entry → errNoEntry) instead of a second copy; npm.go only dispatches by archive kind. smoke.go is unchanged.
+NOTES (2026-11-06): the test fixture release is built by running dist with the existing fake toolchain (runTestDist/fakeToolchain), so the archives have the exact shape dist ships; binaries are compared to stubBinary, the text files to goldens under testdata/npm/. The launcher was also exercised by hand under node with a fake platform package (passes args, exits with the child's status, names the missing package).
 
 **What:**
 **Goal:** the release tool stages the wrapper and six platform npm packages for a version from the release archives, each archive checked against SHA256SUMS.

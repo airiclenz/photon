@@ -1,0 +1,20 @@
+{
+  "name": "@airiclenz/photon-win32-x64",
+  "version": "0.0.0",
+  "description": "The photon binary for win32 x64, installed by @airiclenz/photon",
+  "homepage": "https://github.com/airiclenz/photon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/airiclenz/photon.git"
+  },
+  "license": "MIT",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin/"
+  ]
+}

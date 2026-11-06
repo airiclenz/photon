@@ -1,0 +1,25 @@
+{
+  "name": "@airiclenz/photon",
+  "version": "0.0.0",
+  "description": "Record, check and render a terminal app's demo clip from its storyboard",
+  "homepage": "https://github.com/airiclenz/photon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/airiclenz/photon.git"
+  },
+  "license": "MIT",
+  "bin": {
+    "photon": "bin/photon.js"
+  },
+  "files": [
+    "bin/"
+  ],
+  "optionalDependencies": {
+    "@airiclenz/photon-linux-x64": "0.0.0",
+    "@airiclenz/photon-linux-arm64": "0.0.0",
+    "@airiclenz/photon-darwin-x64": "0.0.0",
+    "@airiclenz/photon-darwin-arm64": "0.0.0",
+    "@airiclenz/photon-win32-x64": "0.0.0",
+    "@airiclenz/photon-win32-arm64": "0.0.0"
+  }
+}

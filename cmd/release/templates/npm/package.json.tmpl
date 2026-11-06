@@ -1,0 +1,22 @@
+{
+  "name": "{{.Wrapper}}",
+  "version": "{{.Version}}",
+  "description": "Record, check and render a terminal app's demo clip from its storyboard",
+  "homepage": "https://github.com/airiclenz/photon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/airiclenz/photon.git"
+  },
+  "license": "MIT",
+  "bin": {
+    "photon": "bin/photon.js"
+  },
+  "files": [
+    "bin/"
+  ],
+  "optionalDependencies": {
+{{- range $index, $platform := .Platforms}}{{if $index}},{{end}}
+    "{{$platform.Name}}": "{{$.Version}}"
+{{- end}}
+  }
+}
