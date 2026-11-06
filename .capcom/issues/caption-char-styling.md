@@ -1,0 +1,19 @@
+---
+title: Style parts of a caption's text
+status: open
+type: task
+priority: 2
+labels: [render]
+created: 2026-11-06T07:11:17Z
+---
+
+A caption has one colour and style for all its text. Highlighting a word (a key name, a command)
+is not possible.
+
+Shelved as out of scope by `docs/plans/archived/2026-10-17 - 05 - camera-captions-plan.md`.
+
+## Acceptance
+
+- A storyboard can style a span of caption text (at least colour) separately from the rest.
+- Unstyled captions render byte-identically to today.
+- Render goldens cover a styled span.
