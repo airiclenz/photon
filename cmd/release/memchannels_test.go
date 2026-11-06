@@ -5,34 +5,41 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 )
 
 // The channelRepos methods a memChannelRepos reads through and can be told to fail.
 const (
-	methodExists      = "Exists"
-	methodReadFile    = "ReadFile"
-	methodListDirs    = "ListDirs"
-	methodOpenPulls   = "OpenPulls"
-	methodPublishFile = "PublishFile"
+	methodExists         = "Exists"
+	methodReadFile       = "ReadFile"
+	methodListDirs       = "ListDirs"
+	methodOpenPulls      = "OpenPulls"
+	methodPublishFile    = "PublishFile"
+	methodHasPackage     = "HasPackage"
+	methodPublishPackage = "PublishPackage"
 )
 
 // channelsCallName is the name a memChannelRepos' writes are recorded under in a runner's call
 // record.
 const channelsCallName = "channels"
 
-// memChannelRepos is the in-memory channelRepos: the channel repositories held as plain state —
-// which repositories exist, the files and directories each holds, its open pull requests — and
-// the error each method fails with on each repository, so a test states what the channel
-// repositories hold instead of what gh prints. Its zero value holds no repository: every read
-// answers "no", and PublishFile is refused.
+// memChannelRepos is the in-memory channelRepos: the channel repositories and the npm registry
+// held as plain state — which repositories exist, the files and directories each holds, its open
+// pull requests, the versions the registry holds of each package — and the error each method
+// fails with on each repository or package, so a test states what the channels hold instead of
+// what gh and npm print. Its zero value holds no repository and no package: every read answers
+// "no", and PublishFile and PublishPackage are refused.
 type memChannelRepos struct {
 	// repos are the repositories that exist, by name.
 	repos map[string]memChannelRepo
-	// failures are the errors methods fail with, by method and repository, before anything is
-	// read: an error wrapping errUnparsableAnswer stands for an answer the adapter could not
-	// parse.
+	// registry is the versions the npm registry holds, by package name.
+	registry map[string][]string
+	// failures are the errors methods fail with, by method and repository — or package name, for
+	// the registry's methods — before anything is read: an error wrapping errUnparsableAnswer
+	// stands for an answer the adapter could not parse.
 	failures map[memChannelCall]error
 	// record is what the methods read and PublishFile wrote; nil records nothing and refuses
 	// PublishFile. It is a pointer so every copy of the memChannelRepos records into one.
@@ -47,7 +54,7 @@ type memChannelRepo struct {
 	pulls []pullRequest
 }
 
-// memChannelCall is one method called on one repository.
+// memChannelCall is one method called on one repository, or on one npm package.
 type memChannelCall struct {
 	method string
 	repo   string
@@ -62,6 +69,14 @@ type memChannelPublish struct {
 	subject string
 }
 
+// memPackagePublish is one package PublishPackage published: its name and version, and the
+// token it was published with.
+type memPackagePublish struct {
+	name    string
+	version string
+	token   string
+}
+
 // memChannelRecord is the part of a memChannelRepos its calls change.
 type memChannelRecord struct {
 	// log is the runner whose ordered call record PublishFile joins, as calls named
@@ -74,6 +89,8 @@ type memChannelRecord struct {
 	reads []memChannelCall
 	// published are the files PublishFile pushed, in order; later reads see them.
 	published []memChannelPublish
+	// packages are the packages PublishPackage published, in order; later reads see them.
+	packages []memPackagePublish
 }
 
 // withFailure returns a copy of the repositories whose method fails with err on repo.
@@ -189,6 +206,70 @@ func (c memChannelRepos) PublishFile(_ context.Context, repo, path, content, sub
 		log.mu.Unlock()
 	}
 	return true, nil
+}
+
+// publishedPackages returns the packages PublishPackage published so far, in order; none when
+// nothing is recorded.
+func (c memChannelRepos) publishedPackages() []memPackagePublish {
+	if c.record == nil {
+		return nil
+	}
+	c.record.mu.Lock()
+	defer c.record.mu.Unlock()
+	return slices.Clone(c.record.packages)
+}
+
+// HasPackage reports whether the registry holds the package at version, or PublishPackage
+// published it.
+func (c memChannelRepos) HasPackage(_ context.Context, name, version string) (bool, error) {
+	if err := c.read(methodHasPackage, name); err != nil {
+		return false, err
+	}
+	return c.holdsPackage(name, version), nil
+}
+
+// holdsPackage reports whether the registry holds the package at version, or PublishPackage
+// published it.
+func (c memChannelRepos) holdsPackage(name, version string) bool {
+	if c.record != nil {
+		c.record.mu.Lock()
+		defer c.record.mu.Unlock()
+		isPublished := slices.ContainsFunc(c.record.packages, func(published memPackagePublish) bool {
+			return published.name == name && published.version == version
+		})
+		if isPublished {
+			return true
+		}
+	}
+	return slices.Contains(c.registry[name], version)
+}
+
+// PublishPackage records the package in record and its log, where later reads see it: dir must
+// hold a staged package's manifest, and the registry must not hold the version already, as npm's
+// refuses to publish one twice.
+func (c memChannelRepos) PublishPackage(_ context.Context, name, version, dir, token string) error {
+	if err := c.failures[memChannelCall{method: methodPublishPackage, repo: name}]; err != nil {
+		return err
+	}
+	if c.record == nil {
+		return errors.New("this memChannelRepos publishes nothing")
+	}
+	if _, err := os.Stat(filepath.Join(dir, npmManifestFile)); err != nil {
+		return fmt.Errorf("publish %s@%s: %w", name, version, err)
+	}
+	if c.holdsPackage(name, version) {
+		return fmt.Errorf("publish %s@%s: E403 cannot publish over the previously published version", name, version)
+	}
+
+	c.record.mu.Lock()
+	c.record.packages = append(c.record.packages, memPackagePublish{name: name, version: version, token: token})
+	c.record.mu.Unlock()
+	if log := c.record.log; log != nil {
+		log.mu.Lock()
+		log.calls = append(log.calls, recordedCall{name: channelsCallName, args: []string{methodPublishPackage, name + "@" + version}})
+		log.mu.Unlock()
+	}
+	return nil
 }
 
 // file returns what path holds in the repository: the content PublishFile last pushed there, else

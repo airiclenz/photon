@@ -12,12 +12,13 @@ import (
 	"strings"
 )
 
-// channelRepos is the semantic seam over the package channels' GitHub repositories: what the
-// channel probes ask of them and what publish writes to them, in their own terms rather than as
-// gh and git argv. execChannelRepos is the production adapter.
-// A "no" answer — a repository, file or directory that does not exist, or an empty repository —
-// is never an error; every method fails with an error when its answer cannot be read, and one
-// wrapping errUnparsableAnswer when the answer came back in a shape it cannot parse.
+// channelRepos is the semantic seam over the package channels' GitHub repositories and the npm
+// registry: what the channel probes ask of them and what publish writes to them, in their own
+// terms rather than as gh, git and npm argv. execChannelRepos is the production adapter.
+// A "no" answer — a repository, file, directory or package version that does not exist, or an
+// empty repository — is never an error; every method fails with an error when its answer cannot
+// be read, and one wrapping errUnparsableAnswer when the answer came back in a shape it cannot
+// parse.
 type channelRepos interface {
 	// Exists reports whether the repository exists.
 	Exists(ctx context.Context, repo string) (bool, error)
@@ -38,6 +39,14 @@ type channelRepos interface {
 	// — no pull request. It reports whether it pushed a commit; every failure names the
 	// repository and the step that failed.
 	PublishFile(ctx context.Context, repo, path, content, subject string) (bool, error)
+	// HasPackage reports whether the npm registry holds the package name at version: false for
+	// a package or version it does not have. Its error wraps exec.ErrNotFound when npm is not
+	// installed.
+	HasPackage(ctx context.Context, name, version string) (bool, error)
+	// PublishPackage publishes the package name at version, staged in the directory dir, to the
+	// npm registry, authenticated by token. The token reaches npm through its environment alone,
+	// never its argv, and no error it returns carries it.
+	PublishPackage(ctx context.Context, name, version, dir, token string) error
 }
 
 // pullRequest is one pull request a channel repository holds.
@@ -62,8 +71,9 @@ func (e unparsableAnswerError) Error() string { return e.cause.Error() }
 func (e unparsableAnswerError) Unwrap() []error { return []error{errUnparsableAnswer, e.cause} }
 
 // execChannelRepos is the production channelRepos: it owns the gh argv for the channel
-// repositories, run in dir, and the git argv of the clone PublishFile writes in, and reads
-// GitHub's 404 — a missing repository or path, or an empty repository — as a "no".
+// repositories, run in dir, the git argv of the clone PublishFile writes in, and the npm argv
+// for the registry, and reads GitHub's and the registry's 404 — a missing repository, path or
+// package, or an empty repository — as a "no".
 type execChannelRepos struct {
 	commands runner
 	dir      string
@@ -301,4 +311,61 @@ func (r execChannelRepos) PublishFile(
 		return false, fmt.Errorf("push %s to %s: %w", path, repo, err)
 	}
 	return true, nil
+}
+
+// npmNotFoundCode is the error code npm prints for a package the registry does not have.
+const npmNotFoundCode = "E404"
+
+// npmUserconfigFile names the temporary npm userconfig PublishPackage authenticates through, and
+// npmUserconfigMode keeps it readable by its owner alone.
+const (
+	npmUserconfigFile = ".npmrc"
+	npmUserconfigMode = 0o600
+)
+
+// npmUserconfig is the userconfig's content: npm expands ${NPM_TOKEN} from its environment when
+// it reads the file, so the token itself is written nowhere.
+const npmUserconfig = "//" + npmRegistryHost + "/:_authToken=${" + npmTokenVariable + "}\n"
+
+// HasPackage runs `npm view <name>@<version> version`, revalidating npm's cached answer, which
+// prints the version when the registry holds it, nothing for a version of the package it does
+// not, and fails with E404 for a package it does not have at all.
+func (r execChannelRepos) HasPackage(ctx context.Context, name, version string) (bool, error) {
+	output, err := r.commands.run(ctx, r.dir, nil, npmCommand,
+		"view", name+"@"+version, "version", "--prefer-online", "--registry", npmRegistryURL)
+	if err != nil && strings.Contains(err.Error(), npmNotFoundCode) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(output) != "", nil
+}
+
+// PublishPackage runs `npm publish <dir> --access public` against the npm registry, through a
+// temporary userconfig that reads the token from NPM_TOKEN in npm's environment — so neither its
+// argv nor the userconfig holds the token, and npm reads no other userconfig. A failing npm's
+// error is scrubbed of the token, in case it echoed it.
+func (r execChannelRepos) PublishPackage(
+	ctx context.Context,
+	name, version, dir, token string,
+) error {
+	configDir, err := os.MkdirTemp("", "photon-npm-config-")
+	if err != nil {
+		return fmt.Errorf("create the npm userconfig directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(configDir) }()
+	userconfig := filepath.Join(configDir, npmUserconfigFile)
+	if err := os.WriteFile(userconfig, []byte(npmUserconfig), npmUserconfigMode); err != nil {
+		return fmt.Errorf("write the npm userconfig: %w", err)
+	}
+
+	env := []string{npmTokenVariable + "=" + token}
+	_, err = r.commands.run(ctx, r.dir, env, npmCommand, "publish", dir, "--access", "public",
+		"--registry", npmRegistryURL, "--userconfig", userconfig)
+	if err != nil {
+		return fmt.Errorf("publish %s@%s to the npm registry: %s",
+			name, version, strings.ReplaceAll(err.Error(), token, redactedToken))
+	}
+	return nil
 }

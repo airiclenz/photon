@@ -99,12 +99,13 @@ func TestStatusReportsTheGateBaselineAndHighestTag(t *testing.T) {
 	}
 
 	// Nothing is published for v0.24.14 and no channel's one-time setup has landed; winget needs
-	// none, since publish submits the package's first manifests itself.
+	// none, since publish submits the package's first manifests itself, and npm none on a host
+	// that has npm.
 	var states []string
 	for _, step := range steps {
 		states = append(states, step.Name+" "+string(step.State))
 	}
-	wantStates := []string{"tag pending", "release pending", "homebrew setup-pending", "scoop setup-pending", "winget pending", "smoke pending"}
+	wantStates := []string{"tag pending", "release pending", "homebrew setup-pending", "scoop setup-pending", "winget pending", "npm pending", "smoke pending"}
 	if !slices.Equal(states, wantStates) {
 		t.Errorf("steps = %q, want %q", states, wantStates)
 	}
@@ -398,6 +399,7 @@ func TestStatusTextNamesTheBlockingConditions(t *testing.T) {
 		"  tag       pending        origin has no tag v0.24.14\n",
 		"  scoop     setup-pending  no airiclenz/scoop-bucket repository yet\n",
 		"  winget    pending        AiricLenz.Photon is not in microsoft/winget-pkgs yet",
+		"  npm       pending        registry.npmjs.org lacks @airiclenz/photon@0.24.14 and 6 of its 6 platform packages",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("output lacks %q:\n%s", want, output)

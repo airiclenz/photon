@@ -12,6 +12,7 @@ const (
 	stepHomebrew = "homebrew"
 	stepScoop    = "scoop"
 	stepWinget   = "winget"
+	stepNpm      = "npm"
 	stepSmoke    = "smoke"
 )
 
@@ -26,9 +27,10 @@ const (
 	// statePending: publish has the step to do.
 	statePending stepState = "pending"
 	// stateSetupPending: the channel's one-time setup — its tap or bucket repository, the
-	// winget package's first submission — has not landed; publish skips the step. publish also
-	// reports winget so when komac or a GitHub token is missing, or its first `komac submit`
-	// fails, keeping the rendered manifests for a human to submit.
+	// winget package's first submission, npm on this host — has not landed; publish skips the
+	// step. publish also reports winget so when komac or a GitHub token is missing, or its first
+	// `komac submit` fails, keeping the rendered manifests for a human to submit, and npm so when
+	// NPM_TOKEN is not set.
 	stateSetupPending stepState = "setup-pending"
 	// stateUnknown: the probe could not run, or found the remote in a state publish cannot
 	// converge from; the detail names which.
@@ -48,7 +50,7 @@ type stepProbe func(ctx context.Context, env probeEnv, version releaseVersion) s
 
 // probeEnv is what the probes read the remotes through: photon's own checkout and GitHub
 // repository through repo, and the package channels' repositories — the tap, the bucket,
-// winget-pkgs — through channels.
+// winget-pkgs — and the npm registry through channels.
 type probeEnv struct {
 	repo     repo
 	channels channelRepos
@@ -72,9 +74,9 @@ type publishStep struct {
 
 // publishSteps are the steps publish runs, in the order it runs them. status and publish both
 // read this one table, so what status reports done is exactly what publish skips. The channel
-// steps (homebrew.go, scoop.go, winget.go) run after the release, whose SHA256SUMS they render
-// from, and the smoke step (smoke.go) runs last, over everything the others published; the smoke
-// verb runs the channels' smoke checks in this table's order.
+// steps (homebrew.go, scoop.go, winget.go, npm.go) run after the release, whose SHA256SUMS they
+// render from, and the smoke step (smoke.go) runs last, over everything the others published; the
+// smoke verb runs the channels' smoke checks in this table's order.
 var publishSteps = []publishStep{
 	{name: stepTag, probe: probeTag, describe: describeTag, converge: convergeTag},
 	{name: stepRelease, probe: probeRelease, describe: describeRelease, converge: convergeRelease},
@@ -85,6 +87,8 @@ var publishSteps = []publishStep{
 		smoke: func(ctx context.Context, run *smokeRun) { run.checkScoop(ctx) }},
 	{name: stepWinget, probe: probeWinget, describe: describeWinget, converge: convergeWinget,
 		doneDetail: wingetSubmittedDetail},
+	{name: stepNpm, probe: probeNpm, describe: describeNpm, converge: convergeNpm,
+		smoke: func(ctx context.Context, run *smokeRun) { run.checkNpm(ctx) }},
 	{name: stepSmoke, probe: probeSmoke, describe: describeSmoke, converge: convergeSmoke,
 		doneDetail: smokePassedDetail},
 }

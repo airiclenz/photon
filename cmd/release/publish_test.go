@@ -22,7 +22,7 @@ const (
 )
 
 // mutatingCommands are the commands that change something — origin, a GitHub release, the
-// checkout's refs, a channel repository, or the disk a build writes — by their leading words: the
+// checkout's refs, a channel repository, the npm registry, or the disk a build writes — by their leading words: the
 // runner's commands, and the memRepo's and memChannelRepos' changes they record into the same log.
 // A run that may change nothing issues none of them.
 var mutatingCommands = []string{
@@ -33,6 +33,7 @@ var mutatingCommands = []string{
 	repoCallName + " " + methodUploadAssets,
 	repoCallName + " " + methodUndraftRelease,
 	channelsCallName + " " + methodPublishFile,
+	channelsCallName + " " + methodPublishPackage,
 	"go build",
 	"komac update",
 	"komac submit",

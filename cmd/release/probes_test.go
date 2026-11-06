@@ -95,6 +95,16 @@ func wingetHolding(versions []string, pulls ...pullRequest) memChannelRepos {
 	return memChannelRepos{repos: map[string]memChannelRepo{wingetRepo: winget}}
 }
 
+// npmHolding is channel repositories whose npm registry holds each of the packages names at
+// version.
+func npmHolding(version string, names ...string) memChannelRepos {
+	registry := make(map[string][]string, len(names))
+	for _, name := range names {
+		registry[name] = []string{version}
+	}
+	return memChannelRepos{registry: registry}
+}
+
 // komacPull is an open komac pull request titled kind ("New version", or "New package" for the
 // first submission) for version.
 func komacPull(number int, kind, version string) pullRequest {
@@ -102,13 +112,14 @@ func komacPull(number int, kind, version string) pullRequest {
 		url: fmt.Sprintf("https://github.com/microsoft/winget-pkgs/pull/%d", number)}
 }
 
-// channelReposOf is channel repositories holding every repository the parts hold — a later
-// part's repository replacing an earlier part's of the same name — and failing as each part
-// fails; it records nothing.
+// channelReposOf is channel repositories holding every repository and npm package the parts
+// hold — a later part's repository or package replacing an earlier part's of the same name — and
+// failing as each part fails; it records nothing.
 func channelReposOf(parts ...memChannelRepos) memChannelRepos {
-	channels := memChannelRepos{repos: map[string]memChannelRepo{}}
+	channels := memChannelRepos{repos: map[string]memChannelRepo{}, registry: map[string][]string{}}
 	for _, part := range parts {
 		maps.Copy(channels.repos, part.repos)
+		maps.Copy(channels.registry, part.registry)
 		for call, err := range part.failures {
 			channels = channels.withFailure(call.method, call.repo, err)
 		}
@@ -202,6 +213,20 @@ func TestProbesReportEachState(t *testing.T) {
 			wantState: stateUnknown, wantDetail: "could not parse gh pr list output: invalid character"},
 		"winget pull requests unreadable": {probe: probeWinget, channels: wingetHolding([]string{"0.24.10"}).withFailure(methodOpenPulls, wingetRepo, cannotRun),
 			wantState: stateUnknown, wantDetail: "could not list the open microsoft/winget-pkgs pull requests"},
+		"npm absent": {probe: probeNpm, wantState: statePending,
+			wantDetail: "registry.npmjs.org lacks @airiclenz/photon@0.24.11 and 6 of its 6 platform packages: @airiclenz/photon-linux-x64, "},
+		"npm interrupted after three platform packages": {probe: probeNpm, channels: npmHolding("0.24.11", npmWantPackages[:3]...),
+			wantState: statePending, wantDetail: "and 3 of its 6 platform packages: @airiclenz/photon-darwin-arm64, @airiclenz/photon-win32-x64, @airiclenz/photon-win32-arm64"},
+		"npm older version": {probe: probeNpm, channels: npmHolding("0.24.10", npmWantPackages...),
+			wantState: statePending, wantDetail: "lacks @airiclenz/photon@0.24.11 and 6 of its 6"},
+		"npm published": {probe: probeNpm, channels: npmHolding("0.24.11", npmWrapperName),
+			wantState: stateDone, wantDetail: "published: @airiclenz/photon@0.24.11 on registry.npmjs.org"},
+		"npm not installed": {probe: probeNpm, channels: memChannelRepos{}.withFailure(methodHasPackage, npmWrapperName, npmMissing()),
+			wantState: stateSetupPending, wantDetail: "npm is not installed"},
+		"npm registry unreachable": {probe: probeNpm, channels: memChannelRepos{}.withFailure(methodHasPackage, npmWrapperName, cannotRun),
+			wantState: stateUnknown, wantDetail: "could not read @airiclenz/photon@0.24.11 from registry.npmjs.org: cannot run"},
+		"npm platform package unreadable": {probe: probeNpm, channels: memChannelRepos{}.withFailure(methodHasPackage, npmWantPackages[4], cannotRun),
+			wantState: stateUnknown, wantDetail: "could not read @airiclenz/photon-win32-x64@0.24.11 from registry.npmjs.org"},
 		"smoke": {probe: probeSmoke, repo: memRepo{remoteTags: annotated, releases: allAssets}, wantState: statePending, wantDetail: "publish runs it last"},
 		// A draft an interrupted `gh release create` left is never done: its download URLs 404.
 		"release draft with all assets": {probe: probeRelease, repo: memRepo{releases: allAssets, drafts: draft},
@@ -240,19 +265,24 @@ func TestProbeStepsRunsEveryStepInPublishOrder(t *testing.T) {
 	for _, step := range steps {
 		names = append(names, step.Name)
 	}
-	want := []string{"tag", "release", "homebrew", "scoop", "winget", "smoke"}
+	want := []string{"tag", "release", "homebrew", "scoop", "winget", "npm", "smoke"}
 	if !slices.Equal(names, want) {
 		t.Errorf("steps = %q, want %q", names, want)
 	}
 }
 
 // failingChannels is channel repositories every one of whose methods fails with err on the tap,
-// the bucket and winget-pkgs alike.
+// the bucket and winget-pkgs alike, and on each of the seven npm packages.
 func failingChannels(err error) memChannelRepos {
 	var channels memChannelRepos
 	for _, repo := range []string{tapRepo, bucketRepo, wingetRepo} {
 		for _, method := range []string{methodExists, methodReadFile, methodListDirs, methodOpenPulls, methodPublishFile} {
 			channels = channels.withFailure(method, repo, err)
+		}
+	}
+	for _, name := range npmWantPackages {
+		for _, method := range []string{methodHasPackage, methodPublishPackage} {
+			channels = channels.withFailure(method, name, err)
 		}
 	}
 	return channels

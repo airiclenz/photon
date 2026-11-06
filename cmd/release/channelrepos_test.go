@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -400,6 +401,118 @@ func TestExecChannelReposPublishFileNamesTheFailingStep(t *testing.T) {
 			last := commands.calls[len(commands.calls)-1]
 			if got := last.name + " " + last.args[0]; got != tc.failing {
 				t.Errorf("the last command run = %q, want the failing %q", got, tc.failing)
+			}
+		})
+	}
+}
+
+// TestExecChannelReposHasPackageReadsTheRegistry pins HasPackage's npm argv, run in its
+// directory, and what it makes of the answer: the version printed is a yes, an empty answer (a
+// version of the package the registry lacks) and E404 (a package it lacks) are a no, a missing npm
+// is an error wrapping exec.ErrNotFound, and any other failure is an error.
+func TestExecChannelReposHasPackageReadsTheRegistry(t *testing.T) {
+	t.Parallel()
+	wantCall := recordedCall{dir: "/work", name: "npm", args: []string{
+		"view", "@airiclenz/photon@0.24.11", "version", "--prefer-online", "--registry", "https://registry.npmjs.org/",
+	}}
+	notFound := errors.New("npm view @airiclenz/photon@0.24.11 version: exit status 1: npm error code E404\n" +
+		"npm error 404 Not Found - GET https://registry.npmjs.org/@airiclenz%2fphoton - Not found")
+	offline := errors.New("npm view @airiclenz/photon@0.24.11 version: exit status 1: npm error code ENOTFOUND")
+	missing := fmt.Errorf("npm view: %w", &exec.Error{Name: "npm", Err: exec.ErrNotFound})
+
+	cases := map[string]struct {
+		output         string
+		err            error
+		want           bool
+		wantErr        string
+		wantMissingNpm bool
+	}{
+		"the version is published":       {output: "0.24.11\n", want: true},
+		"the package lacks the version":  {output: "", want: false},
+		"the registry lacks the package": {err: notFound, want: false},
+		"the registry cannot be reached": {err: offline, wantErr: "ENOTFOUND"},
+		"npm is not installed":           {err: missing, wantErr: "executable file not found", wantMissingNpm: true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			commands := answering(tc.output, tc.err)
+			channels := execChannelRepos{commands: commands, dir: "/work"}
+
+			got, err := channels.HasPackage(t.Context(), npmWrapperName, "0.24.11")
+
+			if tc.wantErr == "" && err != nil {
+				t.Fatalf("HasPackage failed: %v", err)
+			}
+			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+				t.Fatalf("HasPackage error = %v, want one containing %q", err, tc.wantErr)
+			}
+			if isMissing := errors.Is(err, exec.ErrNotFound); isMissing != tc.wantMissingNpm {
+				t.Errorf("HasPackage error wraps exec.ErrNotFound: %t, want %t", isMissing, tc.wantMissingNpm)
+			}
+			if got != tc.want {
+				t.Errorf("HasPackage = %t, want %t", got, tc.want)
+			}
+			if len(commands.calls) != 1 || !reflect.DeepEqual(commands.calls[0], wantCall) {
+				t.Errorf("calls = %+v, want exactly %+v", commands.calls, wantCall)
+			}
+		})
+	}
+}
+
+// TestExecChannelReposPublishPackageKeepsTheTokenOutOfArgv pins PublishPackage's npm argv: the
+// package directory published publicly to the registry through a temporary userconfig that names
+// NPM_TOKEN rather than holding the token, the token in npm's environment alone, and the
+// userconfig removed once npm has run; a failing npm's error names the package with the token it
+// echoed redacted.
+func TestExecChannelReposPublishPackageKeepsTheTokenOutOfArgv(t *testing.T) {
+	t.Parallel()
+
+	for _, isFailing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("failing %t", isFailing), func(t *testing.T) {
+			t.Parallel()
+			var userconfig, userconfigContent string
+			commands := &fakeRunner{respond: func(call recordedCall) (string, error) {
+				userconfig = call.args[len(call.args)-1]
+				content, err := os.ReadFile(userconfig)
+				if err != nil {
+					return "", err
+				}
+				userconfigContent = string(content)
+				if isFailing {
+					return "", fmt.Errorf("npm publish: exit status 1: npm error code E401 bad token %s", sentinelToken)
+				}
+				return "", nil
+			}}
+			channels := execChannelRepos{commands: commands, dir: "/work"}
+
+			err := channels.PublishPackage(t.Context(), npmWrapperName, "0.24.11", "/stage/photon", sentinelToken)
+
+			if (err != nil) != isFailing {
+				t.Fatalf("PublishPackage error = %v, want an error: %t", err, isFailing)
+			}
+			if isFailing && (strings.Contains(err.Error(), sentinelToken) ||
+				!strings.Contains(err.Error(), "publish @airiclenz/photon@0.24.11 to the npm registry") ||
+				!strings.Contains(err.Error(), redactedToken)) {
+				t.Errorf("PublishPackage error = %q, want it naming the package with the token redacted", err)
+			}
+			if len(commands.calls) != 1 {
+				t.Fatalf("calls = %+v, want exactly one npm publish", commands.calls)
+			}
+			call := commands.calls[0]
+			wantArgs := []string{"publish", "/stage/photon", "--access", "public",
+				"--registry", "https://registry.npmjs.org/", "--userconfig", userconfig}
+			if call.name != "npm" || call.dir != "/work" || !reflect.DeepEqual(call.args, wantArgs) {
+				t.Errorf("call = %s %q in %s, want npm %q in /work", call.name, call.args, call.dir, wantArgs)
+			}
+			if want := []string{"NPM_TOKEN=" + sentinelToken}; !reflect.DeepEqual(call.env, want) {
+				t.Errorf("env = %q, want %q", call.env, want)
+			}
+			if want := "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n"; userconfigContent != want {
+				t.Errorf("userconfig = %q, want %q", userconfigContent, want)
+			}
+			if _, statErr := os.Stat(userconfig); !errors.Is(statErr, os.ErrNotExist) {
+				t.Errorf("the userconfig %s outlived the publish: %v", userconfig, statErr)
 			}
 		})
 	}

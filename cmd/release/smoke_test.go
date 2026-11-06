@@ -26,8 +26,9 @@ const (
 )
 
 // smokeFake is a published publishVersion whose assets sit in releaseDir: repo holds the
-// checkout and its GitHub repository, channels the bucket, and respond answers the brew and
-// binary commands the way brew and the released binaries would on a given host.
+// checkout and its GitHub repository, channels the bucket and the npm registry, and respond
+// answers the brew, npm and binary commands the way brew, npm and the released binaries would on
+// a given host.
 type smokeFake struct {
 	releaseDir string
 	repo       memRepo
@@ -50,11 +51,18 @@ type smokeFake struct {
 	// reading it fails with.
 	manifest      string
 	bucketFailure error
+	// isNpmMissing makes npm not installed; isNpmUnpublished leaves the registry without the
+	// version's packages; npmReports is the version the photon npm installs prints, in the build
+	// string versionLine makes.
+	isNpmMissing     bool
+	isNpmUnpublished bool
+	npmReports       string
 }
 
 // newSmokeFake is a release published in full: the annotated tag is on origin and fetched, the
 // six archives and SHA256SUMS are on the release, every binary carries the tag's commit, brew
-// is installed and upgrades onto the version, and the bucket's manifest names it.
+// is installed and upgrades onto the version, the bucket's manifest names it, and the npm
+// registry holds its seven packages, whose photon reports it.
 func newSmokeFake(t *testing.T) *smokeFake {
 	t.Helper()
 	releaseDir := publishedRelease(t)
@@ -71,6 +79,7 @@ func newSmokeFake(t *testing.T) *smokeFake {
 		brew:          "installed",
 		brewReports:   strings.TrimPrefix(publishVersion, "v"),
 		manifest:      manifest,
+		npmReports:    strings.TrimPrefix(publishVersion, "v"),
 	}
 }
 
@@ -106,13 +115,33 @@ func (f *smokeFake) openRepo(string) repo {
 }
 
 // channels returns the channel repositories as the fake stands: the bucket holding its manifest,
-// read failing with bucketFailure when it is set.
+// read failing with bucketFailure when it is set, and the npm registry holding the version's
+// seven packages unless isNpmUnpublished, read failing as npm missing when isNpmMissing.
 func (f *smokeFake) channels() memChannelRepos {
 	channels := bucketHolding(f.manifest)
 	if f.bucketFailure != nil {
 		channels = channels.withFailure(methodReadFile, bucketRepo, f.bucketFailure)
 	}
+	if !f.isNpmUnpublished {
+		channels = channelReposOf(channels, npmHolding(strings.TrimPrefix(publishVersion, "v"), npmWantPackages...))
+	}
+	if f.isNpmMissing {
+		channels = channels.withFailure(methodHasPackage, npmWrapperName, npmMissing())
+	}
 	return channels
+}
+
+// npmMissing is the error running npm fails with on a host without it.
+func npmMissing() error {
+	return fmt.Errorf("npm view: %w", &exec.Error{Name: npmCommand, Err: exec.ErrNotFound})
+}
+
+// npmLauncherStub is what the fake npm install links as the photon launcher.
+const npmLauncherStub = "npm launcher stub\n"
+
+// isNpmLauncher reports whether binary is the photon launcher an `npm install --prefix` links.
+func isNpmLauncher(binary string) bool {
+	return strings.Contains(binary, string(filepath.Separator)+npmLauncherDir+string(filepath.Separator))
 }
 
 // publishedRelease builds publishVersion's six archives and SHA256SUMS with the fake toolchain
@@ -165,6 +194,14 @@ func (f *smokeFake) respondOn(goos, goarch string, call recordedCall) (string, e
 		return smokeBrewPrefix + "\n", nil
 	case line == filepath.Join(smokeBrewPrefix, "bin", "photon")+" "+versionArgument:
 		return f.printedLine(f.brewLine, f.brewReports) + "\n", nil
+	case call.name == npmCommand && len(args) == 4 && args[0] == "install" && args[1] == "--prefix":
+		return "", f.installNpm(goos, args[2])
+	case len(args) == 1 && args[0] == versionArgument && isNpmLauncher(call.name):
+		// Only a launcher npm installed runs.
+		if _, err := os.Stat(call.name); err != nil {
+			return "", err
+		}
+		return f.printedLine("", f.npmReports) + "\n", nil
 	case len(args) == 1 && args[0] == versionArgument:
 		// A binary extracted from an archive: only the host's own build reports the version, so
 		// running another platform's binary fails the version check.
@@ -178,6 +215,22 @@ func (f *smokeFake) respondOn(goos, goarch string, call recordedCall) (string, e
 		return f.printedLine(f.binaryLine, f.binaryVersion) + "\n", nil
 	}
 	return "", fmt.Errorf("unexpected command %q", line)
+}
+
+// installNpm is `npm install --prefix <prefix>` on a goos host: it links the photon launcher
+// under prefix, as a .cmd shim on Windows.
+func (f *smokeFake) installNpm(goos, prefix string) error {
+	if f.isNpmMissing {
+		return npmMissing()
+	}
+	launcher := filepath.Join(prefix, npmLauncherDir, "photon")
+	if goos == "windows" {
+		launcher += ".cmd"
+	}
+	if err := os.MkdirAll(filepath.Dir(launcher), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(launcher, []byte(npmLauncherStub), 0o755)
 }
 
 // printedLine is what a binary prints for `photon version`: line when it is set, otherwise the
@@ -280,44 +333,60 @@ func TestSmokeChecks(t *testing.T) {
 				{"PASS", "the released binary reports \"0.24.11\""},
 				{"PASS", "brew's photon reports \"0.24.11\""},
 				{"PASS", "bucket at 0.24.11, both Windows hashes match SHA256SUMS"},
+				{"PASS", "npm's photon reports \"0.24.11\""},
 			},
-			wantTally: "7 passed, 0 failed, 0 skipped",
+			wantTally: "8 passed, 0 failed, 0 skipped",
+		},
+		"npm is not installed": {
+			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.isNpmMissing = true },
+			wantResults: [][2]string{{"SKIP", "npm is not installed on this host"}},
+			wantTally:   "7 passed, 0 failed, 1 skipped",
+		},
+		"the npm registry lacks the version": {
+			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.isNpmUnpublished = true },
+			wantResults: [][2]string{{"SKIP", "@airiclenz/photon@0.24.11 is not on registry.npmjs.org"}},
+			wantTally:   "7 passed, 0 failed, 1 skipped",
+		},
+		"npm's photon reports another version": {
+			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.npmReports = "0.24.10" },
+			wantResults: [][2]string{{"FAIL", "npm's photon reports \"0.24.10\", not \"0.24.11\""}},
+			wantTally:   "7 passed, 1 failed, 0 skipped",
 		},
 		"no tag on origin": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.repo.remoteTags = map[string]string{} },
 			wantResults: [][2]string{{"FAIL", "origin has no tag v0.24.11"}},
-			wantTally:   "6 passed, 1 failed, 0 skipped",
+			wantTally:   "7 passed, 1 failed, 0 skipped",
 		},
 		"lightweight tag": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.repo.remoteTags[publishVersion] = "commit" },
 			wantResults: [][2]string{{"FAIL", "v0.24.11 on origin is a lightweight tag"}},
-			wantTally:   "6 passed, 1 failed, 0 skipped",
+			wantTally:   "7 passed, 1 failed, 0 skipped",
 		},
 		"origin's tags cannot be listed": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) {
 				fake.repo.failures[methodRemoteHasTag] = errors.New("not a git repository")
 			},
 			wantResults: [][2]string{{"SKIP", "could not list origin's tags"}},
-			wantTally:   "6 passed, 0 failed, 1 skipped",
+			wantTally:   "7 passed, 0 failed, 1 skipped",
 		},
 		"tag type unreadable": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) {
 				fake.repo.failures[methodRemoteTagType] = errors.New("gh: authentication required")
 			},
 			wantResults: [][2]string{{"SKIP", "gh could not read its type"}},
-			wantTally:   "6 passed, 0 failed, 1 skipped",
+			wantTally:   "7 passed, 0 failed, 1 skipped",
 		},
 		"no local build to compare": {
 			adjust:      func(_ *smokeFake, options *smokeOptions) { options.distDir = "" },
 			wantResults: [][2]string{{"SKIP", "no --dist-dir"}},
-			wantTally:   "6 passed, 0 failed, 1 skipped",
+			wantTally:   "7 passed, 0 failed, 1 skipped",
 		},
 		"local build differs from the published sums": {
 			adjust: func(fake *smokeFake, options *smokeOptions) {
 				options.distDir = otherBuild(t, fake.releaseDir, "photon_0.24.11_linux_arm64.tar.gz")
 			},
 			wantResults: [][2]string{{"FAIL", "differs from the published one for photon_0.24.11_linux_arm64.tar.gz"}},
-			wantTally:   "6 passed, 1 failed, 0 skipped",
+			wantTally:   "7 passed, 1 failed, 0 skipped",
 		},
 		"an asset does not match SHA256SUMS": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) {
@@ -328,7 +397,7 @@ func TestSmokeChecks(t *testing.T) {
 				{"SKIP", "the assets did not all download and verify"},
 				{"PASS", "the released binary reports"},
 			},
-			wantTally: "5 passed, 1 failed, 1 skipped",
+			wantTally: "6 passed, 1 failed, 1 skipped",
 		},
 		"the host's archive does not match SHA256SUMS": {
 			adjust: func(fake *smokeFake, options *smokeOptions) {
@@ -340,7 +409,7 @@ func TestSmokeChecks(t *testing.T) {
 				{"SKIP", "the assets did not all download and verify"},
 				{"SKIP", "the host's archive photon_0.24.11_linux_amd64.tar.gz does not match the release's SHA256SUMS"},
 			},
-			wantTally: "3 passed, 1 failed, 3 skipped",
+			wantTally: "4 passed, 1 failed, 3 skipped",
 		},
 		"the release has no SHA256SUMS": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) {
@@ -351,7 +420,7 @@ func TestSmokeChecks(t *testing.T) {
 				{"FAIL", "no SHA256SUMS asset on release v0.24.11"},
 				{"SKIP", "the host's archive photon_0.24.11_linux_amd64.tar.gz did not download"},
 			},
-			wantTally: "2 passed, 1 failed, 4 skipped",
+			wantTally: "3 passed, 1 failed, 4 skipped",
 		},
 		"gh is not installed": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) {
@@ -360,12 +429,12 @@ func TestSmokeChecks(t *testing.T) {
 				fake.bucketFailure = notFound
 			},
 			wantResults: [][2]string{{"SKIP", "gh is not installed"}},
-			wantTally:   "1 passed, 0 failed, 6 skipped",
+			wantTally:   "2 passed, 0 failed, 6 skipped",
 		},
 		"tag not fetched into the local clone": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { delete(fake.repo.tagCommits, publishVersion) },
 			wantResults: [][2]string{{"SKIP", "tag v0.24.11 is not in the local clone"}},
-			wantTally:   "6 passed, 0 failed, 1 skipped",
+			wantTally:   "7 passed, 0 failed, 1 skipped",
 		},
 		"binaries built from another commit": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) { fake.revision = "0123456789abcdef0123456789abcdef01234567" },
@@ -373,12 +442,12 @@ func TestSmokeChecks(t *testing.T) {
 				{"FAIL", "asset photon_0.24.11_linux_amd64.tar.gz was built from 0123456789abcdef"},
 				{"FAIL", "asset photon_0.24.11_windows_arm64.zip was built from 0123456789abcdef"},
 			},
-			wantTally: "6 passed, 6 failed, 0 skipped",
+			wantTally: "7 passed, 6 failed, 0 skipped",
 		},
 		"binaries without a revision": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.revision = "" },
 			wantResults: [][2]string{{"FAIL", "carries no vcs.revision"}},
-			wantTally:   "6 passed, 6 failed, 0 skipped",
+			wantTally:   "7 passed, 6 failed, 0 skipped",
 		},
 		"binaries without build information": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) { fake.isUnstamped = true },
@@ -386,7 +455,7 @@ func TestSmokeChecks(t *testing.T) {
 				{"FAIL", "carries no build information"},
 				{"PASS", "the released binary reports \"0.24.11\""},
 			},
-			wantTally: "6 passed, 6 failed, 0 skipped",
+			wantTally: "7 passed, 6 failed, 0 skipped",
 		},
 		"binaries built from a modified tree": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) { fake.modified = "true" },
@@ -398,91 +467,91 @@ func TestSmokeChecks(t *testing.T) {
 				{"warning", "brew's photon was built from a modified tree"},
 				{"PASS", "brew's photon reports \"0.24.11\""},
 			},
-			wantTally: "7 passed, 0 failed, 0 skipped",
+			wantTally: "8 passed, 0 failed, 0 skipped",
 		},
 		"the host's binary reports another version": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.binaryVersion = "0.24.10" },
 			wantResults: [][2]string{{"FAIL", "the released binary reports \"0.24.10\", not \"0.24.11\""}},
-			wantTally:   "6 passed, 1 failed, 0 skipped",
+			wantTally:   "7 passed, 1 failed, 0 skipped",
 		},
 		"the host's binary prints photon and the version without a commit": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.binaryLine = "photon 0.24.11" },
 			wantResults: [][2]string{{"PASS", "the released binary reports \"0.24.11\""}},
-			wantTally:   "7 passed, 0 failed, 0 skipped",
+			wantTally:   "8 passed, 0 failed, 0 skipped",
 		},
 		"the host's binary prints the bare version of a release cut before the build string": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.binaryLine = "0.24.11" },
 			wantResults: [][2]string{{"PASS", "the released binary reports \"0.24.11\""}},
-			wantTally:   "7 passed, 0 failed, 0 skipped",
+			wantTally:   "8 passed, 0 failed, 0 skipped",
 		},
 		"the host's binary prints the bare version of another release": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.binaryLine = "0.24.10" },
 			wantResults: [][2]string{{"FAIL", "the released binary reports \"0.24.10\", not \"0.24.11\""}},
-			wantTally:   "6 passed, 1 failed, 0 skipped",
+			wantTally:   "7 passed, 1 failed, 0 skipped",
 		},
 		"the host's binary prints a commit other than its build stamp": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) { fake.binaryLine = "photon 0.24.11 (0123456)" },
 			wantResults: [][2]string{{"FAIL", "the released binary reports commit 0123456, but its vcs.revision is " +
 				smokeTagCommit}},
-			wantTally: "6 passed, 1 failed, 0 skipped",
+			wantTally: "7 passed, 1 failed, 0 skipped",
 		},
 		"the host's binary prints a line that is not a version line": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) { fake.binaryLine = "photon 0.24.11 (81eec1b" },
 			wantResults: [][2]string{{"FAIL",
 				"the released binary reports \"photon 0.24.11 (81eec1b\", which is not a photon version line"}},
-			wantTally: "6 passed, 1 failed, 0 skipped",
+			wantTally: "7 passed, 1 failed, 0 skipped",
 		},
 		"no release archive for the host": {
 			adjust:      func(_ *smokeFake, options *smokeOptions) { options.goos = "freebsd" },
 			wantResults: [][2]string{{"SKIP", "no release archive is built for this host (freebsd/amd64)"}},
-			wantTally:   "6 passed, 0 failed, 1 skipped",
+			wantTally:   "7 passed, 0 failed, 1 skipped",
 		},
 		"Homebrew is not installed": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brew = "missing" },
 			wantResults: [][2]string{{"SKIP", "Homebrew is not installed on this host"}},
-			wantTally:   "6 passed, 0 failed, 1 skipped",
+			wantTally:   "7 passed, 0 failed, 1 skipped",
 		},
 		"photon is not installed through Homebrew": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brew = "absent" },
 			wantResults: [][2]string{{"SKIP", "photon is not installed through Homebrew here"}},
-			wantTally:   "6 passed, 0 failed, 1 skipped",
+			wantTally:   "7 passed, 0 failed, 1 skipped",
 		},
 		"Homebrew skips a version that is not the latest release": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.repo.latestRelease = githubRelease{Tag: "v0.24.12"} },
 			wantResults: [][2]string{{"SKIP", "v0.24.11 is not the latest release (v0.24.12); brew upgrade would move this machine onto that one"}},
-			wantTally:   "6 passed, 0 failed, 1 skipped",
+			wantTally:   "7 passed, 0 failed, 1 skipped",
 		},
 		"brew upgrade leaves the old version": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brewReports = "0.24.10" },
 			wantResults: [][2]string{{"FAIL", "brew's photon reports \"0.24.10\", not \"0.24.11\""}},
-			wantTally:   "6 passed, 1 failed, 0 skipped",
+			wantTally:   "7 passed, 1 failed, 0 skipped",
 		},
 		"brew's photon prints photon and the version without a commit": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brewLine = "photon 0.24.11" },
 			wantResults: [][2]string{{"PASS", "brew's photon reports \"0.24.11\""}},
-			wantTally:   "7 passed, 0 failed, 0 skipped",
+			wantTally:   "8 passed, 0 failed, 0 skipped",
 		},
 		"brew's photon prints the bare version of a release cut before the build string": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brewLine = "0.24.11" },
 			wantResults: [][2]string{{"PASS", "brew's photon reports \"0.24.11\""}},
-			wantTally:   "7 passed, 0 failed, 0 skipped",
+			wantTally:   "8 passed, 0 failed, 0 skipped",
 		},
 		"brew's photon prints a commit other than its build stamp": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.brewLine = "photon 0.24.11 (0123456, dirty)" },
 			wantResults: [][2]string{{"FAIL", "brew's photon reports commit 0123456, but its vcs.revision is"}},
-			wantTally:   "6 passed, 1 failed, 0 skipped",
+			wantTally:   "7 passed, 1 failed, 0 skipped",
 		},
 		"the bucket's manifest is unreadable": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.manifest = "" },
 			wantResults: [][2]string{{"SKIP", "the bucket's manifest bucket/photon.json in airiclenz/scoop-bucket is unreadable"}},
-			wantTally:   "6 passed, 0 failed, 1 skipped",
+			wantTally:   "7 passed, 0 failed, 1 skipped",
 		},
 		"the manifest's hashes are prefixed and upper-case": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) {
 				fake.manifest = prefixHashes(t, fake.manifest, fake.releaseDir)
 			},
 			wantResults: [][2]string{{"PASS", "both Windows hashes match"}},
-			wantTally:   "7 passed, 0 failed, 0 skipped",
+			wantTally:   "8 passed, 0 failed, 0 skipped",
 		},
 		"a manifest hash does not match": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) {
@@ -493,17 +562,17 @@ func TestSmokeChecks(t *testing.T) {
 				fake.manifest = strings.Replace(fake.manifest, hash, strings.Repeat("0", 64), 1)
 			},
 			wantResults: [][2]string{{"FAIL", "the bucket's arm64 hash is"}},
-			wantTally:   "6 passed, 1 failed, 0 skipped",
+			wantTally:   "7 passed, 1 failed, 0 skipped",
 		},
 		"the manifest is not JSON": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.manifest = "{" },
 			wantResults: [][2]string{{"FAIL", "is not valid JSON"}},
-			wantTally:   "6 passed, 1 failed, 0 skipped",
+			wantTally:   "7 passed, 1 failed, 0 skipped",
 		},
 		"the bucket is behind the latest release": {
 			adjust:      func(fake *smokeFake, _ *smokeOptions) { fake.manifest = `{"version": "0.24.10"}` },
 			wantResults: [][2]string{{"FAIL", "not the latest release 0.24.11"}},
-			wantTally:   "6 passed, 1 failed, 0 skipped",
+			wantTally:   "7 passed, 1 failed, 0 skipped",
 		},
 		"the bucket has moved past an older release": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) {
@@ -511,7 +580,7 @@ func TestSmokeChecks(t *testing.T) {
 				fake.repo.latestRelease = githubRelease{Tag: "v0.24.12"}
 			},
 			wantResults: [][2]string{{"SKIP", "v0.24.11 is not the latest release (v0.24.12)"}},
-			wantTally:   "5 passed, 0 failed, 2 skipped",
+			wantTally:   "6 passed, 0 failed, 2 skipped",
 		},
 		"the latest release cannot be read": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) {
@@ -522,7 +591,7 @@ func TestSmokeChecks(t *testing.T) {
 				{"SKIP", "the latest release could not be read: gh: HTTP 502"},
 				{"SKIP", "the latest release could not be read, so brew upgrade may not move this machine onto v0.24.11: gh: HTTP 502"},
 			},
-			wantTally: "5 passed, 0 failed, 2 skipped",
+			wantTally: "6 passed, 0 failed, 2 skipped",
 		},
 		"no release is published": {
 			adjust: func(fake *smokeFake, _ *smokeOptions) {
@@ -533,7 +602,7 @@ func TestSmokeChecks(t *testing.T) {
 				{"SKIP", "the bucket is at \"0.24.10\", not 0.24.11, and airiclenz/photon has no published release"},
 				{"SKIP", "airiclenz/photon has no published release, so brew upgrade may not move this machine onto v0.24.11"},
 			},
-			wantTally: "5 passed, 0 failed, 2 skipped",
+			wantTally: "6 passed, 0 failed, 2 skipped",
 		},
 	}
 	for name, tc := range cases {
@@ -632,7 +701,7 @@ func TestSmokeNeverRunsAHostBinaryThatFailedItsHash(t *testing.T) {
 		result := runTestSmoke(t, fake, func(options *smokeOptions) { options.distDir = "" })
 
 		for _, call := range result.commands.calls {
-			if len(call.args) == 1 && call.args[0] == versionArgument && !strings.HasPrefix(call.name, filepath.FromSlash(smokeBrewPrefix)) {
+			if isReleasedBinaryRun(call) {
 				t.Errorf("ran the released binary %s:\n%s", call.name, result.output)
 			}
 		}
@@ -701,7 +770,8 @@ func prefixHashes(t *testing.T, manifest, releaseDir string) string {
 }
 
 // TestSmokeRunsTheHostsZipArchive pins the Windows host path: the host's archive is a .zip, and
-// the binary run is the photon.exe inside it — the windows/amd64 build, not another platform's.
+// the binary run is the photon.exe inside it — the windows/amd64 build, not another platform's —
+// while npm's photon runs through the photon.cmd shim npm links there.
 func TestSmokeRunsTheHostsZipArchive(t *testing.T) {
 	t.Parallel()
 	fake := newSmokeFake(t)
@@ -717,15 +787,28 @@ func TestSmokeRunsTheHostsZipArchive(t *testing.T) {
 	if !hasResult(result.output, "PASS", "the released binary reports \"0.24.11\"") {
 		t.Errorf("the host check did not run the windows/amd64 binary:\n%s", result.output)
 	}
-	var ran []string
+	var ran, launchers []string
 	for _, call := range result.commands.calls {
-		if len(call.args) == 1 && call.args[0] == versionArgument && !strings.HasPrefix(call.name, filepath.FromSlash(smokeBrewPrefix)) {
+		if isReleasedBinaryRun(call) {
 			ran = append(ran, call.name)
+		}
+		if len(call.args) == 1 && call.args[0] == versionArgument && isNpmLauncher(call.name) {
+			launchers = append(launchers, call.name)
 		}
 	}
 	if len(ran) != 1 || filepath.Base(ran[0]) != "photon.exe" {
 		t.Errorf("ran %q version, want the one photon.exe from the zip", ran)
 	}
+	if len(launchers) != 1 || filepath.Base(launchers[0]) != "photon.cmd" {
+		t.Errorf("ran npm's %q version, want the one photon.cmd shim npm links on Windows", launchers)
+	}
+}
+
+// isReleasedBinaryRun reports whether call runs `version` on a binary extracted from a release
+// archive: not brew's photon, nor the launcher npm installed.
+func isReleasedBinaryRun(call recordedCall) bool {
+	return len(call.args) == 1 && call.args[0] == versionArgument &&
+		!strings.HasPrefix(call.name, filepath.FromSlash(smokeBrewPrefix)) && !isNpmLauncher(call.name)
 }
 
 // TestSmokeVersion pins which version smoke checks: the one asked for, a bare X.Y.Z read as

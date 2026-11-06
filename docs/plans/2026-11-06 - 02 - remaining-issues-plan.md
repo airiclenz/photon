@@ -335,7 +335,14 @@ cmd/release/githubrelease.go — checkUploadedArchives; cmd/release/doc.go — f
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./cmd/release/ -run 'Npm|Render'`
 **Commit:** `feat(release): build the npm packages`
 
-## 12. Publish to npm
+## 12. Publish to npm — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): channelRepos gains `HasPackage(ctx, name, version) (bool, error)` and `PublishPackage(ctx, name, version, dir, token) error`; execChannelRepos runs `npm view <pkg>@<v> version --prefer-online --registry https://registry.npmjs.org/` (E404 or empty output is a "no"; a missing npm surfaces exec.ErrNotFound) and `npm publish <dir> --access public --registry https://registry.npmjs.org/ --userconfig <temp .npmrc holding //registry.npmjs.org/:_authToken=${NPM_TOKEN}>` with NPM_TOKEN in the env only, scrubbing the token from a failure. `--prefer-online` and the explicit `--registry` are additions to the plan's argv: the first keeps npm's cache from hiding a version just published, the second pins the registry the userconfig's token is scoped to.
+NOTES (2026-11-06): the execChannelRepos npm argv tests went into cmd/release/channelrepos_test.go (not in the item's Files list), beside the other execChannelRepos argv tests, per doc.go's rule that only execChannelRepos' own tests pin its argv.
+NOTES (2026-11-06): the SHA256SUMS check of the downloaded archives is stageNpmPackages' own (item 11's verifyNpmArchives), run before anything is staged; convergeNpm downloads SHA256SUMS and the six archives with repo.DownloadAsset and hands them to it, rather than repeating the check.
+NOTES (2026-11-06): convergeNpm re-reads each package with HasPackage before publishing it, so a resumed run publishes only the missing ones and names the rest as already on the registry; the wrapper is published last. The smoke check (checkNpm, in npm.go) runs `npm install --prefix <workdir>/npm @airiclenz/photon@<v>` in the smoke work dir and then `<prefix>/node_modules/.bin/photon version` (`photon.cmd` when the smoke host's goos is windows) through checkReportsVersion.
+NOTES (2026-11-06): smoke_test.go's two tests that enumerate the released binaries run (TestSmokeNeverRunsAHostBinaryThatFailedItsHash, TestSmokeRunsTheHostsZipArchive) now exclude the npm launcher through a shared isReleasedBinaryRun helper; the zip-archive test also pins the photon.cmd shim on Windows.
+NOTES (2026-11-06): left for item 13, which owns those files: doc.go's `npm.go` line, runner.go's list of what the runner carries (now also `npm install` and npm's launcher), and the publish and smoke verbs' long help in publish.go and smoke.go do not yet mention the npm step.
 
 **What:** Recast at the regression check (2026-11-06). Depends on items 10 and 11.
 **Goal:** an `npm` step after `winget` publishes missing platform packages then the wrapper; smoke installs the wrapper into a temp prefix and runs `photon version` (through checkReportsVersion); without npm or `NPM_TOKEN` it reports setup-pending.

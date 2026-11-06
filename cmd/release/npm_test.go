@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -368,4 +369,214 @@ func writeNpmTestArchive(t *testing.T, target distTarget, content string) string
 		t.Fatal(err)
 	}
 	return archivePath
+}
+
+// npmPendingFake is releasedFake whose release carries a real build's assets, with the tap, the
+// bucket and winget-pkgs already on the release, so npm is the one channel step pending, and the
+// npm registry holding the version of each of the packages published.
+func npmPendingFake(t *testing.T, published ...string) *publishFake {
+	t.Helper()
+	fake := releasedFake()
+	fake.repo.assetContent = rebuiltAssetContent(t)
+	fake.remote = channelReposOf(fake.remote,
+		tapHolding(testFormula),
+		bucketHolding(`{"version": "0.24.11"}`),
+		npmHolding(strings.TrimPrefix(publishVersion, "v"), published...),
+	)
+	return fake
+}
+
+// runNpmPublish runs publish of publishVersion over fake with a written notes file and an
+// environment whose NPM_TOKEN is token ("" for unset).
+func runNpmPublish(t *testing.T, fake *publishFake, isDryRun bool, token string) publishRunResult {
+	t.Helper()
+	notesPath := filepath.Join(t.TempDir(), "notes.md")
+	writeTestFile(t, notesPath, "## What's new\n\n- A release.\n")
+	getenv := func(key string) string {
+		if key == npmTokenVariable {
+			return token
+		}
+		return ""
+	}
+	return runTestPublishWith(t, fake, publishOptions{notesFile: notesPath, isDryRun: isDryRun, getenv: getenv})
+}
+
+// publishedPackageNames returns the name of each package the registry was published, in order.
+func publishedPackageNames(channels memChannelRepos) []string {
+	var names []string
+	for _, published := range channels.publishedPackages() {
+		names = append(names, published.name)
+	}
+	return names
+}
+
+// requireNoToken fails when the token appears in the output or in any command's argv or
+// environment.
+func requireNoToken(t *testing.T, result publishRunResult, token string) {
+	t.Helper()
+	if strings.Contains(result.output, token) {
+		t.Errorf("publish printed the %s value:\n%s", npmTokenVariable, result.output)
+	}
+	result.commands.mu.Lock()
+	defer result.commands.mu.Unlock()
+	for _, call := range result.commands.calls {
+		if strings.Contains(strings.Join(append(call.args, call.env...), " "), token) {
+			t.Errorf("%s %q ran with the %s value", call.name, call.args, npmTokenVariable)
+		}
+	}
+}
+
+// TestPublishNpmPublishesOnlyTheMissingPackagesWrapperLast pins the npm step's converge: each
+// package the registry lacks is published at the version with NPM_TOKEN, the platform packages
+// first and the wrapper last, so a run interrupted part-way resumes with only the missing ones;
+// the token is printed nowhere and reaches no command's argv.
+func TestPublishNpmPublishesOnlyTheMissingPackagesWrapperLast(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		published []string
+		want      []string
+	}{
+		"a first run":                           {want: npmWantPackages},
+		"resumed after three platform packages": {published: npmWantPackages[:3], want: npmWantPackages[3:]},
+		"resumed after every platform package":  {published: npmWantPackages[:6], want: npmWantPackages[6:]},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fake := npmPendingFake(t, tc.published...)
+
+			result := runNpmPublish(t, fake, false, sentinelToken)
+
+			if result.err != nil {
+				t.Fatalf("publish failed: %v\n%s", result.err, result.output)
+			}
+			if got := publishedPackageNames(fake.remote); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("published %q, want %q", got, tc.want)
+			}
+			for _, published := range fake.remote.publishedPackages() {
+				if published.version != "0.24.11" || published.token != sentinelToken {
+					t.Errorf("%s published at %q with token %q, want 0.24.11 with NPM_TOKEN's value",
+						published.name, published.version, published.token)
+				}
+			}
+			for _, already := range tc.published {
+				if !strings.Contains(result.output, already+"@0.24.11 is already on registry.npmjs.org") {
+					t.Errorf("output does not name %s as already published:\n%s", already, result.output)
+				}
+			}
+			if !hasRow(result.output, "npm", "done", "done by this run") {
+				t.Errorf("the npm row is not done by this run:\n%s", result.output)
+			}
+			requireNoToken(t, result, sentinelToken)
+		})
+	}
+}
+
+// TestPublishNpmWithoutATokenIsSetupPending pins the unset NPM_TOKEN: the npm step is reported
+// setup-pending, naming the variable, before anything is downloaded, staged or published, and the
+// run succeeds.
+func TestPublishNpmWithoutATokenIsSetupPending(t *testing.T) {
+	t.Parallel()
+	fake := npmPendingFake(t)
+
+	result := runNpmPublish(t, fake, false, "")
+
+	if result.err != nil {
+		t.Fatalf("publish failed: %v\n%s", result.err, result.output)
+	}
+	if !hasRow(result.output, "npm", "setup-pending", "no npm token — set NPM_TOKEN") {
+		t.Errorf("the npm row is not setup-pending on the missing token:\n%s", result.output)
+	}
+	lines := commandLines(result.commands)
+	for _, unwanted := range []string{repoCallName + " " + methodReadAsset, repoCallName + " " + methodDownloadAsset} {
+		if index := lineIndex(lines, unwanted); index >= 0 {
+			t.Errorf("ran %q without a token", lines[index])
+		}
+	}
+	if published := publishedPackageNames(fake.remote); len(published) > 0 {
+		t.Errorf("published %q without a token", published)
+	}
+}
+
+// TestPublishNpmRefusesAnArchiveThatMismatchesItsSums pins the downloaded archives' check: one
+// whose hash differs from the release's SHA256SUMS fails the npm step, and nothing is published.
+func TestPublishNpmRefusesAnArchiveThatMismatchesItsSums(t *testing.T) {
+	t.Parallel()
+	fake := npmPendingFake(t)
+	fake.repo.assetContent["photon_0.24.11_darwin_arm64.tar.gz"] = "corrupted in transit\n"
+
+	result := runNpmPublish(t, fake, false, sentinelToken)
+
+	want := "the npm step failed: " + errNpmArchiveMismatch.Error() + ": photon_0.24.11_darwin_arm64.tar.gz"
+	if result.err == nil || !strings.Contains(result.err.Error(), want) {
+		t.Fatalf("publish error = %v, want one containing %q", result.err, want)
+	}
+	if published := publishedPackageNames(fake.remote); len(published) > 0 {
+		t.Errorf("published %q from a mismatched archive", published)
+	}
+}
+
+// TestPublishNpmDryRunRedactsTheToken pins the dry run: the plan names the npm publish with the
+// token redacted, and nothing is downloaded or published.
+func TestPublishNpmDryRunRedactsTheToken(t *testing.T) {
+	t.Parallel()
+	fake := npmPendingFake(t)
+
+	result := runNpmPublish(t, fake, true, sentinelToken)
+
+	if result.err != nil {
+		t.Fatalf("publish failed: %v\n%s", result.err, result.output)
+	}
+	if want := "NPM_TOKEN=<redacted> npm publish <package> --access public"; !strings.Contains(result.output, want) {
+		t.Errorf("the dry run's plan lacks %q:\n%s", want, result.output)
+	}
+	if mutating := mutatingLines(result.commands); len(mutating) > 0 {
+		t.Errorf("issued mutating commands %q, want none", mutating)
+	}
+	if index := lineIndex(commandLines(result.commands), repoCallName+" "+methodDownloadAsset); index >= 0 {
+		t.Errorf("the dry run downloaded an archive")
+	}
+	requireNoToken(t, result, sentinelToken)
+}
+
+// TestProbeNpmReadsThePlatformPackagesOnlyWithoutTheWrapper pins the probe's reads: the wrapper,
+// published last, alone settles done; only while it is absent are the six platform packages read.
+func TestProbeNpmReadsThePlatformPackagesOnlyWithoutTheWrapper(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		published []string
+		wantReads []string
+		wantState stepState
+	}{
+		"the wrapper is published": {published: []string{npmWrapperName}, wantReads: npmWantPackages[6:], wantState: stateDone},
+		"the wrapper is absent": {
+			published: npmWantPackages[:6],
+			wantReads: append([]string{npmWrapperName}, npmWantPackages[:6]...),
+			wantState: statePending,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			channels := npmHolding("0.24.11", tc.published...).recording()
+
+			step := probeNpm(t.Context(), probeEnv{channels: channels}, mustVersion(t, publishVersion))
+
+			var reads []string
+			for _, read := range channels.reads() {
+				if read.method != methodHasPackage {
+					t.Errorf("the probe called %s, want only %s", read.method, methodHasPackage)
+				}
+				reads = append(reads, read.repo)
+			}
+			if !reflect.DeepEqual(reads, tc.wantReads) {
+				t.Errorf("the probe read %q, want %q", reads, tc.wantReads)
+			}
+			if step.State != tc.wantState {
+				t.Errorf("step = %s %q, want %s", step.State, step.Detail, tc.wantState)
+			}
+		})
+	}
 }
