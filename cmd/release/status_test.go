@@ -98,12 +98,13 @@ func TestStatusReportsTheGateBaselineAndHighestTag(t *testing.T) {
 		t.Errorf("report = %s\nwant     %s", gotJSON, wantJSON)
 	}
 
-	// Nothing is published for v0.24.14 and no channel's one-time setup has landed.
+	// Nothing is published for v0.24.14 and no channel's one-time setup has landed; winget needs
+	// none, since publish submits the package's first manifests itself.
 	var states []string
 	for _, step := range steps {
 		states = append(states, step.Name+" "+string(step.State))
 	}
-	wantStates := []string{"tag pending", "release pending", "homebrew setup-pending", "scoop setup-pending", "smoke pending"}
+	wantStates := []string{"tag pending", "release pending", "homebrew setup-pending", "scoop setup-pending", "winget pending", "smoke pending"}
 	if !slices.Equal(states, wantStates) {
 		t.Errorf("steps = %q, want %q", states, wantStates)
 	}
@@ -396,6 +397,7 @@ func TestStatusTextNamesTheBlockingConditions(t *testing.T) {
 		"\nsteps\n",
 		"  tag       pending        origin has no tag v0.24.14\n",
 		"  scoop     setup-pending  no airiclenz/scoop-bucket repository yet\n",
+		"  winget    pending        AiricLenz.Photon is not in microsoft/winget-pkgs yet",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("output lacks %q:\n%s", want, output)

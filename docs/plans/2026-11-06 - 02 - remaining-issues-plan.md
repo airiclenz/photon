@@ -282,7 +282,13 @@ cmd/release/render_test.go — goldenSums, TestRenderRefusesABadOrMissingHash; c
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./cmd/release/ -run Render`
 **Commit:** `feat(release): render winget manifests`
 
-## 10. Publish to winget
+## 10. Publish to winget — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): ported the probe's setup-pending branch for an unmerged first submission of another version (the reference behaviour, not named on the item's Goal line), and kept resolveWingetPackage's refusal when its listing read fails (TestPublishWingetRefusesAnUnreadablePackageListing).
+NOTES (2026-11-06): a missing komac (exec.ErrNotFound) or no token is a setupPendingError, where the reference failed the step; any other `komac --version` failure still fails it. newPublishFake holds a done winget (an open pull request for the version), like releasedFake (a published manifest dir), so pre-existing publish tests run no komac; the winget tests use wingetPendingFake.
+NOTES (2026-11-06): the publish verb's Long help names the winget step and its setup-pending cases (its last lines re-wrapped to keep the 100-column limit); the `status` text table pin gains a winget row.
+NOTES (2026-11-06): consequential edit — cmd/release/runner.go: made necessary by winget.go running komac and `gh auth token` through the runner, which the runner's comment listed the commands of.
+NOTES (2026-11-06): a first submission's manifest directory is made with os.MkdirTemp("", "photon-winget-") as in the reference, so TestPublishWingetSubmitFailureIsSetupPending leaves it under the system temp dir until its t.Cleanup removes it, not under t.TempDir().
 
 **What:** Depends on items 8 and 9.
 **Goal:** `status`, `publish` and `smoke` carry a `winget` step after `scoop`: done when the version's manifest dir is listed or the account's open PR names it, otherwise converged through komac; a missing komac or token reports setup-pending.

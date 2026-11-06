@@ -20,7 +20,8 @@
 // tests pin. What it asks of the package channels' repositories goes through the channelRepos
 // seam (channelrepos.go) the same way: the verbs' tests hold them in memChannelRepos, and only
 // execChannelRepos' own tests pin its argv. The runner's fakes answer the toolchain, dist's read
-// of its source tree's commit time, brew and the released binaries the smoke test runs.
+// of its source tree's commit time, komac, `gh auth token`, brew and the released binaries the
+// smoke test runs.
 //
 // It is a dev tool, never a release asset: dist does not ship it, and its production code imports
 // nothing from photon's internal packages (only docmap_test.go uses internal/testkit).
@@ -58,4 +59,6 @@
 //     CI-made annotated tag
 //   - `version.go` — the release version: parsing, ordering, its bare form and the highest release
 //     tag
+//   - `winget.go` — the winget channel: its probe, describe, and converge by komac, which submits
+//     the version's manifests to winget-pkgs
 package main

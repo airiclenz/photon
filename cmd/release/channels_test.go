@@ -21,8 +21,9 @@ func testReleaseSums() string {
 }
 
 // releasedFake is a resumed run of publishVersion: the tag and the whole release are on GitHub,
-// and the tap's formula and the bucket's manifest pin the previous release — so every channel step
-// is pending.
+// the tap's formula and the bucket's manifest pin the previous release — so the homebrew and scoop
+// steps are pending — and winget-pkgs already publishes the version, so the winget step is done
+// and runs no komac; the winget tests (winget_test.go) set winget-pkgs back a version.
 func releasedFake() *publishFake {
 	fake := newPublishFake()
 	fake.tagged()
@@ -30,20 +31,21 @@ func releasedFake() *publishFake {
 	fake.remote = channelReposOf(
 		tapHolding(strings.Replace(testFormula, "0.24.11", "0.24.10", 1)),
 		bucketHolding(`{"version": "0.24.10"}`),
+		wingetHolding([]string{"0.24.10", "0.24.11"}),
 	)
 	fake.repo.assetContent[checksumsFile] = testReleaseSums()
 	return fake
 }
 
 // channelRun is a publish run of publishVersion over fake, its channel repositories recording
-// what they are pushed, for a test to drive the tap and bucket steps' converge through directly;
-// output holds what the run prints.
+// what they are pushed, for a test to drive the channel steps' converge through directly, in an
+// empty environment; output holds what the run prints.
 func channelRun(t *testing.T, fake *publishFake) (run *publishRun, output *strings.Builder) {
 	t.Helper()
 	commands := fake.runner()
 	output = &strings.Builder{}
 	run = &publishRun{commands: commands, repo: fake.repo, channels: fake.remote, output: output,
-		version: mustVersion(t, publishVersion), options: publishOptions{dir: t.TempDir()}}
+		version: mustVersion(t, publishVersion), options: publishOptions{dir: t.TempDir(), getenv: emptyEnv}}
 	return run, output
 }
 

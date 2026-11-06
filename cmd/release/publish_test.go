@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -35,11 +34,13 @@ var mutatingCommands = []string{
 	repoCallName + " " + methodUndraftRelease,
 	channelsCallName + " " + methodPublishFile,
 	"go build",
+	"komac update",
+	"komac submit",
 }
 
 // publishFake is what publish meets: photon's checkout and GitHub repository held in repo, the
-// tap and the bucket held in remote, and the commands the runner answers the way go and git
-// would.
+// tap, the bucket and winget-pkgs held in remote, and the commands the runner answers the way go,
+// git, komac and gh would.
 type publishFake struct {
 	repo memRepo
 	// remote is where the channel repositories stand.
@@ -51,13 +52,15 @@ type publishFake struct {
 	// commit it is on.
 	tagKind   string
 	tagCommit string
+	// channels is the komac and gh installs the winget step meets.
+	channels fakeChannels
 }
 
 // newPublishFake is a first run of publishVersion: HEAD is the VERSION bump, one commit ahead of
 // origin/main, whose feature commit CI passed; nothing is tagged or released yet, and the
 // workflow tags the bump on the third poll after the push. The tap's formula already pins the
-// version and the Scoop bucket's repository is not there yet (setup pending), so the channel steps
-// change nothing.
+// version, the Scoop bucket's repository is not there yet (setup pending) and an open winget-pkgs
+// pull request already submits the version, so the channel steps change nothing.
 func newPublishFake() *publishFake {
 	fake := &publishFake{
 		repo: memRepo{
@@ -71,7 +74,10 @@ func newPublishFake() *publishFake {
 			files:        map[string]string{versionFile: strings.TrimPrefix(publishVersion, "v") + "\n"},
 			publish:      &memPublish{},
 		},
-		remote:          tapHolding(testFormula),
+		remote: channelReposOf(
+			tapHolding(testFormula),
+			wingetHolding(nil, komacPull(301234, "New version", strings.TrimPrefix(publishVersion, "v"))),
+		),
 		tagAppearsAfter: 2,
 		tagKind:         gitObjectTag,
 		tagCommit:       bumpCommit,
@@ -114,8 +120,8 @@ func (f *publishFake) opener() repoOpener {
 	return func(string) repo { return f.repo }
 }
 
-// respond answers one command; any command but the build and its commit-time read is
-// unexpected.
+// respond answers one command: the build and its commit-time read here, komac and `gh auth
+// token` in respondTools (winget_test.go); any other command is unexpected.
 func (f *publishFake) respond(call recordedCall) (string, error) {
 	args := call.args
 	command := call.name + " " + strings.Join(args, " ")
@@ -126,7 +132,7 @@ func (f *publishFake) respond(call recordedCall) (string, error) {
 		output := args[slices.Index(args, "-o")+1]
 		return "", os.WriteFile(output, []byte(stubBinary(call.env)), 0o755)
 	}
-	return "", fmt.Errorf("unexpected command %s", command)
+	return f.respondTools(call)
 }
 
 // requireFiles fails when an absolute path among args names no file: gh would refuse to upload
@@ -194,7 +200,8 @@ func runTestPublish(t *testing.T, fake *publishFake, isDryRun bool) publishRunRe
 
 // runTestPublishWith runs publish of publishVersion over fake with options, filling in the
 // version, the test poll timing, a counting sleep and, unless options has them, the fake's channel
-// repositories and a smoke step that records what it was asked to check and passes.
+// repositories, an empty environment and a smoke step that records what it was asked to check and
+// passes.
 func runTestPublishWith(t *testing.T, fake *publishFake, options publishOptions) publishRunResult {
 	t.Helper()
 	result := publishRunResult{commands: fake.runner(), notesPath: options.notesFile}
@@ -203,6 +210,9 @@ func runTestPublishWith(t *testing.T, fake *publishFake, options publishOptions)
 	}
 	if options.channels == nil {
 		options.channels = fake.remote
+	}
+	if options.getenv == nil {
+		options.getenv = emptyEnv
 	}
 	if options.smoke == nil {
 		options.smoke = func(_ context.Context, _ io.Writer, smoke smokeOptions) error {

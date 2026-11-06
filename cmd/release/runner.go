@@ -18,7 +18,8 @@ import (
 // (repo.go) instead, whose execRepo is the one caller of the runner with that argv, and what they
 // ask of the package channels' repositories through the channelRepos seam (channelrepos.go), whose
 // execChannelRepos is the one caller with theirs; the runner itself carries the toolchain, dist's
-// read of its source tree's commit time, brew and the released binaries the smoke test runs.
+// read of its source tree's commit time, komac, `gh auth token`, brew and the released binaries
+// the smoke test runs.
 type runner interface {
 	// run executes name with args in dir, with env appended to the inherited environment (a
 	// later entry overrides an earlier one, so env wins), and returns what the command wrote to

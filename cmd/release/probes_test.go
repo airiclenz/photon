@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -84,6 +85,23 @@ func bucketHolding(manifest string) memChannelRepos {
 	return memChannelRepos{repos: map[string]memChannelRepo{bucketRepo: {files: fileHolding(bucketPath, manifest)}}}
 }
 
+// wingetHolding is channel repositories where winget-pkgs holds one manifest directory per
+// version — none of the package's at all when versions is nil — and the open pull requests pulls.
+func wingetHolding(versions []string, pulls ...pullRequest) memChannelRepos {
+	winget := memChannelRepo{pulls: pulls}
+	if versions != nil {
+		winget.dirs = map[string][]string{wingetManifestDir: versions}
+	}
+	return memChannelRepos{repos: map[string]memChannelRepo{wingetRepo: winget}}
+}
+
+// komacPull is an open komac pull request titled kind ("New version", or "New package" for the
+// first submission) for version.
+func komacPull(number int, kind, version string) pullRequest {
+	return pullRequest{number: number, title: fmt.Sprintf("%s: AiricLenz.Photon version %s", kind, version),
+		url: fmt.Sprintf("https://github.com/microsoft/winget-pkgs/pull/%d", number)}
+}
+
 // channelReposOf is channel repositories holding every repository the parts hold — a later
 // part's repository replacing an earlier part's of the same name — and failing as each part
 // fails; it records nothing.
@@ -120,6 +138,7 @@ func TestProbesReportEachState(t *testing.T) {
 	olderFormula := strings.Replace(testFormula, `version "0.24.11"`, `version "0.24.10"`, 1)
 	newerFormula := strings.Replace(testFormula, `version "0.24.11"`, `version "0.24.12"`, 1)
 	cannotRun := errors.New("cannot run")
+	unparsable := unparsableAnswerError{cause: errors.New("invalid character 'x' looking for beginning of value")}
 
 	cases := map[string]struct {
 		probe      stepProbe
@@ -155,6 +174,34 @@ func TestProbesReportEachState(t *testing.T) {
 		"bucket newer":       {probe: probeScoop, channels: bucketHolding(`{"version": "0.24.12"}`), wantState: stateDone, wantDetail: "manifest pins newer 0.24.12"},
 		"bucket unreadable": {probe: probeScoop, channels: bucketHolding("").withFailure(methodExists, bucketRepo, cannotRun),
 			wantState: stateUnknown, wantDetail: "could not read the airiclenz/scoop-bucket repository"},
+		"winget not set up": {probe: probeWinget, wantState: statePending,
+			wantDetail: "AiricLenz.Photon is not in microsoft/winget-pkgs yet and no open pull request submits 0.24.11"},
+		"winget first submission open": {probe: probeWinget, channels: wingetHolding(nil, komacPull(312345, "New package", "0.24.11")),
+			wantState: stateDone, wantDetail: "submitted: pull request #312345 https://github.com/microsoft/winget-pkgs/pull/312345"},
+		"winget first submission of another version open": {probe: probeWinget, channels: wingetHolding(nil, komacPull(312345, "New package", "0.24.10")),
+			wantState: stateSetupPending, wantDetail: "AiricLenz.Photon is not in microsoft/winget-pkgs yet: its first submission, pull request #312345 https://github.com/microsoft/winget-pkgs/pull/312345, has not merged"},
+		"winget not set up beside another package's pull request": {probe: probeWinget,
+			channels:  wingetHolding(nil, pullRequest{number: 312345, title: "New package: AiricLenz.PhotonX version 0.24.10"}),
+			wantState: statePending, wantDetail: "AiricLenz.Photon is not in microsoft/winget-pkgs yet and no open pull request submits 0.24.11"},
+		"winget absent": {probe: probeWinget, channels: wingetHolding([]string{"0.24.10"}),
+			wantState: statePending, wantDetail: "no AiricLenz.Photon 0.24.11 manifest or open pull request"},
+		"winget pull request open": {probe: probeWinget, channels: wingetHolding([]string{"0.24.10"}, komacPull(312345, "New version", "0.24.11")),
+			wantState: stateDone, wantDetail: "submitted: pull request #312345"},
+		"winget pull request for another version": {probe: probeWinget, channels: wingetHolding([]string{"0.24.10"}, komacPull(312345, "New version", "0.24.10")),
+			wantState: statePending, wantDetail: "no AiricLenz.Photon 0.24.11 manifest or open pull request"},
+		"winget merged": {probe: probeWinget, channels: wingetHolding([]string{"0.24.10", "0.24.11"}),
+			wantState: stateDone, wantDetail: "published: manifests/a/AiricLenz/Photon/0.24.11"},
+		"winget pull request for a longer version": {probe: probeWinget, version: "v0.24.1",
+			channels:  wingetHolding([]string{"0.24.0"}, komacPull(312345, "New version", "0.24.11")),
+			wantState: statePending, wantDetail: "no AiricLenz.Photon 0.24.1 manifest"},
+		"winget listing unreadable": {probe: probeWinget, channels: wingetHolding(nil).withFailure(methodListDirs, wingetRepo, cannotRun),
+			wantState: stateUnknown, wantDetail: "could not read manifests/a/AiricLenz/Photon from microsoft/winget-pkgs"},
+		"winget listing unparsable": {probe: probeWinget, channels: wingetHolding(nil).withFailure(methodListDirs, wingetRepo, unparsable),
+			wantState: stateUnknown, wantDetail: "could not parse the manifests/a/AiricLenz/Photon listing: invalid character"},
+		"winget pull requests unparsable": {probe: probeWinget, channels: wingetHolding([]string{"0.24.10"}).withFailure(methodOpenPulls, wingetRepo, unparsable),
+			wantState: stateUnknown, wantDetail: "could not parse gh pr list output: invalid character"},
+		"winget pull requests unreadable": {probe: probeWinget, channels: wingetHolding([]string{"0.24.10"}).withFailure(methodOpenPulls, wingetRepo, cannotRun),
+			wantState: stateUnknown, wantDetail: "could not list the open microsoft/winget-pkgs pull requests"},
 		"smoke": {probe: probeSmoke, repo: memRepo{remoteTags: annotated, releases: allAssets}, wantState: statePending, wantDetail: "publish runs it last"},
 		// A draft an interrupted `gh release create` left is never done: its download URLs 404.
 		"release draft with all assets": {probe: probeRelease, repo: memRepo{releases: allAssets, drafts: draft},
@@ -193,18 +240,18 @@ func TestProbeStepsRunsEveryStepInPublishOrder(t *testing.T) {
 	for _, step := range steps {
 		names = append(names, step.Name)
 	}
-	want := []string{"tag", "release", "homebrew", "scoop", "smoke"}
+	want := []string{"tag", "release", "homebrew", "scoop", "winget", "smoke"}
 	if !slices.Equal(names, want) {
 		t.Errorf("steps = %q, want %q", names, want)
 	}
 }
 
-// failingChannels is channel repositories every one of whose methods fails with err on the tap
-// and the bucket alike.
+// failingChannels is channel repositories every one of whose methods fails with err on the tap,
+// the bucket and winget-pkgs alike.
 func failingChannels(err error) memChannelRepos {
 	var channels memChannelRepos
-	for _, repo := range []string{tapRepo, bucketRepo} {
-		for _, method := range []string{methodExists, methodReadFile, methodPublishFile} {
+	for _, repo := range []string{tapRepo, bucketRepo, wingetRepo} {
+		for _, method := range []string{methodExists, methodReadFile, methodListDirs, methodOpenPulls, methodPublishFile} {
 			channels = channels.withFailure(method, repo, err)
 		}
 	}
