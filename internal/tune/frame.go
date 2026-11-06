@@ -16,6 +16,11 @@ import (
 // camera.positions does not list.
 var ErrNoPosition = errors.New("no such camera position")
 
+// ErrNoPreview is returned by every frame, camera view and pick while the last good pipeline
+// holds no frames: the take is a terminal one under a url-launch clip, which draws a page's frames
+// from an image layer such a take does not hold, so only re-recording it brings a preview.
+var ErrNoPreview = errors.New("no preview: a url-launch clip cannot draw a terminal take")
+
 // errNoCameraView is returned when the last good pipeline holds no compositor to answer the
 // camera's view; a pipeline that built in full always holds one.
 var errNoCameraView = errors.New("the preview holds no camera view")
@@ -35,12 +40,15 @@ type CameraView struct {
 // showing the storyboard as it was before it, max_colors included. A snapshot is rasterized once
 // and kept in the pipeline's raster cache, bounded at [rasterCacheBytes]. It fails with
 // [render.ErrOutsideClip] when out is not in [0, length) and when the take holds no snapshot to
-// show.
+// show, and with [ErrNoPreview] when that pipeline holds no frames.
 //
 // The pipeline is taken under the session's lock and the frame drawn outside it, so frames are
 // served concurrently with each other and with edits. The PNG is compressed at [png.BestSpeed].
 func (s *Session) Frame(out time.Duration) ([]byte, error) {
-	good := s.goodPipeline()
+	good, err := s.previewed()
+	if err != nil {
+		return nil, err
+	}
 	return encodeFrame(good.quantized(good.frames.FrameAt), png.BestSpeed, out)
 }
 
@@ -52,7 +60,11 @@ func (s *Session) Frame(out time.Duration) ([]byte, error) {
 // compressed ([png.NoCompression]): encoding it is then far faster, and the page fetches it from
 // this machine. It fails as [Session.Frame] does, and is served concurrently as it is.
 func (s *Session) DraftFrame(out time.Duration) ([]byte, error) {
-	return encodeFrame(s.goodPipeline().frames.DraftAt, png.NoCompression, out)
+	good, err := s.previewed()
+	if err != nil {
+		return nil, err
+	}
+	return encodeFrame(good.frames.DraftAt, png.NoCompression, out)
 }
 
 // FullFrame returns the PNG of the full view at output time out: the whole frame at
@@ -61,7 +73,10 @@ func (s *Session) DraftFrame(out time.Duration) ([]byte, error) {
 // pipeline and raster cache, quantized to frame.max_colors as [Session.Frame] is, fails as it
 // does, and is served concurrently as it is.
 func (s *Session) FullFrame(out time.Duration) ([]byte, error) {
-	good := s.goodPipeline()
+	good, err := s.previewed()
+	if err != nil {
+		return nil, err
+	}
 	return encodeFrame(good.quantized(good.frames.FullFrameAt), png.BestSpeed, out)
 }
 
@@ -73,15 +88,24 @@ func (s *Session) FullFrame(out time.Duration) ([]byte, error) {
 // compressed, for [Session.DraftFrame]'s reason, fails as [Session.Frame] does, and is served
 // concurrently as it is.
 func (s *Session) FullDraftFrame(out time.Duration) ([]byte, error) {
-	return encodeFrame(s.goodPipeline().frames.FullDraftAt, png.NoCompression, out)
+	good, err := s.previewed()
+	if err != nil {
+		return nil, err
+	}
+	return encodeFrame(good.frames.FullDraftAt, png.NoCompression, out)
 }
 
 // Camera returns where the camera looks at output time out, from the last good pipeline, and,
 // when position is not nil, the cell the position at that index in camera.positions aims at,
 // both from the same pipeline. It fails with [render.ErrOutsideClip] when out is not in
-// [0, length) and with [ErrNoPosition] when the storyboard lists no position at that index.
+// [0, length), with [ErrNoPosition] when the storyboard lists no position at that index and
+// with [ErrNoPreview] when the pipeline holds no frames.
 func (s *Session) Camera(out time.Duration, position *int) (CameraView, error) {
-	frames := s.goodPipeline().frames
+	good, err := s.previewed()
+	if err != nil {
+		return CameraView{}, err
+	}
+	frames := good.frames
 	view, ok := frames.ViewAt(out)
 	if !ok {
 		return CameraView{}, errNoCameraView
@@ -112,6 +136,15 @@ func (s *Session) goodPipeline() pipeline {
 	defer s.mu.Unlock()
 
 	return s.good
+}
+
+// previewed returns [Session.goodPipeline], or [ErrNoPreview] when it holds no frames.
+func (s *Session) previewed() (pipeline, error) {
+	good := s.goodPipeline()
+	if good.frames == nil {
+		return pipeline{}, ErrNoPreview
+	}
+	return good, nil
 }
 
 // quantized returns drawFrame with each frame it draws quantized to the pipeline's

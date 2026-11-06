@@ -194,7 +194,9 @@ refused outside the range the loader takes. On a `launch.url` clip it shows `vie
 an edit that sets one of those five, since a frame with a viewport takes none of them. A `cols`
 or `rows` other than the take's, or a page's `viewport` or `device_scale`, keeps the
 preview at the take's recorded size and stands as a clip problem until the take is re-recorded
-with `photon record`; Save still writes it, and `photon render` refuses the mismatch. The
+with `photon record`; Save still writes it, and `photon render` refuses the mismatch. A take
+recorded from a terminal under a `launch.url` clip opens with that problem and no preview, since
+the clip draws its frames from the page's pixels, which such a take does not hold. The
 storyboard's `camera.positions`, `camera.zooms` and `captions` show on lanes of their own under
 the beats. The position lane draws each position as a bar over its `hold`, or as a point when it
 has none, and each transition, the gap into the next position by start, as a bar in its own

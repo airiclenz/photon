@@ -14,6 +14,7 @@ import (
 
 	"github.com/airiclenz/photon/internal/clip"
 	"github.com/airiclenz/photon/internal/render"
+	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 )
@@ -91,12 +92,24 @@ type Session struct {
 // rest; frames is nil when the take does not schedule, and partial when a later stage failed.
 // loaded is the clip as the storyboard has it; when the take was recorded at another size than
 // its frame, sizeErr says so and frames is built on the take's size instead, so the preview keeps
-// drawing the cells the take holds.
+// drawing the cells the take holds — but for a terminal take under a url-launch clip, which draws
+// a page's frames from an image layer the take does not hold: that pipeline builds no frames,
+// built in full all the same, and undrawn holds the take's schedule in their place.
 type pipeline struct {
 	board   *storyboard.Storyboard
 	loaded  *clip.Clip
 	frames  *render.Pipeline
+	undrawn *schedule.Schedule
 	sizeErr error
+}
+
+// clipSchedule is the output clock p was built on: its frames', set on partial frames too, or
+// undrawn's for a take the clip cannot draw; nil when the take does not schedule.
+func (p pipeline) clipSchedule() *schedule.Schedule {
+	if p.frames != nil {
+		return p.frames.Schedule()
+	}
+	return p.undrawn
 }
 
 // fileStamp is what tells a rewritten take apart without reading it.
@@ -109,7 +122,8 @@ type fileStamp struct {
 // takePath is empty. It fails when the take or the storyboard cannot be read, and when the
 // storyboard does not schedule or compose against the take, just as `photon render` would. A take
 // recorded at another size than the storyboard's frame does not fail it: the session opens
-// previewing at the take's size, with that standing as a clip problem a save allows.
+// previewing at the take's size, with that standing as a clip problem a save allows; a terminal
+// take under a url-launch clip opens so too, with no preview ([ErrNoPreview]).
 func NewSession(loaded *clip.Clip, takePath string) (*Session, error) {
 	if takePath == "" {
 		var err error
@@ -377,7 +391,9 @@ func (s *Session) settle(built pipeline, err error) {
 // reuse, so its rasterizer, raster cache, draft rasterizer, draft raster cache and caption faces
 // carry over where render finds them unchanged, and the caption fonts load once a session. A take
 // recorded at another size than the storyboard's frame is no build error: the pipeline is built
-// at the take's size and the mismatch kept as the pipeline's sizeErr.
+// at the take's size and the mismatch kept as the pipeline's sizeErr. A url-launch clip cannot
+// draw a terminal take, one with no cell size, at any size: its pipeline builds no frames, only
+// the take's schedule, whose error is the build's.
 func (s *Session) build(src []byte) (pipeline, error) {
 	var built pipeline
 	board, err := storyboard.Parse(src, s.path)
@@ -391,6 +407,10 @@ func (s *Session) build(src []byte) (pipeline, error) {
 	previewed := built.loaded
 	if sizeErr := render.CheckFrame(s.takePath, s.recorded, board.Frame); sizeErr != nil {
 		built.sizeErr = fmt.Errorf("%w with `photon record`", sizeErr)
+		if built.loaded.Config.IsBrowser() && s.recorded.Cell == (take.CellSize{}) {
+			built.undrawn, err = schedule.New(board, s.recorded)
+			return built, err
+		}
 		previewed = atTakeSize(built.loaded, s.recorded)
 	}
 	built.frames, err = s.buildPipeline(previewed, s.takePath, s.recorded, render.BuildOptions{

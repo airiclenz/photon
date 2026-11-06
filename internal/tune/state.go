@@ -206,9 +206,9 @@ func (s *Session) State() State {
 	}
 	// A take that no longer schedules builds no pipeline: the schedule shown is then the good
 	// one's.
-	clipSchedule := s.good.frames.Schedule()
-	if s.current.frames != nil {
-		clipSchedule = s.current.frames.Schedule()
+	clipSchedule := s.good.clipSchedule()
+	if current := s.current.clipSchedule(); current != nil {
+		clipSchedule = current
 	}
 	state := State{
 		Version:    s.version,

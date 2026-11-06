@@ -23,7 +23,9 @@
 // stays the preview's. A take recorded at another size than the storyboard's frame — another
 // cols×rows, or a page's viewport or device scale ([render.ErrTakeSize]) — builds no less: the
 // pipeline is built at the take's size, so the preview keeps drawing its cells, and a clip
-// problem naming both sizes stands, telling the user to re-record the take with `photon record`.
+// problem naming both sizes stands, telling the user to re-record the take with `photon record`;
+// a terminal take under a url-launch clip, which draws from an image layer such a take lacks,
+// builds no frames at all, and every frame, camera view and pick fails with [ErrNoPreview].
 // [Session.Refresh] takes in outside writes — a rewritten take is read again, a changed storyboard
 // is loaded when nothing is unsaved and turns the session stale otherwise — and [Session.Save]
 // writes in place, refused while stale ([ErrStale]) or while an error other than the take's size

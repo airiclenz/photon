@@ -221,6 +221,30 @@ func savePageTake(t *testing.T, path string) {
 	}
 }
 
+// newNoPreviewSession starts a session on pageSessionConfig, pageSessionStoryboard and
+// [saveNoPreviewTake]'s terminal take, which the url-launch clip cannot draw.
+func newNoPreviewSession(t *testing.T) *Session {
+	t.Helper()
+	return startSessionFixture(t, pageSessionConfig, pageSessionStoryboard, saveNoPreviewTake).session
+}
+
+// saveNoPreviewTake writes to path a terminal take, one with no cell size, of pageSessionStoryboard's
+// beat 1: 2s of fixtureCols×4 cells, beat 1 starting at 0.
+func saveNoPreviewTake(t *testing.T, path string) {
+	t.Helper()
+	recorded := &take.Take{
+		Cols: fixtureCols, Rows: 4, FPS: 10,
+		Snapshots: []take.Snapshot{
+			lineSnapshot(0, "$ app"),
+			lineSnapshot(2*time.Second, "done"),
+		},
+		Events: []take.Event{{At: 0, Kind: take.EventBeatStart, Beat: 1}},
+	}
+	if err := take.Save(path, recorded); err != nil {
+		t.Fatalf("take.Save: %v", err)
+	}
+}
+
 // lineSnapshot is a snapshot at at showing one line of text per row.
 func lineSnapshot(at time.Duration, lines ...string) take.Snapshot {
 	rows := make([][]take.Cell, 0, len(lines))
@@ -1165,5 +1189,88 @@ func TestSession_APageTake_BuildsItsFramesAndSavesATimingEdit(t *testing.T) {
 	}
 	if state := f.session.State(); state.IsDirty || len(state.Errors) != 0 {
 		t.Errorf("after the save: dirty %v, errors %+v; want clean, none", state.IsDirty, state.Errors)
+	}
+}
+
+func TestNewSession_NoPreviewTake_OpensWithTheTakeSizeProblem(t *testing.T) {
+	t.Parallel()
+	session := newNoPreviewSession(t)
+
+	state := session.State()
+
+	errs := state.Errors
+	sizes := fmt.Sprintf("was recorded at %d×4 terminal cells", fixtureCols)
+	if len(errs) != 1 || errs[0].Owner != (storyboard.Owner{Kind: storyboard.OwnerClip}) ||
+		!strings.Contains(errs[0].Message, sizes) ||
+		!strings.HasSuffix(errs[0].Message, "re-record it with `photon record`") {
+		t.Fatalf("errors %+v, want one clip problem %q telling to re-record", errs, sizes)
+	}
+	if !errors.Is(session.current.sizeErr, render.ErrTakeSize) {
+		t.Errorf("size problem %v, want it to wrap ErrTakeSize", session.current.sizeErr)
+	}
+	if state.LengthMS != beatOneMS {
+		t.Errorf("length %dms, want the storyboard's schedule of %dms", state.LengthMS, beatOneMS)
+	}
+}
+
+func TestSession_NoPreviewTake_FramesCameraAndPickFailWithNoPreview(t *testing.T) {
+	t.Parallel()
+	session := newNoPreviewSession(t)
+	calls := []struct {
+		name string
+		call func() error
+	}{
+		{"Frame", func() error { _, err := session.Frame(0); return err }},
+		{"DraftFrame", func() error { _, err := session.DraftFrame(0); return err }},
+		{"FullFrame", func() error { _, err := session.FullFrame(0); return err }},
+		{"FullDraftFrame", func() error { _, err := session.FullDraftFrame(0); return err }},
+		{"Camera", func() error { _, err := session.Camera(0, nil); return err }},
+		{"Pick", func() error {
+			_, err := session.Pick(0, ViewCamera, image.Point{}, image.Point{X: 4})
+			return err
+		}},
+	}
+
+	for _, tc := range calls {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.call(); !errors.Is(err, ErrNoPreview) {
+				t.Errorf("%s: %v, want ErrNoPreview", tc.name, err)
+			}
+		})
+	}
+}
+
+func TestSession_NoPreviewTake_AppliesATimingEdit(t *testing.T) {
+	t.Parallel()
+	session := newNoPreviewSession(t)
+
+	err := session.Apply(beatEdit(1, storyboard.FieldDuration, 1200))
+
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	state := session.State()
+	if state.LengthMS != 1200 || len(state.Errors) != 1 {
+		t.Errorf("length %dms with errors %+v, want 1200ms with the take-size problem alone",
+			state.LengthMS, state.Errors)
+	}
+	if _, err := session.Frame(0); !errors.Is(err, ErrNoPreview) {
+		t.Errorf("Frame(0) after the edit: %v, want ErrNoPreview", err)
+	}
+}
+
+func TestNewSession_NoPreviewTakeOfOtherBeats_Fails(t *testing.T) {
+	t.Parallel()
+	opened := newNoPreviewSession(t)
+	// Beats 1 and 2, where the storyboard has beat 1 alone.
+	saveSessionTake(t, opened.takePath, fixtureCols, time.Now())
+
+	session, err := NewSession(opened.base, opened.takePath)
+
+	if err == nil {
+		t.Fatalf("NewSession: a session %v, want the beats' mismatch", session)
+	}
+	if !strings.Contains(err.Error(), "schedule: ") {
+		t.Errorf("NewSession: %v, want the schedule's mismatch", err)
 	}
 }

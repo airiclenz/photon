@@ -105,7 +105,10 @@ with a url-shaped `config.Launch` (URL set, Strip set) whose result lacks the st
 **Closes:** browser-env-strip
 **Commit:** `feat(config): allow launch.strip on a url launch`
 
-## 3. tune opens with no pipeline on a take it cannot draw
+## 3. tune opens with no pipeline on a take it cannot draw — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): frame and pick readers go through a new `Session.previewed()` beside `goodPipeline` (which returns `ErrNoPreview` on nil frames) instead of changing `goodPipeline`'s signature, so the existing tests that call `goodPipeline().frames` stay untouched; the skip-path schedule is kept on the pipeline as `undrawn`, read through `pipeline.clipSchedule()` by `State`.
+NOTES (2026-11-06): beyond the plan's listed tests, `TestSession_NoPreviewTake_AppliesATimingEdit` checks a rebuild on the skip path (length follows the edit, frames still `ErrNoPreview`), and the frame/pick test covers all six readers (Frame, DraftFrame, FullFrame, FullDraftFrame, Camera, Pick).
 
 **What:** fixes `tune-terminal-take-viewport`: `NewSession` fails on a terminal take under a
 url-launch clip with a `frame.viewport`, because `atTakeSize` leaves the viewport and render's

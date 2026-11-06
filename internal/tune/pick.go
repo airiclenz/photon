@@ -94,12 +94,16 @@ type Proposal struct {
 // the smallest box recorded for one of the clip's selectors that holds the picked cells, equal
 // sizes in selector order then reading order, as that selector with nth counting to the box over
 // the whole screen, resolver-checked alike; a terminal take records no boxes. It fails with
-// [render.ErrOutsideClip] when out is not in [0, length) and with [ErrNoProposal] when the pick
-// starts off the screen, picks only blanks or does not resolve.
+// [render.ErrOutsideClip] when out is not in [0, length), with [ErrNoProposal] when the pick
+// starts off the screen, picks only blanks or does not resolve, and with [ErrNoPreview] when the
+// last good pipeline holds no frames.
 func (s *Session) Pick(
 	out time.Duration, view FrameView, from, to image.Point,
 ) (Proposal, error) {
-	shown := s.goodPipeline()
+	shown, err := s.previewed()
+	if err != nil {
+		return Proposal{}, err
+	}
 
 	screen, err := shown.frames.ScreenAt(out)
 	if err != nil {
