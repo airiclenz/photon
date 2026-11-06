@@ -19,6 +19,9 @@
 // the state version changes, unless the preview shows that URL or is loading it; the preview
 // revokes the URL it replaces once no cache entry holds it.
 //
+// While the state says the take cannot be drawn (preview: false) it asks for no frame, and shows
+// NO_PREVIEW_TEXT in the preview in place of the picture.
+//
 // It loads after app.js and before transport.js, and adds pumpFrames, settleFrames, frameTime,
 // frameView and frameQuality to window.tunePage, the page's internal namespace, where app.js's takeState and
 // window.tune contract, transport.js's clock, marker.js and picker.js reach them. The clock is
@@ -47,8 +50,15 @@
   // CACHE_ENTRIES bounds the frames held at hand.
   const CACHE_ENTRIES = 48;
 
+  // NO_PREVIEW_TEXT stands in the preview in place of the picture while the take cannot be drawn.
+  const NO_PREVIEW_TEXT =
+    "No preview — the take does not fit this clip; re-record it with `photon record`.";
+
   const view = page.view;
   const frameImage = page.frame;
+  const stage = document.getElementById("stage");
+  const noPreview = document.getElementById("no-preview");
+  noPreview.textContent = NO_PREVIEW_TEXT;
 
   // cache holds the frames at hand of cacheVersion by key, least recently used first, each as
   // {key, view, quality, ms, url}.
@@ -169,10 +179,23 @@
 
   // --- choosing the frames ---
 
+  // hasPreview says the state has frames to show, and shows the picture, or without them the
+  // placeholder in its place.
+  function hasPreview() {
+    const isPreview = Boolean(page.state() && page.state().preview);
+    stage.hidden = !isPreview;
+    noPreview.hidden = isPreview;
+    if (!isPreview) {
+      view.frameMessage.hidden = true;
+    }
+    return isPreview;
+  }
+
   // pumpFrames asks for the frames wanted around the playhead and shows the one at it when it is
-  // at hand: drafts while the preview moves, the exact frame once it has settled.
+  // at hand: drafts while the preview moves, the exact frame once it has settled. It asks for none
+  // while the state has no preview.
   function pumpFrames() {
-    if (page.frameCount() === 0) {
+    if (!hasPreview() || page.frameCount() === 0) {
       return;
     }
     syncVersion();

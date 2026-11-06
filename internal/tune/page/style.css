@@ -201,6 +201,7 @@ textarea {
   pointer-events: none;
 }
 
+.stage[hidden],
 .pick-drag[hidden],
 .pick-box[hidden],
 .camera-crop[hidden],
@@ -246,6 +247,15 @@ textarea {
 .frame-message {
   margin: 6px 0 0;
   color: var(--danger);
+}
+
+.no-preview {
+  margin: 0;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
 }
 
 .inspector {

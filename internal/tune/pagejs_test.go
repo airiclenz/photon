@@ -51,6 +51,7 @@ const (
 	elementTime       = "time"
 	elementBuild      = "build"
 	elementStatus     = "status"
+	elementNoPreview  = "no-preview"
 	elementDocument   = "document"
 )
 
@@ -464,6 +465,35 @@ func TestPageJS_LoadsAndWires(t *testing.T) {
 	}
 	if got := page.text(elementTime); !strings.HasPrefix(got, "0:00.000 / ") {
 		t.Errorf("the transport's time: want it from 0:00.000, got %q", got)
+	}
+}
+
+func TestPageJS_NoPreview_FetchesNoFrameAndShowsThePlaceholder(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newNoPreviewSession(t))
+	page.dispatch("play", "click", nil)
+	page.settle()
+
+	for _, request := range page.requests {
+		if strings.HasPrefix(request.path, frameAPIPrefix) {
+			t.Errorf("the page asked for a frame: %s", request.path)
+		}
+	}
+	want := "No preview — the take does not fit this clip; re-record it with `photon record`."
+	if got := page.text(elementNoPreview); got != want {
+		t.Errorf("the placeholder: want %q, got %q", want, got)
+	}
+	if page.isHidden(elementNoPreview) || !page.isHidden(elementStage) {
+		t.Error("want the placeholder shown and the picture hidden")
+	}
+}
+
+func TestPageJS_Preview_HidesThePlaceholder(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+
+	if !page.isHidden(elementNoPreview) || page.isHidden(elementStage) {
+		t.Error("want the picture shown and the placeholder hidden")
 	}
 }
 

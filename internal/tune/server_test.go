@@ -710,6 +710,55 @@ func TestHandler_PickOnBlanks_Is422(t *testing.T) {
 	}
 }
 
+func TestHandler_NoPreview_FrameCameraAndPickAre409(t *testing.T) {
+	t.Parallel()
+	handler := newHandler(newNoPreviewSession(t), testAddr)
+	pick := pickBody(t, 0, image.Pt(0, 0), image.Pt(10, 0))
+
+	for _, test := range []struct {
+		name     string
+		response *httptest.ResponseRecorder
+	}{
+		{"frame", get(t, handler, "/api/frame?t=0")},
+		{"draft frame", get(t, handler, "/api/frame?t=0&draft=1")},
+		{"full view", get(t, handler, "/api/frame?t=0&view=full")},
+		{"camera", get(t, handler, "/api/camera?t=0")},
+		{"pick", post(t, handler, "/api/pick", pick)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			assertStatus(t, test.response, http.StatusConflict)
+			var failure apiError
+			decodeResponse(t, test.response, &failure)
+			if failure.Error != ErrNoPreview.Error() {
+				t.Errorf("message: want %q, got %q", ErrNoPreview.Error(), failure.Error)
+			}
+		})
+	}
+}
+
+func TestHandler_State_ReportsThePreview(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name    string
+		session *Session
+		want    bool
+	}{
+		{"a drawn take", newSessionFixture(t).session, true},
+		{"a take the clip cannot draw", newNoPreviewSession(t), false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := get(t, newHandler(test.session, testAddr), "/api/state")
+
+			assertStatus(t, response, http.StatusOK)
+			var state map[string]any
+			decodeResponse(t, response, &state)
+			if got := state["preview"]; got != test.want {
+				t.Errorf(`"preview": want %v, got %v`, test.want, got)
+			}
+		})
+	}
+}
+
 func TestRun_PortZero_ListensOnLoopbackAndStopsOnCancel(t *testing.T) {
 	t.Parallel()
 	fixture := newSessionFixture(t)

@@ -148,7 +148,12 @@ a no-cell-size take whose beats the storyboard lacks still fails `NewSession`; `
 **Closes:** tune-terminal-take-viewport
 **Commit:** `fix(tune): open on a take the clip cannot draw, without a preview`
 
-## 4. tune's server and page show no preview
+## 4. tune's server and page show no preview — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the preview gate sits once at the top of `pumpFrames` in frames.js (the only caller of `request` and `prefetch`), which also toggles the placeholder and hides `#stage` and a stale frame message; app.js is unchanged (still 395 lines), so nothing of the toggle lands there.
+NOTES (2026-11-06): `.stage[hidden]` joins style.css's `[hidden] { display: none }` rule, since `.stage`'s `display: inline-block` would otherwise keep a hidden stage on screen; the placeholder text keeps the backticks around `photon record`, as the clip problem's own text does.
+NOTES (2026-11-06): beyond the plan's tests, the server test also checks the draft, full-view and camera routes answer 409 with the `ErrNoPreview` message and that a drawn take's state has `"preview": true`; a page test checks the placeholder stays hidden on a drawn take.
+NOTES (2026-11-06): the plan names the State field `Preview`; it is `HasPreview bool` (JSON key still `preview`) instead, per the house rule that a boolean field reads as a predicate, like `IsDirty` and `CanUndo` beside it.
 
 **What:**
 **Goal:** with a session from item 3, the frame, camera and pick routes answer 409 with the

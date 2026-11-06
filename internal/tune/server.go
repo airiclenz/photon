@@ -207,8 +207,9 @@ type pixelRect struct {
 // view or pick the session cannot give — a time outside the clip, a camera position the
 // storyboard does not list — and a save refused while an error stands answer 422; a save refused
 // while the storyboard changed on disk answers 409, and so does an export refused while it changed
-// on disk, while edits are unsaved, while an error stands or while another export runs. Every
-// failure's body is {"error": "…"}.
+// on disk, while edits are unsaved, while an error stands or while another export runs, and every
+// frame, camera view and pick while the session has no preview ([ErrNoPreview]). Every failure's
+// body is {"error": "…"}.
 func newHandler(session *Session, addr string) http.Handler {
 	serving := &server{session: session, hosts: map[string]bool{addr: true}, page: pageFS()}
 	if _, port, err := net.SplitHostPort(addr); err == nil {
@@ -426,8 +427,9 @@ func (s *server) stateAfterAs(status int, change func() error) http.HandlerFunc 
 	}
 }
 
-// handlePick answers the [Proposal] for the pick in the body, or 422 when there is none; a view
-// but the camera's frame or the full view answers 400.
+// handlePick answers the [Proposal] for the pick in the body, or 422 when there is none and 409
+// while the session has no preview ([ErrNoPreview]); a view but the camera's frame or the full
+// view answers 400.
 func (s *server) handlePick(w http.ResponseWriter, r *http.Request) {
 	var pick pickRequest
 	if !decodeBody(w, r, &pick) {
@@ -445,7 +447,11 @@ func (s *server) handlePick(w http.ResponseWriter, r *http.Request) {
 		image.Pt(pick.To.X, pick.To.Y),
 	)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		status := http.StatusUnprocessableEntity
+		if errors.Is(err, ErrNoPreview) {
+			status = http.StatusConflict
+		}
+		writeError(w, status, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, responseOf(proposal))
@@ -488,12 +494,12 @@ func decodeBody(w http.ResponseWriter, r *http.Request, into any) bool {
 	return false
 }
 
-// statusOf is the status a session error answers with: 409 while stale and for a refused export,
-// 422 for what else the session refuses, 500 for anything else.
+// statusOf is the status a session error answers with: 409 while stale, for a refused export and
+// while the session has no preview, 422 for what else the session refuses, 500 for anything else.
 func statusOf(err error) int {
 	switch {
 	case errors.Is(err, ErrStale), errors.Is(err, ErrUnsaved), errors.Is(err, ErrProblems),
-		errors.Is(err, ErrExporting):
+		errors.Is(err, ErrExporting), errors.Is(err, ErrNoPreview):
 		return http.StatusConflict
 	case errors.Is(err, ErrInvalid), errors.Is(err, ErrNoUndo), errors.Is(err, ErrNoRedo),
 		errors.Is(err, render.ErrOutsideClip), errors.Is(err, ErrNoProposal),

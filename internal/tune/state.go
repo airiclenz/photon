@@ -18,7 +18,8 @@ import (
 // only while it builds in full. Export is the GIF export's progress and outcome. Version rises on
 // every change but the export's, so a page that saw it already has nothing new to draw; an export
 // leaves every frame as it was, so its progress keeps the version and the page's frames. Build is
-// the build string of the photon serving the page, as `photon version` prints it.
+// the build string of the photon serving the page, as `photon version` prints it. HasPreview says
+// the last good pipeline draws frames: false while the take cannot be drawn ([ErrNoPreview]).
 type State struct {
 	Version   int             `json:"version"`
 	Build     string          `json:"build"`
@@ -52,11 +53,12 @@ type State struct {
 	// key it is sent as above.
 	Fields []storyboard.Field `json:"fields"`
 
-	Errors  []Problem `json:"errors"`
-	IsDirty bool      `json:"dirty"`
-	IsStale bool      `json:"stale"`
-	CanUndo bool      `json:"can_undo"`
-	CanRedo bool      `json:"can_redo"`
+	Errors     []Problem `json:"errors"`
+	HasPreview bool      `json:"preview"`
+	IsDirty    bool      `json:"dirty"`
+	IsStale    bool      `json:"stale"`
+	CanUndo    bool      `json:"can_undo"`
+	CanRedo    bool      `json:"can_redo"`
 
 	Export ExportState `json:"export"`
 }
@@ -231,6 +233,7 @@ func (s *Session) State() State {
 		MaxColors:  board.Frame.MaxColors,
 		Fields:     storyboard.Fields(board),
 		Errors:     append([]Problem{}, s.problems...),
+		HasPreview: s.good.frames != nil,
 		IsDirty:    s.isDirty(),
 		IsStale:    s.isStale,
 		CanUndo:    s.history.canUndo(),
