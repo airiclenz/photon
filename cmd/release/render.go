@@ -11,24 +11,44 @@ import (
 )
 
 // The package-channel files publish writes, rendered whole from the templates below at each
-// release. The templates are the source of truth: the tap's formula and the bucket's manifest
-// say they are generated here, so a fix to either lands in this repository, never in theirs.
+// release. The templates are the source of truth: the tap's formula, the bucket's manifest and
+// the winget manifests say they are generated here, so a fix to any of them lands in this
+// repository, never in theirs. Every template base name is distinct, since templates are looked
+// up by base name whichever directory they sit in.
 const (
 	formulaTemplate         = "photon.rb.tmpl"
 	scoopTemplate           = "scoop.json.tmpl"
+	wingetVersionTemplate   = "photon.version.yaml.tmpl"
+	wingetInstallerTemplate = "photon.installer.yaml.tmpl"
+	wingetLocaleTemplate    = "photon.locale.en-US.yaml.tmpl"
 	packageTemplatesPattern = "templates/*.tmpl"
+	wingetTemplatesPattern  = "templates/winget/*.tmpl"
 )
 
-// releaseDownloadBase is the base URL every asset of a release on GitHub downloads from,
-// followed by the tag.
-const releaseDownloadBase = "https://github.com/" + photonRepo + "/releases/download/"
+// wingetPackageID is the package identifier photon is published under in winget-pkgs.
+const wingetPackageID = "AiricLenz.Photon"
 
-//go:embed templates/*.tmpl
+// The base URLs of a release on GitHub: every asset downloads from releaseDownloadBase and the
+// release page sits at releasePageBase, each followed by the tag.
+const (
+	releaseDownloadBase = "https://github.com/" + photonRepo + "/releases/download/"
+	releasePageBase     = "https://github.com/" + photonRepo + "/releases/tag/"
+)
+
+//go:embed templates/*.tmpl templates/winget/*.tmpl
 var templateFiles embed.FS
 
 // packageTemplates holds every package-channel template, parsed once. A template that fails to
 // parse is a defect of this program, caught by every render test, so it panics at start-up.
-var packageTemplates = template.Must(template.ParseFS(templateFiles, packageTemplatesPattern))
+var packageTemplates = template.Must(
+	template.ParseFS(templateFiles, packageTemplatesPattern, wingetTemplatesPattern),
+)
+
+// renderedFile is one rendered package-channel file and the name it is written under.
+type renderedFile struct {
+	name    string
+	content string
+}
 
 // checksumPattern is the one hash shape SHA256SUMS may list for an archive: 64 lower-case hex
 // digits, after lower-casing.
@@ -50,12 +70,28 @@ type packageArchive struct {
 	Stem string
 }
 
+// UpperSHA256 is the archive's hash in upper case, the form winget manifests carry it in.
+func (a packageArchive) UpperSHA256() string {
+	return strings.ToUpper(a.SHA256)
+}
+
 // packageData is what a package-channel template renders from.
 type packageData struct {
 	// Version is the bare release version, X.Y.Z.
 	Version string
 	tag     string
 	sums    string
+}
+
+// ReleaseURL is the release's page on GitHub, which the winget locale manifest links as its
+// release notes.
+func (d packageData) ReleaseURL() string {
+	return releasePageBase + d.tag
+}
+
+// WingetPackageID is the package identifier the winget manifests name.
+func (d packageData) WingetPackageID() string {
+	return wingetPackageID
 }
 
 // Archive resolves the archive a template names by its target. Templates call it for exactly the
@@ -121,4 +157,36 @@ func renderPackageFile(name, version, sums string) (string, error) {
 		return "", fmt.Errorf("render %s for %s: %w", name, tag, err)
 	}
 	return rendered.String(), nil
+}
+
+// wingetManifest is one manifest of a winget submission: the file name winget-pkgs holds it
+// under and the template it renders from.
+type wingetManifest struct {
+	name     string
+	template string
+}
+
+// wingetManifests are the three manifests a winget submission carries, in winget-pkgs' file
+// naming: the version manifest, the installer manifest and the en-US default-locale manifest.
+var wingetManifests = []wingetManifest{
+	{name: wingetPackageID + ".yaml", template: wingetVersionTemplate},
+	{name: wingetPackageID + ".installer.yaml", template: wingetInstallerTemplate},
+	{name: wingetPackageID + ".locale.en-US.yaml", template: wingetLocaleTemplate},
+}
+
+// renderWingetManifests renders the three winget manifests for version (vX.Y.Z or a bare X.Y.Z),
+// reading the two Windows archive hashes from the release's SHA256SUMS body, and returns them in
+// wingetManifests' order under the file names a winget-pkgs manifest directory holds them by.
+// It fails on the first manifest that cannot render: a bad version, or a Windows archive
+// SHA256SUMS omits or lists a malformed hash for.
+func renderWingetManifests(version, sums string) ([]renderedFile, error) {
+	rendered := make([]renderedFile, 0, len(wingetManifests))
+	for _, manifest := range wingetManifests {
+		content, err := renderPackageFile(manifest.template, version, sums)
+		if err != nil {
+			return nil, err
+		}
+		rendered = append(rendered, renderedFile{name: manifest.name, content: content})
+	}
+	return rendered, nil
 }

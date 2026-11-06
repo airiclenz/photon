@@ -261,7 +261,10 @@ TestExecChannelReposTellsANoFromABrokenCommand; cmd/release/memchannels_test.go 
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./cmd/release/`
 **Commit:** `feat(release): list channel directories and own open pull requests`
 
-## 9. Render the winget manifests
+## 9. Render the winget manifests — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the default-locale template constant is `wingetLocaleTemplate` (file `photon.locale.en-US.yaml.tmpl`, as the plan's Files line names it); the installer's `Dependencies: PackageDependencies: - PackageIdentifier: Gyan.FFmpeg` sits at the manifest root, after NestedInstallerType, so it applies to both architectures.
+NOTES (2026-11-06): beyond the golden test, added TestRenderWingetInstallerNamesTheArchivesAndFFmpeg (field-level check of both installers, upper-cased hashes, alias and the FFmpeg dependency), winget rows in TestRenderRefusesABadOrMissingHash/TestRenderRefusesABadVersion and TestPackageDataReleaseURL; render_test.go now imports gopkg.in/yaml.v3 (already in go.mod) to check each manifest parses — test-only, so the tool's non-test imports stay stdlib and cobra.
 
 **What:**
 **Goal:** the release tool renders the three winget manifests for a version (portable zip, x64 and arm64, `photon.exe` alias `photon`, `Gyan.FFmpeg` dependency), matching committed goldens.
