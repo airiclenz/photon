@@ -8,12 +8,15 @@ import (
 	"image/color"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
 	"github.com/airiclenz/photon/internal/config"
 	"github.com/airiclenz/photon/internal/fonts"
+	"github.com/airiclenz/photon/internal/pixels"
+	"github.com/airiclenz/photon/internal/raster"
 	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/take"
 	"github.com/airiclenz/photon/internal/target"
@@ -60,6 +63,20 @@ func loadRenderTake(t *testing.T, cols int) (string, *take.Take) {
 // schedule, rasterizer and compositor, each frame's snapshot rasterized afresh.
 func oracleFrames(t *testing.T, loaded *clip.Clip, recorded *take.Take) ([]schedule.Frame, []*image.RGBA) {
 	t.Helper()
+	return oracleFramesOf(t, loaded, recorded, func(rasterizer *raster.Rasterizer, index int) *image.RGBA {
+		return rasterizer.Frame(recorded.Snapshots[index])
+	})
+}
+
+// oracleFramesOf is [oracleFrames] with each frame's snapshot drawn afresh by draw, given the
+// oracle's own rasterizer and the snapshot's index in recorded.
+func oracleFramesOf(
+	t *testing.T,
+	loaded *clip.Clip,
+	recorded *take.Take,
+	draw func(rasterizer *raster.Rasterizer, index int) *image.RGBA,
+) ([]schedule.Frame, []*image.RGBA) {
+	t.Helper()
 	clipSchedule, err := schedule.New(loaded.Storyboard, recorded)
 	if err != nil {
 		t.Fatalf("schedule.New: %v", err)
@@ -84,7 +101,7 @@ func oracleFrames(t *testing.T, loaded *clip.Clip, recorded *take.Take) ([]sched
 	composed := make([]*image.RGBA, 0, len(frames))
 	for _, frame := range frames {
 		index := recorded.ScreenAt(frame.Source)
-		composed = append(composed, compositor.Compose(frame.Out, rasterizer.Frame(recorded.Snapshots[index])))
+		composed = append(composed, compositor.Compose(frame.Out, draw(rasterizer, index)))
 	}
 	return frames, composed
 }
@@ -489,5 +506,188 @@ func TestPipeline_TheCameraView_PassesTheCompositorThrough(t *testing.T) {
 	wantCol, wantRow, wantOK := built.Cell(0, pixel)
 	if col, row, ok := built.FullViewCell(pixel); col != wantCol || row != wantRow || ok != wantOK {
 		t.Errorf("FullViewCell(%v): want (%d, %d, %t), got (%d, %d, %t)", pixel, wantCol, wantRow, wantOK, col, row, ok)
+	}
+}
+
+// imageFrameSize is the pixel size of the frames in imageTake's image layer.
+var imageFrameSize = image.Pt(48, 24)
+
+// imageFrame is an opaque frame of imageFrameSize filled with fill, with a block of mark at
+// (x, 4) to (x+6, 10).
+func imageFrame(fill, mark color.RGBA, x int) *image.RGBA {
+	frame := image.NewRGBA(image.Rectangle{Max: imageFrameSize})
+	for y := range imageFrameSize.Y {
+		for column := range imageFrameSize.X {
+			isMark := column >= x && column < x+6 && y >= 4 && y < 10
+			if isMark {
+				frame.SetRGBA(column, y, mark)
+			} else {
+				frame.SetRGBA(column, y, fill)
+			}
+		}
+	}
+	return frame
+}
+
+// saveImageTake writes into dir a take of the render tests' grid with an image layer and returns
+// its path and the frames its layer was encoded from: a key frame at 0, a patch at 1s that moves
+// the block, and a key frame at 3s, two seconds after the first. Beat 1 runs from 0 and beat 2
+// from 2s.
+func saveImageTake(t *testing.T, dir string) (string, []*image.RGBA) {
+	t.Helper()
+	ink := color.RGBA{R: 0xe0, G: 0x40, B: 0x20, A: 0xff}
+	ats := []time.Duration{0, sec, 3 * sec}
+	frames := []*image.RGBA{
+		imageFrame(color.RGBA{R: 0x10, G: 0x20, B: 0x30, A: 0xff}, ink, 2),
+		imageFrame(color.RGBA{R: 0x10, G: 0x20, B: 0x30, A: 0xff}, ink, 10),
+		imageFrame(color.RGBA{R: 0x30, G: 0x30, B: 0x10, A: 0xff}, ink, 20),
+	}
+	recorded := &take.Take{
+		Cols: 20, Rows: 4, FPS: 10,
+		Events: []take.Event{
+			{At: 0, Kind: take.EventBeatStart, Beat: 1},
+			{At: 2 * sec, Kind: take.EventBeatStart, Beat: 2},
+		},
+	}
+	var encoder pixels.Encoder
+	for index, frame := range frames {
+		entry, err := encoder.Encode(ats[index], frame)
+		if err != nil {
+			t.Fatalf("Encode the frame at %s: %v", ats[index], err)
+		}
+		recorded.Snapshots = append(recorded.Snapshots, take.Snapshot{At: ats[index], Image: entry})
+	}
+	if recorded.Snapshots[1].Image.Key {
+		t.Fatal("the frame at 1s encoded as a key frame, not a patch")
+	}
+	path := filepath.Join(dir, "rendered.take")
+	if err := take.Save(path, recorded); err != nil {
+		t.Fatalf("take.Save: %v", err)
+	}
+	return path, frames
+}
+
+// loadImageTake writes saveImageTake's take and loads it back, returning its path and the frames
+// its layer was encoded from too.
+func loadImageTake(t *testing.T) (string, *take.Take, []*image.RGBA) {
+	t.Helper()
+	takePath, frames := saveImageTake(t, t.TempDir())
+	recorded, err := take.Load(takePath)
+	if err != nil {
+		t.Fatalf("take.Load: %v", err)
+	}
+	return takePath, recorded, frames
+}
+
+// imageOracleFrames is [oracleFrames] for a take with an image layer: each frame's snapshot is
+// the layer's frame there, decoded afresh.
+func imageOracleFrames(t *testing.T, loaded *clip.Clip, recorded *take.Take) ([]schedule.Frame, []*image.RGBA) {
+	t.Helper()
+	return oracleFramesOf(t, loaded, recorded, func(_ *raster.Rasterizer, index int) *image.RGBA {
+		frame, err := pixels.NewDecoder(recorded).Frame(index)
+		if err != nil {
+			t.Fatalf("Decoder.Frame(%d): %v", index, err)
+		}
+		return frame
+	})
+}
+
+// keepNothing is a RasterCache that keeps nothing, so every frame draws its snapshot afresh.
+type keepNothing struct{}
+
+// Get reports that no raster is kept.
+func (keepNothing) Get(int) (*image.RGBA, bool) { return nil, false }
+
+// Put drops frame.
+func (keepNothing) Put(int, *image.RGBA) {}
+
+func TestPipeline_RasterAt_AnImageTake_IsTheEncodersInputFrame(t *testing.T) {
+	t.Parallel()
+	loaded := loadRenderClip(t)
+	takePath, recorded, frames := loadImageTake(t)
+	cache := newCountingCache()
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: cache})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	for _, index := range []int{2, 0, 1, 2} {
+		got, err := built.rasterAt(index, built.rasterizer, built.cache)
+
+		if err != nil {
+			t.Fatalf("rasterAt(%d): %v", index, err)
+		}
+		if got.Rect != frames[index].Rect || !bytes.Equal(got.Pix, frames[index].Pix) {
+			t.Errorf("rasterAt(%d) is not the frame the layer was encoded from", index)
+		}
+	}
+	if cache.puts != len(frames) {
+		t.Errorf("the cache got %d puts, want one per snapshot, %d", cache.puts, len(frames))
+	}
+	for index, kept := range cache.rasters {
+		if !bytes.Equal(kept.Pix, frames[index].Pix) {
+			t.Errorf("the cached frame of snapshot %d changed after it was kept", index)
+		}
+	}
+}
+
+func TestPipeline_FrameAt_AnImageTake_EqualsTheOracleComposingTheDecodedImage(t *testing.T) {
+	t.Parallel()
+	loaded := loadRenderClipOf(t, zoomedCaptionedStoryboard)
+	takePath, recorded, _ := loadImageTake(t)
+	frames, want := imageOracleFrames(t, loaded, recorded)
+
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster()})
+
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if len(frames) == 0 {
+		t.Fatal("the oracle scheduled no frames")
+	}
+	for index, frame := range frames {
+		got, err := built.FrameAt(frame.Out)
+		if err != nil {
+			t.Fatalf("FrameAt(%s): %v", frame.Out, err)
+		}
+		if got.Rect != want[index].Rect || !bytes.Equal(got.Pix, want[index].Pix) {
+			t.Errorf("FrameAt(%s) differs from the oracle's frame", frame.Out)
+		}
+	}
+}
+
+func TestPipeline_FrameAt_AnImageTakeDrawnConcurrently_EqualsTheOracle(t *testing.T) {
+	t.Parallel()
+	loaded := loadRenderClip(t)
+	takePath, recorded, _ := loadImageTake(t)
+	frames, want := imageOracleFrames(t, loaded, recorded)
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: keepNothing{}})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	const workers = 4
+	errs := make(chan error, workers*len(frames))
+	var wg sync.WaitGroup
+
+	for worker := range workers {
+		wg.Go(func() {
+			for step := range frames {
+				index := (step*(worker+1) + worker) % len(frames)
+				got, err := built.FrameAt(frames[index].Out)
+				if err != nil {
+					errs <- err
+					continue
+				}
+				if !bytes.Equal(got.Pix, want[index].Pix) {
+					errs <- errors.New("FrameAt(" + frames[index].Out.String() + ") differs from the oracle's frame")
+				}
+			}
+		})
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Error(err)
 	}
 }

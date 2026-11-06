@@ -47,8 +47,8 @@
 // caption font file changes, reloading the clip each round; it polls their sizes and modification
 // times, reports a failed round on stderr and goes on until its context ends.
 //
-// It imports clip, config, schedule, raster, compose, caption, fonts, target, storyboard and take,
-// and runs ffmpeg and gifsicle as programs.
+// It imports clip, config, schedule, raster, pixels, compose, caption, fonts, target, storyboard
+// and take, and runs ffmpeg and gifsicle as programs.
 //
 // The file map:
 //   - doc.go: this package comment and file map.

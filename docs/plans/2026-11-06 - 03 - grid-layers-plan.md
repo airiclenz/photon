@@ -179,7 +179,12 @@ internal/take/file_bench_test.go — largeTake (synthetic-take pattern); .capcom
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/pixels/`
 **Commit:** `feat(pixels): store a browser take's frames as key frames and patches`
 
-## 8. Draw from the image layer
+## 8. Draw from the image layer — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the image branch is chosen per take (any snapshot carries an image entry), not per `Snapshots[index].Image`: the decoder shows the previous frame for a snapshot without an entry, so a per-snapshot check would rasterize such a snapshot's absent cells instead.
+NOTES (2026-11-06): `rasterAt` became a `Pipeline` method returning an error, so a malformed image layer fails `FrameAt`, `FullFrameAt`, `DraftAt` and `FullDraftAt` (wrapping `pixels.ErrMalformed`); the decoder (behind a mutex, each call handed a fresh copy) carries over on `BuildOptions.Reuse` while the take matches.
+NOTES (2026-11-06): `oracleFrames` now delegates to a new `oracleFramesOf` taking the snapshot drawer, so the image oracle shares its schedule and compositor setup; its behaviour is unchanged.
+NOTES (2026-11-06): consequential edit — internal/render/doc.go: made necessary by render now importing pixels (the package comment lists its imports).
 
 **What:**
 **Goal:** the render pipeline draws a snapshot from its image layer when it has one and from its cells through raster otherwise; tune's frames follow through the pipeline; terminal renders and tune frames are byte-identical.

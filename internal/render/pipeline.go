@@ -11,6 +11,7 @@ import (
 	"github.com/airiclenz/photon/internal/clip"
 	"github.com/airiclenz/photon/internal/compose"
 	"github.com/airiclenz/photon/internal/fonts"
+	"github.com/airiclenz/photon/internal/pixels"
 	"github.com/airiclenz/photon/internal/raster"
 	"github.com/airiclenz/photon/internal/schedule"
 	"github.com/airiclenz/photon/internal/storyboard"
@@ -37,7 +38,8 @@ type RasterCache interface {
 }
 
 // Pipeline builds the shipped frames of one clip's take by output time: the schedule maps an
-// output time onto the snapshot it shows, the rasterizer draws that snapshot at frame.scale and
+// output time onto the snapshot it shows, the rasterizer draws that snapshot at frame.scale — or,
+// for a take with an image layer, the layer's frame at that snapshot stands in — and
 // the compositor lays the camera, the cursor and the captions over it at frame.width. Every frame
 // `photon render` encodes comes from [Pipeline.FrameAt]. Built with a draft cache, it also
 // draws draft frames ([Pipeline.DraftAt]) from a draft rasterizer drawing at about the shipped
@@ -63,6 +65,10 @@ type Pipeline struct {
 	compositor   *compose.Compositor
 	cache        RasterCache
 	captionFaces fonts.CaptionSet
+
+	// images draws the snapshots of a take with an image layer in place of the rasterizers, and
+	// is nil for a take without one.
+	images *imageLayer
 
 	// draftRasterizer draws the snapshots of draft frames at draftGeometry into draftCache, and
 	// is nil without a draft cache. When draftGeometry is the raster geometry these two are
@@ -92,7 +98,7 @@ type Pipeline struct {
 // was its exact stage — only along with that exact stage, so a draft stage never binds an exact
 // cache the new exact stage does not share. Its caption faces carry over while the config's
 // caption fonts match. A reused cache is then shared by both pipelines, so it must be safe for
-// both to use at once when they are.
+// both to use at once when they are. Its image layer decoder carries over while the take matches.
 type BuildOptions struct {
 	Cache      RasterCache
 	DraftCache RasterCache
@@ -130,6 +136,7 @@ func Build(
 	built := &Pipeline{
 		loaded: loaded, recorded: recorded, schedule: clipSchedule,
 		cache: options.Cache, draftCache: options.DraftCache,
+		images: imageLayerFrom(options.Reuse, recorded),
 	}
 	if built.err = built.buildFrames(options.Reuse); built.err != nil {
 		return built, built.err
@@ -335,15 +342,21 @@ func (e *takeSizeError) Unwrap() error { return ErrTakeSize }
 func (p *Pipeline) Schedule() *schedule.Schedule { return p.schedule }
 
 // FrameAt returns the shipped frame at output time out, before the GIF's palette quantization:
-// the snapshot on screen then, rasterized or taken from the raster cache, composed at out. It
-// fails with [ErrOutsideClip] when out is not in [0, length), when the take holds no snapshot to
-// show, and with the build's error on a partial pipeline.
+// the snapshot on screen then, rasterized — or drawn from the take's image layer when it has
+// one — or taken from the raster cache, composed at out. It fails with [ErrOutsideClip] when out
+// is not in [0, length), when the take holds no snapshot to show, when the image layer cannot
+// rebuild the snapshot's frame (wrapping [pixels.ErrMalformed]), and with the build's error on a
+// partial pipeline.
 func (p *Pipeline) FrameAt(out time.Duration) (*image.RGBA, error) {
 	index, err := p.screenIndexAt(out)
 	if err != nil {
 		return nil, err
 	}
-	return p.compositor.Compose(out, rasterAt(p.recorded, index, p.rasterizer, p.cache)), nil
+	source, err := p.rasterAt(index, p.rasterizer, p.cache)
+	if err != nil {
+		return nil, err
+	}
+	return p.compositor.Compose(out, source), nil
 }
 
 // FullFrameAt returns the full view at output time out: the snapshot on screen then, rasterized
@@ -355,7 +368,11 @@ func (p *Pipeline) FullFrameAt(out time.Duration) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	return p.compositor.ComposeFull(out, rasterAt(p.recorded, index, p.rasterizer, p.cache)), nil
+	source, err := p.rasterAt(index, p.rasterizer, p.cache)
+	if err != nil {
+		return nil, err
+	}
+	return p.compositor.ComposeFull(out, source), nil
 }
 
 // DraftAt returns a draft of the frame at output time out, of [Pipeline.Size] and with the same
@@ -372,7 +389,10 @@ func (p *Pipeline) DraftAt(out time.Duration) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	source := rasterAt(p.recorded, index, p.draftRasterizer, p.draftCache)
+	source, err := p.rasterAt(index, p.draftRasterizer, p.draftCache)
+	if err != nil {
+		return nil, err
+	}
 	return p.compositor.ComposeDraft(out, source), nil
 }
 
@@ -389,24 +409,76 @@ func (p *Pipeline) FullDraftAt(out time.Duration) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	source := rasterAt(p.recorded, index, p.draftRasterizer, p.draftCache)
+	source, err := p.rasterAt(index, p.draftRasterizer, p.draftCache)
+	if err != nil {
+		return nil, err
+	}
 	return p.compositor.ComposeFullDraft(out, source), nil
 }
 
-// rasterAt returns the snapshot at index of recorded drawn by rasterizer: taken from cache when
-// it holds it, rasterized and put there otherwise.
-func rasterAt(
-	recorded *take.Take,
+// rasterAt returns the snapshot at index of the pipeline's take, taken from cache when it holds
+// it and otherwise drawn and put there: from the take's image layer when it has one, by
+// rasterizer from its cells otherwise. A draft frame scales whichever image results.
+func (p *Pipeline) rasterAt(
 	index int,
 	rasterizer *raster.Rasterizer,
 	cache RasterCache,
-) *image.RGBA {
+) (*image.RGBA, error) {
 	if source, ok := cache.Get(index); ok {
-		return source
+		return source, nil
 	}
-	source := rasterizer.Frame(recorded.Snapshots[index])
+	if p.images == nil {
+		source := rasterizer.Frame(p.recorded.Snapshots[index])
+		cache.Put(index, source)
+		return source, nil
+	}
+	source, err := p.images.frame(index)
+	if err != nil {
+		return nil, err
+	}
 	cache.Put(index, source)
-	return source
+	return source, nil
+}
+
+// imageLayer rebuilds the frames of a take's image layer for a pipeline. Its decoder keeps the
+// frame it built last and overwrites it on the next call, so the mutex holds one call at a time
+// and each call hands back a copy of its own: a raster cache never keeps an image a later patch
+// mutates. It is safe for concurrent use.
+type imageLayer struct {
+	mu      sync.Mutex
+	decoder *pixels.Decoder
+}
+
+// imageLayerFrom returns previous's image layer when it was built over recorded, a new one over
+// recorded's image layer otherwise, and nil when recorded has no image layer.
+func imageLayerFrom(previous *Pipeline, recorded *take.Take) *imageLayer {
+	if previous != nil && previous.recorded == recorded && previous.images != nil {
+		return previous.images
+	}
+	hasImage := slices.ContainsFunc(recorded.Snapshots, func(snapshot take.Snapshot) bool {
+		return snapshot.Image != nil
+	})
+	if !hasImage {
+		return nil
+	}
+	return &imageLayer{decoder: pixels.NewDecoder(recorded)}
+}
+
+// frame returns a copy of the image layer's frame at snapshot index. An error for a layer the
+// frame cannot be rebuilt from wraps [pixels.ErrMalformed].
+func (l *imageLayer) frame(index int) (*image.RGBA, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	decoded, err := l.decoder.Frame(index)
+	if err != nil {
+		return nil, fmt.Errorf("draw from the take's image layer: %w", err)
+	}
+	return &image.RGBA{
+		Pix:    slices.Clone(decoded.Pix),
+		Stride: decoded.Stride,
+		Rect:   decoded.Rect,
+	}, nil
 }
 
 // ScreenAt returns the take's snapshot on screen at output time out. It fails as
