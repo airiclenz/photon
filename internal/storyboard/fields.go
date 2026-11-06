@@ -27,7 +27,9 @@ const (
 	KindText FieldKind = "text"
 	// KindMoment is a moment on the clip's output clock, {"beat": 3, "offset_ms": 200}.
 	KindMoment FieldKind = "moment"
-	// KindTarget is an on-screen target, {"text": "ok", "nth": 2, "area": "list"}.
+	// KindTarget is an on-screen target, a text one {"text": "ok", "nth": 2, "area": "list"} or
+	// a selector one {"selector": "#save", "nth": 2, "area": "list"}: exactly one of text and
+	// selector, nth and area optional.
 	KindTarget FieldKind = "target"
 	// KindCell is a cell of the terminal grid, {"x": 3, "y": 4}: column X and row Y, from 0.
 	KindCell FieldKind = "cell"

@@ -78,7 +78,11 @@ NOTES (2026-11-06): internal/config/config_test.go is listed in Files but needed
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/config/`, then `GOMEMLIMIT=2GiB go test -run README ./cmd/photon/`
 **Commit:** `feat(config): a url launch ends by settling, not by keys`
 
-## 3. Selector targets in camera position edits
+## 3. Selector targets in camera position edits — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): consequential edit — internal/storyboard/edit.go: made necessary by the selector form of position.target (the Edit wire-spelling doc comment listed only the text form and said position.cell removes text, nth and area)
+
+NOTES (2026-11-06): decodeTarget treats an empty text or selector string as absent, so {"text": "", "selector": "#a"} is a selector target; a malformed selector is left to the storyboard's own validation, which Apply runs on the edited result
 
 **What:**
 **Goal:** `position.cell` and `position.target` edits on a position naming a selector leave no selector key behind and the result validates; `position.target` with `{"selector": "...", "nth", "area"}` writes a selector target; a value with both or neither of text and selector is refused, never silently dropped.

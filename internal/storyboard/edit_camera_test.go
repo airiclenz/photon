@@ -112,6 +112,12 @@ func TestApply_PointEditOnAOneKeyPosition_WritesTheNewKeyFirst(t *testing.T) {
 			positionEdit(0, FieldPositionTarget, map[string]any{"text": "ok"}), "    - text: 'ok'\n"},
 		{"a target drops the nth and area it leaves out", "    - {text: ok, nth: 2, area: list}\n",
 			positionEdit(0, FieldPositionTarget, map[string]any{"text": "ok"}), "    - {text: 'ok'}\n"},
+		{"a selector replaces the only text", "    - text: ok\n",
+			positionEdit(0, FieldPositionTarget, map[string]any{"selector": "#save"}), "    - selector: '#save'\n"},
+		{"a text replaces the only selector", "    - selector: '#save'\n",
+			positionEdit(0, FieldPositionTarget, map[string]any{"text": "ok"}), "    - text: 'ok'\n"},
+		{"a cell replaces the only selector", "    - selector: '#save'\n",
+			positionEdit(0, FieldPositionCell, cell(1, 1)), "    - cell: {x: 1, y: 1}\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -125,6 +131,61 @@ func TestApply_PointEditOnAOneKeyPosition_WritesTheNewKeyFirst(t *testing.T) {
 			}
 			if want := editBaseBoard + "camera:\n  positions:\n" + tc.want; string(got) != want {
 				t.Errorf("Apply(%+v) =\n%s\nwant\n%s", tc.edit, got, want)
+			}
+		})
+	}
+}
+
+// selectorEditBoard is editBaseBoard with a block selector position, a flow text position and a
+// flow cell position.
+const selectorEditBoard = editBaseBoard + `camera:
+  positions:
+    - selector: '#save'
+      nth: 2
+      at: 200ms
+    - {text: 'failing', at: 900ms}
+    - {cell: {x: 3, y: 2}, at: 1200ms}
+`
+
+func TestApply_PointEditOverASelectorOrOntoOne_ReplacesTheOtherPoint(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		edit     Edit
+		old, new string
+		want     Target
+	}{
+		{"a cell over a selector", positionEdit(0, FieldPositionCell, cell(1, 1)),
+			"    - selector: '#save'\n      nth: 2\n", "    - cell: {x: 1, y: 1}\n", Target{}},
+		{"a text over a selector", positionEdit(0, FieldPositionTarget, map[string]any{"text": "ok"}),
+			"    - selector: '#save'\n      nth: 2\n", "    - text: 'ok'\n", Target{Text: "ok"}},
+		{"a selector over a text", positionEdit(1, FieldPositionTarget,
+			map[string]any{"selector": "#list li", "nth": "last"}),
+			"{text: 'failing', at: 900ms}", "{selector: '#list li', nth: last, at: 900ms}",
+			Target{Selector: "#list li", Nth: NthLast}},
+		{"a selector over a cell", positionEdit(2, FieldPositionTarget,
+			map[string]any{"selector": ".row", "area": "list"}),
+			"{cell: {x: 3, y: 2}, at: 1200ms}", "{selector: '.row', area: 'list', at: 1200ms}",
+			Target{Selector: ".row", Area: "list"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if count := strings.Count(selectorEditBoard, tc.old); count != 1 {
+				t.Fatalf("the board holds %q %d times, want once", tc.old, count)
+			}
+			want := strings.Replace(selectorEditBoard, tc.old, tc.new, 1)
+
+			got, board, err := Apply([]byte(selectorEditBoard), cameraEditPath, tc.edit)
+
+			if err != nil {
+				t.Fatalf("Apply(%+v): %v", tc.edit, err)
+			}
+			if string(got) != want {
+				t.Errorf("Apply(%+v) =\n%s\nwant\n%s", tc.edit, got, want)
+			}
+			if target := board.Camera.Positions[tc.edit.Owner.Index].Target; target != tc.want {
+				t.Errorf("Apply(%+v) target = %+v, want %+v", tc.edit, target, tc.want)
 			}
 		})
 	}
@@ -276,6 +337,12 @@ func TestApply_CameraWireSpellings(t *testing.T) {
 		{"a target's nth of 0", positionEdit(1, FieldPositionTarget, map[string]any{"text": "ok", "nth": 0}), false},
 		{"a target with a cell", positionEdit(1, FieldPositionTarget, map[string]any{"text": "ok", "cell": cell(1, 1)}), false},
 		{"a target as a string", positionEdit(1, FieldPositionTarget, "ok"), false},
+		{"a selector target", positionEdit(1, FieldPositionTarget,
+			map[string]any{"selector": "#save", "nth": 2, "area": "list"}), true},
+		{"a target with a text and a selector", positionEdit(1, FieldPositionTarget,
+			map[string]any{"text": "ok", "selector": "#save"}), false},
+		{"a target with neither a text nor a selector", positionEdit(1, FieldPositionTarget,
+			map[string]any{"nth": 2, "area": "list"}), false},
 		{"a zoom over in milliseconds", zoomEdit(2, FieldZoomOver, 80), true},
 		{"a negative zoom over", zoomEdit(2, FieldZoomOver, -1), false},
 		{"a zoom factor", zoomEdit(2, FieldZoomTo, 2.5), true},

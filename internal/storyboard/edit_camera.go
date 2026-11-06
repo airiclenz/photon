@@ -41,6 +41,7 @@ const (
 // [keyText].
 const (
 	keyCamera    = "camera"
+	keySelector  = "selector"
 	keyPositions = "positions"
 	keyZooms     = "zooms"
 	keyHold      = "hold"
@@ -53,7 +54,7 @@ const (
 )
 
 // positionKeyOrder is a position's keys in its struct field order: its point's — the target's
-// text, nth and area, then cell — ahead of its at, hold and ease, as Point leads Position.
+// text, selector, nth and area, then cell — ahead of its at, hold and ease, as Point leads Position.
 // keyOrder leaves an inline field out, so the order is put together here. zoomKeyOrder is a
 // zoom's keys in its struct field order.
 var (
@@ -65,8 +66,9 @@ var (
 	zoomKeyOrder = keyOrder(reflect.TypeFor[ZoomMove]())
 )
 
-// targetKeys are the keys of a position's text target, which its cell comes instead of.
-var targetKeys = []string{keyText, keyNth, keyArea}
+// targetKeys are the keys of a position's target, a text or a selector one, which its cell comes
+// instead of.
+var targetKeys = []string{keyText, keySelector, keyNth, keyArea}
 
 // isPositionField reports whether field edits a camera position.
 func isPositionField(field string) bool {
@@ -203,8 +205,8 @@ func (s *splicer) setEase(mapping yamledit.Path, order []string, value json.RawM
 }
 
 // setPositionCell writes the position's cell, typed as {"x", "y"}, as a {x: 3, y: 4} flow
-// mapping in place of its whole node, then deletes its text, nth and area, which the cell comes
-// instead of. The cell goes in first: a block sequence item's only key cannot be deleted.
+// mapping in place of its whole node, then deletes its text, selector, nth and area, which the
+// cell comes instead of. The cell goes in first: a block sequence item's only key cannot be deleted.
 func (s *splicer) setPositionCell(position yamledit.Path, value json.RawMessage) error {
 	cell, err := decodeCell(value)
 	if err != nil {
@@ -221,15 +223,28 @@ func (s *splicer) setPositionCell(position yamledit.Path, value json.RawMessage)
 	return nil
 }
 
-// setPositionTarget writes the position's text target, typed as a pick answers it: its text
-// quoted, its nth and area as [Target.YAMLFlow] spells them, deleting the nth for the first match
-// and the area for none, then deletes its cell, which the target comes instead of. The text goes
-// in first: a block sequence item's only key cannot be deleted.
+// setPositionTarget writes the position's target, typed as a pick answers it: its text or its
+// selector quoted, deleting the other, its nth and area as [Target.YAMLFlow] spells them,
+// deleting the nth for the first match and the area for none, then deletes its cell, which the
+// target comes instead of. The text or selector goes in first: a block sequence item's only key
+// cannot be deleted.
 func (s *splicer) setPositionTarget(position yamledit.Path, value json.RawMessage) error {
 	target, err := decodeTarget(value)
 	if err != nil {
 		return err
 	}
+	written, replaced, place := keyText, keySelector, target.Text
+	if target.Selector != "" {
+		written, replaced, place = keySelector, keyText, target.Selector
+	}
+	err = s.replaceOrInsert(position, written, yamledit.Quote(place), positionKeyOrder)
+	if err != nil {
+		return err
+	}
+	if err := s.doc.DeleteIfPresent(under(position, replaced)); err != nil {
+		return err
+	}
+
 	nth := ""
 	switch {
 	case target.Nth == NthLast:
@@ -242,11 +257,11 @@ func (s *splicer) setPositionTarget(position yamledit.Path, value json.RawMessag
 		area = yamledit.Quote(target.Area)
 	}
 
-	keys := map[string]string{keyText: yamledit.Quote(target.Text), keyNth: nth, keyArea: area}
-	for _, key := range targetKeys {
-		if err := s.writeTargetKey(position, key, keys[key]); err != nil {
-			return err
-		}
+	if err := s.writeTargetKey(position, keyNth, nth); err != nil {
+		return err
+	}
+	if err := s.writeTargetKey(position, keyArea, area); err != nil {
+		return err
 	}
 	return s.doc.DeleteIfPresent(under(position, keyCell))
 }
@@ -285,16 +300,18 @@ func cellFlow(cell Cell) string {
 	return "{x: " + strconv.Itoa(cell.X) + ", y: " + strconv.Itoa(cell.Y) + "}"
 }
 
-// decodeTarget reads a text target typed as a pick answers it, {"text": "ok", "nth": 2, "area":
-// "list"}, its nth and area optional, refusing any other key, an nth [Nth.UnmarshalJSON] refuses
-// and an empty text.
+// decodeTarget reads a target typed as a pick answers it, a text one {"text": "ok", "nth": 2,
+// "area": "list"} or a selector one {"selector": "#save", "nth": 2, "area": "list"}, its nth and
+// area optional, refusing any other key, an nth [Nth.UnmarshalJSON] refuses and a value with both
+// or neither of a text and a selector; whether the selector is well formed is the storyboard's
+// rule to check.
 func decodeTarget(value json.RawMessage) (Target, error) {
 	decoder := json.NewDecoder(bytes.NewReader(value))
 	decoder.DisallowUnknownFields()
 	var target Target
-	if err := decoder.Decode(&target); err != nil || target.Text == "" {
-		return Target{}, fmt.Errorf(
-			`want a target such as {"text": "ok", "nth": 2, "area": "list"}, got %s`, value)
+	if err := decoder.Decode(&target); err != nil || (target.Text == "") == (target.Selector == "") {
+		return Target{}, fmt.Errorf(`want a target such as {"text": "ok", "nth": 2, "area": `+
+			`"list"} or {"selector": "#save"}, exactly one of text and selector, got %s`, value)
 	}
 	return target, nil
 }

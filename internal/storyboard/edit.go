@@ -40,10 +40,11 @@ import (
 //   - position.ease, zoom.ease: "smooth", which removes the key, "linear", "ease-in" or
 //     "ease-out";
 //   - position.cell: a cell of the terminal grid, {"x": 3, "y": 4}, which removes the position's
-//     text, nth and area;
-//   - position.target: a text target as a pick answers it, {"text": "ok", "nth": 2, "area":
-//     "list"}, its nth and area optional, an absent one removing its key, which removes the
-//     position's cell;
+//     text, selector, nth and area;
+//   - position.target: a target as a pick answers it, a text one {"text": "ok", "nth": 2,
+//     "area": "list"} or a selector one {"selector": "#save"}, exactly one of text and selector,
+//     which removes the other, its nth and area optional, an absent one removing its key, which
+//     removes the position's cell;
 //   - position.transition: the edges of the transition into the owner's position, {"start_ms":
 //     1200, "end_ms": 1800}, whole milliseconds of the output clock with the start no later than
 //     the end, an equal pair a hard cut;
