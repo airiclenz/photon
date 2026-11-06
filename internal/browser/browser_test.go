@@ -57,6 +57,7 @@ func TestBrowser_Start_LoadsThePageAtTheViewportAndScale(t *testing.T) {
 		Height:      viewportHeight,
 		DeviceScale: deviceScale,
 		FPS:         testFPS,
+		Env:         os.Environ(),
 	})
 	if err != nil {
 		t.Fatalf("Start: %v", err)
@@ -97,6 +98,7 @@ func TestBrowser_Start_RefusedSelectorFailsNamingIt(t *testing.T) {
 		Height:      viewportHeight,
 		DeviceScale: deviceScale,
 		FPS:         testFPS,
+		Env:         os.Environ(),
 		Selectors:   []string{"p", refusedSelector},
 	})
 

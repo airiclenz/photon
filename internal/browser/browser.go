@@ -40,7 +40,8 @@ const rootUID = 0
 // [Start] finds. Width and Height are the viewport in CSS pixels and DeviceScale the device
 // pixels per CSS pixel; all three must be positive. FPS caps how many snapshots a second the take
 // keeps; it must be positive. Selectors are the selectors whose boxes every snapshot holds. Env
-// holds extra KEY=VALUE variables for the browser process, on top of photon's own environment.
+// is the browser process's whole env, as KEY=VALUE entries: nothing of photon's own env reaches
+// the browser unless Env holds it.
 type Options struct {
 	URL         string
 	ExecPath    string
@@ -289,8 +290,8 @@ func (o Options) validate() error {
 }
 
 // allocatorOptions are the flags the browser at execPath runs with: chromedp's headless defaults,
-// the GPU off, a window the viewport's size at options' device scale, options' extra environment,
-// and no sandbox where Chromium cannot start with one.
+// the GPU off, a window the viewport's size at options' device scale, options.Env as the browser's
+// whole env, and no sandbox where Chromium cannot start with one.
 func allocatorOptions(execPath string, options Options) []chromedp.ExecAllocatorOption {
 	flags := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(execPath),
@@ -298,6 +299,7 @@ func allocatorOptions(execPath string, options Options) []chromedp.ExecAllocator
 		chromedp.WindowSize(options.Width, options.Height),
 		chromedp.Flag(deviceScaleFlag, strconv.FormatFloat(options.DeviceScale, 'f', -1, 64)),
 		chromedp.Env(options.Env...),
+		chromedp.NoInheritEnv,
 	)
 	if isRootOnLinux() {
 		flags = append(flags, chromedp.NoSandbox)

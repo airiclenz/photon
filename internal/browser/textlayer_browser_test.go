@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -119,6 +120,7 @@ func startAt(t *testing.T, page string) *Browser {
 		Height:      viewportHeight,
 		DeviceScale: deviceScale,
 		FPS:         testFPS,
+		Env:         os.Environ(),
 	})
 	if err != nil {
 		t.Fatalf("Start: %v", err)

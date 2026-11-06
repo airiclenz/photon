@@ -212,8 +212,8 @@ func (r recorder) startProgram(environ []string) (capture, error) {
 
 // openPage starts headless Chromium — `launch.browser` when set — at the launch's url, its
 // `${NAME}` references expanded from environ, with the frame's viewport, device scale and fps and
-// environ added to the browser's env, recording the boxes of r's selectors. The browser lives as
-// long as ctx.
+// environ as the browser's env, recording the boxes of r's selectors. The browser lives as long
+// as ctx.
 func (r recorder) openPage(ctx context.Context, environ []string) (capture, error) {
 	address, err := launchURL(r.cfg.Launch.URL, environ)
 	if err != nil {

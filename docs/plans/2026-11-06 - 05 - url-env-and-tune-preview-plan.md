@@ -33,7 +33,9 @@ clip and shows the take-size problem with no preview, instead of failing to star
 - 3: guard folded (decision applied); supersedes README.md:195-197 for a url-launch clip's terminal take
 - 4: guard folded (decision applied)
 
-## 1. The browser's env is exactly Options.Env
+## 1. The browser's env is exactly Options.Env — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): env_test.go uses literal viewport/scale/fps values because the package's test constants live in the `browser`-tagged browser_test.go, and its fake browser calls `/usr/bin/env` by absolute path since it runs with no PATH.
 
 **What:**
 **Goal:** `browser.Start` runs the browser process with exactly `Options.Env` as its env, and
