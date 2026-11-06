@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A url launch's browser now runs with exactly the env photon builds for the launch; variables from photon's own environment no longer leak into it on top.
 - `photon tune` opens on a terminal take under a `launch.url` clip instead of failing to start: the take-size problem stands on the clip, telling to re-record the take with `photon record`, and the page has no preview to show.
 - `photon tune`'s page says "No preview — the take does not fit this clip; re-record it with `photon record`." in place of the picture when the clip cannot draw the take, and asks for no frames; the frame, camera and pick routes answer 409 then, and `/api/state` carries `preview`.
+- `photon tune` on a url-launch clip no longer decodes the page frames again after every storyboard edit: a rebuild over the same take keeps the frames already drawn.
 
 ## [0.3.0] - 2026-11-06
 
