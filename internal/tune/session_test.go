@@ -3,6 +3,7 @@ package tune
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -830,15 +831,102 @@ func TestSession_RewrittenTake_IsReadAgain(t *testing.T) {
 	}
 }
 
-func TestNewSession_TakeOfAnotherFrame_IsRefused(t *testing.T) {
+func TestNewSession_TakeOfAnotherFrame_OpensWithTheProblem(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixture(t)
 	saveSessionTake(t, f.takePath, fixtureCols+10, time.Now())
 
-	_, err := NewSession(f.session.base, f.takePath)
+	session, err := NewSession(f.session.base, f.takePath)
 
-	if err == nil || !strings.Contains(err.Error(), "re-record it") {
-		t.Fatalf("NewSession: got %v, want the take's size refused", err)
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	assertTakeSizeProblem(t, session.State().Errors, fixtureCols+10, fixtureCols)
+	if _, err := session.Frame(500 * time.Millisecond); err != nil {
+		t.Errorf("Frame: %v, want the preview at the take's size", err)
+	}
+}
+
+func TestSession_Apply_FrameCols_PreviewsAtTheTakesSizeAndSaves(t *testing.T) {
+	t.Parallel()
+	const out = 500 * time.Millisecond
+	const cols = fixtureCols + 10
+	f := newSessionFixture(t)
+	before, err := f.session.Frame(out)
+	if err != nil {
+		t.Fatalf("Frame(%s) before the edit: %v", out, err)
+	}
+
+	f.apply(t, frameEdit(storyboard.FieldFrameCols, cols))
+
+	state := f.session.State()
+	if state.Cols != cols {
+		t.Errorf("cols after the edit: want %d, got %d", cols, state.Cols)
+	}
+	assertTakeSizeProblem(t, state.Errors, fixtureCols, cols)
+	after, err := f.session.Frame(out)
+	if err != nil {
+		t.Fatalf("Frame(%s) after the edit: %v", out, err)
+	}
+	assertSameSize(t, after, before)
+	if err := f.session.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if got := f.readDisk(t); !strings.Contains(got, fmt.Sprintf("cols: %d,", cols)) {
+		t.Errorf("saved storyboard lacks the new cols:\n%s", got)
+	}
+
+	// The pipeline still builds on the edited frame, so a timing edit after it changes the clip.
+	f.apply(t, beatEdit(1, storyboard.FieldDuration, beatOneMS+500))
+
+	edited := f.session.State()
+	if edited.LengthMS != state.LengthMS+500 {
+		t.Errorf("length after the beat edit: want %d, got %d", state.LengthMS+500, edited.LengthMS)
+	}
+	if reflect.DeepEqual(edited.Sections, state.Sections) {
+		t.Errorf("sections unchanged by the beat edit: %+v", edited.Sections)
+	}
+}
+
+func TestSession_TakeSizeWithAnotherProblem_BlocksSave(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixtureOf(t, captionsStoryboard)
+	f.apply(t, frameEdit(storyboard.FieldFrameCols, fixtureCols+10))
+	f.apply(t, tooWideCaptionEdit(0))
+
+	err := f.session.Save()
+
+	if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "captions[0]") {
+		t.Errorf("Save: got %v, want ErrInvalid naming the caption", err)
+	}
+	if got := f.readDisk(t); got != captionsStoryboard {
+		t.Errorf("the storyboard on disk changed:\n%s", got)
+	}
+}
+
+func TestSession_Undo_ClearsTheTakeSizeProblem(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixture(t)
+	f.apply(t, frameEdit(storyboard.FieldFrameCols, fixtureCols+10))
+
+	if err := f.session.Undo(); err != nil {
+		t.Fatalf("Undo: %v", err)
+	}
+
+	if errs := f.session.State().Errors; len(errs) != 0 {
+		t.Errorf("errors after the undo: %+v", errs)
+	}
+}
+
+// assertTakeSizeProblem fails the test unless errs is the one clip problem of a take recorded at
+// takeCols columns against a frame of frameCols, telling the user to re-record it.
+func assertTakeSizeProblem(t *testing.T, errs []Problem, takeCols, frameCols int) {
+	t.Helper()
+	sizes := fmt.Sprintf("recorded at %d×4 cells; the storyboard's frame is %d×4", takeCols, frameCols)
+	if len(errs) != 1 || errs[0].Owner != (storyboard.Owner{Kind: storyboard.OwnerClip}) ||
+		!strings.Contains(errs[0].Message, sizes) ||
+		!strings.Contains(errs[0].Message, "re-record it with `photon record`") {
+		t.Fatalf("errors %+v, want one clip problem %q telling to re-record", errs, sizes)
 	}
 }
 

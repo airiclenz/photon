@@ -20,10 +20,14 @@
 // frame's raster geometry stay, and its caption faces, so the caption fonts load once a session; a
 // build that fails leaves each of its errors standing on the beat, camera position, zoom or
 // caption it is located on ([storyboard.OwnerOf]), or on the clip, and the last good pipeline
-// stays the preview's.
+// stays the preview's. A take recorded at another cols×rows than the storyboard's frame
+// ([render.ErrTakeSize]) builds no less: the pipeline is built at the take's size, so the preview
+// keeps drawing its cells, and a clip problem naming both sizes stands, telling the user to
+// re-record the take with `photon record`.
 // [Session.Refresh] takes in outside writes — a rewritten take is read again, a changed storyboard
 // is loaded when nothing is unsaved and turns the session stale otherwise — and [Session.Save]
-// writes in place, refused while stale ([ErrStale]) or while an error stands ([ErrInvalid]).
+// writes in place, refused while stale ([ErrStale]) or while an error other than the take's size
+// stands ([ErrInvalid]); `photon render`, and so [Session.Export], still refuses the mismatch.
 // [Session.State] reports everything the page shows — the beats, camera positions and zooms,
 // captions and schedule — and [Session.Frame] the PNG of the exact frame
 // `photon render` composes at an output time, from the last good pipeline, its rasterized snapshots

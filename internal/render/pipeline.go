@@ -22,6 +22,10 @@ import (
 // clip.
 var ErrOutsideClip = errors.New("the time is outside the clip")
 
+// ErrTakeSize is a take recorded at another size than the storyboard's frame; [CheckFrame]'s
+// refusal wraps it.
+var ErrTakeSize = errors.New("the take was recorded at another size than the storyboard's frame")
+
 // RasterCache keeps rasterized snapshots by their index in the take, so a snapshot shown by
 // several frames is rasterized once. A cache belongs to one rasterizer and take: a pipeline's
 // exact rasterizer keeps its rasters in [BuildOptions.Cache] and its draft rasterizer in
@@ -105,7 +109,8 @@ type BuildOptions struct {
 // and draft cache are taken over or a draft rasterizer draws at that size into it; the caption
 // fonts are loaded only when options.Reuse holds none that match (see [BuildOptions]).
 //
-// It fails with a nil pipeline when the frame sizes differ or the take does not schedule. When a
+// It fails with a nil pipeline when the frame sizes differ ([ErrTakeSize]) or the take does not
+// schedule. When a
 // later stage fails — a font or an area that does not load, a target not on screen, a caption
 // that does not lay out — it returns that error together with a partial pipeline whose
 // [Pipeline.Schedule] is set. Errors are returned as their stage reports them, unwrapped.
@@ -115,7 +120,7 @@ func Build(
 	recorded *take.Take,
 	options BuildOptions,
 ) (*Pipeline, error) {
-	if err := checkFrame(takePath, recorded, loaded.Storyboard.Frame); err != nil {
+	if err := CheckFrame(takePath, recorded, loaded.Storyboard.Frame); err != nil {
 		return nil, err
 	}
 	clipSchedule, err := schedule.New(loaded.Storyboard, recorded)
@@ -302,17 +307,29 @@ func (p *Pipeline) captionFacesFrom(previous *Pipeline) (fonts.CaptionSet, error
 	return loadCaptionFaces(p.loaded)
 }
 
-// checkFrame refuses a take recorded at another size than the storyboard's frame: its cells are
-// what the rasterizer lays out and its targets are resolved on.
-func checkFrame(takePath string, recorded *take.Take, frame storyboard.Frame) error {
+// CheckFrame refuses a take recorded at another size than the storyboard's frame: its cells are
+// what the rasterizer lays out and its targets are resolved on. The refusal wraps [ErrTakeSize]
+// and names the take at takePath, both sizes and the remedy, re-recording the take.
+func CheckFrame(takePath string, recorded *take.Take, frame storyboard.Frame) error {
 	if recorded.Cols == frame.Cols && recorded.Rows == frame.Rows {
 		return nil
 	}
-	return fmt.Errorf(
+	return &takeSizeError{message: fmt.Sprintf(
 		"%s was recorded at %d×%d cells; the storyboard's frame is %d×%d — re-record it",
 		takePath, recorded.Cols, recorded.Rows, frame.Cols, frame.Rows,
-	)
+	)}
 }
+
+// takeSizeError is [CheckFrame]'s refusal: its message alone, wrapping [ErrTakeSize].
+type takeSizeError struct {
+	message string
+}
+
+// Error returns the refusal's message.
+func (e *takeSizeError) Error() string { return e.message }
+
+// Unwrap returns [ErrTakeSize].
+func (e *takeSizeError) Unwrap() error { return ErrTakeSize }
 
 // Schedule is the output clock the pipeline was built on, set on a partial pipeline too.
 func (p *Pipeline) Schedule() *schedule.Schedule { return p.schedule }

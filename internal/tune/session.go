@@ -54,6 +54,8 @@ type Session struct {
 	takeStamp fileStamp
 	// takeErr is why the take could not be read again, or nil; it stands as a clip error.
 	takeErr error
+	// buildErr is the error the current bytes' build stopped at, or nil.
+	buildErr error
 	// recorded is the take every build schedules and composes.
 	recorded *take.Take
 	// buildPipeline is [render.Build]; a test wraps it to see what each build is given.
@@ -65,7 +67,8 @@ type Session struct {
 	// pipeline that built in full.
 	current pipeline
 	good    pipeline
-	// problems are the errors standing on the current bytes, take included.
+	// problems are the errors standing on the current bytes, take and take size included; the
+	// take size's comes last.
 	problems []Problem
 	// isStale says the storyboard changed on disk while edits were unsaved.
 	isStale bool
@@ -85,12 +88,15 @@ type Session struct {
 // pipeline is one version of the storyboard as the preview builds on it: the board parsed, the
 // clip cross-checked, and the render pipeline every frame, screen, cell and rect of the preview
 // comes from. A pipeline that failed to build holds the stages before the failure and nil for the
-// rest; frames is nil when the take was recorded at another frame size or does not schedule, and
-// partial when a later stage failed.
+// rest; frames is nil when the take does not schedule, and partial when a later stage failed.
+// loaded is the clip as the storyboard has it; when the take was recorded at another size than
+// its frame, sizeErr says so and frames is built on the take's size instead, so the preview keeps
+// drawing the cells the take holds.
 type pipeline struct {
-	board  *storyboard.Storyboard
-	loaded *clip.Clip
-	frames *render.Pipeline
+	board   *storyboard.Storyboard
+	loaded  *clip.Clip
+	frames  *render.Pipeline
+	sizeErr error
 }
 
 // fileStamp is what tells a rewritten take apart without reading it.
@@ -100,9 +106,10 @@ type fileStamp struct {
 }
 
 // NewSession starts tuning loaded against the take at takePath, or at the clip's take path when
-// takePath is empty. It fails when the take or the storyboard cannot be read, when the take was
-// recorded at a size other than the storyboard's frame, and when the storyboard does not
-// schedule or compose against the take, just as `photon render` would.
+// takePath is empty. It fails when the take or the storyboard cannot be read, and when the
+// storyboard does not schedule or compose against the take, just as `photon render` would. A take
+// recorded at another size than the storyboard's frame does not fail it: the session opens
+// previewing at the take's size, with that standing as a clip problem a save allows.
 func NewSession(loaded *clip.Clip, takePath string) (*Session, error) {
 	if takePath == "" {
 		var err error
@@ -140,7 +147,7 @@ func NewSession(loaded *clip.Clip, takePath string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.current, s.good = built, built
+	s.settle(built, nil)
 	return s, nil
 }
 
@@ -250,9 +257,10 @@ func (s *Session) Reload() error {
 
 // Save writes the current storyboard over the file in place: a temporary file beside it, given
 // the file's mode, renamed over it. It refuses with [ErrStale] when the file on disk is not the
-// one the session loaded or last saved, and with [ErrInvalid] while an error stands or the bytes
-// fail validation again. With nothing unsaved it writes nothing. The bytes written become the
-// on-disk baseline, so the next Refresh sees no change.
+// one the session loaded or last saved, and with [ErrInvalid] while an error other than the take's
+// size against the frame stands or the bytes fail validation again: a frame of another size is
+// saved, and the take re-recorded at it after. With nothing unsaved it writes nothing. The bytes
+// written become the on-disk baseline, so the next Refresh sees no change.
 func (s *Session) Save() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -260,7 +268,8 @@ func (s *Session) Save() error {
 	if err := s.checkDisk(); err != nil {
 		return err
 	}
-	if len(s.problems) > 0 {
+	// The take size's problem comes last, so the first problem is one of the errors that block.
+	if s.buildErr != nil || s.takeErr != nil {
 		return fmt.Errorf("%w: %s", ErrInvalid, s.problems[0].Message)
 	}
 	if !s.isDirty() {
@@ -342,8 +351,15 @@ func (s *Session) refreshTake() bool {
 // rebuild builds the pipeline on the current bytes, keeps it as the good one when it built in
 // full, and records the errors standing.
 func (s *Session) rebuild() {
-	built, err := s.build(s.history.current())
-	s.current = built
+	s.settle(s.build(s.history.current()))
+	s.version++
+}
+
+// settle makes built, what the current bytes built up to err, the current pipeline, and the good
+// one too when it built in full, and records the errors standing on it: err, the take's and the
+// take size's, in that order.
+func (s *Session) settle(built pipeline, err error) {
+	s.current, s.buildErr = built, err
 	if err == nil {
 		s.good = built
 	}
@@ -353,14 +369,15 @@ func (s *Session) rebuild() {
 	if board == nil {
 		board = s.good.board
 	}
-	s.problems = problemsOf(errors.Join(err, s.takeErr), board)
-	s.version++
+	s.problems = problemsOf(errors.Join(err, s.takeErr, built.sizeErr), board)
 }
 
 // build parses src and builds the render pipeline on it against the take. On an error the
 // pipeline returned holds the stages built before it. The build is given the good pipeline to
 // reuse, so its rasterizer, raster cache, draft rasterizer, draft raster cache and caption faces
-// carry over where render finds them unchanged, and the caption fonts load once a session.
+// carry over where render finds them unchanged, and the caption fonts load once a session. A take
+// recorded at another size than the storyboard's frame is no build error: the pipeline is built
+// at the take's size and the mismatch kept as the pipeline's sizeErr.
 func (s *Session) build(src []byte) (pipeline, error) {
 	var built pipeline
 	board, err := storyboard.Parse(src, s.path)
@@ -371,12 +388,27 @@ func (s *Session) build(src []byte) (pipeline, error) {
 	if built.loaded, err = s.base.WithStoryboard(board); err != nil {
 		return built, err
 	}
-	built.frames, err = s.buildPipeline(built.loaded, s.takePath, s.recorded, render.BuildOptions{
+	previewed := built.loaded
+	if sizeErr := render.CheckFrame(s.takePath, s.recorded, board.Frame); sizeErr != nil {
+		built.sizeErr = fmt.Errorf("%w with `photon record`", sizeErr)
+		previewed = atTakeSize(built.loaded, s.recorded)
+	}
+	built.frames, err = s.buildPipeline(previewed, s.takePath, s.recorded, render.BuildOptions{
 		Cache:      newRasterCache(rasterCacheBytes),
 		DraftCache: newRasterCache(draftCacheBytes),
 		Reuse:      s.good.frames,
 	})
 	return built, err
+}
+
+// atTakeSize returns a copy of loaded whose storyboard frame is recorded's size, the one the take's
+// cells were laid out at; loaded itself is left as it is.
+func atTakeSize(loaded *clip.Clip, recorded *take.Take) *clip.Clip {
+	board := *loaded.Storyboard
+	board.Frame.Cols, board.Frame.Rows = recorded.Cols, recorded.Rows
+	previewed := *loaded
+	previewed.Storyboard = &board
+	return &previewed
 }
 
 // stampOf reads the size and modification time of the file at path.

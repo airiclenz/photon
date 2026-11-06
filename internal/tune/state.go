@@ -32,8 +32,9 @@ type State struct {
 	FPS       int             `json:"fps"`
 	Width     int             `json:"width"`
 
-	// The frame's other fields: padding, font_size, line_height and scale, which photon tune
-	// edits as frame.<key>, and cols, rows and max_colors, which it shows but does not edit.
+	// The frame's other fields, which photon tune edits as frame.<key>. Cols and Rows are the
+	// storyboard's frame, not the take's: on another size than the take was recorded at, the
+	// preview draws at the take's and a clip problem stands until the take is re-recorded.
 	Cols       int     `json:"cols"`
 	Rows       int     `json:"rows"`
 	Padding    int     `json:"padding"`
@@ -196,8 +197,8 @@ func (s *Session) State() State {
 	if board == nil {
 		board = s.good.board
 	}
-	// A take rewritten at another frame size, or one that no longer schedules, builds no
-	// pipeline: the schedule shown is then the good one's.
+	// A take that no longer schedules builds no pipeline: the schedule shown is then the good
+	// one's.
 	clipSchedule := s.good.frames.Schedule()
 	if s.current.frames != nil {
 		clipSchedule = s.current.frames.Schedule()

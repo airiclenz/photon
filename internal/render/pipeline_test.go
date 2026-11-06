@@ -171,6 +171,9 @@ func TestBuild_ATakeOfAnotherFrame_IsRefusedWithoutAPipeline(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Fatalf("want %q, got %v", want, err)
 	}
+	if !errors.Is(err, ErrTakeSize) {
+		t.Errorf("want the refusal to wrap ErrTakeSize, got %v", err)
+	}
 }
 
 func TestBuild_APositionTargetNotOnScreen_LeavesAPartialPipeline(t *testing.T) {

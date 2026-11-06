@@ -82,7 +82,11 @@ editable; the two tune tests updated as the guard says.
 - `GOMEMLIMIT=2GiB go test ./internal/tune -run 'ReadOnlyClipFields|ClipFrame'`
 **Commit:** `feat(storyboard): make frame cols, rows and max_colors edit fields`
 
-## 2. tune: a take recorded at another size previews at its size and stands as a problem
+## 2. tune: a take recorded at another size previews at its size and stands as a problem — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the take-size error lives on the `pipeline` struct as `sizeErr` (set by `build`) rather than as a session field beside `takeErr`; the session gains a `buildErr` field instead, and a shared `settle` helper (used by `NewSession` and `rebuild`) sets current/good and joins build error, `takeErr` and `sizeErr`, in that order, into `problems`. `Save` refuses only on `buildErr`/`takeErr`, and reports `problems[0]`, which is always a blocking one because the size problem comes last.
+NOTES (2026-11-06): `render.CheckFrame` keeps its message text unchanged by returning an unexported `takeSizeError` type whose `Unwrap` gives `ErrTakeSize`. tune wraps it as "<message> with `photon record`" so the clip problem names the command, as the Goal asks. `photon render`'s message is the same as before.
+NOTES (2026-11-06): the State field-group comment in state.go now says every frame field is edited as frame.<key>. Its old wording, "cols, rows and max_colors ... shows but does not edit", stopped being true with item 1. The Fields comment that item 1's notes leave to item 5 is untouched.
 
 **What:**
 **Goal:** a tune session whose storyboard frame size differs from the take's opens and keeps
