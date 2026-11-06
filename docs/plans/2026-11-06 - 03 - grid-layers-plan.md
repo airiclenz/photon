@@ -263,7 +263,13 @@ internal/storyboard/fields.go — clipFields; internal/clip/clip.go — crossChe
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard/`, then `./internal/clip/`, then `./internal/config/`, then `GOMEMLIMIT=2GiB go test ./internal/tune/ -run TestSession_State_NoReadOnlyClipFields`, then `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run Lint`, then `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run TestREADMEDocumentsEveryField`
 **Commit:** `feat(storyboard): a browser viewport and selector targets`
 
-## 12. Resolve selector targets and areas from recorded boxes
+## 12. Resolve selector targets and areas from recorded boxes — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): consequential edit — internal/target/doc.go: made necessary by selector targets and selector areas (package comment and the anchor.go row of the file map).
+NOTES (2026-11-06): consequential edit — internal/clip/doc.go: made necessary by the new Clip.Selectors (package comment and the clip.go row of the file map).
+NOTES (2026-11-06): the resolver now works on a `region` (box plus extent: whole screen, a band of lines, or an element box). Anchor areas still hold whatever lies within their rows, whatever the columns. A selector area holds only what lies wholly inside its box, for both text and selector targets. With no area, a selector target counts every recorded box, even one outside the union of the text runs. Text-target errors keep their exact wording; selector targets read `target selector "<css>" ...`. A missing selector area reads `area <name>: selector "<css>": not on screen`.
+NOTES (2026-11-06): the resolver sorts a selector's recorded boxes into reading order (top edge, then left edge) itself, using the same comparator as the text layer's lines (new `readingOrder`), instead of relying on the source's order. A selector recorded with an empty box list is treated like an absent one (ErrNotOnScreen). Zero-size boxes are not filtered.
+NOTES (2026-11-06): Clip.Selectors lists every selector area the config declares, whether or not the storyboard uses that area, as the Goal says. A clip that names no selector returns nil.
 
 **What:**
 **Goal:** the resolver resolves a selector target from `Snapshot.Selectors[selector]` (reading order, `nth`, inside its area) and a selector area to that selector's first box; a selector absent from the snapshot is `ErrNotOnScreen`; `clip.Clip.Selectors()` lists every selector the clip names (targets in beats, camera positions, expects, and config areas), sorted and unique, for the source to record.

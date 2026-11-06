@@ -7,14 +7,20 @@ import (
 	"github.com/airiclenz/photon/internal/config"
 )
 
-// area is a config area with its anchors compiled. A nil edge is the screen's own edge.
+// area is a config area compiled: a selector area's selector, or an anchor area's anchors, a nil
+// edge being the screen's own edge.
 type area struct {
-	top    *anchor
-	bottom *anchor
+	selector string
+	top      *anchor
+	bottom   *anchor
 }
 
-// compileArea compiles both edges of a declared area.
+// compileArea compiles a declared area: a selector area keeps its selector, an anchor area has
+// both its edges compiled.
 func compileArea(spec config.Area) (area, error) {
+	if spec.Selector != "" {
+		return area{selector: spec.Selector}, nil
+	}
 	top, err := compileAnchor("top", spec.Top)
 	if err != nil {
 		return area{}, err
@@ -26,8 +32,8 @@ func compileArea(spec config.Area) (area, error) {
 	return area{top: top, bottom: bottom}, nil
 }
 
-// lines returns the half-open range [top, end) of the screen's lines the area covers. Both edges
-// are inclusive, so an area whose two edges pick the same line is that one line.
+// lines returns the half-open range [top, end) of the screen's lines an anchor area covers. Both
+// edges are inclusive, so an area whose two edges pick the same line is that one line.
 func (a area) lines(screen []line) (top, end int, err error) {
 	top, bottom := 0, len(screen)-1
 	if a.top != nil {

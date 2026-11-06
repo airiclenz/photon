@@ -380,3 +380,109 @@ func cellsOf(line string) []take.Cell {
 	}
 	return cells
 }
+
+// selectorScreen is pageScreen with the boxes a source recorded for its selectors: every button,
+// stored out of reading order; two forms, the lower one stored first, the upper one holding Save
+// but not Cancel; and a selector that matched nothing.
+func selectorScreen() take.Snapshot {
+	page := pageScreen()
+	page.Selectors = map[string][]take.Box{
+		"button": {
+			{X: 90, Y: 40, W: 47, H: 18},
+			{X: 12, Y: 300, W: 70, H: 16},
+			{X: 12, Y: 40, W: 30, H: 18},
+		},
+		"form": {
+			{X: 0, Y: 290, W: 200, H: 40},
+			{X: 0, Y: 30, W: 100, H: 40},
+		},
+		".empty": {},
+	}
+	return page
+}
+
+// selectorAreas is pageAreas plus an area from the form selector and one from a selector the
+// snapshot recorded nothing for.
+func selectorAreas() map[string]config.Area {
+	areas := pageAreas()
+	areas["form"] = config.Area{Selector: "form"}
+	areas["gone"] = config.Area{Selector: "#gone"}
+	return areas
+}
+
+func TestResolver_TargetBySelector(t *testing.T) {
+	t.Parallel()
+	resolver, err := New(selectorAreas())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	page := selectorScreen()
+
+	for _, tc := range []struct {
+		name   string
+		target storyboard.Target
+		want   take.Box
+	}{
+		{"first in reading order", storyboard.Target{Selector: "button"}, take.Box{X: 12, Y: 40, W: 30, H: 18}},
+		{"nth in reading order", storyboard.Target{Selector: "button", Nth: 2}, take.Box{X: 90, Y: 40, W: 47, H: 18}},
+		{"last is the lowest", storyboard.Target{Selector: "button", Nth: storyboard.NthLast}, take.Box{X: 12, Y: 300, W: 70, H: 16}},
+		{"inside an anchor area", storyboard.Target{Selector: "button", Nth: storyboard.NthLast, Area: "actions"}, take.Box{X: 90, Y: 40, W: 47, H: 18}},
+		{"inside a selector area", storyboard.Target{Selector: "button", Nth: storyboard.NthLast, Area: "form"}, take.Box{X: 12, Y: 40, W: 30, H: 18}},
+		{"text inside a selector area", storyboard.Target{Text: "a", Nth: storyboard.NthLast, Area: "form"}, take.Box{X: 20, Y: 40, W: 7, H: 18}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			box, err := resolver.Target(page, tc.target)
+			if err != nil || box != tc.want {
+				t.Fatalf("Target = %+v, %v; want %+v", box, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolver_SelectorNotOnScreen(t *testing.T) {
+	t.Parallel()
+	resolver, err := New(selectorAreas())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	page := selectorScreen()
+
+	for _, tc := range []struct {
+		name   string
+		target storyboard.Target
+		want   string
+	}{
+		{"a selector the snapshot never recorded", storyboard.Target{Selector: "#gone"}, `target selector "#gone" (area any)`},
+		{"a selector that matched nothing", storyboard.Target{Selector: ".empty"}, `target selector ".empty" (area any)`},
+		{"an nth past the boxes", storyboard.Target{Selector: "button", Nth: 4}, "nth 4"},
+		{"a selector area with no box", storyboard.Target{Text: "Save", Area: "gone"}, `area gone: selector "#gone"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			box, err := resolver.Target(page, tc.target)
+			if !errors.Is(err, ErrNotOnScreen) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Target = %+v, %v; want a not-on-screen error saying %q", box, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolver_SelectorArea(t *testing.T) {
+	t.Parallel()
+	resolver, err := New(selectorAreas())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	page := selectorScreen()
+
+	box, boxErr := resolver.Area(page, "form")
+	text, textErr := resolver.Text(page, "form")
+
+	if want := (take.Box{X: 0, Y: 30, W: 100, H: 40}); boxErr != nil || box != want {
+		t.Errorf("Area = %+v, %v; want %+v", box, boxErr, want)
+	}
+	if textErr != nil || text != "Save" {
+		t.Errorf("Text = %q, %v; want %q", text, textErr, "Save")
+	}
+}

@@ -485,3 +485,52 @@ func TestLoad_CrossChecksTheLaunchKind(t *testing.T) {
 		})
 	}
 }
+
+func TestSelectors_ListsEverySelectorTheClipNames(t *testing.T) {
+	config := urlConfig + `areas:
+  panel:
+    selector: '.panel'
+  header:
+    top: {match: 'Inbox'}
+    bottom: {match: 'Inbox'}
+`
+	board := "clip: demo\nship: out/demo.gif\nframe: " + pageFrame + `
+beats:
+  - id: 1
+    title: click and drag
+    duration: 2s
+    do:
+      - click: {target: {selector: '#save', area: panel}}
+      - drag: {from: {selector: '.grip'}, via: [{selector: '.lane'}, {offset: {x: 4}}], to: {selector: '#drop'}}
+      - click: {target: {text: 'Save'}}
+    expect:
+      - {seen: 'Saved', area: panel}
+camera:
+  positions:
+    - {selector: '#save', at: 1s}
+    - {selector: '.toolbar', at: 1500ms}
+`
+	loaded, err := Load(writeClip(t, config, board), "", "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	got := loaded.Selectors()
+
+	want := []string{"#drop", "#save", ".grip", ".lane", ".panel", ".toolbar"}
+	if !slices.Equal(got, want) {
+		t.Errorf("Selectors = %q, want %q", got, want)
+	}
+}
+
+func TestSelectors_NoneOnATextClip(t *testing.T) {
+	loaded, err := Load(writeClip(t, commandConfig,
+		launchBoard(terminalFrame, "{text: 'Save'}", "{text: 'Save', at: 1s}")), "", "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if got := loaded.Selectors(); got != nil {
+		t.Errorf("Selectors = %q, want none", got)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/airiclenz/photon/internal/config"
@@ -87,6 +88,27 @@ func (c *Clip) Take() (string, error) {
 		return "", err
 	}
 	return filepath.Join(work, c.Storyboard.Clip+takeExtension), nil
+}
+
+// Selectors lists every CSS selector the clip names, sorted and without repeats: each target
+// selector of a beat's click or drag (its target, from, via points and to) and of a camera
+// position, and each selector area the config declares. They are the selectors a browser source
+// records the boxes of with every snapshot. An expect names no target, so it reaches a selector
+// only through a selector area. A clip that names none returns nil.
+func (c *Clip) Selectors() []string {
+	var selectors []string
+	for _, named := range namedTargets(c.Storyboard) {
+		if named.target.Selector != "" {
+			selectors = append(selectors, named.target.Selector)
+		}
+	}
+	for _, area := range c.Config.Areas {
+		if area.Selector != "" {
+			selectors = append(selectors, area.Selector)
+		}
+	}
+	slices.Sort(selectors)
+	return slices.Compact(selectors)
 }
 
 // loadConfig finds and loads the config a storyboard in storyboardDir uses.
