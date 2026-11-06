@@ -28,6 +28,15 @@
 // earliest, since a change's frame arrives a moment after the page paints it; [Browser.Close]
 // returns the take, its grid the viewport in CSS pixels and its cell the device scale.
 //
+// [Browser.Type], [Browser.Key] and [Browser.Pointer] drive the page as the engine's Source drives
+// any program, through the DevTools input events a real keyboard and mouse would raise.
+// Typing sends each rune as a keyDown, a char and a keyUp, as a US keyboard sends them. A named key
+// is one [keys.Lookup] accepts, pressed with the modifiers its name holds; the table of the keys a
+// page can receive covers every one of them, and any other name is an error naming it. A pointer
+// event is a press, a move with the button held or a release at its cell, one CSS pixel of the
+// viewport, with its button and its modifier keys, converted from the SGR bits [keys.Mods] holds
+// to the protocol's own.
+//
 // It imports chromedp, and cdproto through it, to drive the browser over the Chrome DevTools
 // Protocol: the protocol's pipe, its typed commands and the browser's process lifetime are what
 // chromedp owns, and photon would otherwise write them itself.
@@ -38,6 +47,10 @@
 //     and viewport, and the methods a recording is driven and read through.
 //   - find.go: [ErrNoBrowser] and the lookup of the browser binary from a named path or the fixed
 //     list.
+//   - input.go: [Browser.Type], [Browser.Key] and [Browser.Pointer], which dispatch typed text,
+//     named keys and pointer events to the page.
+//   - keymap.go: the table from photon's key names to the keystrokes a page receives, and the
+//     key events a press or a typed rune dispatches.
 //   - record.go: the screencast's pumps and the recording that keeps its frames as snapshots,
 //     one frame interval apart at most.
 //   - textlayer.go: [Browser.ReadText], which runs textlayer.js on the page and converts its

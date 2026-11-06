@@ -207,7 +207,12 @@ NOTES (2026-11-06): pre-existing, not this item's: `golangci-lint run --build-ta
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/browser/`, then `GOMEMLIMIT=2GiB go test -tags browser ./internal/browser/`
 **Commit:** `feat(browser): record a take from the page's screencast`
 
-## 10. Drive the page: typing, keys and pointer
+## 10. Drive the page: typing, keys and pointer — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): keymap.go maps each keys name to a DOM key in chromedp's generated `kb` table (key, code, virtual key code) plus CDP modifiers, rather than repeating key/code/keyCode literals; Type and Key both dispatch kb's keyDown/char/keyUp per rune, dropping the char when ctrl or alt is held.
+NOTES (2026-11-06): tests split across three files where the plan named one: input_test.go (external package) holds only the `engine.Source` compile assertion, keymap_test.go (internal, hermetic) covers keyEvents over every `keys.Names()` entry, typeEvents and mouseEvent, and input_browser_test.go (`//go:build browser`) logs keydown/input/mousedown/mousemove/mouseup into the DOM and reads them back through Match; an external test package cannot reach the unexported table, and the hermetic test cannot carry the browser tag.
+NOTES (2026-11-06): .capcom/knowledge/package-layout.md browser row gains input dispatch and the `keys` import, per the plan's standing requirement on import changes.
+NOTES (2026-11-06): Type and Key dispatch several CDP key events per call (Pointer one mouse event), each call capped by a 10 s inputTimeout; no mutex serialises concurrent callers (the doc comment says a concurrent call's events may interleave), so browser.go was left untouched.
 
 **What:**
 **Goal:** `*browser.Browser` implements `engine.Source`: `Type` sends each rune as a key event, `Key` sends every name `keys.Lookup` accepts that a page can receive (others are an error naming the key), `Pointer` dispatches press, move and release at the cell's CSS-px point with button and modifiers.
