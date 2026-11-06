@@ -30,6 +30,9 @@ The terms code, flags, messages and docs use. One meaning each.
 - **Zoom**: one change of the camera's magnification on the clip's clock, to a factor from 1 to
   3 over its `over`; it aims nowhere and pushes in on wherever the positions aim.
 - **Section**: a beat's stretch of the rendered clip; its `duration` sets the playback speed.
+- **Cut beat**: a beat marked `cut: true`; recorded and checked like any beat, it plays no time in
+  the clip. A position, zoom or caption anchored at it resolves to where the cut lands: the next
+  kept beat's start, or the clip's end after the last kept beat.
 - **Render**: a take turned into the shipped GIF.
 - **Draft frame**: a frame `photon tune` shows while playing or scrubbing: drawn from a raster at
   the shipped size with a fast scaler, at the exact frame's pixel size with its cursor and

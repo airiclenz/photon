@@ -112,7 +112,11 @@ internal/caption/layout_test.go — wrapTestLines; internal/caption/golden_test.
 **Commit:** `feat(caption): draw styled spans in their own colour and weight`
 **Closes:** caption-char-styling
 
-## 3. Anchor camera moves and captions at a cut beat
+## 3. Anchor camera moves and captions at a cut beat — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): OutputClock.Resolve now delegates to SectionStart; clockSection's isCut field, read only by the removed refusal, is deleted as dead code.
+
+NOTES (2026-11-06): the cut-beat caption reject cases in TestLoadRejects_Captions became one case showing a cut-beat anchor still faces the usual range checks (`at: {beat: 2}` lands on 3s, the stop's own instant); loading at/until on a cut beat is covered by new rows in TestParse_ResolvesCaptionValues, and positions/zooms by new entries in TestParse_ResolvesMoveStarts.
 
 **What:**
 **Goal:** `at`/`until` naming a cut beat resolve to that beat's sitting start plus offset and then pass the usual range checks; storyboards using it load, render and show in tune at the cut marker; README and glossary state the meaning.

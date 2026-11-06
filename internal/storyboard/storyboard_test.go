@@ -333,12 +333,11 @@ func TestLoadRejects_Captions(t *testing.T) {
 		{"width negative", "position: {x: 10, y: 20}", "position: {x: 10, y: 20}, width: -1",
 			"captions[1]: width: want ≥0, got -1", false},
 	}
-	// cutBeatCases swap fragments of captionCutBase, whose beat 2 is cut.
+	// cutBeatCases swap fragments of captionCutBase, whose beat 2 is cut: a moment at it lands
+	// where beat 3 starts, 3s, and then faces the usual range checks.
 	cutBeatCases := []rejectCase{
-		{"start at a cut beat", "at: {beat: 1}", "at: {beat: 2}",
-			"captions[0]: at: beat 2 is cut, so it has no clip time", false},
-		{"stop at a cut beat", "until: {beat: 3}", "until: {beat: 2}",
-			"captions[0]: until: beat 2 is cut, so it has no clip time", false},
+		{"start at a cut beat where the stop is", "at: {beat: 1}", "at: {beat: 2}",
+			"captions[0]: until: want a stop after the start 3s, got 3s", false},
 	}
 	type basedCase struct {
 		base string
@@ -442,6 +441,10 @@ captions:
 			3200 * time.Millisecond, 4 * time.Second, white, black},
 		{"beat moment and for", "{text: a, at: {beat: 1}, for: 2s}", 0, 2 * time.Second, white, black},
 		{"until a clip time", "{text: a, at: 2s, until: 4500ms}", 2 * time.Second, 4500 * time.Millisecond, white, black},
+		{"at a cut beat lands where the next kept beat starts", "{text: a, at: {beat: 2}, until: {beat: 3, offset: 1s}}",
+			3 * time.Second, 4 * time.Second, white, black},
+		{"until a cut beat", "{text: a, at: 1s, until: {beat: 2, offset: -500ms}}",
+			time.Second, 2500 * time.Millisecond, white, black},
 		{"explicit colours", "{text: a, at: 1s, for: 1s, color: '#0a1B2c', box: {color: '#FF8000'}}",
 			time.Second, 2 * time.Second, RGB{R: 0x0a, G: 0x1b, B: 0x2c}, RGB{R: 0xff, G: 0x80}},
 	}
@@ -479,9 +482,11 @@ beats:
 camera:
   positions:
     - {cell: {x: 1, y: 1}, at: 1500ms, hold: 1s}
+    - {cell: {x: 2, y: 2}, at: {beat: 2}}
   zooms:
     - {to: 2, over: 1s}
     - {to: 1, at: {beat: 3, offset: 500ms}, over: 1s}
+    - {to: 2, at: {beat: 2, offset: -1s}, over: 1s}
 `
 
 	parsed, err := Parse([]byte(body), "resolve.yaml")
@@ -490,8 +495,11 @@ camera:
 		t.Fatalf("Parse: %v", err)
 	}
 	camera := parsed.Camera
-	got := []time.Duration{camera.Zooms[0].Start(), camera.Zooms[1].Start(), camera.Positions[0].Start()}
-	want := []time.Duration{0, 3500 * time.Millisecond, 1500 * time.Millisecond}
+	got := []time.Duration{
+		camera.Zooms[0].Start(), camera.Zooms[1].Start(), camera.Zooms[2].Start(),
+		camera.Positions[0].Start(), camera.Positions[1].Start(),
+	}
+	want := []time.Duration{0, 3500 * time.Millisecond, 2 * time.Second, 1500 * time.Millisecond, 3 * time.Second}
 	if !slices.Equal(got, want) {
 		t.Errorf("starts: want %v, got %v", want, got)
 	}

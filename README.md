@@ -471,7 +471,7 @@ A **position** is one place the camera aims at, from its `at` for its `hold`:
 
 | Field | Meaning |
 | --- | --- |
-| `at` | When the position starts. A bare time such as `4500ms` is that long after the clip's first frame. `{beat: N, offset: D}` is where beat N's section starts in the clip, plus `D`. `D` may be negative and defaults to 0. Leave `at` out to start at the clip's first frame. |
+| `at` | When the position starts. A bare time such as `4500ms` is that long after the clip's first frame. `{beat: N, offset: D}` is where beat N's section starts in the clip, plus `D`. `D` may be negative and defaults to 0. A cut beat plays no time, so on a cut beat `{beat: N}` is where the cut lands: where the next kept beat starts, or the clip's end when no kept beat follows, which makes a trailing cut beat need a negative `D`. Leave `at` out to start at the clip's first frame. |
 | `hold` | How long the camera rests there, ≥0. Leave it out, or set 0, and the position is a point in time. It must end by the clip's end. |
 | `cell` | `{x, y}`: one cell of the grid, blank or not. `x` is the column and `y` the row, both counted from 0. The camera aims at the cell's centre. A cell takes no `nth` or `area`. |
 | `text`, `nth`, `area` | A [target](#targets-and-areas). The camera aims at the centre of its box on the screen shown when the position starts, and stays on that spot for the whole hold: it does not follow the text. `photon render` fails, naming the position, if that screen does not show it. |
@@ -528,7 +528,7 @@ view, so a position shows only while the camera is zoomed in.
 
 `photon lint` reports a position with both or neither of `text` and `cell`, a cell outside the
 grid, an `nth` or `area` on a cell, a negative `hold`, a zoom's `to` outside 1-3, an `over` that is
-not >0, an `ease` other than the four above, an `at` that names a missing or cut beat, a position
+not >0, an `ease` other than the four above, an `at` that names a missing beat, a position
 or zoom that starts outside the clip or ends after it, and two positions or two zooms that
 overlap.
 
@@ -598,7 +598,7 @@ A caption changes only the rendered GIF, not what photon records. After you edit
 `photon render` again; the take stays as it is.
 
 `photon lint` reports a caption with no `text`, a caption that sets both or neither of `for` and
-`until`, a `for` that is not >0, an `at` or `until` that names a missing or cut beat, a caption
+`until`, a `for` that is not >0, an `at` or `until` that names a missing beat, a caption
 that starts outside the clip, ends before it starts or ends after the clip, a `font.size` outside
 6..72 (its own, or the `frame.font_size` it falls back to), a `font.weight` other than `regular`
 or `bold`, a `place` or `align` that is not one of its words, a `position` set with `place`,
@@ -735,7 +735,9 @@ the beat took in the take:
 - A longer beat plays its first `hold` at 1× and speeds up the rest to fit. `photon render` warns
   when a section runs faster than 6×.
 - A `cut` beat is recorded and checked but left out of the clip. If every beat is cut, there is
-  nothing to render, and that is an error.
+  nothing to render, and that is an error. A camera position, zoom or caption whose `at` or
+  `until` names a cut beat lands where the cut is: where the next kept beat starts, or the clip's
+  end after the last one.
 
 `photon render` prints one row per beat: `beat N  <speed>×  <take> of take in <duration>`, or
 `beat N  cut`.

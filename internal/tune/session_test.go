@@ -551,6 +551,22 @@ func TestSession_State_ReportsPositionsAndZooms(t *testing.T) {
 	}
 }
 
+func TestSession_State_PositionAtACutBeat_StartsWhereTheCutSectionStarts(t *testing.T) {
+	t.Parallel()
+	cutBeatOne := strings.Replace(sessionStoryboard, beatOneOld, beatOneOld+"    cut: true\n", 1)
+	f := newSessionFixtureOf(t, cutBeatOne+"camera:\n  positions:\n    - {cell: {x: 3, y: 1}, at: {beat: 1}}\n")
+
+	state := f.session.State()
+
+	if len(state.Errors) != 0 || len(state.Positions) != 1 || len(state.Sections) == 0 || !state.Sections[0].IsCut {
+		t.Fatalf("want a cut beat 1 and one position without errors, got errors %+v, positions %+v, sections %+v",
+			state.Errors, state.Positions, state.Sections)
+	}
+	if got, want := state.Positions[0].StartMS, state.Sections[0].StartMS; got != want {
+		t.Errorf("position start %dms, want the cut section's start %dms", got, want)
+	}
+}
+
 func TestSession_State_WithoutACamera_ReportsEmptyLists(t *testing.T) {
 	t.Parallel()
 	f := newSessionFixture(t)

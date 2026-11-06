@@ -18,7 +18,6 @@ type OutputClock struct {
 type clockSection struct {
 	beat  int
 	start time.Duration
-	isCut bool
 }
 
 // Clock builds the storyboard's output clock from its beats as they stand. It sums the kept
@@ -27,7 +26,7 @@ func (s *Storyboard) Clock() OutputClock {
 	sections := make([]clockSection, 0, len(s.Beats))
 	var start time.Duration
 	for _, beat := range s.Beats {
-		sections = append(sections, clockSection{beat: beat.ID, start: start, isCut: beat.Cut})
+		sections = append(sections, clockSection{beat: beat.ID, start: start})
 		if !beat.Cut {
 			start += beat.Duration
 		}
@@ -53,21 +52,19 @@ func (c OutputClock) SectionStart(beat int) (time.Duration, error) {
 }
 
 // Resolve places a moment on the output clock: a bare clip time is its Offset, and a beat moment
-// is that beat's section start plus its Offset. It does not check that the result lies inside the
-// clip; it fails only for a beat the storyboard does not declare or one that is cut, which has no
-// time on the output clock.
+// is that beat's section start plus its Offset. A cut beat plays no time, so a moment at one
+// resolves to where the cut lands: the next kept beat's start, or the clip's Length after the
+// last kept beat. It does not check that the result lies inside the clip; it fails only for a
+// beat the storyboard does not declare.
 func (c OutputClock) Resolve(moment Moment) (time.Duration, error) {
 	if moment.Beat == 0 {
 		return moment.Offset, nil
 	}
-	section, isDeclared := c.section(moment.Beat)
-	if !isDeclared {
-		return 0, fmt.Errorf("beat %d is not in the storyboard", moment.Beat)
+	start, err := c.SectionStart(moment.Beat)
+	if err != nil {
+		return 0, err
 	}
-	if section.isCut {
-		return 0, fmt.Errorf("beat %d is cut, so it has no clip time", moment.Beat)
-	}
-	return section.start + moment.Offset, nil
+	return start + moment.Offset, nil
 }
 
 // section finds the first beat with the id beat.

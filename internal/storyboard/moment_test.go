@@ -133,7 +133,6 @@ func TestOutputClock_Resolve_Refuses(t *testing.T) {
 		want   string
 	}{
 		{name: "unknown beat", moment: Moment{Beat: 4}, want: "beat 4 is not in the storyboard"},
-		{name: "cut beat", moment: Moment{Beat: 2}, want: "beat 2 is cut, so it has no clip time"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -143,6 +142,44 @@ func TestOutputClock_Resolve_Refuses(t *testing.T) {
 
 			if err == nil || err.Error() != test.want {
 				t.Errorf("Resolve error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestOutputClock_Resolve_AtACutBeat_IsWhereTheCutLands(t *testing.T) {
+	t.Parallel()
+	leadingCut := &Storyboard{Beats: []Beat{
+		{ID: 1, Duration: 4 * time.Second, Cut: true},
+		{ID: 2, Duration: 3 * time.Second},
+	}}
+	trailingCut := &Storyboard{Beats: []Beat{
+		{ID: 1, Duration: 2 * time.Second},
+		{ID: 2, Duration: 4 * time.Second, Cut: true},
+	}}
+	tests := []struct {
+		name   string
+		board  *Storyboard
+		moment Moment
+		want   time.Duration
+	}{
+		{name: "middle cut lands on the next kept beat", board: clockBoard(), moment: Moment{Beat: 2}, want: 2 * time.Second},
+		{name: "middle cut with offset", board: clockBoard(), moment: Moment{Beat: 2, Offset: 250 * time.Millisecond}, want: 2250 * time.Millisecond},
+		{name: "leading cut lands on the clip's start", board: leadingCut, moment: Moment{Beat: 1}, want: 0},
+		{name: "trailing cut lands on the clip's end", board: trailingCut, moment: Moment{Beat: 2}, want: 2 * time.Second},
+		{name: "trailing cut with a negative offset", board: trailingCut, moment: Moment{Beat: 2, Offset: -500 * time.Millisecond}, want: 1500 * time.Millisecond},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := test.board.Clock().Resolve(test.moment)
+
+			if err != nil {
+				t.Fatalf("Resolve: %v", err)
+			}
+			if got != test.want {
+				t.Errorf("Resolve = %s, want %s", got, test.want)
 			}
 		})
 	}

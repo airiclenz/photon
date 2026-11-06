@@ -211,6 +211,36 @@ func TestComposePositionResolvesOnTheScreenAtItsStart(t *testing.T) {
 	}
 }
 
+func TestComposePositionAtACutBeatAimsOnTheNextKeptBeatsFirstScreen(t *testing.T) {
+	t.Parallel()
+	// Beat 2 is cut, so {beat: 2} lands where beat 3 starts: 2s on the output clock, source 4s.
+	// alpha sits on a different row in each beat's screens, so only beat 3's first one matches.
+	const body = `beats:
+  - {id: 1, title: before, duration: 2s}
+  - {id: 2, title: skipped, cut: true}
+  - {id: 3, title: after, duration: 2s}
+camera:
+  positions:
+    - {text: alpha, at: {beat: 2}}
+`
+	recorded := &take.Take{
+		Snapshots: []take.Snapshot{
+			screen(0, map[int]string{2: "     alpha"}),
+			screen(3*sec, map[int]string{5: "     alpha"}),
+			screen(4*sec, map[int]string{9: "                              alpha"}),
+			screen(5*sec, map[int]string{11: "     alpha"}),
+		},
+		Events: []take.Event{beatStart(0, 1), beatStart(2*sec, 2), beatStart(4*sec, 3)},
+	}
+
+	compositor, _ := newTestCompositor(t, parseBoard(t, body), recorded)
+
+	want := testLayout.boxRect(take.Box{X: 30, Y: 9, W: 5, H: 1}).centre()
+	if got := compositor.camera.centreAt(2 * sec); got != want {
+		t.Errorf("aim at 2s: want %+v, got %+v", want, got)
+	}
+}
+
 func TestNewRefusesAPositionTargetOffScreenAtItsStart(t *testing.T) {
 	t.Parallel()
 	shown := map[int]string{3: "     ghost"}
