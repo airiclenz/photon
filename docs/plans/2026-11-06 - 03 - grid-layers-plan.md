@@ -160,7 +160,11 @@ internal/take/file_bench_test.go — BenchmarkLoad
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/take/` and `GOMEMLIMIT=2GiB go test -run XXX -bench BenchmarkLoad -benchtime 1x ./internal/take/`
 **Commit:** `feat(take): format v2 carries an image layer and cell geometry`
 
-## 7. Encode, decode and seek the image layer
+## 7. Encode, decode and seek the image layer — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): beyond the plan's three key-frame triggers, a change of frame size also starts a key frame; a snapshot with no entry decodes as the frame before it, so a caller that keeps such a snapshot still reads correctly.
+NOTES (2026-11-06): each PNG holds the frame's RGBA bytes verbatim (as NRGBA), so even translucent frames round-trip bit for bit; an opaque frame, as every capture is, is written as plain RGB. Decoder.Frame returns its own buffer, overwritten by the next call.
+NOTES (2026-11-06): the plan's synthetic page measures 4.8 MB/min (288 entries, 36 key frames); adding a spinner that turns every frame far from the typing box measured 30.3 MB/min, because one bounding rectangle over two distant changes exceeds half the frame and every such frame becomes a key frame.
 
 **What:**
 **Goal:** a new package `internal/pixels` turns a sequence of RGBA frames into take `ImageEntry` values and back losslessly at any snapshot index; a one-minute 1280×800, 24 fps synthetic take written with `take.Save` is ≤ 25 MB.

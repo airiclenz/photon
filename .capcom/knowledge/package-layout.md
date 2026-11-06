@@ -11,6 +11,7 @@ imports upward, and there are no cycles.
 |---|---|---|
 | `internal/keys` | named keys to bytes, SGR mouse press, motion and release | — |
 | `internal/take` | the Take: snapshots, cells, colours, typed events, `Box`, beat spans; its versioned file format | — |
+| `internal/pixels` | a take's image layer: frames encoded as PNG key frames (the first frame, every 2 s, a new frame size, or a change over half the frame) and patches of the changed rectangle, and decoded back at any snapshot | `take` |
 | `internal/yamledit` | YAML source splicing: replace, insert or remove one scalar or key, leaving the rest of the bytes as written | — |
 | `internal/storyboard` | a clip's Storyboard; strict decode and validation; typed edits (`Apply`) spliced into its source, a new key placed by its yaml struct tags | `keys`, `yamledit` |
 | `internal/config` | the project's `photon.yaml` (rig, launch, services, profiles, end, areas, theme, fonts) and its lookup | `keys` |
