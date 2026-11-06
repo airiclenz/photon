@@ -3,11 +3,13 @@
 //
 // The layer is key frames and patches. The [Encoder] writes a key frame (the whole frame as a
 // PNG) at the first frame, whenever the frame's size changes, when at least two seconds of the
-// take's clock have passed since the last key frame, and when the rectangle that changed covers
-// more than half the frame; any other changed frame is a PNG patch of the rectangle that changed.
-// A frame identical to the one before it gets no entry. The [Decoder] seeks a snapshot by
-// decoding the last key frame at or before it and applying the patches after, and it keeps the
-// frame it last built, so reading the snapshots in order costs one patch each.
+// take's clock have passed since the last key frame, and when the changed rectangles together
+// cover more than half the frame; any other changed frame is a patch entry of one PNG for each
+// far-apart change, each the smallest rectangle holding it (changes closer than a few dozen
+// pixels share one rectangle). A frame identical to the one before it gets no entry. The
+// [Decoder] seeks a snapshot by decoding the last key frame at or before it and applying the
+// patch entries after, and it keeps the frame it last built, so reading the snapshots in order
+// costs one entry each.
 //
 // Frames round-trip bit for bit: a PNG holds a frame's RGBA bytes verbatim, which for an opaque
 // frame, as every screen capture is, is exactly the picture.

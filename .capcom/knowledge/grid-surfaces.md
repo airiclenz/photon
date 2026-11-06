@@ -41,9 +41,10 @@ geometry comes from its font, as today.
 ## Frame storage
 
 Pixel frames live inside the take file. A take with an image layer is take format v2 (a terminal
-take stays v1). Frames are PNG key frames plus PNG patches of the changed rectangle; a key frame
-is written every 2 s, or whenever a patch would cover more than half the frame. Budget: a
-one-minute 1280×800, 24 fps browser take is at most 25 MB.
+take stays v1). Frames are PNG key frames plus patch entries holding one PNG rectangle for each
+far-apart change, so typing and a spinner at opposite corners stay two small patches; a key
+frame is written every 2 s, or whenever the patches together would cover more than half the
+frame. Budget: a one-minute 1280×800, 24 fps browser take is at most 25 MB.
 
 ## Selectors
 

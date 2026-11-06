@@ -18,6 +18,11 @@ const keyInterval = 2 * time.Second
 // bytesPerPixel is the size of one pixel in an [image.RGBA]'s Pix.
 const bytesPerPixel = 4
 
+// patchGap is the fewest unchanged rows, or unchanged columns, that part two changes of a frame
+// into separate patches. Changes closer than that share one rectangle: a patch's own PNG costs
+// more than the few unchanged pixels between them.
+const patchGap = 32
+
 // ErrMalformed is wrapped by every error for an image layer a frame cannot be rebuilt from: no
 // key frame before a snapshot, a key frame that is not one patch at (0, 0), a patch outside its
 // frame, or bytes that are not the PNG a patch says they are.
@@ -35,9 +40,9 @@ type Encoder struct {
 }
 
 // Encode returns the image layer entry for frame, taken at at on the take's clock: a key frame,
-// a patch of the rectangle that changed since the previous frame, or nil when nothing changed, in
-// which case the caller keeps no snapshot for the frame. The encoder copies what it keeps, so the
-// caller may reuse frame's buffer for the next frame.
+// a patch entry holding one rectangle for each far-apart change since the previous frame, or nil
+// when nothing changed, in which case the caller keeps no snapshot for the frame. The encoder
+// copies what it keeps, so the caller may reuse frame's buffer for the next frame.
 func (e *Encoder) Encode(at time.Duration, frame *image.RGBA) (*take.ImageEntry, error) {
 	bounds := frame.Bounds()
 	if bounds.Empty() {
@@ -46,24 +51,32 @@ func (e *Encoder) Encode(at time.Duration, frame *image.RGBA) (*take.ImageEntry,
 	if e.prev == nil || e.prev.Rect.Size() != bounds.Size() {
 		return e.key(at, frame)
 	}
-	changed, isChanged := e.changed(frame)
-	if !isChanged {
+	changed := e.changed(frame)
+	if len(changed) == 0 {
 		return nil, nil
 	}
-	if at-e.lastKey >= keyInterval || 2*changed.Dx()*changed.Dy() > bounds.Dx()*bounds.Dy() {
+	area := 0
+	for _, rect := range changed {
+		area += rect.Dx() * rect.Dy()
+	}
+	if at-e.lastKey >= keyInterval || 2*area > bounds.Dx()*bounds.Dy() {
 		return e.key(at, frame)
 	}
 
-	width := changed.Dx()
-	for y := changed.Min.Y; y < changed.Max.Y; y++ {
-		start := e.prev.PixOffset(changed.Min.X, y)
-		copy(e.prev.Pix[start:start+width*bytesPerPixel], row(frame, changed.Min.X, y, width))
+	patches := make([]take.Patch, 0, len(changed))
+	for _, rect := range changed {
+		width := rect.Dx()
+		for y := rect.Min.Y; y < rect.Max.Y; y++ {
+			start := e.prev.PixOffset(rect.Min.X, y)
+			copy(e.prev.Pix[start:start+width*bytesPerPixel], row(frame, rect.Min.X, y, width))
+		}
+		encoded, err := encodePNG(e.prev, rect)
+		if err != nil {
+			return nil, fmt.Errorf("encode the patch at %s: %w", at, err)
+		}
+		patches = append(patches, take.Patch{Rect: box(rect), PNG: encoded})
 	}
-	encoded, err := encodePNG(e.prev, changed)
-	if err != nil {
-		return nil, fmt.Errorf("encode the patch at %s: %w", at, err)
-	}
-	return &take.ImageEntry{Patches: []take.Patch{{Rect: box(changed), PNG: encoded}}}, nil
+	return &take.ImageEntry{Patches: patches}, nil
 }
 
 // key makes frame the encoder's previous frame and returns it whole as a key frame.
@@ -84,45 +97,86 @@ func (e *Encoder) key(at time.Duration, frame *image.RGBA) (*take.ImageEntry, er
 	return &take.ImageEntry{Key: true, Patches: []take.Patch{{Rect: box(e.prev.Rect), PNG: encoded}}}, nil
 }
 
-// changed returns the smallest rectangle, in the frame's own pixels from (0, 0), holding every
-// pixel where frame differs from the previous frame of the same size, and false when none does.
-func (e *Encoder) changed(frame *image.RGBA) (image.Rectangle, bool) {
+// changed returns the rectangles, in the frame's own pixels from (0, 0), that together hold every
+// pixel where frame differs from the previous frame of the same size, and none when no pixel
+// does. The changed rows split into bands at every run of at least patchGap unchanged rows, each
+// band splits into spans at every run of at least patchGap unchanged columns, and each span's
+// rectangle is the smallest one holding its changed pixels. The rectangles do not overlap and
+// run top to bottom, then left to right.
+func (e *Encoder) changed(frame *image.RGBA) []image.Rectangle {
 	size := e.prev.Rect.Size()
-	top, bottom := -1, -1
+	rowChanged := make([]bool, size.Y)
 	for y := range size.Y {
-		if !bytes.Equal(row(frame, 0, y, size.X), row(e.prev, 0, y, size.X)) {
-			if top < 0 {
-				top = y
-			}
-			bottom = y
-		}
+		rowChanged[y] = !bytes.Equal(row(frame, 0, y, size.X), row(e.prev, 0, y, size.X))
 	}
-	if top < 0 {
-		return image.Rectangle{}, false
+	var rects []image.Rectangle
+	for _, band := range runs(rowChanged) {
+		rects = append(rects, e.spans(frame, rowChanged, band)...)
+	}
+	return rects
+}
+
+// spans returns the rectangles of the changed pixels in band, a run of frame's rows, one for
+// each run of changed columns; rowChanged says which of frame's rows differ at all.
+func (e *Encoder) spans(frame *image.RGBA, rowChanged []bool, band run) []image.Rectangle {
+	width := e.prev.Rect.Dx()
+	columnChanged := make([]bool, width)
+	for y := band.start; y < band.end; y++ {
+		if !rowChanged[y] {
+			continue
+		}
+		now, before := row(frame, 0, y, width), row(e.prev, 0, y, width)
+		for x := range width {
+			if !columnChanged[x] && !samePixel(now, before, x) {
+				columnChanged[x] = true
+			}
+		}
 	}
 
-	left, right := size.X, -1
-	for y := top; y <= bottom; y++ {
-		now, before := row(frame, 0, y, size.X), row(e.prev, 0, y, size.X)
-		for x := 0; x < left; x++ {
-			if !samePixel(now, before, x) {
-				left = x
-				break
-			}
+	var rects []image.Rectangle
+	for _, span := range runs(columnChanged) {
+		differs := func(y int) bool {
+			return rowChanged[y] && !bytes.Equal(row(frame, span.start, y, span.end-span.start),
+				row(e.prev, span.start, y, span.end-span.start))
 		}
-		for x := size.X - 1; x > right; x-- {
-			if !samePixel(now, before, x) {
-				right = x
-				break
-			}
+		top := band.start
+		for !differs(top) {
+			top++
 		}
+		bottom := band.end - 1
+		for !differs(bottom) {
+			bottom--
+		}
+		rects = append(rects, image.Rect(span.start, top, span.end, bottom+1))
 	}
-	return image.Rect(left, top, right+1, bottom+1), true
+	return rects
+}
+
+// run is the rows or columns [start, end).
+type run struct {
+	start, end int
+}
+
+// runs returns the runs of changed's true indices, joining two runs fewer than patchGap apart;
+// each run starts and ends at a true index.
+func runs(changed []bool) []run {
+	var found []run
+	for index, isChanged := range changed {
+		if !isChanged {
+			continue
+		}
+		if last := len(found) - 1; last >= 0 && index-found[last].end < patchGap {
+			found[last].end = index + 1
+			continue
+		}
+		found = append(found, run{start: index, end: index + 1})
+	}
+	return found
 }
 
 // Decoder rebuilds the frames of a take's image layer. It keeps the frame it built last, so
-// reading snapshots in order costs one patch each, and reading any other one costs at most the
-// patches since its key frame.
+// reading snapshots in order costs one entry each, and reading any other one costs at most the
+// entries since its key frame.
 type Decoder struct {
 	snapshots []take.Snapshot
 	frame     *image.RGBA

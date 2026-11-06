@@ -5,6 +5,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"math"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -23,13 +24,15 @@ const (
 )
 
 func TestRoundTrip_EveryIndexInAnyOrder(t *testing.T) {
-	const width, height, frames = 32, 24, 60
+	// The frame is wide and tall enough for two changes patchGap apart.
+	const width, height, frames = 96, 72, 60
 	rng := rand.New(rand.NewPCG(7, 11))
 	// The frame's bounds start off the origin, as a sub-image's do.
 	frame := image.NewRGBA(image.Rect(3, 2, 3+width, 2+height))
 	var encoder Encoder
 	recorded := &take.Take{Cols: width, Rows: height, FPS: 10, Cell: take.CellSize{W: 1, H: 1}}
 	var want []*image.RGBA
+	split := 0
 	for index := range frames {
 		at := time.Duration(index) * 100 * time.Millisecond
 		paintStep(frame, index, rng)
@@ -37,10 +40,16 @@ func TestRoundTrip_EveryIndexInAnyOrder(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Encode(frame %d): %v", index, err)
 		}
+		if entry != nil && len(entry.Patches) > 1 {
+			split++
+		}
 		// A frame without an entry keeps its snapshot here, so the decoder's reading of one is
 		// covered too.
 		recorded.Snapshots = append(recorded.Snapshots, take.Snapshot{At: at, Image: entry})
 		want = append(want, clone(frame))
+	}
+	if split == 0 {
+		t.Fatal("no entry has more than one patch, so the round trip covers none")
 	}
 
 	var file bytes.Buffer
@@ -79,7 +88,8 @@ func TestRoundTrip_EveryIndexInAnyOrder(t *testing.T) {
 }
 
 // paintStep changes frame for step index of the round-trip test: some steps change nothing, some
-// paint a small rectangle (opaque or translucent), and some repaint most of the frame.
+// paint one to three small rectangles (opaque or translucent) anywhere in the frame, and some
+// repaint most of the frame.
 func paintStep(frame *image.RGBA, index int, rng *rand.Rand) {
 	bounds := frame.Bounds()
 	switch {
@@ -89,9 +99,11 @@ func paintStep(frame *image.RGBA, index int, rng *rand.Rand) {
 		fill(frame, image.Rect(bounds.Min.X, bounds.Min.Y, bounds.Max.X, bounds.Max.Y-2),
 			randomColor(rng))
 	default:
-		x := bounds.Min.X + rng.IntN(bounds.Dx()-4)
-		y := bounds.Min.Y + rng.IntN(bounds.Dy()-4)
-		fill(frame, image.Rect(x, y, x+1+rng.IntN(4), y+1+rng.IntN(4)), randomColor(rng))
+		for range 1 + index%3 {
+			x := bounds.Min.X + rng.IntN(bounds.Dx()-4)
+			y := bounds.Min.Y + rng.IntN(bounds.Dy()-4)
+			fill(frame, image.Rect(x, y, x+1+rng.IntN(4), y+1+rng.IntN(4)), randomColor(rng))
+		}
 	}
 }
 
@@ -177,6 +189,60 @@ func TestEncoder_KeyFrameCadence(t *testing.T) {
 				if entry != nil && !slices.Equal(rects(entry), []take.Box{s.rect}) {
 					t.Errorf("step %d: entry rectangles %+v, want [%+v]", index, rects(entry), s.rect)
 				}
+			}
+		})
+	}
+}
+
+func TestEncoder_FarApartChangesAreSeparatePatches(t *testing.T) {
+	const width, height = 200, 120 // half the frame is 12000 pixels
+	tests := []struct {
+		name  string
+		paint []image.Rectangle
+		want  string
+		rects []take.Box
+	}{
+		{"changes far apart in rows and columns are one patch each",
+			[]image.Rectangle{image.Rect(2, 2, 6, 5), image.Rect(180, 100, 190, 110)},
+			kindPatch, []take.Box{{X: 2, Y: 2, W: 4, H: 3}, {X: 180, Y: 100, W: 10, H: 10}}},
+		{"changes far apart in the same rows are one patch each",
+			[]image.Rectangle{image.Rect(2, 10, 6, 14), image.Rect(100, 12, 104, 20)},
+			kindPatch, []take.Box{{X: 2, Y: 10, W: 4, H: 4}, {X: 100, Y: 12, W: 4, H: 8}}},
+		{"changes patchGap columns apart are one patch each",
+			[]image.Rectangle{image.Rect(0, 0, 4, 4), image.Rect(4+patchGap, 0, 8+patchGap, 4)},
+			kindPatch, []take.Box{{W: 4, H: 4}, {X: 4 + patchGap, W: 4, H: 4}}},
+		{"changes patchGap rows apart are one patch each",
+			[]image.Rectangle{image.Rect(0, 0, 4, 4), image.Rect(0, 4+patchGap, 4, 8+patchGap)},
+			kindPatch, []take.Box{{W: 4, H: 4}, {Y: 4 + patchGap, W: 4, H: 4}}},
+		{"changes closer than patchGap share one patch",
+			[]image.Rectangle{image.Rect(0, 0, 4, 4), image.Rect(3+patchGap, 3+patchGap, 7+patchGap, 7+patchGap)},
+			kindPatch, []take.Box{{W: 7 + patchGap, H: 7 + patchGap}}},
+		{"far-apart changes over more than half the frame together are a key frame",
+			[]image.Rectangle{image.Rect(0, 0, width, 40), image.Rect(0, 79, width, height)},
+			kindKey, []take.Box{{W: width, H: height}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var encoder Encoder
+			frame := image.NewRGBA(image.Rect(0, 0, width, height))
+			fill(frame, frame.Rect, color.RGBA{R: 10, G: 20, B: 30, A: 255})
+			if _, err := encoder.Encode(0, frame); err != nil {
+				t.Fatalf("Encode(key): %v", err)
+			}
+			for _, rect := range tt.paint {
+				fill(frame, rect, color.RGBA{R: 200, G: 120, B: 9, A: 255})
+			}
+
+			entry, err := encoder.Encode(100*time.Millisecond, frame)
+
+			if err != nil {
+				t.Fatalf("Encode: %v", err)
+			}
+			if got := kindOf(entry); got != tt.want {
+				t.Fatalf("Encode gave a %s entry, want %s", got, tt.want)
+			}
+			if !slices.Equal(rects(entry), tt.rects) {
+				t.Errorf("entry rectangles %+v, want %+v", rects(entry), tt.rects)
 			}
 		})
 	}
@@ -317,7 +383,7 @@ func TestDecoder_RefusesAMalformedLayer(t *testing.T) {
 
 // The synthetic browser take the size test records: a 1280×800 page filmed for a minute at 24
 // frames a second, scrolled every 5 s, with text typed into a box and a side panel swapped every
-// 15 s.
+// 15 s, and in one variant a spinner far from the typing box turning every frame.
 const (
 	pageWidth      = 1280
 	pageHeight     = 800
@@ -333,6 +399,9 @@ const (
 	glyphWidth     = 8
 	glyphHeight    = 14
 	glyphCount     = 64
+	spinnerDots    = 8
+	spinnerRadius  = 13
+	spinnerDot     = 6
 )
 
 // The page's layout: the scrolling text column, the side panel and the box text is typed into.
@@ -340,12 +409,30 @@ var (
 	pageTextColumn = image.Rect(40, 0, 880, pageLength)
 	pagePanel      = image.Rect(920, 80, 1240, 680)
 	pageTypingBox  = image.Rect(40, 716, 880, 784)
+	pageSpinner    = image.Rect(1200, 16, 1240, 56)
 )
 
 func TestEncode_OneMinuteBrowserTakeFitsTheBudget(t *testing.T) {
 	if testing.Short() {
 		t.Skip("encodes a minute of 1280×800 frames")
 	}
+	for _, tt := range []struct {
+		name    string
+		spinner bool
+	}{
+		{"typing", false},
+		{"typing plus a turning spinner", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			encodeOneMinuteTake(t, tt.spinner)
+		})
+	}
+}
+
+// encodeOneMinuteTake encodes the synthetic browser take, with the spinner when spinner is set,
+// and fails t when it is over the budget on disk or its last frame does not decode back.
+func encodeOneMinuteTake(t *testing.T, spinner bool) {
+	t.Helper()
 	rng := rand.New(rand.NewPCG(1, 2))
 	glyphs := makeGlyphs(rng)
 	page := makePage(rng, glyphs)
@@ -365,6 +452,9 @@ func TestEncode_OneMinuteBrowserTakeFitsTheBudget(t *testing.T) {
 		}
 		drawPageFrame(frame, page, panels[(index/pageSwapFor)%2], glyphs, typed,
 			(index/pageScrollFor)*pageScrollStep)
+		if spinner {
+			drawSpinner(frame, index)
+		}
 		at := time.Duration(index) * time.Second / pageFPS
 		entry, err := encoder.Encode(at, frame)
 		if err != nil {
@@ -479,6 +569,20 @@ func drawPageFrame(frame, page, panel *image.RGBA, glyphs []glyph, typed []int, 
 		at := image.Pt(pageTypingBox.Min.X+glyphWidth+(index%perLine)*glyphWidth,
 			pageTypingBox.Min.Y+4+(index/perLine)*(glyphHeight+6))
 		drawGlyph(frame, glyphs[which], at, color.RGBA{A: 255})
+	}
+}
+
+// drawSpinner draws the spinner at step of its turn: a ring of dots, the leading one darkest and
+// each one behind it lighter.
+func drawSpinner(frame *image.RGBA, step int) {
+	fill(frame, pageSpinner, color.RGBA{R: 252, G: 252, B: 250, A: 255})
+	center := image.Pt((pageSpinner.Min.X+pageSpinner.Max.X)/2, (pageSpinner.Min.Y+pageSpinner.Max.Y)/2)
+	for dot := range spinnerDots {
+		sin, cos := math.Sincos(2 * math.Pi * float64(dot) / spinnerDots)
+		at := center.Add(image.Pt(int(spinnerRadius*cos)-spinnerDot/2, int(spinnerRadius*sin)-spinnerDot/2))
+		shade := uint8(200 * ((step - dot + spinnerDots) % spinnerDots) / spinnerDots)
+		fill(frame, image.Rectangle{Min: at, Max: at.Add(image.Pt(spinnerDot, spinnerDot))},
+			color.RGBA{R: shade, G: shade, B: shade + 40, A: 255})
 	}
 }
 

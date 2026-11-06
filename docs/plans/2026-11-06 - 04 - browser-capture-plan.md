@@ -123,7 +123,11 @@ NOTES (2026-11-06): the patch list's JSON key is `patches` (each patch keeps the
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/take/`, then `GOMEMLIMIT=2GiB go test -short ./internal/pixels/`, then `GOMEMLIMIT=2GiB go test ./internal/render/`
 **Commit:** `feat(take): an image entry holds several patch rectangles`
 
-## 6. Encode far-apart changes as separate patches
+## 6. Encode far-apart changes as separate patches — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): `patchGap` is 32 pixels; each span's rectangle is tightened to the rows its own columns changed in (not the whole band's rows). The one-minute budget test is now two subtests, "typing" (4.8 MB) and "typing plus a turning spinner" (4.9 MB; 30.8 MB with a single bounding rectangle). The round-trip test's frame grew to 96×72 and paints one to three rectangles per step, failing if no entry carries more than one patch.
+NOTES (2026-11-06): consequential edit — internal/pixels/pixels.go: the `Decoder` doc comment and doc.go's "costs one patch each" now say "one entry each", made necessary by an entry holding several patches.
+NOTES (2026-11-06): no CHANGELOG entry: browser takes (the only image-layer takes) cannot be recorded yet, so nothing a user sees changes.
 
 **What:**
 **Goal:** two far-apart changes in one frame encode as a patch entry with one rectangle each, not a key frame; a one-minute 1280×800, 24 fps synthetic take with typing plus a turning spinner is ≤ 25 MB.
