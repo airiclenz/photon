@@ -543,7 +543,7 @@ inspector's **Move up** and **Move down**.
 
 | Field | Meaning |
 | --- | --- |
-| `text` | Required. The caption's text. Each line of a YAML block (`text: \|`) is a line of the caption. A line too long to fit wraps at its spaces. |
+| `text` | Required. The caption's text. Each line of a YAML block (`text: \|`) is a line of the caption. A line too long to fit wraps at its spaces. Tags inside it style a span of the text: see [Styled spans](#styled-spans). |
 | `at` | When the caption appears, in the same two forms as a camera position's `at`: a bare time such as `4500ms`, or `{beat: N, offset: D}`. Leave it out to start at the clip's first frame. |
 | `for`, `until` | When it goes. Set exactly one: `for` is how long it shows, >0; `until` is the moment it ends, in the same forms as `at`. It must end after it starts and by the clip's end. |
 | `font.size` | The text size, in the same unit as `frame.font_size`, 6..72. Default `frame.font_size`, which matches the terminal text's size. |
@@ -603,9 +603,32 @@ that starts outside the clip, ends before it starts or ends after the clip, a `f
 6..72 (its own, or the `frame.font_size` it falls back to), a `font.weight` other than `regular`
 or `bold`, a `place` or `align` that is not one of its words, a `position` set with `place`,
 `align` or `offset`, a colour not spelled `#rrggbb`, a `box.opacity` outside 0..1, a negative
-fade, and fades that together outlast the caption. Once the storyboard and its config are clean,
-it lays the captions out with the config's fonts and reports a caption whose box is larger than
-the frame.
+fade, fades that together outlast the caption, and malformed span markup: an unknown token, two
+colours in one tag, a tag with no token or no closing `]`, a span never closed, a `[/]` with no
+span open, a tag inside a span or a span with no text. Once the storyboard and its config are
+clean, it lays the captions out with the config's fonts and reports a caption whose box is larger
+than the frame.
+
+#### Styled spans
+
+Inline tags in `text` draw a span of it in another colour, in bold, or both:
+
+- `[#rrggbb]` opens a span in that colour.
+- `[bold]` opens a span in the bold face.
+- `[bold #rrggbb]` opens a bold span in that colour.
+- `[/]` closes the open span.
+
+The text outside a span keeps the caption's own `color` and `font.weight`, and a span keeps
+whichever of the two its tag leaves out. A literal `[` is written `[[`. Spans do not nest, a span
+may run across a line break, and a span that is too long for its line wraps at its spaces like
+the rest of the text.
+
+```yaml
+captions:
+  - text: 'Press [bold #ffe08a]Enter[/] to save, [[Esc] to cancel'
+    at: 2s
+    for: 3s
+```
 
 ## Targets and areas
 

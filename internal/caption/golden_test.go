@@ -39,6 +39,25 @@ func TestDraw_WrappedCaption_MatchesItsGolden(t *testing.T) {
 	assertMatchesGolden(t, frame, readGolden(t, path))
 }
 
+// styledCaption is a caption whose coloured bold span is too long for its line and wraps across
+// lines, between plain words and beside a coloured regular span.
+const styledCaption = "  - {text: \"Plain words, then [bold #ffc040]a bold coloured span long enough to" +
+	" wrap across lines[/] and [#80e0ff]a regular one[/]\", at: 0s, for: 1s," +
+	" font: {size: 28}, place: middle, align: middle, box: {color: '#203040', opacity: 1}}\n"
+
+func TestDraw_StyledSpan_MatchesItsGolden(t *testing.T) {
+	layer := newTestLayer(t, styledCaption, testOut, testUnit)
+
+	frame := drawAt(layer, testOut, 0)
+
+	path := filepath.Join("testdata", "styled.png")
+	if *update {
+		writeGolden(t, path, frame)
+		return
+	}
+	assertMatchesGolden(t, frame, readGolden(t, path))
+}
+
 // writeGolden saves img as the PNG golden at path.
 func writeGolden(t *testing.T, path string, img *image.RGBA) {
 	t.Helper()

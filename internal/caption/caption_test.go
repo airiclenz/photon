@@ -185,6 +185,36 @@ func TestDraw_TextColour_AppearsInsideTheBoxOnly(t *testing.T) {
 	}
 }
 
+func TestDraw_SpanColour_AppearsOnlyWhereTheSpanIs(t *testing.T) {
+	const caption = "  - {text: 'plain words [#ff0000]red span[/]', at: 0s, for: 1s," +
+		" color: '#00ff00', align: left, box: {opacity: 0}}\n"
+	layer := newTestLayer(t, caption, testOut, testUnit)
+
+	frame := drawAt(layer, testOut, 0)
+
+	red, green := image.Rectangle{}, image.Rectangle{}
+	for y := range testOut.Y {
+		for x := range testOut.X {
+			pixel := frame.RGBAAt(x, y)
+			cell := image.Rect(x, y, x+1, y+1)
+			switch {
+			case pixel.R > 0 && pixel.G == 0 && pixel.B == 0:
+				red = red.Union(cell)
+			case pixel.G > 0 && pixel.R == 0 && pixel.B == 0:
+				green = green.Union(cell)
+			case pixel.A != 0:
+				t.Fatalf("pixel (%d, %d) = %v, want the span's red or the caption's green", x, y, pixel)
+			}
+		}
+	}
+	if red.Empty() || green.Empty() {
+		t.Fatalf("red ink %v, green ink %v: want both drawn", red, green)
+	}
+	if red.Min.X <= green.Max.X {
+		t.Errorf("red ink %v starts before the green ink %v ends: want the span after the plain words", red, green)
+	}
+}
+
 func TestNew_SizeAtFrameFontSize_HasTheShippedTerminalEm(t *testing.T) {
 	const fontSize = 14
 	tests := []struct {

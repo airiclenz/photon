@@ -132,16 +132,19 @@ func wrapTestLines(t *testing.T, text string, width int) ([]string, fixed.Int26_
 	t.Helper()
 	const em = 14 * designScale * testUnit
 	maxWidth := maxTextWidth(width, testOut.X, testUnit)
-	block, err := newTextBlock(loadFaces(t).Regular, em, text, maxWidth)
+	runs := []storyboard.Run{{Text: text, Weight: storyboard.WeightRegular}}
+	block, err := newTextBlock(loadFaces(t), em, runs, maxWidth)
 	if err != nil {
 		t.Fatalf("newTextBlock: %v", err)
 	}
+	lines := make([]string, 0, len(block.lines))
 	for index, line := range block.lines {
-		if block.widths[index] > maxWidth && strings.Contains(line, " ") {
-			t.Errorf("line %q is %v wide, past the %v maximum", line, block.widths[index], maxWidth)
+		if block.widths[index] > maxWidth && strings.Contains(line.text, " ") {
+			t.Errorf("line %q is %v wide, past the %v maximum", line.text, block.widths[index], maxWidth)
 		}
+		lines = append(lines, line.text)
 	}
-	return block.lines, maxWidth
+	return lines, maxWidth
 }
 
 func TestNewTextBlock_Wrap_KeepsOrBreaksLines(t *testing.T) {
@@ -208,5 +211,40 @@ func TestNewTextBlock_Width_NarrowsTheWrap(t *testing.T) {
 
 	if len(narrowLines) <= len(frameLines) {
 		t.Errorf("width 200 gives %d lines, want more than the frame's %d", len(narrowLines), len(frameLines))
+	}
+}
+
+func TestNewTextBlock_Runs_WrapAcrossRunBoundariesKeepingTheirStyles(t *testing.T) {
+	bold := storyboard.RGB{R: 0xff}
+	runs := []storyboard.Run{
+		{Text: "plain words before ", Weight: storyboard.WeightRegular},
+		{Text: "a bold span long enough to wrap across lines", Color: bold, Weight: storyboard.WeightBold},
+		{Text: " and plain words after", Weight: storyboard.WeightRegular},
+	}
+	const em = 14 * designScale * testUnit
+
+	block, err := newTextBlock(loadFaces(t), em, runs, maxTextWidth(200, testOut.X, testUnit))
+
+	if err != nil {
+		t.Fatalf("newTextBlock: %v", err)
+	}
+	var texts []string
+	var boldText strings.Builder
+	for _, line := range block.lines {
+		texts = append(texts, line.text)
+		for _, run := range line.runs {
+			if run.Weight == storyboard.WeightBold && run.Color == bold {
+				boldText.WriteString(run.Text + " ")
+			}
+		}
+	}
+	if len(texts) < 3 {
+		t.Errorf("lines = %q, want the text wrapped onto at least three", texts)
+	}
+	if got, want := strings.Join(texts, " "), "plain words before a bold span long enough to wrap across lines and plain words after"; got != want {
+		t.Errorf("lines joined = %q, want %q", got, want)
+	}
+	if got := strings.TrimSpace(boldText.String()); got != runs[1].Text {
+		t.Errorf("bold red text across the lines = %q, want the span %q", got, runs[1].Text)
 	}
 }

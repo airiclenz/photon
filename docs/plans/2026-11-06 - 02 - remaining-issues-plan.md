@@ -83,7 +83,15 @@ internal/tune/session_test.go — captionsStoryboard
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard/`
 **Commit:** `feat(storyboard): parse styled spans in caption text`
 
-## 2. Draw caption runs and document the markup
+## 2. Draw caption runs and document the markup — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): consequential edit — internal/caption/doc.go: made necessary by the text now rasterizing to one coverage mask per run colour, each run in its weight's face (the package comment named a single mask).
+
+NOTES (2026-11-06): wrapLine was rewritten over byte offsets into a styledLine (the concatenated run text) rather than a word-by-word string build; a one-run line measures and wraps exactly as before (wrapped.png and every TestNewTextBlock_* case pass unchanged).
+
+NOTES (2026-11-06): a block's line height, ascent and descent are the largest among the faces its runs use, so a one-weight caption keeps its old metrics; the README lint paragraph also gained the span-markup problems item 1 reports.
+
+NOTES (2026-11-06): added TestNewTextBlock_Runs_WrapAcrossRunBoundariesKeepingTheirStyles (layout_test.go) beside the planned golden and span-colour pixel test (TestDraw_SpanColour_AppearsOnlyWhereTheSpanIs).
 
 **What:** Depends on item 1.
 **Goal:** captions draw each run in its colour and weight; a caption of one run matches the unchanged `wrapped.png` golden without `-update`; a new golden covers a coloured bold span wrapping across lines; README documents the markup.

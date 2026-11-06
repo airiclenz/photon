@@ -12,10 +12,12 @@
 // wide to fit stays whole on a line of its own. The box is placed a margin in from the frame's
 // edges by place and align and moved by offset, or set at position, then clamped inside the frame;
 // a box larger than the frame is an error. Lines align within the box as the caption's align says,
-// left when it has a position. The text is rasterized to a coverage mask there and then, because an
-// opentype face is not safe for concurrent use; [Layer.Draw] then only composites, the box at its
-// opacity × the fade and the text at the fade, which rises linearly over the fade-in and falls
-// linearly over the fade-out. A [Layer] never changes after New, so one is safe for concurrent use.
+// left when it has a position. A caption's styled runs are measured and drawn each in the face of
+// its weight, and a line breaks at spaces whichever run they fall in. The text is rasterized there
+// and then, to one coverage mask per colour its runs use, because an opentype face is not safe for
+// concurrent use; [Layer.Draw] then only composites, the box at its opacity × the fade and the text
+// at the fade, which rises linearly over the fade-in and falls linearly over the fade-out. A
+// [Layer] never changes after New, so one is safe for concurrent use.
 //
 // It imports storyboard and fonts. golang.org/x/image/font measures and draws the text.
 //

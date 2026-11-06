@@ -24,8 +24,8 @@ type Layer struct {
 }
 
 // placed is one caption ready to draw: its span on the output clock and its fades, the box it
-// fills in shipped pixels, the box's colour and opacity, and its text as a coverage mask whose
-// bounds are the box itself, in the text's colour.
+// fills in shipped pixels, the box's colour and opacity, and its text as one coverage mask per
+// colour its runs are drawn in, each mask's bounds the box itself.
 type placed struct {
 	start, stop time.Duration
 	fade        storyboard.Fade
@@ -34,24 +34,23 @@ type placed struct {
 	boxColor   color.RGBA
 	boxOpacity float64
 
-	text      *image.Alpha
-	textColor color.RGBA
+	texts []textMask
 }
 
 // New lays out board's captions on a shipped frame out pixels in size, where one design pixel
 // spans unit shipped pixels (the compositor's unit). It draws each caption's text from faces at
 // an em of its font size × the design scale × unit pixels — the shipped em of the terminal's text
-// at that font size — wraps each line of it at spaces to fit the frame less its edge margins (or
-// the caption's width, when narrower), sizes its box around the text, places the box by place,
-// align and offset or by position, clamps it inside the frame and rasterizes the text, so
-// [Layer.Draw] only composites, showing each caption over the start and stop it carries in the
-// colours it carries.
+// at that font size — each styled run in the face of its weight and in its colour, wraps each
+// line of it at spaces to fit the frame less its edge margins (or the caption's width, when
+// narrower), sizes its box around the text, places the box by place, align and offset or by
+// position, clamps it inside the frame and rasterizes the text, so [Layer.Draw] only composites,
+// showing each caption over the start and stop it carries in the colours it carries.
 //
 // board must be one [storyboard.Parse] returned, so the captions carry their defaults and their
-// resolved start, stop and colours; a caption built as a struct literal never shows. New fails
-// when out or unit is not positive, a face is missing, or a caption's text cannot be laid out or
-// its box is wider or taller than the frame; a caption's error names the caption and is filed
-// under it as a [storyboard.LocatedError].
+// resolved start, stop, colours and runs; a caption built as a struct literal never shows. New
+// fails when out or unit is not positive, a face is missing, or a caption's text cannot be laid
+// out or its box is wider or taller than the frame; a caption's error names the caption and is
+// filed under it as a [storyboard.LocatedError].
 func New(
 	board *storyboard.Storyboard,
 	faces fonts.CaptionSet,
@@ -79,21 +78,18 @@ func New(
 	return layer, nil
 }
 
-// place lays out and rasterizes one caption, keeping the start, stop and colours Parse resolved.
+// place lays out and rasterizes one caption, keeping the start, stop, colours and runs Parse
+// resolved.
 func place(
 	caption storyboard.Caption,
 	faces fonts.CaptionSet,
 	out image.Point,
 	unit float64,
 ) (placed, error) {
-	face := faces.Regular
-	if caption.Font.Weight == storyboard.WeightBold {
-		face = faces.Bold
-	}
 	block, err := newTextBlock(
-		face,
+		faces,
 		caption.Font.Size*designScale*unit,
-		caption.Text,
+		caption.Runs(),
 		maxTextWidth(caption.Width, out.X, unit),
 	)
 	if err != nil {
@@ -115,8 +111,7 @@ func place(
 		box:        box,
 		boxColor:   opaque(caption.BoxColor()),
 		boxOpacity: boxOpacity,
-		text:       block.mask(box, caption.Align, unit),
-		textColor:  opaque(caption.TextColor()),
+		texts:      block.masks(box, caption.Align, unit),
 	}, nil
 }
 
@@ -136,8 +131,9 @@ func (l *Layer) Boxes() []image.Rectangle {
 }
 
 // Draw paints every caption showing at output time t onto dst: first its box, at the box's
-// opacity × the caption's fade, then its text at the fade. dst must be a frame of the size the
-// Layer was built for; Draw writes only dst, so calls on distinct frames may run concurrently.
+// opacity × the caption's fade, then its text at the fade, one colour at a time. dst must be a
+// frame of the size the Layer was built for; Draw writes only dst, so calls on distinct frames
+// may run concurrently.
 func (l *Layer) Draw(dst *image.RGBA, t time.Duration) {
 	for _, caption := range l.captions {
 		fade := caption.opacity(t)
@@ -146,10 +142,12 @@ func (l *Layer) Draw(dst *image.RGBA, t time.Duration) {
 		}
 		box := &image.Uniform{C: withAlpha(caption.boxColor, caption.boxOpacity*fade)}
 		draw.Draw(dst, caption.box, box, image.Point{}, draw.Over)
-		text := &image.Uniform{C: withAlpha(caption.textColor, fade)}
-		draw.DrawMask(
-			dst, caption.box, text, image.Point{}, caption.text, caption.box.Min, draw.Over,
-		)
+		for _, text := range caption.texts {
+			ink := &image.Uniform{C: withAlpha(text.color, fade)}
+			draw.DrawMask(
+				dst, caption.box, ink, image.Point{}, text.mask, caption.box.Min, draw.Over,
+			)
+		}
 	}
 }
 
