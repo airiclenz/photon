@@ -1,11 +1,13 @@
 ---
 title: Publish releases to winget
-status: open
+status: done
 type: task
 priority: 2
 labels: [release]
 plan: 2026-11-06 - 02 - remaining-issues-plan
 created: 2026-11-06T07:11:17Z
+closed: 2026-11-06T12:41:41Z
+reason: Release tool submits winget manifests via komac; docs/releasing.md covers setup, resolved by plan 2026-11-06 - 02 - remaining-issues-plan (archived in 54788b7)
 ---
 
 Releases ship through GitHub, Homebrew and Scoop. Windows users on winget cannot install photon.

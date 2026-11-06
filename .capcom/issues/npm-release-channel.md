@@ -1,11 +1,13 @@
 ---
 title: Publish releases to npm
-status: open
+status: done
 type: task
 priority: 2
 labels: [release]
 plan: 2026-11-06 - 02 - remaining-issues-plan
 created: 2026-11-06T07:11:17Z
+closed: 2026-11-06T12:41:41Z
+reason: Release tool builds and publishes npm wrapper plus platform packages with smoke check; docs/releasing.md covers setup, resolved by plan 2026-11-06 - 02 - remaining-issues-plan (archived in 54788b7)
 ---
 
 Releases ship through GitHub, Homebrew and Scoop. An npm package would let JavaScript projects

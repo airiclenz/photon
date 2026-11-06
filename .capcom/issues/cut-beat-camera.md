@@ -1,11 +1,13 @@
 ---
 title: Allow camera moves inside a cut beat
-status: open
+status: done
 type: task
 priority: 2
 labels: [render]
 plan: 2026-11-06 - 02 - remaining-issues-plan
 created: 2026-11-06T07:11:17Z
+closed: 2026-11-06T12:41:41Z
+reason: Anchors at a cut beat resolve to where the cut lands; README and glossary document it, resolved by plan 2026-11-06 - 02 - remaining-issues-plan (archived in 54788b7)
 ---
 
 Camera positions and zooms cannot be anchored at a cut beat (`cut: true`): an `at` or `until`

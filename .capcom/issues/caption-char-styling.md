@@ -1,11 +1,13 @@
 ---
 title: Style parts of a caption's text
-status: open
+status: done
 type: task
 priority: 2
 labels: [render]
 plan: 2026-11-06 - 02 - remaining-issues-plan
 created: 2026-11-06T07:11:17Z
+closed: 2026-11-06T12:41:41Z
+reason: Styled caption spans ([#rrggbb], [bold], [/]) with golden, resolved by plan 2026-11-06 - 02 - remaining-issues-plan (archived in 54788b7)
 ---
 
 A caption has one colour and style for all its text. Highlighting a word (a key name, a command)

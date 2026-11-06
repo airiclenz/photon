@@ -1,11 +1,13 @@
 ---
 title: Extend drag beyond a straight left-button path
-status: open
+status: done
 type: task
 priority: 2
 labels: [storyboard]
 plan: 2026-11-06 - 02 - remaining-issues-plan
 created: 2026-11-06T07:11:17Z
+closed: 2026-11-06T12:41:41Z
+reason: click/drag take button, with modifiers and via points; cursor follows every segment, resolved by plan 2026-11-06 - 02 - remaining-issues-plan (archived in 54788b7)
 ---
 
 The `drag` action presses the left button only, without modifier keys, along a straight path.
