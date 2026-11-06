@@ -240,7 +240,9 @@ NOTES (2026-11-06): buildFixture now takes the package, binary name and temp-dir
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/testkit/...`
 **Commit:** `test(testkit): a fixture web app`
 
-## 12. A rig-local capture seam
+## 12. A rig-local capture seam — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the `capture` interface is `engine.Source` plus `Painted`, `Settle`, `Freeze`, `exitError` (how the program ended, wrapped by the rig as "... before its first paint") and `finish(ctx)` (end of take: the terminal adapter folds `Quit` with its quit keys and `end.kill_after`, then `Close`); `quitKeyGap` moved from record.go to capture.go beside its only user, the terminal adapter.
 
 **What:**
 **Goal:** `rig`'s record path drives the capture through a rig-local interface with no change to a terminal take's behaviour.

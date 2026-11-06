@@ -1,0 +1,58 @@
+package rig
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/airiclenz/photon/internal/engine"
+	"github.com/airiclenz/photon/internal/take"
+	"github.com/airiclenz/photon/internal/terminal"
+)
+
+// quitKeyGap parts two quit keys, like any two key presses of a beat: above the 50 ms escape
+// timeout common TUI input parsers use, so two presses are read as two keys.
+const quitKeyGap = 100 * time.Millisecond
+
+// capture is what recording one take drives: the [engine.Source] the beats run against, plus the
+// lifecycle around them — the first paint the beats wait for, the idle wait and freeze that end
+// the take, and the shutdown that hands the take back. The record path speaks only to it, so a
+// take's capture need not be a program in a pty.
+type capture interface {
+	engine.Source
+	// Painted closes once the capture shows its first frame, the take's first snapshot.
+	Painted() <-chan struct{}
+	// Settle waits until the capture has shown nothing new for quiet, and reports whether it did
+	// so, or the program exited, within timeout. A cancelled ctx reports false.
+	Settle(ctx context.Context, quiet, timeout time.Duration) bool
+	// Freeze ends the take where it stands: from then on nothing reaches it.
+	Freeze()
+	// exitError says how the program ended, once [engine.Source.Done] has closed.
+	exitError() error
+	// finish shuts the capture down — the way a person would, unless ctx is cancelled — and
+	// returns its take, nil when nothing was recorded. It is called once, last.
+	finish(ctx context.Context) *take.Take
+}
+
+// terminalCapture is a [capture] of a program in a pty: the terminal itself, plus the end-of-take
+// keys that quit it and how long it is given to leave before it is killed.
+type terminalCapture struct {
+	*terminal.Terminal
+	quitKeys  [][]byte
+	killAfter time.Duration
+}
+
+// exitError names the program's exit status.
+func (c terminalCapture) exitError() error {
+	return fmt.Errorf("the program exited (status %d)", c.ExitCode())
+}
+
+// finish types the quit keys, quitKeyGap apart, and gives the program killAfter to leave; then it
+// closes the terminal, which kills a program still running with its whole process group. A
+// cancelled ctx skips the quit and goes straight to the kill.
+func (c terminalCapture) finish(ctx context.Context) *take.Take {
+	if ctx.Err() == nil {
+		c.Quit(c.quitKeys, quitKeyGap, c.killAfter)
+	}
+	return c.Close()
+}

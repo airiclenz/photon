@@ -26,10 +26,6 @@ import (
 // firstPaintTimeout bounds how long a take waits for the program's first paint after its launch.
 const firstPaintTimeout = 30 * time.Second
 
-// quitKeyGap parts two quit keys, like any two key presses of a beat: above the 50 ms escape
-// timeout common TUI input parsers use, so two presses are read as two keys.
-const quitKeyGap = 100 * time.Millisecond
-
 // takeEnv names the absolute path of the take just written, for `on_success`.
 const takeEnv = "PHOTON_TAKE"
 
@@ -182,39 +178,42 @@ func (r recorder) record(ctx context.Context, vars []string) (*take.Take, error)
 	if err != nil {
 		return nil, fmt.Errorf("launch %q: %w", r.cfg.Launch.Command, err)
 	}
-	beatsErr := r.performBeats(ctx, term)
-	return r.endTake(ctx, term), beatsErr
+	launched := terminalCapture{
+		Terminal:  term,
+		quitKeys:  r.quitKeys,
+		killAfter: r.cfg.End.KillAfter,
+	}
+	beatsErr := r.performBeats(ctx, launched)
+	return r.endTake(ctx, launched), beatsErr
 }
 
-// performBeats waits for the program's first paint, then runs the beats.
-func (r recorder) performBeats(ctx context.Context, term *terminal.Terminal) error {
+// performBeats waits for the capture's first paint, then runs the beats.
+func (r recorder) performBeats(ctx context.Context, launched capture) error {
 	timeout := time.NewTimer(firstPaintTimeout)
 	defer timeout.Stop()
 	select {
-	case <-term.Painted():
-	case <-term.Done():
-		return fmt.Errorf("the program exited (status %d) before its first paint", term.ExitCode())
+	case <-launched.Painted():
+	case <-launched.Done():
+		return fmt.Errorf("%w before its first paint", launched.exitError())
 	case <-timeout.C:
 		return fmt.Errorf("the program did not paint within %s of its launch", firstPaintTimeout)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	return engine.New(term, r.resolver).Run(ctx, r.board.Beats)
+	return engine.New(launched, r.resolver).Run(ctx, r.board.Beats)
 }
 
 // endTake ends the take after the last beat, or the failed one, and returns it. The program is
 // first given up to the settle timeout to fall idle, so what it had in flight reaches the take;
-// then the take is frozen, so nothing it paints on its way out is kept; then it is quit the way a
-// person quits it, so it can save its state, and killed with its whole process group when it has
-// not left by the kill timeout. A cancelled ctx skips the waits and goes straight to the kill.
-func (r recorder) endTake(ctx context.Context, term *terminal.Terminal) *take.Take {
+// then the take is frozen, so nothing it paints on its way out is kept; then the capture is
+// finished: a program in a pty is quit the way a person quits it, so it can save its state, and
+// killed with its whole process group when it has not left by the kill timeout. A cancelled ctx
+// skips the waits and goes straight to the kill.
+func (r recorder) endTake(ctx context.Context, launched capture) *take.Take {
 	end := r.cfg.End
 	if ctx.Err() == nil {
-		term.Settle(ctx, end.Idle, end.SettleTimeout)
+		launched.Settle(ctx, end.Idle, end.SettleTimeout)
 	}
-	term.Freeze()
-	if ctx.Err() == nil {
-		term.Quit(r.quitKeys, quitKeyGap, end.KillAfter)
-	}
-	return term.Close()
+	launched.Freeze()
+	return launched.finish(ctx)
 }

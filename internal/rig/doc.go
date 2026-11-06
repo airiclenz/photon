@@ -24,6 +24,7 @@
 //   - doc.go: this package comment and file map.
 //   - record.go: [Record]: reset, services, launch, first paint, beats, end of take, save, check,
 //     on_success.
+//   - capture.go: the seam a take's capture sits behind, and its terminal adapter.
 //   - setup.go: [Setup], the work dir, and running one of the rig's commands.
 //   - env.go: the launch's env: the strip globs, `launch.env` expansion and photon's own variables.
 package rig
