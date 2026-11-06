@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - The render pipeline draws a snapshot of a take with an image layer from that layer's frame instead of rasterizing its cells; terminal renders are unchanged.
-- `photon.yaml` accepts `launch.url` (an http or https page, `${NAME}` expanded from the launch env) as the alternative to `launch.command`, with an optional `launch.browser`, and `areas.<name>.selector` for an area taken from a CSS selector's box. A url launch refuses `launch.strip` and anchor `offset`.
+- `photon.yaml` accepts `launch.url` (an http or https page, `${NAME}` expanded from the launch env) as the alternative to `launch.command`, with an optional `launch.browser`, and `areas.<name>.selector` for an area taken from a CSS selector's box. A url launch refuses anchor `offset`; `launch.strip` works with either launch kind and, with `launch.url`, removes its globs from the browser's environment.
 - A storyboard can describe a page instead of a terminal: `frame.viewport: {width, height}` in CSS pixels and an optional `frame.device_scale` (1..4, default 1) replace `cols`, `rows`, `padding`, `font_size` and `line_height`, and a target (click, drag point, camera position) may name a CSS `selector` instead of `text`. `photon lint` requires the viewport with `launch.url` and refuses the viewport, device scale and selector targets with `launch.command`. On such a frame a camera `cell` is a CSS pixel inside the viewport, and a caption's size defaults to 16 CSS pixels.
 - `photon lint` checks a `launch.url` clip without starting a browser: it lays the captions out on the viewport, a caption's `font.size` in CSS pixels drawn at `font.size` × `frame.device_scale` × `frame.scale`, and loads no terminal font. The README's Targets and areas section now describes how selector targets, selector areas, text targets and anchor bands read a page.
 - `photon.yaml` refuses an area whose `selector` key is present but empty (`areas.<name>: selector: want a CSS selector, got ""`) instead of loading it as a whole-screen area; an area without the key is still a whole-screen or edge area.
@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `photon tune`'s picker on a browser take also proposes a selector target when the picked text lies in a recorded box of one of the clip's selectors (the smallest box, with its `nth`); **Use selector target** switches to it before **Set as position target** or a copy.
 - A new example, `examples/tune-page`, films `photon tune`'s own page: `photon setup` builds photon and records a take of `examples/hello`, and each take serves `photon tune` on a copy of the hello storyboard in the work dir, then plays, scrubs, drags beat 1's end and saves, with every expect passing. Its `ship` path is `docs/media/tune-page.gif`.
 - The README shows `photon tune`'s page as photon films it, `docs/media/tune-page.gif`, rendered from the `examples/tune-page` example, and says how to film it again.
+- A url launch's browser now runs with exactly the env photon builds for the launch; variables from photon's own environment no longer leak into it on top.
+- `photon tune` opens on a terminal take under a `launch.url` clip instead of failing to start: the take-size problem stands on the clip, telling to re-record the take with `photon record`, and the page has no preview to show.
+- `photon tune`'s page says "No preview — the take does not fit this clip; re-record it with `photon record`." in place of the picture when the clip cannot draw the take, and asks for no frames; the frame, camera and pick routes answer 409 then, and `/api/state` carries `preview`.
 
 ## [0.3.0] - 2026-11-06
 
