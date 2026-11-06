@@ -48,7 +48,9 @@ exports the GIF itself. `photon render --watch` re-renders on change, and long c
 - progress output on the `photon render` CLI
 - serialising a tune export against a concurrent `photon render` from a terminal
 
-## 1. Take load benchmark
+## 1. Take load benchmark — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): baseline on the Pi 5 host, `GOMEMLIMIT=2GiB go test ./internal/take -bench BenchmarkLoad -run '^$' -benchtime 3x`: BenchmarkLoad-4 6074185242 ns/op, 721321069 B/op, 4300746 allocs/op (160×48 take, 600 snapshots)
 
 **What:**
 **Goal:** `go test ./internal/take -bench BenchmarkLoad -run '^$'` measures `take.Load` on a
