@@ -38,10 +38,17 @@ type Take struct {
 
 // Snapshot is what the terminal showed from At (measured from the take's start) until the next
 // snapshot: its cell grid, one slice per row, and its cursor.
+//
+// Its text layer ([Snapshot.Text]) is derived from Cells when it has any; a snapshot without
+// cells carries its text layer as Runs instead. Selectors holds, per selector the clip names, the
+// boxes of the elements it matched when the snapshot was taken, in reading order. A terminal take
+// sets neither Runs nor Selectors.
 type Snapshot struct {
-	At     time.Duration `json:"at"`
-	Cursor Cursor        `json:"cursor"`
-	Cells  [][]Cell      `json:"cells"`
+	At        time.Duration    `json:"at"`
+	Cursor    Cursor           `json:"cursor"`
+	Cells     [][]Cell         `json:"cells"`
+	Runs      []TextRun        `json:"runs,omitempty"`
+	Selectors map[string][]Box `json:"sel,omitempty"`
 }
 
 // Cursor is the cell the terminal's cursor sat on (0-based) and whether the program showed it.

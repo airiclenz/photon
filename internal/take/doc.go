@@ -16,6 +16,8 @@
 //   - doc.go: this package comment and file map.
 //   - take.go: the [Take], its [Snapshot]s and [Cursor], its beat spans ([Take.BeatSpans]) and
 //     its beats matched against the storyboard's ([Take.MatchBeats], [BeatError]).
+//   - text.go: a snapshot's text layer ([Snapshot.Text], [TextRun]) and its grid size
+//     ([Snapshot.Bounds]).
 //   - cell.go: one snapshot [Cell] and its [Color] (default, palette index or RGB).
 //   - event.go: the typed [Event], its [EventKind]s, and the [Box] and [Point] it carries.
 //   - file.go: the versioned take file ([Write], [Read], [Save], [Load]).

@@ -72,7 +72,7 @@ the browser launch, area and selector keys in config and storyboard.
 - `grep -c "grid-surfaces" .capcom/knowledge/extension-model.md .capcom/knowledge/package-layout.md` is ≥ 1 for each.
 **Commit:** `docs(knowledge): record the grid-surfaces decision`
 
-## 2. Give a snapshot a text layer
+## 2. Give a snapshot a text layer — ✅ DONE (2026-11-06)
 
 **What:**
 **Goal:** `take.Snapshot.Text()` returns the snapshot's text layer as `[]take.TextRun` in reading order; a cell snapshot derives one run per row exactly as the target package's row reading does today; a snapshot without cells returns its stored runs; snapshots also carry recorded selector boxes.
