@@ -141,7 +141,9 @@ internal/compose/camera.go — shownAt; internal/compose/camera_test.go — came
 **Commit:** `feat(storyboard): resolve anchors at a cut beat to where the cut lands`
 **Closes:** cut-beat-camera
 
-## 4. Encode mouse buttons and modifiers
+## 4. Encode mouse buttons and modifiers — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the unexported leftButton/motionButton constants are replaced by the exported Button constants (LeftButton, MiddleButton, RightButton) and an unexported motionBit; Mods is a bitset type with Shift/Alt/Ctrl valued as their SGR bits (4/8/16). An empty name between `+` signs (`ctrl+`) is refused as `unknown modifier ""`. doc.go's left-button package wording is left for item 6, per the plan's guard.
 
 **What:**
 **Goal:** `internal/keys` encodes SGR press, motion and release for any of left/middle/right with any of shift/alt/ctrl, and parses the storyboard spellings.

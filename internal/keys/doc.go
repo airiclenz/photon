@@ -8,6 +8,7 @@
 //
 // The file map:
 //   - doc.go: this package comment and file map.
-//   - keys.go: the key-name table ([Lookup], [Names]) and the SGR mouse reports ([Click],
-//     [Release]).
+//   - keys.go: the key-name table ([Lookup], [Names]), the SGR mouse reports ([Click],
+//     [Release], and [MousePress], [MouseMotion], [MouseRelease] for any [Mouse] button and
+//     modifiers) and the storyboard's mouse spellings ([ParseButton], [ParseMods]).
 package keys

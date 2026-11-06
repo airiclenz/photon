@@ -3,6 +3,7 @@ package keys
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // key is one named keystroke and the bytes a terminal sends for it.
@@ -58,12 +59,65 @@ const (
 	releaseFinal = 'm'
 )
 
-// SGR button codes: leftButton is the left mouse button, and motionButton the same button held
-// while the pointer moves — the left button's code plus the motion bit (32).
+// motionBit is the bit an SGR report adds to its button code when the pointer moves with the
+// button held, rather than the button going down.
+const motionBit = 32
+
+// Button is one mouse button, as the SGR report codes it. Its zero value is the left button, so a
+// [Mouse] that names no button presses the left one.
+type Button int
+
+// The mouse buttons photon can press, valued as their SGR button codes.
 const (
-	leftButton   = 0
-	motionButton = 32
+	LeftButton   Button = 0
+	MiddleButton Button = 1
+	RightButton  Button = 2
 )
+
+// Mods is the set of modifier keys held while a mouse button acts, as the bits an SGR report adds
+// to its button code. Its zero value holds no modifier. Combine them with `|`.
+type Mods int
+
+// The modifier keys an SGR mouse report can carry, valued as the bits they add to the button code.
+const (
+	Shift Mods = 4
+	Alt   Mods = 8
+	Ctrl  Mods = 16
+)
+
+// Mouse is the button a mouse report presses and the modifier keys held with it. The zero Mouse is
+// the left button with no modifier — the gesture [Click], [Motion] and [Release] report.
+type Mouse struct {
+	Button Button
+	Mods   Mods
+}
+
+// buttonName is one [Button] and the name a storyboard gives it.
+type buttonName struct {
+	name   string
+	button Button
+}
+
+// buttonNames spells each [Button] the way a storyboard names it, in the order an error lists them.
+var buttonNames = []buttonName{
+	{"left", LeftButton},
+	{"middle", MiddleButton},
+	{"right", RightButton},
+}
+
+// modName is one modifier key and the name a storyboard gives it.
+type modName struct {
+	name string
+	mod  Mods
+}
+
+// modNames spells each modifier the way a storyboard names it — the same names the key table
+// joins with `+` (`shift+tab`, `alt+up`, `ctrl+c`) — in the order an error lists them.
+var modNames = []modName{
+	{"shift", Shift},
+	{"alt", Alt},
+	{"ctrl", Ctrl},
+}
 
 // Lookup returns the bytes a terminal sends for the named key, and false when the name is not
 // one photon accepts. Names are matched exactly: they are lowercase, and modifiers are joined
@@ -94,17 +148,87 @@ func Names() []string {
 //
 // The press and its [Release] are separate because a terminal sends them separately: a program
 // that ends a drag or a selection on release would be left mid-gesture by a press alone.
-func Click(x, y int) []byte { return sgrMouse(leftButton, x, y, pressFinal) }
+func Click(x, y int) []byte { return MousePress(x, y, Mouse{}) }
 
 // Release returns the release that ends the click [Click] began at the same zero-based cell:
 // the same report, ending in `m`.
-func Release(x, y int) []byte { return sgrMouse(leftButton, x, y, releaseFinal) }
+func Release(x, y int) []byte { return MouseRelease(x, y, Mouse{}) }
 
 // Motion returns the report of the pointer moving onto a zero-based cell with the left button
 // held, as a terminal in SGR mouse mode with button-event tracking (1002) sends it between a
 // [Click] and its [Release]: `ESC [ < 32 ; col ; row M`. Like [Click], it takes the zero-based
 // cell and writes the one-based report; both must be non-negative.
-func Motion(x, y int) []byte { return sgrMouse(motionButton, x, y, pressFinal) }
+func Motion(x, y int) []byte { return MouseMotion(x, y, Mouse{}) }
+
+// MousePress returns the report of mouse's button going down at a zero-based cell with its
+// modifier keys held: `ESC [ < code ; col ; row M`, where code is the button's code (0 left,
+// 1 middle, 2 right) plus 4 for shift, 8 for alt and 16 for ctrl. Like [Click], it takes the
+// zero-based cell and writes the one-based report; both must be non-negative.
+func MousePress(x, y int, mouse Mouse) []byte {
+	return sgrMouse(mouse.code(), x, y, pressFinal)
+}
+
+// MouseMotion returns the report of the pointer moving onto a zero-based cell with mouse's button
+// and modifier keys held, as a terminal with button-event tracking (1002) sends it between a
+// [MousePress] and its [MouseRelease]: the press code plus the motion bit (32), ending in `M`.
+func MouseMotion(x, y int, mouse Mouse) []byte {
+	return sgrMouse(mouse.code()+motionBit, x, y, pressFinal)
+}
+
+// MouseRelease returns the release that ends the press [MousePress] began with the same mouse at
+// a zero-based cell: the press report's code, ending in `m`.
+func MouseRelease(x, y int, mouse Mouse) []byte {
+	return sgrMouse(mouse.code(), x, y, releaseFinal)
+}
+
+// ParseButton returns the [Button] a storyboard names: `left`, `middle` or `right`. The empty
+// name is the left button, so a storyboard that names no button presses the left one; any other
+// name is an error listing the accepted ones. Names are matched exactly, in lowercase.
+func ParseButton(name string) (Button, error) {
+	if name == "" {
+		return LeftButton, nil
+	}
+	at := slices.IndexFunc(buttonNames, func(b buttonName) bool { return b.name == name })
+	if at < 0 {
+		names := make([]string, 0, len(buttonNames))
+		for _, b := range buttonNames {
+			names = append(names, b.name)
+		}
+		return LeftButton, fmt.Errorf("unknown button %q, want one of %s", name, strings.Join(names, ", "))
+	}
+	return buttonNames[at].button, nil
+}
+
+// ParseMods returns the modifier keys a storyboard names, joined with `+` (`ctrl+shift`) from
+// `shift`, `alt` and `ctrl`, the names the key table uses. The empty spelling holds no modifier;
+// an unknown name, an empty one between `+` signs, or a name given twice is an error. Names are
+// matched exactly, in lowercase, and their order does not matter.
+func ParseMods(spelling string) (Mods, error) {
+	if spelling == "" {
+		return 0, nil
+	}
+	var mods Mods
+	for name := range strings.SplitSeq(spelling, "+") {
+		at := slices.IndexFunc(modNames, func(m modName) bool { return m.name == name })
+		if at < 0 {
+			names := make([]string, 0, len(modNames))
+			for _, m := range modNames {
+				names = append(names, m.name)
+			}
+			return 0, fmt.Errorf("unknown modifier %q, want one of %s", name, strings.Join(names, ", "))
+		}
+		mod := modNames[at].mod
+		if mods&mod != 0 {
+			return 0, fmt.Errorf("modifier %q given twice", name)
+		}
+		mods |= mod
+	}
+	return mods, nil
+}
+
+// code is the SGR button code of a press or release with this mouse: the button's code plus the
+// bit of every modifier held.
+func (m Mouse) code() int { return int(m.Button) + int(m.Mods) }
 
 // sgrMouse is the one place the report's shape is written: the button code, the one-based column
 // and row, and the final byte that tells a press or a motion from a release.
