@@ -3,6 +3,7 @@ title: tune fails on a terminal take under a viewport frame
 status: open
 type: bug
 priority: 3
+plan: 2026-11-06 - 05 - url-env-and-tune-preview-plan
 created: 2026-11-06T20:12:42Z
 ---
 
