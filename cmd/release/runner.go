@@ -16,7 +16,7 @@ import (
 // through this seam.
 // What the verbs ask of the photon checkout and its GitHub repository goes through the repo seam
 // (repo.go) instead, whose execRepo is the one caller of the runner with that argv, and what they
-// ask of the tap and the bucket through the channelRepos seam (channelrepos.go), whose
+// ask of the package channels' repositories through the channelRepos seam (channelrepos.go), whose
 // execChannelRepos is the one caller with theirs; the runner itself carries the toolchain, dist's
 // read of its source tree's commit time, brew and the released binaries the smoke test runs.
 type runner interface {

@@ -240,7 +240,9 @@ internal/compose/doc.go — cursor paragraph; README.md — "Sections and cursor
 **Commit:** `feat(compose): draw the cursor through a drag's via points`
 **Closes:** drag-action-options
 
-## 8. List channel directories and the account's open pull requests
+## 8. List channel directories and the account's open pull requests — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the viewer query's answer shape is a named type (`viewerOpenPullsAnswer`) and the directory entry type a constant (`contentsDirType`), where the source inlined both; the source's `wingetPull`/`wingetViewerPull` test helpers are ported as `searchedPullsAnswer`/`viewerPullsAnswer` in channelrepos_test.go with literal repo strings, so no winget identifier lands before item 9/10.
 
 **What:**
 **Goal:** `channelRepos` can list a directory of a channel repo and the signed-in account's open pull requests against it, in the gh-backed and in-memory implementations.

@@ -17,11 +17,10 @@
 // three seams carry the tests' fakes. What it asks of the photon
 // checkout and its GitHub repository goes through the repo seam (repo.go): the verbs' tests hold
 // that state in memRepo and never fake an own-repo command by argv, which only execRepo's own
-// tests pin. What it asks of the package channels' repositories — the tap and the bucket — goes
-// through the channelRepos seam (channelrepos.go) the same way: the verbs' tests hold them in
-// memChannelRepos, and only execChannelRepos' own tests pin its argv. The runner's fakes answer
-// the toolchain, dist's read of its source tree's commit time, brew and the released binaries the
-// smoke test runs.
+// tests pin. What it asks of the package channels' repositories goes through the channelRepos
+// seam (channelrepos.go) the same way: the verbs' tests hold them in memChannelRepos, and only
+// execChannelRepos' own tests pin its argv. The runner's fakes answer the toolchain, dist's read
+// of its source tree's commit time, brew and the released binaries the smoke test runs.
 //
 // It is a dev tool, never a release asset: dist does not ship it, and its production code imports
 // nothing from photon's internal packages (only docmap_test.go uses internal/testkit).
@@ -31,7 +30,7 @@
 // Every non-test file of the package, with its responsibility. TestDocMap (docmap_test.go) fails
 // when a file is missing from this map.
 //
-//   - `channelrepos.go` — the channelRepos seam over the tap and bucket repositories, and
+//   - `channelrepos.go` — the channelRepos seam over the package channels' repositories, and
 //     execChannelRepos
 //   - `channels.go` — the helpers the package channels share: publishing a generated file to a
 //     channel repository, judging the version it pins
