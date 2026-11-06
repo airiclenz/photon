@@ -3,6 +3,7 @@ title: A url-launch rebuild drops the page frame caches
 status: open
 type: task
 priority: 3
+plan: 2026-11-06 - 06 - page-pipeline-cache-reuse-plan
 created: 2026-11-06T20:12:42Z
 ---
 
