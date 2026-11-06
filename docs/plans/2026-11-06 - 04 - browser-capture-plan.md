@@ -289,7 +289,14 @@ NOTES (2026-11-06): consequential edit — README.md: made necessary by CheckFra
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/render/`, then `GOMEMLIMIT=2GiB go test ./internal/tune/`, then `./internal/storyboard/`
 **Commit:** `feat(render): check a browser take's grid against its viewport`
 
-## 15. Render a browser take
+## 15. Render a browser take — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the unit rides on a new `compose.Layout.DeviceScale` field (0 reads as 1), multiplied last in `compose.Output` so a terminal's unit is bit-identical and a page's equals `pageOutput`'s exactly; `pageLayout` and `pageOutput` in check.go are untouched (check_test pins `pageLayout`'s value), and render's `composedPageLayout` sets the device scale on it.
+NOTES (2026-11-06): `newCompositor` now takes the layout instead of the rasterizer; a url clip whose take has no image layer fails `Build` with `errNoImageLayer` ("the take holds no image layer to draw the page's frames from — re-record it"); a url pipeline's caches are not taken over on Reuse (only its image layer decoder and caption faces), and `canReuseRasters` refuses a previous pipeline without a rasterizer.
+NOTES (2026-11-06): consequential edit — internal/render/doc.go: made necessary by the url branch in Build (the package comment says a url clip builds no rasterizer).
+NOTES (2026-11-06): consequential edit — internal/compose/doc.go: made necessary by Layout.DeviceScale (the cursor's size is now also scaled by a page's device scale).
+NOTES (2026-11-06): consequential edit — README.md: made necessary by `photon render` now rendering a `launch.url` clip (the command table's render row).
+NOTES (2026-11-06): retry — rewrapped the Build doc comment's error paragraph in internal/render/pipeline.go to 100 columns (it also joins the paragraph's pre-existing short line "schedule. When a").
 
 **What:**
 **Goal:** `photon render` turns a browser take into a GIF with camera moves, a zoom and a caption; no terminal font or rasterizer is loaded for a url-launch clip; captions and the drawn cursor are the size lint lays out; terminal renders are byte-identical.

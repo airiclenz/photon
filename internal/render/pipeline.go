@@ -49,6 +49,10 @@ type RasterCache interface {
 // the shipped size, with the camera's view over it ([Pipeline.ViewAt]) and each position's aim
 // ([Pipeline.PositionCell]).
 //
+// A url-launch clip's pipeline builds no rasterizer and loads no terminal font: every snapshot is
+// its take's image layer frame, laid out by its [composedPageLayout] at frame.scale, and its
+// drafts are those frames, kept in the draft cache and scaled by the draft composition.
+//
 // A pipeline [Build] could not finish holds its schedule and the error that stopped it: its
 // frame methods return that error, [Pipeline.Cell], [Pipeline.FullViewCell],
 // [Pipeline.ViewAt] and [Pipeline.PositionCell] report nothing, [Pipeline.Rect] and
@@ -113,13 +117,15 @@ type BuildOptions struct {
 // cache along with its rasterizer; with options.DraftCache set, the exact stage stands in when it
 // already draws at the shipped frame's size, and otherwise the reused pipeline's draft rasterizer
 // and draft cache are taken over or a draft rasterizer draws at that size into it; the caption
-// fonts are loaded only when options.Reuse holds none that match (see [BuildOptions]).
+// fonts are loaded only when options.Reuse holds none that match (see [BuildOptions]). A
+// url-launch clip builds no rasterizer: its snapshots are drawn from the take's image layer into
+// options.Cache, and its drafts into options.DraftCache.
 //
 // It fails with a nil pipeline when the frame sizes differ ([ErrTakeSize]) or the take does not
-// schedule. When a
-// later stage fails — a font or an area that does not load, a target not on screen, a caption
-// that does not lay out — it returns that error together with a partial pipeline whose
-// [Pipeline.Schedule] is set. Errors are returned as their stage reports them, unwrapped.
+// schedule. When a later stage fails — a font or an area that does not load, a target not on
+// screen, a caption that does not lay out, a url-launch clip's take without an image layer — it
+// returns that error together with a partial pipeline whose [Pipeline.Schedule] is set. Errors
+// are returned as their stage reports them, unwrapped.
 func Build(
 	loaded *clip.Clip,
 	takePath string,
@@ -144,21 +150,11 @@ func Build(
 	return built, nil
 }
 
-// buildFrames builds the rasterizer, the draft rasterizer from it, the caption faces, the target
-// resolver and the compositor over the pipeline's clip, taking from previous what it can reuse,
-// and keeps every stage or none. The two rasterizers share one load of the terminal fonts.
+// buildFrames builds the frame sources, the caption faces, the target resolver and the
+// compositor over the pipeline's clip, taking from previous what it can reuse, and keeps every
+// stage or none.
 func (p *Pipeline) buildFrames(previous *Pipeline) error {
-	faces := sync.OnceValues(func() (fonts.Set, error) { return loadTerminalFaces(p.loaded) })
-	rasterizer, cache, err := p.rastersFrom(previous, faces)
-	if err != nil {
-		return err
-	}
-	draftAt, err := p.draftGeometryFrom(previous, faces, rasterizer)
-	if err != nil {
-		return err
-	}
-	draftRasterizer, draftCache, err := p.draftRastersFrom(
-		previous, faces, draftAt, rasterizer, cache)
+	sources, err := p.sourcesFrom(previous)
 	if err != nil {
 		return err
 	}
@@ -171,14 +167,79 @@ func (p *Pipeline) buildFrames(previous *Pipeline) error {
 		return err
 	}
 	compositor, err := newCompositor(
-		p.loaded, p.recorded, p.schedule, rasterizer, resolver, captionFaces)
+		p.loaded, p.recorded, p.schedule, sources.layout, resolver, captionFaces)
 	if err != nil {
 		return err
 	}
-	p.rasterizer, p.cache = rasterizer, cache
-	p.draftRasterizer, p.draftCache, p.draftGeometry = draftRasterizer, draftCache, draftAt
+	p.rasterizer, p.cache = sources.rasterizer, sources.cache
+	p.draftRasterizer, p.draftCache = sources.draftRasterizer, sources.draftCache
+	p.draftGeometry = sources.draftGeometry
 	p.captionFaces, p.compositor = captionFaces, compositor
 	return nil
+}
+
+// frameSources is what draws a pipeline's snapshots and where their cells sit: the exact and
+// draft rasterizers with their caches and the draft geometry, and the layout the compositor
+// plans over. A url-launch clip has no rasterizer, its snapshots drawn from the take's image
+// layer.
+type frameSources struct {
+	rasterizer      *raster.Rasterizer
+	cache           RasterCache
+	draftRasterizer *raster.Rasterizer
+	draftCache      RasterCache
+	draftGeometry   raster.Geometry
+	layout          compose.Layout
+}
+
+// errNoImageLayer is a url-launch clip's take without an image layer, which its frames are
+// drawn from.
+var errNoImageLayer = errors.New(
+	"the take holds no image layer to draw the page's frames from — re-record it")
+
+// sourcesFrom returns the frame sources of p's clip. A url-launch clip's are the take's image
+// layer, with p's caches and its [composedPageLayout], so it builds no rasterizer and loads no
+// terminal font; it fails when the take has no image layer. A command-launch clip's are
+// [Pipeline.rasterSourcesFrom].
+func (p *Pipeline) sourcesFrom(previous *Pipeline) (frameSources, error) {
+	if !p.loaded.Config.IsBrowser() {
+		return p.rasterSourcesFrom(previous)
+	}
+	if p.images == nil {
+		return frameSources{}, errNoImageLayer
+	}
+	return frameSources{
+		cache:      p.cache,
+		draftCache: p.draftCache,
+		layout:     composedPageLayout(p.loaded.Storyboard.Frame),
+	}, nil
+}
+
+// rasterSourcesFrom builds the rasterizer and the draft rasterizer from it, taking from previous
+// what it can reuse, with the [cellLayout] of the exact rasterizer. The two rasterizers share one
+// load of the terminal fonts.
+func (p *Pipeline) rasterSourcesFrom(previous *Pipeline) (frameSources, error) {
+	faces := sync.OnceValues(func() (fonts.Set, error) { return loadTerminalFaces(p.loaded) })
+	rasterizer, cache, err := p.rastersFrom(previous, faces)
+	if err != nil {
+		return frameSources{}, err
+	}
+	draftAt, err := p.draftGeometryFrom(previous, faces, rasterizer)
+	if err != nil {
+		return frameSources{}, err
+	}
+	draftRasterizer, draftCache, err := p.draftRastersFrom(
+		previous, faces, draftAt, rasterizer, cache)
+	if err != nil {
+		return frameSources{}, err
+	}
+	return frameSources{
+		rasterizer:      rasterizer,
+		cache:           cache,
+		draftRasterizer: draftRasterizer,
+		draftCache:      draftCache,
+		draftGeometry:   draftAt,
+		layout:          cellLayout(p.loaded.Storyboard.Frame, p.recorded, rasterizer),
+	}, nil
 }
 
 // rastersFrom returns the exact rasterizer and the cache its rasters are kept in: previous's
@@ -260,9 +321,10 @@ func (p *Pipeline) draftRastersFrom(
 
 // canReuseRasters says previous built in full over the same take with a rasterizer p's clip
 // would build alike — the same raster geometry, terminal fonts and theme — so its rasterizer
-// draws p's snapshots as p's own would and the rasters in its cache hold for p.
+// draws p's snapshots as p's own would and the rasters in its cache hold for p. A url-launch
+// clip's pipeline holds no rasterizer to reuse.
 func (p *Pipeline) canReuseRasters(previous *Pipeline) bool {
-	if !p.drawsAlike(previous) {
+	if !p.drawsAlike(previous) || previous.rasterizer == nil {
 		return false
 	}
 	return rasterGeometry(previous.loaded.Storyboard.Frame) ==
@@ -421,11 +483,11 @@ func (p *Pipeline) FullFrameAt(out time.Duration) (*image.RGBA, error) {
 // DraftAt returns a draft of the frame at output time out, of [Pipeline.Size] and with the same
 // cursor and captions as [Pipeline.FrameAt]'s: the snapshot on screen then, rasterized at the
 // draft geometry or taken from the draft cache, composed at out by
-// [compose.Compositor.ComposeDraft]. Built
-// without a draft cache it returns [Pipeline.FrameAt]'s frame. It fails as [Pipeline.FrameAt]
-// does.
+// [compose.Compositor.ComposeDraft]; a take drawn from its image layer keeps the layer's frame in
+// the draft cache and the composition scales it. Built without a draft cache it returns
+// [Pipeline.FrameAt]'s frame. It fails as [Pipeline.FrameAt] does.
 func (p *Pipeline) DraftAt(out time.Duration) (*image.RGBA, error) {
-	if p.draftRasterizer == nil {
+	if p.draftCache == nil {
 		return p.FrameAt(out)
 	}
 	index, err := p.screenIndexAt(out)
@@ -442,10 +504,10 @@ func (p *Pipeline) DraftAt(out time.Duration) (*image.RGBA, error) {
 // FullDraftAt returns a draft of the full view at output time out, of [Pipeline.Size] and with
 // the same cursor and captions as [Pipeline.FullFrameAt]'s: the snapshot on screen then,
 // rasterized at the draft geometry or taken from the draft cache, composed at out by
-// [compose.Compositor.ComposeFullDraft]. Built without a draft cache it returns
-// [Pipeline.FullFrameAt]'s frame. It fails as [Pipeline.FrameAt] does.
+// [compose.Compositor.ComposeFullDraft], as [Pipeline.DraftAt] draws it. Built without a draft
+// cache it returns [Pipeline.FullFrameAt]'s frame. It fails as [Pipeline.FrameAt] does.
 func (p *Pipeline) FullDraftAt(out time.Duration) (*image.RGBA, error) {
-	if p.draftRasterizer == nil {
+	if p.draftCache == nil {
 		return p.FullFrameAt(out)
 	}
 	index, err := p.screenIndexAt(out)

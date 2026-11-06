@@ -36,6 +36,10 @@
 // exact stage, while the take, the draft geometry, the terminal fonts and the theme match, and a
 // draft stage that was the exact stage only along with that exact stage; and its caption faces
 // while the caption font files do, so a rebuild after an edit loads no caption font again.
+// A url-launch clip builds no rasterizer and loads no terminal font: each snapshot is its take's
+// image layer frame, laid out one cell per CSS pixel at frame.device_scale × frame.scale, the
+// cursor and the captions sized in CSS pixels as [CheckCaptions] lays them out, and its drafts are
+// those frames kept in the draft cache.
 //
 // A storyboard is checked in three tiers. The static tier is [storyboard.Parse]: every rule the
 // file alone decides. The font-bound tier is [CheckCaptions]: the captions laid out with the

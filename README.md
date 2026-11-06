@@ -161,7 +161,7 @@ storyboard's folder. Each command's `--help` says the same as this section.
 | `photon setup <storyboard>` | Creates the work dir and runs the config's `setup` once. |
 | `photon record <storyboard>` | Records one take to `<work>/<clip>.take`, checks it and prints the check table. |
 | `photon check <storyboard> [<take>]` | Checks a take (default `<work>/<clip>.take`) against the storyboard's expects and prints the check table. |
-| `photon render <storyboard> [<take>]` | Renders a take (default `<work>/<clip>.take`) to the GIF at the storyboard's `ship` path. |
+| `photon render <storyboard> [<take>]` | Renders a take (default `<work>/<clip>.take`) to the GIF at the storyboard's `ship` path. On a `launch.url` clip each frame is the page as recorded, with no terminal font loaded; the camera, the cursor and the captions are drawn over it, a caption's `font.size` in CSS pixels as `photon lint` lays it out. |
 | `photon tune <storyboard> [<take>]` | Serves a page on `127.0.0.1` to tune the storyboard's timing, camera positions and zooms, and frame against a take (default `<work>/<clip>.take`), and saves the edits back into the storyboard. Runs until Ctrl-C. |
 | `photon version` | Prints photon's build string, such as `photon 1.0.0 (a1b2c3d)`: the version, the commit it was built from and `, dirty` when that tree had uncommitted changes; `photon 1.0.0` alone when the binary carries no VCS info. `photon --version` does the same. |
 

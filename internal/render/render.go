@@ -305,24 +305,32 @@ func loadCaptionFaces(loaded *clip.Clip) (fonts.CaptionSet, error) {
 	return fonts.LoadCaption(loaded.Config.CaptionFont.Regular, loaded.Config.CaptionFont.Bold)
 }
 
-// newCompositor plans the camera, the cursor and the captions over the take's cell layout,
-// resolving the camera positions' text targets through resolver, clearing a zoomed frame to the
-// theme background and drawing captions in captionFaces. The rasterizer must be one built at the
-// clip's [rasterGeometry], so the layout matches the frames it draws. It fails when a position's
-// text target does not resolve on the screen shown at its start, under camera.positions[i], and
-// when a caption cannot be laid out.
+// newCompositor plans the camera, the cursor and the captions over layout — where the take's
+// cells sit in the frames the pipeline draws, the [cellLayout] of its rasterizer for a terminal
+// or the [composedPageLayout] of a url-launch clip — resolving the camera positions' text targets
+// through resolver, clearing a zoomed frame to the theme background and drawing captions in
+// captionFaces. It fails when a position's text target does not resolve on the screen shown at
+// its start, under camera.positions[i], and when a caption cannot be laid out.
 func newCompositor(
 	loaded *clip.Clip,
 	recorded *take.Take,
 	clipSchedule *schedule.Schedule,
-	rasterizer *raster.Rasterizer,
+	layout compose.Layout,
 	resolver target.Resolver,
 	captionFaces fonts.CaptionSet,
 ) (*compose.Compositor, error) {
-	layout := cellLayout(loaded.Storyboard.Frame, recorded, rasterizer)
 	background := loaded.Config.Theme.BG.RGBA()
 	return compose.New(
 		loaded.Storyboard, recorded, clipSchedule, resolver, layout, background, captionFaces)
+}
+
+// composedPageLayout is the layout a url-launch clip of frame is composed over: its [pageLayout]
+// with the device scale set to frame.device_scale, so the compositor's unit is [pageOutput]'s and
+// the captions and the cursor come out the size [CheckCaptions] lays them out at.
+func composedPageLayout(frame storyboard.Frame) compose.Layout {
+	layout := pageLayout(frame)
+	layout.DeviceScale = frame.Scaling()
+	return layout
 }
 
 // cellLayout is where the cells of frame sit in the frames rasterizer draws, which must be one

@@ -274,6 +274,43 @@ func TestRunWritesAGIFOfTheScheduledLength(t *testing.T) {
 	}
 }
 
+// TestRunRendersAURLClip renders a take recorded from a page for real, under a storyboard with
+// a camera position, a zoom and a caption: the GIF runs the beats' summed durations at the
+// frame's width and as tall as the viewport's aspect keeps it.
+func TestRunRendersAURLClip(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath(ffmpegProgram); err != nil {
+		t.Skip("ffmpeg is not on PATH")
+	}
+	loaded := loadRenderClipWith(t, pageConfig, pageCameraStoryboard)
+	gifPath := filepath.Join(t.TempDir(), "page.gif")
+	options := Options{Take: savePageTake(t, t.TempDir()), Out: gifPath}
+	var stdout, stderr bytes.Buffer
+
+	err := Run(context.Background(), loaded, options, &stdout, &stderr)
+
+	if err != nil {
+		t.Fatalf("Run: %v\n%s", err, stderr.String())
+	}
+	if first := strings.SplitN(stdout.String(), "\n", 2)[0]; !strings.HasPrefix(first, gifPath+"  ") ||
+		!strings.HasSuffix(first, "  2.5s") {
+		t.Errorf("summary: want `<path>  <size>  2.5s`, got:\n%s", stdout.String())
+	}
+	decoded := decodeGIF(t, gifPath)
+	var centiseconds int
+	for _, delay := range decoded.Delay {
+		centiseconds += delay
+	}
+	got := time.Duration(centiseconds) * 10 * time.Millisecond
+	if got < wantLength-frameSlack || got > wantLength+frameSlack {
+		t.Errorf("GIF length: want %s within a frame, got %s over %d frame(s)", wantLength, got, len(decoded.Delay))
+	}
+	// The 160×100 viewport ships 160 pixels wide.
+	if size := decoded.Image[0].Bounds().Size(); size != image.Pt(wantWidth, 100) {
+		t.Errorf("GIF size: want %v, got %v", image.Pt(wantWidth, 100), size)
+	}
+}
+
 // wantFrames is how many frames the clip streams per pass: its 2.5s at the storyboard's 10 fps.
 const wantFrames = 25
 

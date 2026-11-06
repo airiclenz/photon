@@ -20,12 +20,15 @@ import (
 
 // Layout is where the grid's cells sit in a rasterized frame: the frame's pixel Size, the
 // Padding around the grid, one Cell's pixel size and the Scale the frame was rasterized at (0
-// reads as the design scale, 2).
+// reads as the design scale, 2). DeviceScale is how many pixels of a page's capture one of its
+// CSS pixels spans before Scale, so that a design pixel — a caption's or the cursor's — is a CSS
+// pixel of the page; 0 reads as 1, as for a terminal's frame.
 type Layout struct {
-	Size    image.Point
-	Padding int
-	Cell    take.CellSize
-	Scale   int
+	Size        image.Point
+	Padding     int
+	Cell        take.CellSize
+	Scale       int
+	DeviceScale float64
 }
 
 // pointF is a fractional pixel position.
@@ -148,9 +151,9 @@ func New(
 // Output is the shipped frame a source frame laid out as layout scales to at width: its pixel
 // size, width wide and as tall as keeps the source's aspect, and its unit — how many shipped
 // pixels one design pixel spans: the source frame's scale against the design scale, times the
-// downscale to width. The zoom never enters the unit, so the cursor and the captions keep their
-// size however far the frame pushes in. It fails on a layout with no size and a width that is
-// not positive.
+// downscale to width and its device scale. The zoom never enters the unit, so the cursor and the
+// captions keep their size however far the frame pushes in. It fails on a layout with no size
+// and a width that is not positive.
 func Output(layout Layout, width int) (size image.Point, unit float64, err error) {
 	if layout.Size.X <= 0 || layout.Size.Y <= 0 || layout.Cell.W <= 0 || layout.Cell.H <= 0 {
 		return image.Point{}, 0, fmt.Errorf("compose: invalid cell layout %+v", layout)
@@ -163,7 +166,11 @@ func Output(layout Layout, width int) (size image.Point, unit float64, err error
 	if scale <= 0 {
 		scale = designScale
 	}
-	unit = float64(scale) / designScale * float64(width) / float64(layout.Size.X)
+	deviceScale := layout.DeviceScale
+	if deviceScale <= 0 {
+		deviceScale = 1
+	}
+	unit = float64(scale) / designScale * float64(width) / float64(layout.Size.X) * deviceScale
 	return image.Pt(width, height), unit, nil
 }
 

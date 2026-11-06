@@ -26,8 +26,9 @@
 // from the press cell through each via point to the drag's final move, one segment per leg over
 // the span between their moves, sits at the release cell and rings again on the release, never
 // on a move or a via point. It fades out after the beat's last press
-// or release. Its size is fixed in design pixels, scaled only by the frame's raster scale and the
-// downscale to the shipped width, never by the zoom. A click or drag inside a cut beat draws
+// or release. Its size is fixed in design pixels, scaled only by the frame's raster scale, a
+// page's device scale ([Layout].DeviceScale) and the downscale to the shipped width, never by the
+// zoom. A click or drag inside a cut beat draws
 // nothing.
 //
 // The captions are a [caption.Layer] that [New] builds from the storyboard and the caption
