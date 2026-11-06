@@ -1,11 +1,13 @@
 ---
 title: Edit cols, rows and max_colors in tune
-status: open
+status: done
 type: task
 priority: 2
 labels: [tune]
 plan: 2026-11-06 - 01 - tune-editing-plan
 created: 2026-11-06T07:11:17Z
+closed: 2026-11-06T10:52:28Z
+reason: "Resolved by plan 2026-11-06 - 01 - tune-editing-plan (archived 5f51cdf): items 1-5 make cols, rows and max_colors edit fields with loader rules, preview at the take's size with a re-record problem, and edit them in the clip panel."
 ---
 
 `photon tune` cannot edit the clip's `cols`, `rows` or `max_colors`; they must be changed in the

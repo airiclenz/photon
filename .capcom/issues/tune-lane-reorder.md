@@ -1,11 +1,13 @@
 ---
 title: Reorder lane entries by dragging in tune
-status: open
+status: done
 type: task
 priority: 2
 labels: [tune]
 plan: 2026-11-06 - 01 - tune-editing-plan
 created: 2026-11-06T07:11:17Z
+closed: 2026-11-06T10:52:28Z
+reason: "Resolved by plan 2026-11-06 - 01 - tune-editing-plan (archived 5f51cdf): items 6-7 give captions one lane row each and a vertical drag sends caption.move; refused moves report and leave the file unchanged (captions only, as ratified 2026-11-06)."
 ---
 
 In `photon tune`, entries on a timeline lane can be dragged along the clock but not reordered
