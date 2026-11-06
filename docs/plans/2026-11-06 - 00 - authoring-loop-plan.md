@@ -378,7 +378,13 @@ An existing caption edit test still passes on a board with `width` set.
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard`
 **Commit:** `feat(storyboard): accept a caption width`
 
-## 10. Wrap caption text
+## 10. Wrap caption text — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): consequential edit — internal/caption/doc.go: made necessary by newTextBlock now wrapping lines (package comment and file map describe the layout).
+NOTES (2026-11-06): consequential edit — internal/tune/pagejs_test.go: made necessary by wrapping; captionTooWide was the multi-word "too wide " text and its comment calls it wider than the session frame, so it becomes one unbreakable word like tooWideText.
+NOTES (2026-11-06): consequential edit — internal/render/check_test.go: made necessary by wrapping; oversizedCaptionStoryboard's comment calls its multi-word caption wider than the frame, so its text becomes one unbreakable word.
+NOTES (2026-11-06): the wrap tests are TestNewTextBlock_Wrap_KeepsOrBreaksLines, TestNewTextBlock_LongText_WrapsWithinTheMaximum and TestNewTextBlock_Width_NarrowsTheWrap in layout_test.go; the golden is TestDraw_WrappedCaption_MatchesItsGolden (regenerate with `go test ./internal/caption -run Golden -update`). After a break, a line that would start with spaces only keeps the following word on it, so wrapping never emits a blank line.
+NOTES (2026-11-06): retry — rewrapped the package comment paragraph in internal/caption/doc.go so no line passes 100 columns (tab = 4).
 
 **What:**
 **Goal:**

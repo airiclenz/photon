@@ -9,10 +9,10 @@ import (
 )
 
 // oversizedCaptionStoryboard is renderStoryboard with a caption, second in the list, whose box
-// is wider than the 160-pixel frame.
+// is wider than the 160-pixel frame: its text is one word, which no wrap can break.
 const oversizedCaptionStoryboard = renderStoryboard + `captions:
   - {text: one, at: 100ms, for: 700ms}
-  - {text: 'far too wide for this frame', at: 0s, for: 1s, font: {size: 72}}
+  - {text: 'fartoowideforthisframe', at: 0s, for: 1s, font: {size: 72}}
 `
 
 func TestCheckCaptions_CaptionsThatFit_AreClean(t *testing.T) {

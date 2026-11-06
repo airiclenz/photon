@@ -60,8 +60,8 @@ const cameraStoryboard = sessionStoryboard + `camera:
 `
 
 // tooWideText is a caption's text whose box is wider than the session fixture's frame, so the
-// storyboard parses but its pipeline does not build.
-var tooWideText = strings.Repeat("too wide ", 20)
+// storyboard parses but its pipeline does not build: one word, which no wrap can break.
+var tooWideText = strings.Repeat("toowide", 20)
 
 // The session fixture's own values, as sessionStoryboard and sessionTake set them.
 const (

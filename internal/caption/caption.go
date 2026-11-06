@@ -41,9 +41,11 @@ type placed struct {
 // New lays out board's captions on a shipped frame out pixels in size, where one design pixel
 // spans unit shipped pixels (the compositor's unit). It draws each caption's text from faces at
 // an em of its font size × the design scale × unit pixels — the shipped em of the terminal's text
-// at that font size — sizes its box around the text, places the box by place, align and offset or
-// by position, clamps it inside the frame and rasterizes the text, so [Layer.Draw] only
-// composites, showing each caption over the start and stop it carries in the colours it carries.
+// at that font size — wraps each line of it at spaces to fit the frame less its edge margins (or
+// the caption's width, when narrower), sizes its box around the text, places the box by place,
+// align and offset or by position, clamps it inside the frame and rasterizes the text, so
+// [Layer.Draw] only composites, showing each caption over the start and stop it carries in the
+// colours it carries.
 //
 // board must be one [storyboard.Parse] returned, so the captions carry their defaults and their
 // resolved start, stop and colours; a caption built as a struct literal never shows. New fails
@@ -88,7 +90,12 @@ func place(
 	if caption.Font.Weight == storyboard.WeightBold {
 		face = faces.Bold
 	}
-	block, err := newTextBlock(face, caption.Font.Size*designScale*unit, caption.Text)
+	block, err := newTextBlock(
+		face,
+		caption.Font.Size*designScale*unit,
+		caption.Text,
+		maxTextWidth(caption.Width, out.X, unit),
+	)
 	if err != nil {
 		return placed{}, err
 	}

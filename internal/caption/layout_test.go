@@ -3,8 +3,11 @@ package caption
 import (
 	"image"
 	"math"
+	"slices"
 	"strings"
 	"testing"
+
+	"golang.org/x/image/math/fixed"
 
 	"github.com/airiclenz/photon/internal/storyboard"
 )
@@ -120,5 +123,87 @@ func TestNew_BoxLargerThanTheFrame_IsRefused(t *testing.T) {
 				t.Errorf("OwnerOf(New error) = %+v, want %+v", got, want)
 			}
 		})
+	}
+}
+
+// wrapTestLines are the lines newTextBlock lays text out in at the test frame's em, the text of
+// a caption whose width is width.
+func wrapTestLines(t *testing.T, text string, width int) ([]string, fixed.Int26_6) {
+	t.Helper()
+	const em = 14 * designScale * testUnit
+	maxWidth := maxTextWidth(width, testOut.X, testUnit)
+	block, err := newTextBlock(loadFaces(t).Regular, em, text, maxWidth)
+	if err != nil {
+		t.Fatalf("newTextBlock: %v", err)
+	}
+	for index, line := range block.lines {
+		if block.widths[index] > maxWidth && strings.Contains(line, " ") {
+			t.Errorf("line %q is %v wide, past the %v maximum", line, block.widths[index], maxWidth)
+		}
+	}
+	return block.lines, maxWidth
+}
+
+func TestNewTextBlock_Wrap_KeepsOrBreaksLines(t *testing.T) {
+	overlongWord := strings.Repeat("W", 120)
+	tests := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{"short text", "Hi", []string{"Hi"}},
+		{"hard line break", "one\ntwo", []string{"one", "two"}},
+		{"fitting double-spaced line", "one  two", []string{"one  two"}},
+		{"fitting indented line", "   indented", []string{"   indented"}},
+		{"overlong word", "a " + overlongWord + " b", []string{"a", overlongWord, "b"}},
+		{"overlong word alone", overlongWord, []string{overlongWord}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lines, _ := wrapTestLines(t, test.text, 0)
+
+			if !slices.Equal(lines, test.want) {
+				t.Errorf("lines = %q, want %q", lines, test.want)
+			}
+		})
+	}
+}
+
+func TestNewTextBlock_LongText_WrapsWithinTheMaximum(t *testing.T) {
+	text := strings.TrimSpace(strings.Repeat("a caption long enough to wrap ", 8))
+	_, frameMax := wrapTestLines(t, text, 0)
+	tests := []struct {
+		name  string
+		width int
+		want  fixed.Int26_6
+	}{
+		{"frame width less the margins", 0, frameMax},
+		{"width 200", 200, fromFloat((200 - 2*boxPaddingX) * testUnit)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lines, maxWidth := wrapTestLines(t, text, test.width)
+
+			if maxWidth != test.want {
+				t.Errorf("maximum text width = %v, want %v", maxWidth, test.want)
+			}
+			if len(lines) < 2 {
+				t.Errorf("lines = %q, want the text wrapped", lines)
+			}
+			if got := strings.Join(lines, " "); got != text {
+				t.Errorf("lines joined = %q, want the text %q", got, text)
+			}
+		})
+	}
+}
+
+func TestNewTextBlock_Width_NarrowsTheWrap(t *testing.T) {
+	text := strings.TrimSpace(strings.Repeat("a caption long enough to wrap ", 8))
+
+	frameLines, _ := wrapTestLines(t, text, 0)
+	narrowLines, _ := wrapTestLines(t, text, 200)
+
+	if len(narrowLines) <= len(frameLines) {
+		t.Errorf("width 200 gives %d lines, want more than the frame's %d", len(narrowLines), len(frameLines))
 	}
 }

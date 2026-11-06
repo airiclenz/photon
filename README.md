@@ -533,7 +533,7 @@ scales it. Captions may overlap one another; one listed later draws over one lis
 
 | Field | Meaning |
 | --- | --- |
-| `text` | Required. The caption's text. Each line of a YAML block (`text: \|`) is a line of the caption. Lines are not wrapped. |
+| `text` | Required. The caption's text. Each line of a YAML block (`text: \|`) is a line of the caption. A line too long to fit wraps at its spaces. |
 | `at` | When the caption appears, in the same two forms as a camera position's `at`: a bare time such as `4500ms`, or `{beat: N, offset: D}`. Leave it out to start at the clip's first frame. |
 | `for`, `until` | When it goes. Set exactly one: `for` is how long it shows, >0; `until` is the moment it ends, in the same forms as `at`. It must end after it starts and by the clip's end. |
 | `font.size` | The text size, in the same unit as `frame.font_size`, 6..72. Default `frame.font_size`, which matches the terminal text's size. |
@@ -546,12 +546,15 @@ scales it. Captions may overlap one another; one listed later draws over one lis
 | `box.color` | The colour of the box behind the text, `#rrggbb`. Default `#000000`. |
 | `box.opacity` | The box's opacity, 0..1. Default `0.6`. `0` draws no box. |
 | `fade.in`, `fade.out` | How long the caption fades in after it appears and out before it goes, ≥0. Default 0, which cuts it in and out. The two together must fit in the caption's length. |
+| `width` | The widest the box may be, in design pixels, ≥0: text wraps to fit it. Default `0`, which lets the box grow to the frame's width less a margin on each side. |
 
-A placed caption sits a margin in from the frame's edge it is placed against, or centred, and is
-then moved by its `offset`. The box pads the text on every side. Whatever its placement, the box
-is kept inside the frame: one that would cross an edge stops at that edge. A caption's box larger
-than the frame is a problem: `photon lint` reports it, laying the captions out with the config's
-fonts, and `photon render` fails on it.
+A line of caption text too long for the box wraps at its spaces, so the box fits the frame less a
+margin on each side, or `width` when that is narrower. A line that fits is kept as written. A word
+too long to fit stays whole on a line of its own. A placed caption sits a margin in from the
+frame's edge it is placed against, or centred, and is then moved by its `offset`. The box pads the
+text on every side. Whatever its placement, the box is kept inside the frame: one that would cross
+an edge stops at that edge. A caption's box larger than the frame is a problem: `photon lint`
+reports it, laying the captions out with the config's fonts, and `photon render` fails on it.
 
 A design pixel is a pixel of the frame drawn at scale 2, before the downscale to `frame.width`.
 photon scales every caption length with the frame, so a caption keeps its size and place against

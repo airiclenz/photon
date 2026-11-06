@@ -1727,7 +1727,7 @@ const (
 	holdPastNext     = "5000"
 )
 
-var captionTooWide = strings.Repeat("too wide ", 20)
+var captionTooWide = strings.Repeat("toowide", 20)
 
 func TestPageJS_EditProblem_ShowsOnItsOwningPanel(t *testing.T) {
 	t.Parallel()

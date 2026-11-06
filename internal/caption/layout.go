@@ -44,9 +44,15 @@ type textBlock struct {
 	baseline    float64
 }
 
-// newTextBlock measures text's lines in face at an em of em pixels. Each line takes the face's
-// line height, its ascent and descent centred in it.
-func newTextBlock(face fonts.Face, em float64, text string) (textBlock, error) {
+// newTextBlock measures text's lines in face at an em of em pixels, wrapping each hard line no
+// wider than maxWidth pixels as [wrapLine] does. Each line takes the face's line height, its
+// ascent and descent centred in it.
+func newTextBlock(
+	face fonts.Face,
+	em float64,
+	text string,
+	maxWidth fixed.Int26_6,
+) (textBlock, error) {
 	drawn, err := opentype.NewFace(face.Font, &opentype.FaceOptions{
 		Size:    em,
 		DPI:     pixelsPerPoint,
@@ -56,7 +62,10 @@ func newTextBlock(face fonts.Face, em float64, text string) (textBlock, error) {
 		return textBlock{}, fmt.Errorf("face %s at %g pixels: %w", face.Name, em, err)
 	}
 
-	block := textBlock{face: drawn, lines: strings.Split(text, "\n")}
+	block := textBlock{face: drawn}
+	for _, hardLine := range strings.Split(text, "\n") {
+		block.lines = append(block.lines, wrapLine(drawn, hardLine, maxWidth)...)
+	}
 	var widest fixed.Int26_6
 	for _, line := range block.lines {
 		width := font.MeasureString(drawn, line)
@@ -72,6 +81,42 @@ func newTextBlock(face fonts.Face, em float64, text string) (textBlock, error) {
 		int(math.Ceil(block.lineAdvance*float64(len(block.lines)))),
 	)
 	return block, nil
+}
+
+// wrapLine splits one hard line of caption text into lines no wider than maxWidth pixels in
+// face. A line that fits comes back unchanged. One that does not is broken greedily at single
+// spaces, each break dropping the space it falls on; a word wider than maxWidth stays whole, alone
+// on its line, and a run of leading spaces stays with the word that follows it.
+func wrapLine(face font.Face, line string, maxWidth fixed.Int26_6) []string {
+	if font.MeasureString(face, line) <= maxWidth {
+		return []string{line}
+	}
+
+	words := strings.Split(line, " ")
+	var wrapped []string
+	current := words[0]
+	for _, word := range words[1:] {
+		candidate := current + " " + word
+		if strings.TrimSpace(current) == "" || font.MeasureString(face, candidate) <= maxWidth {
+			current = candidate
+			continue
+		}
+		wrapped = append(wrapped, current)
+		current = word
+	}
+	return append(wrapped, current)
+}
+
+// maxTextWidth is how wide a caption's text may be, in shipped pixels, on a frame frameWidth
+// pixels wide where one design pixel spans unit pixels: the frame's width less an edge margin on
+// each side, narrowed to width design pixels when width is set (above 0), less the box's padding
+// on each side.
+func maxTextWidth(width, frameWidth int, unit float64) fixed.Int26_6 {
+	boxWidth := float64(frameWidth)/unit - 2*edgeMargin
+	if width > 0 {
+		boxWidth = min(boxWidth, float64(width))
+	}
+	return fromFloat((boxWidth - 2*boxPaddingX) * unit)
 }
 
 // padding is the box's padding around its text in shipped pixels.
