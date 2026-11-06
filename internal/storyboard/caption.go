@@ -12,17 +12,20 @@ import (
 // clock. It sits in output space: the camera neither moves nor scales it.
 //
 // Text holds its lines, separated by \n; [Load] trims one trailing newline, so a YAML block
-// scalar reads as written. The caption starts At and ends after For or at Until, exactly one of
-// the two. It is placed by Place and Align, nudged by Offset, or set by Position — the box's
-// top-left corner — instead of all three. [Load] fills what a valid caption leaves out: Font's
-// size is frame.font_size and its weight regular, Place is bottom and Align middle (unless
-// Position is set, when both stay empty), Color is white and Box is black at 0.6 opacity.
-// Width is the box's outer width in design pixels; zero leaves it automatic.
+// scalar reads as written. Text may style spans of itself with inline tags: [#rrggbb], [bold] or
+// [bold #rrggbb] opens a span, [/] closes it, and [[ is a literal [; spans do not nest.
+//
+// The caption starts At and ends after For or at Until, exactly one of the two. It is placed
+// by Place and Align, nudged by Offset, or set by Position — the box's top-left corner — instead
+// of all three. [Load] fills what a valid caption leaves out: Font's size is frame.font_size and
+// its weight regular, Place is bottom and Align middle (unless Position is set, when both stay
+// empty), Color is white and Box is black at 0.6 opacity. Width is the box's outer width in
+// design pixels; zero leaves it automatic.
 //
 // The authored fields stay as written, defaults filled; [Load] also resolves the caption onto the
-// clip's output clock and its colours, which [Caption.Start], [Caption.Stop],
-// [Caption.TextColor] and [Caption.BoxColor] report. A Caption built as a struct literal rather
-// than loaded reports zero for all four.
+// clip's output clock, its colours and its text's styled runs, which [Caption.Start],
+// [Caption.Stop], [Caption.TextColor], [Caption.BoxColor] and [Caption.Runs] report. A Caption
+// built as a struct literal rather than loaded reports zero for all five.
 type Caption struct {
 	Text     string        `yaml:"text"`
 	At       Moment        `yaml:"at"`
@@ -40,6 +43,7 @@ type Caption struct {
 
 	start, stop         time.Duration
 	textColor, boxColor RGB
+	runs                []Run
 }
 
 // Start is where the caption starts on the clip's output clock: its At, resolved.
@@ -54,6 +58,11 @@ func (c Caption) TextColor() RGB { return c.textColor }
 
 // BoxColor is the colour of the box behind the caption's text: its Box.Color, parsed.
 func (c Caption) BoxColor() RGB { return c.boxColor }
+
+// Runs is the caption's text split into its styled runs, in order: its spans and the unstyled
+// text between them, which carries the caption's own colour and weight. Text without spans is
+// one run.
+func (c Caption) Runs() []Run { return c.runs }
 
 // RGB is an opaque colour, one byte per channel.
 type RGB struct {
@@ -151,12 +160,10 @@ func (s *Storyboard) validateCaptions(collect collector) {
 // validate applies the caption's rules, resolving its times on clock, board's output clock, and
 // its colours, a colour left out resolving to its default. What fails to resolve stays zero.
 func (c *Caption) validate(board *Storyboard, clock OutputClock, report reporter) {
-	if strings.TrimSuffix(c.Text, "\n") == "" {
-		report("text: missing")
-	}
 	c.Font.validate(board.Frame.FontSize, report)
 	c.validatePlacement(report)
 	c.textColor = validateColor("color", cmp.Or(c.Color, defaultCaptionColor), report)
+	c.validateText(report)
 	c.boxColor = c.Box.validate(report)
 	start, stop, isTimed := c.validateTiming(clock, report)
 	if isTimed {
@@ -166,6 +173,23 @@ func (c *Caption) validate(board *Storyboard, clock OutputClock, report reporter
 	if c.Width < 0 {
 		report("width: want ≥0, got %d", c.Width)
 	}
+}
+
+// validateText checks that the caption has text and that its span markup is well formed, and
+// keeps its runs. It reads the text as [Caption.applyDefaults] will leave it, one trailing
+// newline trimmed, so the runs need the caption's text colour resolved first.
+func (c *Caption) validateText(report reporter) {
+	text := strings.TrimSuffix(c.Text, "\n")
+	if text == "" {
+		report("text: missing")
+		return
+	}
+	runs, err := parseRuns(text, c.textColor, cmp.Or(c.Font.Weight, WeightRegular))
+	if err != nil {
+		report("text: %v", err)
+		return
+	}
+	c.runs = runs
 }
 
 // validate checks the font's weight and that its size — its own, or frame.font_size when it has
@@ -281,12 +305,21 @@ func (f Fade) validate(length time.Duration, isTimed bool, report reporter) {
 // validateColor reports a colour not spelled #rrggbb, under the field's name, and returns it
 // parsed; a colour it reports is zero.
 func validateColor(field, color string, report reporter) RGB {
+	parsed, isColor := parseColor(color)
+	if !isColor {
+		report("%s: want #rrggbb, got %q", field, color)
+	}
+	return parsed
+}
+
+// parseColor reads a colour spelled #rrggbb; isColor is false, and the colour zero, for any
+// other spelling.
+func parseColor(color string) (parsed RGB, isColor bool) {
 	value, err := strconv.ParseUint(strings.TrimPrefix(color, "#"), 16, 32)
 	if !hexColor.MatchString(color) || err != nil {
-		report("%s: want #rrggbb, got %q", field, color)
-		return RGB{}
+		return RGB{}, false
 	}
-	return RGB{R: uint8(value >> 16), G: uint8(value >> 8), B: uint8(value)}
+	return RGB{R: uint8(value >> 16), G: uint8(value >> 8), B: uint8(value)}, true
 }
 
 // applyDefaults fills what a valid caption leaves out; frameFontSize is the frame's font size,

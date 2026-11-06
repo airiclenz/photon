@@ -51,7 +51,13 @@ beat, drag buttons/modifiers/waypoints, and the winget and npm release channels.
 or via; a drawn cursor showing button or modifiers; a take format bump; a winget smoke check;
 npm trusted publishing; any version bump.
 
-## 1. Parse caption span markup into runs
+## 1. Parse caption span markup into runs — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the grammar also refuses a `[` with no closing `]` (`tag "[Enter" has no closing ]`), a sixth error beside the five the plan lists plus "no token"; every markup error ends `(write [[ for a literal [)`.
+
+NOTES (2026-11-06): validateColor's #rrggbb parsing moved into a shared parseColor (caption.go) so span colours reuse it; the caption's `text: missing` check now runs after its colour resolves (runs need the text colour), which changes only the order of problems a caption reports.
+
+NOTES (2026-11-06): the styled-caption load test lives in caption_markup_test.go (TestParse_CaptionRuns, which also covers the trailing-newline case) rather than in testdata/every-form.yaml, so every-form's other consumers are untouched.
 
 **What:**
 **Goal:** a caption's `text` may hold span tags; loading turns it into styled runs, refusing malformed markup under `captions[i].text`.

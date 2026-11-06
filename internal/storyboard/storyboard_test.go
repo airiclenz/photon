@@ -186,18 +186,21 @@ func TestLoadEveryForm(t *testing.T) {
 			Fade:  Fade{In: 300 * time.Millisecond, Out: 200 * time.Millisecond},
 			start: 2200 * time.Millisecond, stop: 6 * time.Second,
 			textColor: RGB{R: 0xff, G: 0xcc}, boxColor: RGB{R: 0x20, G: 0x20, B: 0x20},
+			runs: []Run{{Text: "Pick an item\nthen save it", Color: RGB{R: 0xff, G: 0xcc}, Weight: WeightBold}},
 		},
 		{
 			Text: "Saved", At: Moment{Offset: 9 * time.Second}, For: 2 * time.Second,
 			Font: CaptionFont{Size: 14, Weight: WeightRegular}, Position: &Pixels{X: 40, Y: 300},
 			Color: "#ffffff", Box: CaptionBox{Color: "#000000", Opacity: new(0.6)},
 			start: 9 * time.Second, stop: 11 * time.Second, textColor: RGB{R: 0xff, G: 0xff, B: 0xff},
+			runs: []Run{{Text: "Saved", Color: RGB{R: 0xff, G: 0xff, B: 0xff}, Weight: WeightRegular}},
 		},
 		{
 			Text: "Goodbye", At: Moment{Beat: 3, Offset: -time.Second}, For: time.Second,
 			Font: CaptionFont{Size: 14, Weight: WeightRegular}, Place: PlaceBottom, Align: AlignMiddle,
 			Color: "#ffffff", Box: CaptionBox{Color: "#000000", Opacity: new(0.6)},
 			start: 5 * time.Second, stop: 6 * time.Second, textColor: RGB{R: 0xff, G: 0xff, B: 0xff},
+			runs: []Run{{Text: "Goodbye", Color: RGB{R: 0xff, G: 0xff, B: 0xff}, Weight: WeightRegular}},
 		},
 	}
 	if !reflect.DeepEqual(board.Captions, wantCaptions) {

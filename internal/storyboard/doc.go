@@ -63,6 +63,8 @@
 //     length.
 //   - caption.go: a [Caption], its [CaptionFont] and [Weight], [Place], [Align], [Pixels],
 //     [CaptionBox], [Fade] and [RGB], and their rules.
+//   - caption_markup.go: a caption's styled [Run] and the span markup grammar its text is
+//     parsed by: [#rrggbb], [bold], [/] and the [[ escape.
 //   - located.go: a problem's [Owner] and [OwnerKind], the [LocatedError] that carries one,
 //     [AtBeat], [AtPosition], [AtZoom], [AtCaption] and [OwnerOf].
 //   - moment.go: a [Moment] on the clip's output clock and how it decodes.
