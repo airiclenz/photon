@@ -94,12 +94,15 @@ Prebuilt archives are on the [releases page](https://github.com/airiclenz/photon
 `photon_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows) for Linux, macOS and Windows on amd64
 and arm64, with `SHA256SUMS`. Unpack it, put `photon` on your `PATH`, and install ffmpeg yourself.
 
-photon uses two external programs:
+photon uses these external programs:
 
 - **ffmpeg** (needed by `photon render`): encodes the GIF. Get it from your package manager
   (`apt install ffmpeg`, `brew install ffmpeg`, ...).
 - **gifsicle** (optional): if it is on `PATH`, `photon render` shrinks the GIF with a lossless
   `gifsicle -O3` pass.
+- **Chromium or Chrome** (needed by `photon record` on a `launch.url` clip): films the page,
+  headless. photon finds it on `PATH` or where it is usually installed; `launch.browser` names
+  another.
 
 Recording needs a unix pty. `photon setup` and `photon record` run on Linux and macOS only.
 `photon lint`, `photon check`, `photon render` and `photon tune` run everywhere.
@@ -239,12 +242,13 @@ Errors go to stderr as `photon: <error>`.
 1. Creates the work dir and runs the config's `reset` to restore a clean state.
 2. Starts the services (under `--profile` if given) and waits until each is ready.
 3. Launches `launch.command` in a pty of `frame.cols` × `frame.rows` and waits for its first paint.
+   On a url launch it opens `launch.url` in headless Chromium at `frame.viewport` instead.
 4. Runs every beat's actions in order. If an action fails, its beat fails and the take ends.
    Examples: a `wait` times out, or a `click` or `drag` target is not on screen.
 5. Ends the take. It waits until the program paints nothing for `end.idle` (at most
    `end.settle_timeout`). It freezes the take, so nothing painted on the way out is kept. On a
    command launch it types `end.keys`. If the program is still running `end.kill_after` later, it
-   kills its whole process group.
+   kills its whole process group. On a url launch it closes the browser.
 6. Writes the take to `<work>/<clip>.take` and prints its path on stderr.
 7. If every beat passed: checks the take while the services still run, prints the check table on
    stdout, stops the services and runs the profile's `on_success`.
@@ -327,7 +331,7 @@ fonts: fonts/
 | `reset` | A command run before every take to restore a clean state. It runs before the services start, so it sees `PHOTON_WORK` but no ports. |
 | `launch` | The program to film. |
 | `launch.command` | Required unless `launch.url` is set. Run as `sh -c '<command>'`. No `exec` is added, so `. env.sh && exec app` works. The whole process group is killed at the end of the take. |
-| `launch.url` | Instead of `launch.command`: a page to film in a browser, an `http` or `https` url. Set exactly one of the two. `${NAME}` in it expands from the launch env, so `http://127.0.0.1:${PHOTON_PORT_WEB}/` reaches a service. Browser capture is not available yet: `photon setup` and `photon record` refuse a url launch. |
+| `launch.url` | Instead of `launch.command`: a page to film in a browser, an `http` or `https` url. Set exactly one of the two. `${NAME}` in it expands from the launch env, so `http://127.0.0.1:${PHOTON_PORT_WEB}/` reaches a service; a name the env does not hold fails `photon record` before the browser starts. photon films the page in headless Chromium or Chrome. |
 | `launch.browser` | With `launch.url` only: the browser binary to drive, instead of the one photon finds. |
 | `launch.dir` | The working directory, relative to the config's folder. Default: the config's folder. |
 | `launch.env` | Variables set for the program. Values may use `${PHOTON_*}`, which photon expands. |
@@ -739,8 +743,10 @@ the viewport.
 
 `photon lint` checks a url-launch clip without starting a browser: the keys the launch refuses,
 the shape of each selector, the areas the storyboard names, and the captions laid out on the
-viewport. Recording a page arrives with the browser capture source; until then `photon setup`
-and `photon record` refuse a url launch.
+viewport. `photon setup` and `photon record` run a url launch as they run a command: `reset`,
+the services, the profiles, `run` expects and `on_success` all work the same. `photon record`
+opens the page in headless Chromium at `frame.viewport` and `frame.device_scale`, runs the beats
+against it, and once the page has painted nothing for `end.idle` closes the browser.
 
 If an anchor finds no row, or the top lands below the bottom, the area is not on screen. A
 `click` or `drag` there fails, and a `seen` expect does not match. Area names start with a letter
@@ -884,7 +890,8 @@ Any program that runs in a terminal: a CLI, a full-screen TUI, a REPL or a scrip
 language. photon only talks to it through the pty, like a real terminal.
 
 **Does it need a browser or a GUI?**
-No. photon draws the frames itself and only needs ffmpeg to encode the GIF.
+Not for a terminal app: photon draws the frames itself and only needs ffmpeg to encode the GIF.
+Filming a web page (`launch.url`) needs Chromium or Chrome, which photon runs headless.
 
 **How is it different from asciinema or VHS?**
 asciinema records a session you perform by hand. VHS, like photon, turns a script into a GIF.

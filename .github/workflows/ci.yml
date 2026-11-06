@@ -60,6 +60,6 @@ jobs:
         with:
           go-version-file: go.mod
       - name: go vet (browser tag)
-        run: go vet -tags browser ./internal/tune ./internal/browser
+        run: go vet -tags browser ./internal/tune ./internal/browser ./internal/rig
       - name: go test (browser tag)
-        run: go test -tags browser ./internal/tune ./internal/browser -run Browser -v
+        run: go test -tags browser ./internal/tune ./internal/browser ./internal/rig -run Browser -v

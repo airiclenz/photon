@@ -253,7 +253,13 @@ NOTES (2026-11-06): the `capture` interface is `engine.Source` plus `Painted`, `
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/rig/`, then `GOMEMLIMIT=2GiB go test -run Record ./cmd/photon/`
 **Commit:** `refactor(rig): drive a take's capture through one seam`
 
-## 13. Record and set up a url launch
+## 13. Record and set up a url launch — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the capture seam's `finish` now returns `(*take.Take, error)` (the terminal adapter returns a nil error) so a browser's recording or close error reaches `Record`, which joins it after the beats' error: the take is still written but not checked, as for a failed beat.
+NOTES (2026-11-06): the browser adapter's `Painted` is closed from the start: `browser.Start` returns once the page has loaded and the browser package has no first-frame signal; a wait answered before the screencast's first frame records nothing, which that package documents, and the first frame then carries the screen.
+NOTES (2026-11-06): `launchURL` (the `${NAME}` expansion over `launchEnv`'s list, a later entry winning, an unset name an error naming `launch.url`) sits in record.go beside `openPage`, its tests in record_test.go, so env.go stays untouched; the browser gets the whole launch env as its extra env.
+NOTES (2026-11-06): the url-launch refusal tests are replaced by `TestSetup_RunsOnAURLLaunch`, `TestLaunchURL` and `TestLaunchURL_UnsetReferenceFails`; the `browser`-tagged test (`browser && !windows`, since its service runs under sh) is `TestBrowser_Record_URLLaunchPassesItsCheck`, and skips on `browser.ErrNoBrowser` unless `PHOTON_TEST_BROWSER_REQUIRED` is set.
+NOTES (2026-11-06): README beyond the two refusal sentences: "How a take works" steps 3 and 5 name the url launch, the external-programs list adds Chromium or Chrome, and the FAQ "Does it need a browser" answer names the url launch; `photon record --help` now says recording runs on Linux and macOS rather than "needs a unix pty".
 
 **What:**
 **Goal:** `photon setup` and `photon record` run a url-launch clip: services, profiles, `reset`, `run:` expects and `on_success` work as for a terminal take; the take types, clicks a text target and a selector target, waits, and `photon check` passes it.

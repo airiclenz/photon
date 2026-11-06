@@ -360,11 +360,10 @@ launch:
 	}
 }
 
-// urlLaunchConfig is a project that launches a page by url, with a setup and a reset that each
-// leave a marker in the work dir if they run.
+// urlLaunchConfig is a project that launches a page by url, with a setup that leaves a marker in
+// the work dir when it runs.
 const urlLaunchConfig = `name: rig-test
 setup: touch "$PHOTON_WORK/setup.out"
-reset: touch "$PHOTON_WORK/` + resetMarker + `"
 launch:
   url: 'http://127.0.0.1:${PHOTON_PORT_WEB}/'
 `
@@ -387,7 +386,7 @@ func writeURLProject(t *testing.T) string {
 	return dir
 }
 
-func TestSetup_RefusesAURLLaunch(t *testing.T) {
+func TestSetup_RunsOnAURLLaunch(t *testing.T) {
 	t.Parallel()
 	dir := writeURLProject(t)
 	work := filepath.Join(dir, "work")
@@ -398,29 +397,51 @@ func TestSetup_RefusesAURLLaunch(t *testing.T) {
 
 	err = Setup(context.Background(), loaded, &bytes.Buffer{})
 
-	if err == nil || !strings.Contains(err.Error(), "launch.url") {
-		t.Fatalf("Setup = %v, want an error naming launch.url", err)
+	if err != nil {
+		t.Fatalf("Setup: %v", err)
 	}
-	if exists(work) {
-		t.Errorf("Setup created the work dir %s before refusing", work)
+	if !exists(filepath.Join(work, "setup.out")) {
+		t.Errorf("setup left no marker in the work dir %s", work)
 	}
 }
 
-func TestRecord_RefusesAURLLaunch(t *testing.T) {
+func TestLaunchURL(t *testing.T) {
 	t.Parallel()
-	dir := writeURLProject(t)
-	work := filepath.Join(dir, "work")
-	loaded, err := clip.Load(filepath.Join(dir, storyboardFile), "", work)
-	if err != nil {
-		t.Fatalf("load the clip: %v", err)
+	environ := []string{"PHOTON_PORT_WEB=41234", "HOST=127.0.0.1", "PHOTON_PORT_WEB=5173", "EMPTY="}
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"no reference", "http://127.0.0.1:8080/", "http://127.0.0.1:8080/"},
+		{"a port, the later entry winning", "http://127.0.0.1:${PHOTON_PORT_WEB}/",
+			"http://127.0.0.1:5173/"},
+		{"several references", "http://${HOST}:${PHOTON_PORT_WEB}/a?b=${HOST}",
+			"http://127.0.0.1:5173/a?b=127.0.0.1"},
+		{"an empty value", "http://127.0.0.1:80/${EMPTY}", "http://127.0.0.1:80/"},
+		{"no braces stays as written", "http://127.0.0.1:80/$HOST", "http://127.0.0.1:80/$HOST"},
 	}
-
-	rows, err := Record(context.Background(), loaded, "", &bytes.Buffer{})
-
-	if err == nil || !strings.Contains(err.Error(), "launch.url") {
-		t.Fatalf("Record = %v, want an error naming launch.url", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := launchURL(tt.raw, environ)
+			if err != nil {
+				t.Fatalf("launchURL(%q): %v", tt.raw, err)
+			}
+			if got != tt.want {
+				t.Errorf("launchURL(%q) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
 	}
-	if rows != nil || exists(work) {
-		t.Errorf("Record returned rows %v or made the work dir %s before refusing", rows, work)
+}
+
+func TestLaunchURL_UnsetReferenceFails(t *testing.T) {
+	t.Parallel()
+
+	_, err := launchURL("http://127.0.0.1:${PHOTON_PORT_API}/", []string{"PHOTON_PORT_WEB=1"})
+
+	if err == nil || !strings.Contains(err.Error(), "launch.url") ||
+		!strings.Contains(err.Error(), "${PHOTON_PORT_API}") {
+		t.Fatalf("launchURL = %v, want an error naming launch.url and ${PHOTON_PORT_API}", err)
 	}
 }

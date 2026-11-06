@@ -7,10 +7,12 @@ import (
 	"io"
 	"maps"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/airiclenz/photon/internal/browser"
 	"github.com/airiclenz/photon/internal/check"
 	"github.com/airiclenz/photon/internal/clip"
 	"github.com/airiclenz/photon/internal/config"
@@ -29,34 +31,32 @@ const firstPaintTimeout = 30 * time.Second
 // takeEnv names the absolute path of the take just written, for `on_success`.
 const takeEnv = "PHOTON_TAKE"
 
-// errBrowserCapture refuses a config that launches a page by url: the browser source that would
-// film it is not built yet.
-var errBrowserCapture = errors.New("launch.url: browser capture is not available yet")
+// urlReference is a `${NAME}` reference in a launch url; group 1 is the variable name.
+var urlReference = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 // Record records one take of loaded under the named profile ("" for the services as declared) and
 // checks it, returning the check's rows. Command output (reset, on_success) and a `take: <path>`
 // line once the take is written go to out.
 //
 // In order: the work dir is created; `reset` runs; the services start; the program launches as
-// `sh -c '<launch.command>'` in a pty at the storyboard's frame, with the env of [launchEnv]; once
-// it has painted, the beats run; the take ends (idle, frozen, quit keys, kill) and is written to
-// the clip's take path. When every beat passed, the take is judged with the services still up and
-// their ports in every `run` expect's env, the services stop, and then the profile's `on_success`
-// runs. FAIL rows are rows, not an error: the caller counts them with [check.Failed].
+// `sh -c '<launch.command>'` in a pty at the storyboard's frame, with the env of [launchEnv] — or,
+// on a url launch, headless Chromium opens `launch.url`, its `${NAME}` references expanded from
+// that env, at the frame's viewport, device scale and fps, recording the boxes of every selector
+// the clip names; once it has painted, the beats run; the take ends (idle, frozen, then quit keys
+// and kill for a program, a close for the browser) and is written to the clip's take path. When
+// every beat passed, the take is judged with the services still up and their ports in every `run`
+// expect's env, the services stop, and then the profile's `on_success` runs. FAIL rows are rows,
+// not an error: the caller counts them with [check.Failed].
 //
-// A beat that fails — or a program that exits or never paints before its first paint — still
-// writes the take, then returns that error (a beat's is an *[engine.BeatError]) without checking
-// the take or running `on_success`. A failure before the launch records nothing. The services are
-// stopped on every path. Rows come back whenever the check ran, even when `on_success` then fails.
-// A config that launches by `launch.url` is refused before anything runs: browser capture is not
-// available yet.
+// A beat that fails — or a program that exits or never paints before its first paint, or a
+// browser that fails to record or close — still writes the take, then returns that error (a
+// beat's is an *[engine.BeatError]) without checking the take or running `on_success`. A failure
+// before the launch records nothing. The services are stopped on every path. Rows come back
+// whenever the check ran, even when `on_success` then fails.
 func Record(
 	ctx context.Context, loaded *clip.Clip, profile string, out io.Writer,
 ) ([]check.Row, error) {
 	cfg := loaded.Config
-	if cfg.IsBrowser() {
-		return nil, errBrowserCapture
-	}
 	onSuccess, err := onSuccessOf(cfg, profile)
 	if err != nil {
 		return nil, err
@@ -89,16 +89,17 @@ func Record(
 	ports := services.Env()
 	recording := recorder{
 		board: loaded.Storyboard, cfg: cfg, resolver: resolver, quitKeys: quitKeys,
+		selectors: loaded.Selectors(),
 	}
-	recorded, beatsErr := recording.record(ctx, slices.Concat(workVars(work), ports))
+	recorded, takeErr := recording.record(ctx, slices.Concat(workVars(work), ports))
 	if recorded == nil {
-		return nil, stopped(beatsErr)
+		return nil, stopped(takeErr)
 	}
 	if err := saveTake(takePath, recorded, out); err != nil {
-		return nil, stopped(errors.Join(beatsErr, err))
+		return nil, stopped(errors.Join(takeErr, err))
 	}
-	if beatsErr != nil {
-		return nil, stopped(beatsErr)
+	if takeErr != nil {
+		return nil, stopped(takeErr)
 	}
 
 	rows, err := check.Judge(
@@ -155,22 +156,46 @@ func saveTake(takePath string, recorded *take.Take, out io.Writer) error {
 }
 
 // recorder is what recording one take needs: the storyboard, the config, the resolver the beats
-// click through and the quit keys' bytes.
+// click through, the quit keys' bytes and, for a url launch, the selectors whose boxes each
+// snapshot records.
 type recorder struct {
-	board    *storyboard.Storyboard
-	cfg      *config.Config
-	resolver target.Resolver
-	quitKeys [][]byte
+	board     *storyboard.Storyboard
+	cfg       *config.Config
+	resolver  target.Resolver
+	quitKeys  [][]byte
+	selectors []string
 }
 
-// record launches the program with vars in its env, waits for its first paint, performs the beats
-// and ends the take. It returns the take whenever the program was launched, together with the
-// first thing that went wrong; a nil take means nothing was recorded.
+// record launches the program or opens the page with vars in its env, waits for its first paint,
+// performs the beats and ends the take. It returns the take whenever the launch succeeded,
+// together with the first thing that went wrong — a failed beat, then a failure ending the take;
+// a nil take means nothing was recorded.
 func (r recorder) record(ctx context.Context, vars []string) (*take.Take, error) {
 	environ, err := launchEnv(os.Environ(), r.cfg.Launch, vars)
 	if err != nil {
 		return nil, err
 	}
+	launched, err := r.launch(ctx, environ)
+	if err != nil {
+		return nil, err
+	}
+	beatsErr := r.performBeats(ctx, launched)
+	recorded, endErr := r.endTake(ctx, launched)
+	return recorded, errors.Join(beatsErr, endErr)
+}
+
+// launch starts the take's capture with environ as its env: headless Chromium at the launch's url
+// on a url launch, else the launch's command in a pty.
+func (r recorder) launch(ctx context.Context, environ []string) (capture, error) {
+	if r.cfg.IsBrowser() {
+		return r.openPage(ctx, environ)
+	}
+	return r.startProgram(environ)
+}
+
+// startProgram runs the launch's command as `sh -c '<command>'` in a pty of the frame's cols and
+// rows, in the launch dir with environ as its env.
+func (r recorder) startProgram(environ []string) (capture, error) {
 	term, err := terminal.Start(shell, []string{shellFlag, r.cfg.Launch.Command}, terminal.Options{
 		Cols: r.board.Frame.Cols, Rows: r.board.Frame.Rows, FPS: r.board.Frame.FPS,
 		Env: environ, Dir: r.cfg.Launch.Dir, FromFirstPaint: true,
@@ -178,13 +203,62 @@ func (r recorder) record(ctx context.Context, vars []string) (*take.Take, error)
 	if err != nil {
 		return nil, fmt.Errorf("launch %q: %w", r.cfg.Launch.Command, err)
 	}
-	launched := terminalCapture{
+	return terminalCapture{
 		Terminal:  term,
 		quitKeys:  r.quitKeys,
 		killAfter: r.cfg.End.KillAfter,
+	}, nil
+}
+
+// openPage starts headless Chromium — `launch.browser` when set — at the launch's url, its
+// `${NAME}` references expanded from environ, with the frame's viewport, device scale and fps and
+// environ added to the browser's env, recording the boxes of r's selectors. The browser lives as
+// long as ctx.
+func (r recorder) openPage(ctx context.Context, environ []string) (capture, error) {
+	address, err := launchURL(r.cfg.Launch.URL, environ)
+	if err != nil {
+		return nil, err
 	}
-	beatsErr := r.performBeats(ctx, launched)
-	return r.endTake(ctx, launched), beatsErr
+	frame := r.board.Frame
+	page, err := browser.Start(ctx, browser.Options{
+		URL:         address,
+		ExecPath:    r.cfg.Launch.Browser,
+		Width:       frame.Viewport.Width,
+		Height:      frame.Viewport.Height,
+		DeviceScale: frame.Scaling(),
+		FPS:         frame.FPS,
+		Selectors:   r.selectors,
+		Env:         environ,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("launch.url: %w", err)
+	}
+	return browserCapture{Browser: page}, nil
+}
+
+// launchURL is raw with every `${NAME}` reference replaced by that variable's value in environ, a
+// list of environ entries in which a later entry wins. A reference to a variable environ does not
+// hold is an error naming it, so a typo or a service's missing port never reaches the browser as
+// an empty string. Nothing else is expanded, and the values go in as they are.
+func launchURL(raw string, environ []string) (string, error) {
+	values := make(map[string]string, len(environ))
+	for _, entry := range environ {
+		name, value, _ := strings.Cut(entry, "=")
+		values[name] = value
+	}
+	var missing string
+	expanded := urlReference.ReplaceAllStringFunc(raw, func(reference string) string {
+		name := urlReference.FindStringSubmatch(reference)[1]
+		value, isSet := values[name]
+		if !isSet && missing == "" {
+			missing = name
+		}
+		return value
+	})
+	if missing != "" {
+		return "", fmt.Errorf("launch.url: ${%s} is not set here", missing)
+	}
+	return expanded, nil
 }
 
 // performBeats waits for the capture's first paint, then runs the beats.
@@ -203,13 +277,14 @@ func (r recorder) performBeats(ctx context.Context, launched capture) error {
 	return engine.New(launched, r.resolver).Run(ctx, r.board.Beats)
 }
 
-// endTake ends the take after the last beat, or the failed one, and returns it. The program is
-// first given up to the settle timeout to fall idle, so what it had in flight reaches the take;
-// then the take is frozen, so nothing it paints on its way out is kept; then the capture is
-// finished: a program in a pty is quit the way a person quits it, so it can save its state, and
-// killed with its whole process group when it has not left by the kill timeout. A cancelled ctx
-// skips the waits and goes straight to the kill.
-func (r recorder) endTake(ctx context.Context, launched capture) *take.Take {
+// endTake ends the take after the last beat, or the failed one, and returns it with any error the
+// capture met finishing it. The program is first given up to the settle timeout to fall idle, so
+// what it had in flight reaches the take; then the take is frozen, so nothing it paints on its
+// way out is kept; then the capture is finished: a program in a pty is quit the way a person
+// quits it, so it can save its state, and killed with its whole process group when it has not
+// left by the kill timeout; a browser is closed. A cancelled ctx skips the waits and goes
+// straight to the kill.
+func (r recorder) endTake(ctx context.Context, launched capture) (*take.Take, error) {
 	end := r.cfg.End
 	if ctx.Err() == nil {
 		launched.Settle(ctx, end.Idle, end.SettleTimeout)

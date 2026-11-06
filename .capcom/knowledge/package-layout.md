@@ -22,7 +22,7 @@ imports upward, and there are no cycles.
 | `internal/engine` | performing a beat's actions; defines the `Source` interface it drives (`Type`, `Key`, `Pointer` with `PointerEvent` = `keys.Pointer`, plus `Current`, `Match`, `Done`, `Event`; pty terminal plus a test fake) and builds no input bytes | `take`, `target`, `storyboard`, `keys` |
 | `internal/service` | a take's services: start, readiness, ports, logs, stop; profiles | `config` |
 | `internal/check` | judging a take: one PASS/FAIL row per expect | `take`, `target`, `storyboard` |
-| `internal/rig` | one take end to end: reset, services, launch, beats, end of take, save, `on_success`, check; `setup` | `clip`, `terminal`, `engine`, `service`, `check`, `take`, `config`, `storyboard`, `target`, `keys` |
+| `internal/rig` | one take end to end: reset, services, launch (a command in the pty terminal, or a url in the browser source, through one capture seam), beats, end of take, save, `on_success`, check; `setup` | `clip`, `terminal`, `browser`, `engine`, `service`, `check`, `take`, `config`, `storyboard`, `target`, `keys` |
 | `internal/schedule` | laying the beats onto section durations, holds and cuts | `storyboard`, `take` |
 | `internal/fonts` | the embedded faces and their OFL licences, or an override dir | — |
 | `internal/raster` | a snapshot's cells to pixels; box drawing drawn, not looked up | `take`, `fonts`, `config` |
