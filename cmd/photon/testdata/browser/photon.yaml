@@ -1,0 +1,9 @@
+# A url launch: a page filmed in a browser, with one anchor area and one selector area.
+name: lint-browser
+launch:
+  url: 'http://127.0.0.1:${PHOTON_PORT_WEB}/inbox'
+areas:
+  header:
+    bottom: {match: '^Inbox$'}
+  sidebar:
+    selector: 'nav[aria-label="Main"] > ul'

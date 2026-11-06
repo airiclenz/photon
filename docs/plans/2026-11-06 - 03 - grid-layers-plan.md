@@ -282,7 +282,13 @@ internal/storyboard/beat.go — DragEnd, Expect
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/target/`, then `GOMEMLIMIT=2GiB go test ./internal/clip/`
 **Commit:** `feat(target): resolve selectors from the boxes a take recorded`
 
-## 13. Lint a browser clip and document the keys
+## 13. Lint a browser clip and document the keys — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): consequential edit — internal/render/doc.go: made necessary by check.go now holding the url clip's page geometry (file-map row).
+NOTES (2026-11-06): the url geometry is two functions in internal/render/check.go: `pageLayout(frame) compose.Layout` (Size = round(viewport × device_scale) × scale per side, Cell = device_scale, Scale = frame.scale, no padding) and `pageOutput(frame) (out, unit, err)`, which is `compose.Output` of that layout with the unit multiplied by device_scale. `compose.New` works out its own unit from the layout, so plan B's render will need that device-scale unit passed into compose for its captions.
+NOTES (2026-11-06): as the plan specifies, `Layout.Cell` is device_scale while `Layout.Size` includes × frame.scale, so at frame.scale > 1 a cell box maps onto the frame at 1/scale of its size. CheckCaptions uses only Size and the unit, so it is not affected. Plan B's render must reconcile this, either with a cell of device_scale × scale or by drawing the image layer unscaled.
+NOTES (2026-11-06): the bad-key fixture is cmd/photon/testdata/browser/font-size.yaml (a viewport frame that also sets font_size; the storyboard loader reports `frame.font_size: a frame with a viewport takes no font_size`). TestLint also lints the browser storyboard against the command-launch config, which lists the viewport, device_scale and selector-target refusals.
+NOTES (2026-11-06): the url branch of CheckCaptions keys on `Config.IsBrowser()`. clip.Load already makes sure such a clip has a viewport.
 
 **What:** Recast at the regression check (2026-11-06).
 **Goal:** `photon lint` passes a valid url-launch clip with captions without starting a browser and reports each bad browser key; `render.CheckCaptions` on a url clip sizes captions per the header's caption-size call (CSS px scaled by device_scale × scale, default 16, bounds [6, 72]); the README's `## Targets and areas` describes selector targets, selector areas, anchor bands on a browser text layer and captions in CSS px, and the README describes lint's behaviour on a browser clip. The keys items 10 and 11 own are documented there, not here.

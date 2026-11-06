@@ -1,0 +1,8 @@
+# A page clip that still sets the terminal's frame.font_size, which a url launch refuses.
+clip: font-size
+ship: out/font-size.gif
+frame: {viewport: {width: 1280, height: 800}, font_size: 14, scale: 1, width: 640, fps: 24, max_colors: 128}
+beats:
+  - id: 1
+    title: open the inbox
+    duration: 2s

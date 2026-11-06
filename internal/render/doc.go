@@ -58,7 +58,8 @@
 //   - pipeline.go: [Pipeline], [Build] and its [BuildOptions] with the reuse rules of the raster
 //     and draft caches, the frame-size check, [ErrOutsideClip], the [RasterCache] seam and the
 //     render's reuse-last cache.
-//   - check.go: [CheckCaptions], the font-bound caption check that needs no take.
+//   - check.go: [CheckCaptions], the font-bound caption check that needs no take, and a
+//     url clip's page geometry.
 //   - watch.go: [Watch] and its [WatchInputs]: the polling loop, the watched files and their
 //     stamps.
 //   - encode.go: the palette pass's and the GIF pass's ffmpeg command lines, streaming the frames

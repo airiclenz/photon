@@ -154,7 +154,7 @@ storyboard's folder. Each command's `--help` says the same as this section.
 
 | Command | What it does |
 | --- | --- |
-| `photon lint <storyboard>` | Loads the storyboard and its config and prints every problem in both, then lays the captions out with the config's fonts and reports a caption box larger than the frame. Prints `ok` with the clip name, beat count and config path if there are none. Records nothing. |
+| `photon lint <storyboard>` | Loads the storyboard and its config and prints every problem in both, then lays the captions out with the config's fonts and reports a caption box larger than the frame. Prints `ok` with the clip name, beat count and config path if there are none. Records nothing. On a `launch.url` clip it starts no browser: it reports each frame key, selector and area the launch refuses, and lays the captions out on the viewport in CSS pixels (see [Targets and areas](#targets-and-areas)). |
 | `photon setup <storyboard>` | Creates the work dir and runs the config's `setup` once. |
 | `photon record <storyboard>` | Records one take to `<work>/<clip>.take`, checks it and prints the check table. |
 | `photon check <storyboard> [<take>]` | Checks a take (default `<work>/<clip>.take`) against the storyboard's expects and prints the check table. |
@@ -716,6 +716,31 @@ areas:
   sidebar:
     selector: 'nav[aria-label="Main"] > ul'
 ```
+
+**On a page.** A url launch films a page, and each frame of it records the page's text and the
+boxes of every selector the clip names, its storyboard targets and its config's selector areas.
+The grid is the page in CSS pixels: one cell is one CSS pixel, so a camera `cell` is a point of
+the viewport.
+
+- A **selector target** is one of the boxes its selector picked on that frame, taken in reading
+  order (top edge, then left edge), so `nth` counts them the way it counts text matches. A
+  `click` or `drag` aims at the box's centre.
+- A **selector area** is the first box, in reading order, its selector picked. It holds only
+  what lies wholly inside that box, text or selector boxes, and is not on screen when the
+  selector picked nothing.
+- A **text target** matches one run of the page's text at a time, the way it matches one row of
+  a terminal. The runs whose top edges line up form a line.
+- An **anchor area** is a band from the top of the line its `top` anchor picks to the bottom of
+  the line its `bottom` anchor picks, across the whole page. An anchor matches a line's text, its
+  runs joined by one space.
+- A caption's `font.size` is in CSS pixels, default 16, and grows with the page: it is drawn at
+  `font.size` × `frame.device_scale` × `frame.scale` pixels of the frame before the frame is
+  scaled to `frame.width`, so it keeps its size against the page at any device scale.
+
+`photon lint` checks a url-launch clip without starting a browser: the keys the launch refuses,
+the shape of each selector, the areas the storyboard names, and the captions laid out on the
+viewport. Recording a page arrives with the browser capture source; until then `photon setup`
+and `photon record` refuse a url launch.
 
 If an anchor finds no row, or the top lands below the bottom, the area is not on screen. A
 `click` or `drag` there fails, and a `seen` expect does not match. Area names start with a letter

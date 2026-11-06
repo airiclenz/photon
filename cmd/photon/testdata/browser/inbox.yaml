@@ -1,0 +1,21 @@
+# A page clip: a viewport in place of the terminal's keys, selector and text targets, and
+# captions whose sizes are CSS pixels.
+clip: inbox
+ship: out/inbox.gif
+frame: {viewport: {width: 1280, height: 800}, device_scale: 2, scale: 1, width: 640, fps: 24, max_colors: 128}
+beats:
+  - id: 1
+    title: open the first message
+    duration: 3s
+    do:
+      - click: {target: {selector: 'li.message', nth: 1, area: sidebar}}
+      - click: {target: {text: 'Reply'}}
+    expect:
+      - seen: '^Inbox$'
+        area: header
+camera:
+  positions:
+    - {at: 0s, selector: 'main h1'}
+captions:
+  - {text: The inbox, at: 0s, for: 2s}
+  - {text: A message opens, at: 1s, for: 2s, font: {size: 24}}

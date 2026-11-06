@@ -22,6 +22,8 @@ var (
 	cameraAreaStoryboard = filepath.Join("testdata", "invalid", "camera-area.yaml")
 	badCaptionStoryboard = filepath.Join("testdata", "invalid", "captions.yaml")
 	captionBoxStoryboard = filepath.Join("testdata", "invalid", "caption-box.yaml")
+	pageStoryboard       = filepath.Join("testdata", "browser", "inbox.yaml")
+	pageFontSizeBoard    = filepath.Join("testdata", "browser", "font-size.yaml")
 )
 
 // okMarker is what lint prints for a clip with no problem.
@@ -106,6 +108,29 @@ func TestLint(t *testing.T) {
 			args:       []string{"lint", captionBoxStoryboard, "--config", validConfig},
 			wantCode:   exitRunFailed,
 			wantStderr: []string{"captions[0]: ", "larger than the"},
+		},
+		{
+			name:     "a url-launch clip with captions lints clean without a browser",
+			args:     []string{"lint", pageStoryboard},
+			wantCode: exitOK,
+			wantOK:   true,
+		},
+		{
+			name:       "a terminal key under a url launch is listed",
+			args:       []string{"lint", pageFontSizeBoard},
+			wantCode:   exitRunFailed,
+			wantStderr: []string{"frame.font_size: "},
+		},
+		{
+			name:     "every browser key under a command launch is listed",
+			args:     []string{"lint", pageStoryboard, "--config", validConfig},
+			wantCode: exitRunFailed,
+			wantStderr: []string{
+				"frame.viewport: only a url launch takes a viewport",
+				"frame.device_scale: only a url launch takes a device_scale",
+				"beat 1: do[0]: click.target.selector: only a url launch takes a selector",
+				"camera.positions[0]: selector: only a url launch takes a selector",
+			},
 		},
 		{
 			name:       "no storyboard is a bad command line",

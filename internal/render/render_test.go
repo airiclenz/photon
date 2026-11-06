@@ -108,8 +108,14 @@ func loadRenderClip(t *testing.T) *clip.Clip {
 // loadRenderClipOf is [loadRenderClip] with storyboard in place of renderStoryboard.
 func loadRenderClipOf(t *testing.T, storyboard string) *clip.Clip {
 	t.Helper()
+	return loadRenderClipWith(t, renderConfig, storyboard)
+}
+
+// loadRenderClipWith is [loadRenderClipOf] with config in place of renderConfig.
+func loadRenderClipWith(t *testing.T, config, storyboard string) *clip.Clip {
+	t.Helper()
 	project := t.TempDir()
-	writeFile(t, project, "photon.yaml", renderConfig)
+	writeFile(t, project, "photon.yaml", config)
 	board := writeFile(t, project, "rendered.yaml", storyboard)
 	loaded, err := clip.Load(board, "", t.TempDir())
 	if err != nil {
