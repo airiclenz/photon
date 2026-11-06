@@ -1,11 +1,13 @@
 ---
 title: "Decision: one grid model for terminal and browser takes"
-status: open
+status: done
 type: task
 priority: 3
 labels: [browser, architecture]
 plan: 2026-11-06 - 03 - grid-layers-plan
 created: 2026-11-06T13:42:51Z
+closed: 2026-11-06T15:53:42Z
+reason: resolved by 2026-11-06 - 03 - grid-layers-plan (6999cd1)
 ---
 
 Record the decision that photon films more than terminals, and how: a snapshot is a grid

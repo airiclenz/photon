@@ -1,12 +1,14 @@
 ---
 title: Resolve targets and areas on the text layer
-status: open
+status: done
 type: task
 priority: 3
 labels: [browser, target]
 deps: [snapshot-two-layers]
 plan: 2026-11-06 - 03 - grid-layers-plan
 created: 2026-11-06T13:42:51Z
+closed: 2026-11-06T15:53:42Z
+reason: resolved by 2026-11-06 - 03 - grid-layers-plan (6999cd1)
 ---
 
 `internal/target` matches a target's regex over the cells' rows and finds areas by row

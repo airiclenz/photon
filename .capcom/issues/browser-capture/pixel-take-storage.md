@@ -24,3 +24,7 @@ tune preview and render.
 - A take with image frames writes and reads back losslessly at the frame the source captured.
 - A one-minute 1280×800 take at 24 fps stays within a size the decision Note sets.
 - Terminal takes keep their current format, and old takes still load.
+
+## Log
+
+- 2026-11-06 Airic Lenz: grid-layers-plan (6999cd1) landed internal/pixels (key frames + one-rectangle PNG patches, take v2); the synthetic page measures 4.8 MB/min, but two distant changes per frame (typing plus a spinner) make every frame a key frame at 30.3 MB/min against the 25 MB budget; multi-rectangle patches remain

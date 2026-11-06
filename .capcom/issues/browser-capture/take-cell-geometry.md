@@ -1,12 +1,14 @@
 ---
 title: Record the grid's cell geometry in the take
-status: open
+status: done
 type: task
 priority: 3
 labels: [browser, take, render]
 deps: [grid-surfaces-decision]
 plan: 2026-11-06 - 03 - grid-layers-plan
 created: 2026-11-06T13:42:51Z
+closed: 2026-11-06T15:53:42Z
+reason: resolved by 2026-11-06 - 03 - grid-layers-plan (6999cd1)
 ---
 
 `compose.Layout.boxRect` turns a Box into pixels with the rasterizer's cell width and line

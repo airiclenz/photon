@@ -1,12 +1,14 @@
 ---
 title: Split a snapshot into a text layer and an image layer
-status: open
+status: done
 type: task
 priority: 3
 labels: [browser, take]
 deps: [grid-surfaces-decision]
 plan: 2026-11-06 - 03 - grid-layers-plan
 created: 2026-11-06T13:42:51Z
+closed: 2026-11-06T15:53:42Z
+reason: resolved by 2026-11-06 - 03 - grid-layers-plan (6999cd1)
 ---
 
 A `take.Snapshot` is today a grid of cells, and everything that reads it reads cells. Give it
