@@ -1,10 +1,12 @@
 ---
 title: tune fails on a terminal take under a viewport frame
-status: open
+status: done
 type: bug
 priority: 3
 plan: 2026-11-06 - 05 - url-env-and-tune-preview-plan
 created: 2026-11-06T20:12:42Z
+closed: 2026-11-06T21:09:43Z
+reason: "Resolved by plan 2026-11-06 - 05 - url-env-and-tune-preview-plan (archived 540af7d): tune opens on a terminal take under a url-launch clip with no preview and reports the take-size problem, tested in session_test.go."
 ---
 
 `photon tune` fails to open, instead of opening with a size problem, on a terminal take (one with no cell size) under a storyboard frame that sets `frame.viewport`. `atTakeSize` (internal/tune/session.go:408) writes the take's cols × rows into the previewed frame for such a take (internal/tune/session.go:410 takes the cols × rows branch), so the viewport stays and `render.CheckFrame` (internal/render/pipeline.go:385) refuses the frame again; the url-launch pipeline then has no image layer to draw from (internal/render/pipeline.go:207, `errNoImageLayer`). `NewSession` returns the error rather than a session showing the size problem, as it does for a mismatched take of any other kind.
