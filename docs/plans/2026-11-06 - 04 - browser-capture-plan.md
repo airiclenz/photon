@@ -365,7 +365,10 @@ NOTES (2026-11-06): the README is not touched here; linking the example and embe
 **Acceptance:** `GOMEMLIMIT=2GiB go test -run TunePage ./cmd/photon/`, then `GOMEMLIMIT=2GiB go test -tags browser -run TunePage ./cmd/photon/`
 **Commit:** `docs(examples): film photon tune's own page`
 
-## 19. Ship the tune-page GIF in the README
+## 19. Ship the tune-page GIF in the README — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the GIF was filmed on this host with a photon built from 178ef7b: `setup`, `record` (every expect PASS), `check` (exit 0) and `render` on examples/tune-page/tune-page.yaml in a scratch `--work`; it is 960x480, 85 frames, 11s, 106K, and its transport bar shows `photon 0.3.0 (178ef7b)`. Its first frame is the page before its first data load (an empty preview), as the storyboard's beat 1 records it.
+NOTES (2026-11-06): the image and a short paragraph linking `examples/tune-page` sit right after the "**Tuning** with `photon tune`" paragraph, before "**Exit status**".
 
 **What:**
 **Goal:** `docs/media/tune-page.gif` is committed, rendered from item 18's example, and the README shows it and links the example.

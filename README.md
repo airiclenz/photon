@@ -230,6 +230,15 @@ failed. It is disabled while edits are unsaved, an error stands, the file change
 export runs. The transport bar's
 right end shows the build serving the page, the string `photon version` prints.
 
+![photon tune on the hello example's take: it plays, scrubs, drags beat 1's end and saves](docs/media/tune-page.gif)
+
+photon filmed this clip of its own tune page. The example `examples/tune-page` serves
+`photon tune` on a take of `examples/hello` and films the page in Chromium: it plays the take,
+scrubs it, drags beat 1's end and saves. `photon setup examples/tune-page/tune-page.yaml` builds
+photon and records the hello take; `photon record` and `photon render` on the same storyboard then
+write `docs/media/tune-page.gif`. Each take saves into a copy of the hello storyboard in the work
+dir, never into the repository.
+
 **Exit status** is the same for every command:
 
 | Status | Meaning |
