@@ -4,6 +4,7 @@ status: open
 type: task
 priority: 3
 labels: [browser, architecture]
+plan: 2026-11-06 - 03 - grid-layers-plan
 created: 2026-11-06T13:42:51Z
 ---
 
