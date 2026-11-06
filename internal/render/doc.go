@@ -43,8 +43,12 @@
 // any take exists; `photon lint` runs it. The take-bound tier is [compose.New] in [Build]: the
 // camera positions' text targets resolved on the take's screens.
 //
-// It imports clip, schedule, raster, compose, caption, fonts, target, storyboard and take, and
-// runs ffmpeg and gifsicle as programs.
+// [Watch] renders as Run does, then again each time the storyboard, the config, the take or a
+// caption font file changes, reloading the clip each round; it polls their sizes and modification
+// times, reports a failed round on stderr and goes on until its context ends.
+//
+// It imports clip, config, schedule, raster, compose, caption, fonts, target, storyboard and take,
+// and runs ffmpeg and gifsicle as programs.
 //
 // The file map:
 //   - doc.go: this package comment and file map.
@@ -55,6 +59,8 @@
 //     and draft caches, the frame-size check, [ErrOutsideClip], the [RasterCache] seam and the
 //     render's reuse-last cache.
 //   - check.go: [CheckCaptions], the font-bound caption check that needs no take.
+//   - watch.go: [Watch] and its [WatchInputs]: the polling loop, the watched files and their
+//     stamps.
 //   - encode.go: the palette pass's and the GIF pass's ffmpeg command lines, streaming the frames
 //     into each, and the gifsicle pass.
 package render

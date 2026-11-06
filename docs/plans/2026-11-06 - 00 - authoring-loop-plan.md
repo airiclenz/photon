@@ -305,7 +305,12 @@ when clean. With `done=1,total=2` set on the export record (version unchanged) i
 Depends on item 6.
 **Commit:** `feat(tune): export the GIF from the page`
 
-## 8. photon render --watch
+## 8. photon render --watch — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): re-derived from the assumed `Watch(ctx, storyboardPath, load func() (*clip.Clip, error), ...)` signature: the regression guard needs the `--config` flag for the no-earlier-set fallback, which a load closure cannot hand over, so Watch takes `WatchInputs{Storyboard, ConfigFlag, WorkFlag}` and calls `clip.Load` itself each round (the closure had no second caller).
+NOTES (2026-11-06): render now imports `config` (for `config.Find` and `config.FileName` in the fallback set); doc.go's import line names it.
+NOTES (2026-11-06): consequential edit — .capcom/knowledge/package-layout.md: made necessary by render importing `config` and gaining `Watch` (the render row's role and import list).
+NOTES (2026-11-06): the stamps of a round are taken right after its load, before the render, so an edit made while a render runs starts the next round; a failed render cut short by Ctrl-C is not reported.
 
 **What:**
 **Goal:** `photon render --watch <storyboard> [<take>]` renders once. After that it renders

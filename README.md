@@ -156,6 +156,7 @@ Flags:
 | `--profile <name>` | record | The profile to record with (its services and `on_success`). |
 | `-o`, `--output <file>` | render | Write the GIF here instead of the `ship` path. Its folder is created. |
 | `--dry-run` | render | Print both ffmpeg command lines, palette pass first, and exit without rendering. |
+| `--watch` | render | Render once, then again each time the storyboard, config, take or a caption font file changes. A failed load or render prints its error and the watch goes on. Runs until Ctrl-C. |
 | `--port <n>` | tune | Serve the page on this port of `127.0.0.1`. The default, `0`, picks any free port. |
 
 **The work dir** is the first of: `--work`, `$PHOTON_WORK`, the config's `work`, and
@@ -202,7 +203,7 @@ right end shows the build serving the page, the string `photon version` prints.
 
 | Status | Meaning |
 | --- | --- |
-| `0` | Success: the clip is clean (lint), setup ran, every beat and expect passed (record, check), the GIF was written (render), the page was served until Ctrl-C (tune). |
+| `0` | Success: the clip is clean (lint), setup ran, every beat and expect passed (record, check), the GIF was written (render), the watch ran until Ctrl-C or SIGTERM (render `--watch`), the page was served until Ctrl-C (tune). |
 | `1` | The run failed: a problem in a file, a failed command, beat or expect, or a take that could not be recorded, rendered or tuned, or a page that could not be served. |
 | `2` | A bad command line, such as an unknown flag or a missing argument. The usage text is printed. |
 

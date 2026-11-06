@@ -100,3 +100,17 @@ func TestRender(t *testing.T) {
 		})
 	}
 }
+
+func TestRender_WatchFlag_IsABooleanOffByDefault(t *testing.T) {
+	cmd := newRenderCommand()
+
+	flag := cmd.Flags().Lookup(watchFlag)
+
+	if flag == nil {
+		t.Fatalf("render has no --%s flag", watchFlag)
+	}
+	if flag.Value.Type() != "bool" || flag.DefValue != "false" {
+		t.Errorf("--%s is a %s defaulting to %q, want a bool defaulting to false",
+			watchFlag, flag.Value.Type(), flag.DefValue)
+	}
+}
