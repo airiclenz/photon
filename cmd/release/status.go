@@ -69,10 +69,10 @@ func newStatusCommand(commands runner, openRepo repoOpener, channels channelRepo
 			"each condition that\nblocks it; the baseline (the latest published release and the " +
 			"commits since, or the\nwhole history while no release is published); and the " +
 			"highest release tag. It probes\neach publish step (tag, release, homebrew, scoop, " +
-			"smoke) for the version: done,\npending, setup-pending or unknown. The version " +
-			"defaults to VERSION, whose steps are\nprobed only when it is above the baseline or " +
-			"no release is published yet; a bare X.Y.Z\nreads as vX.Y.Z. It exits 0 when the " +
-			"gate clears and 1 when it is blocked or a check or\nprobe could not run.",
+			"winget, npm, smoke) for the version:\ndone, pending, setup-pending or unknown. " +
+			"The version defaults to VERSION, whose steps are\nprobed only when it is above the " +
+			"baseline or no release is published yet; a bare X.Y.Z\nreads as vX.Y.Z. It exits 0 " +
+			"when the gate clears and 1 when it is blocked or a check or\nprobe could not run.",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 1 {
 				return fmt.Errorf("status takes at most one version, got %d arguments", len(args))

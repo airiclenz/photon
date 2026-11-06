@@ -119,7 +119,11 @@ func newPublishCommand(commands runner, openRepo repoOpener, channels channelRep
 			"setup is pending —\na missing tap or bucket repository, an unmerged first winget " +
 			"submission, komac or a\nGitHub token missing — is skipped and named; a first " +
 			"`komac submit` that fails leaves\nwinget setup-pending, naming the kept manifest " +
-			"directory and the command to rerun.\nThe run still succeeds. Last, the smoke step " +
+			"directory and the command to rerun.\nThe npm step publishes the wrapper " +
+			"@airiclenz/photon and its six platform packages,\nstaged from the release's " +
+			"archives checked against its SHA256SUMS, with the token in\nNPM_TOKEN: only the " +
+			"packages the registry lacks, the wrapper last. A missing npm or\nNPM_TOKEN leaves " +
+			"npm setup-pending.\nThe run still succeeds. Last, the smoke step " +
 			"checks the published release from\nthe outside, as the smoke verb does, comparing " +
 			"its SHA256SUMS with this run's build\nwhen it made one; a failed check fails the " +
 			"run. It never prompts or reads stdin, and\nexits 1 after printing the step table " +

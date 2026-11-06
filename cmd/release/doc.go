@@ -20,8 +20,8 @@
 // tests pin. What it asks of the package channels' repositories goes through the channelRepos
 // seam (channelrepos.go) the same way: the verbs' tests hold them in memChannelRepos, and only
 // execChannelRepos' own tests pin its argv. The runner's fakes answer the toolchain, dist's read
-// of its source tree's commit time, komac, `gh auth token`, brew and the released binaries the
-// smoke test runs.
+// of its source tree's commit time, komac, `gh auth token`, brew, the npm smoke check's
+// `npm install` and the released binaries the smoke test runs.
 //
 // It is a dev tool, never a release asset: dist does not ship it, and its production code imports
 // nothing from photon's internal packages (only docmap_test.go uses internal/testkit).
@@ -43,8 +43,9 @@
 //   - `homebrew.go` — the homebrew channel: its probe, describe, converge, formula rendering and
 //     smoke check
 //   - `main.go` — main, the root command and the exit code a run failure maps to
-//   - `npm.go` — the npm channel's packages: staging the wrapper and the six platform packages
-//     of a release from its archives, checked against SHA256SUMS
+//   - `npm.go` — the npm channel: its probe, describe, converge and smoke check, and staging the
+//     wrapper and the six platform packages of a release from its archives, checked against
+//     SHA256SUMS
 //   - `prepare.go` — release prepare: the CHANGELOG rollup and VERSION bump commits
 //   - `publish.go` — release publish: the verb, the run and its step loop, the gate checks and the
 //     step table

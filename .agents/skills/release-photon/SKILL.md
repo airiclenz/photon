@@ -5,8 +5,9 @@ description: >
   status`, drafts the notes with release-notes-photon, proposes the version and
   has the owner confirm it, makes the two local release commits with `prepare`,
   then — after a dry run and one explicit confirmation — runs `publish`, which
-  pushes, waits for the CI-made tag, creates the GitHub release and updates
-  Homebrew and Scoop. Optional argument vX.Y.Z proposes the version.
+  pushes, waits for the CI-made tag, creates the GitHub release, updates
+  Homebrew and Scoop, submits to winget and publishes to npm. Optional
+  argument vX.Y.Z proposes the version.
   Use for "cut a release", "publish a release", "ship vX.Y.Z". Only drafting
   the notes is release-notes-photon.
 ---
@@ -35,12 +36,15 @@ is run for photon.
   undone with `git reset --keep HEAD~2`; everything after it is fixed
   forward, never undone.
 - **No bypass.** A blocked gate stops the run. You never tag, push, create a
-  GitHub release, or commit to the tap or the bucket by hand — `publish`
-  does all of it, and the tag is made by CI, never by you or `publish`.
+  GitHub release, commit to the tap or the bucket, submit to winget or
+  publish to npm by hand — `publish` does all of it, and the tag is made by
+  CI, never by you or `publish`.
 - **Ask with the host's user-question tool** (`ask_user`, `AskUserQuestion`,
   or similar) at every *Ask* below, and wait for the answer. No answer, or a
   host without the tool, means stop — never assume consent.
-- Needs an authenticated `gh` (`gh auth status`) and a Go toolchain. Shell
+- Needs an authenticated `gh` (`gh auth status`) and a Go toolchain; the
+  winget step also needs komac, and the npm step npm and `NPM_TOKEN` (without
+  them the step is setup-pending, see *Report*). Shell
   snippets assume fail-fast hosts (`set -e`, `pipefail`): a command that may
   match nothing carries `|| true` — keep it.
 
@@ -113,10 +117,11 @@ git log -2 --format=%s
 
 From the status JSON, name every `setup-pending` step (`publish` skips it
 and still succeeds; a later re-run converges it once the owner's one-time
-setup — a missing tap or bucket repository — is done) and every `unknown`
-one. `prepare` makes exactly two **local** commits — the CHANGELOG rollup,
-then the bare `X.Y.Z` in `VERSION` — and pushes nothing; a refusal writes
-nothing — relay it and stop.
+setup — a missing tap or bucket repository, komac, a GitHub token, an
+unmerged first winget submission, npm or `NPM_TOKEN` — is done) and every
+`unknown` one. `prepare` makes exactly two **local** commits — the CHANGELOG
+rollup, then the bare `X.Y.Z` in `VERSION` — and pushes nothing; a refusal
+writes nothing — relay it and stop.
 
 ## 6 — Write the release notes file (one shell call)
 
@@ -142,8 +147,9 @@ the gate is blocked or VERSION at HEAD does not read X.Y.Z; once the tag is
 on origin and the release is pending, `ci.yml` has no successful run for the
 tag's commit (its gate row reads `CI only`) — relay the reasons and stop
 (see *Abort*). Otherwise *Ask* exactly once: "Publish vX.Y.Z? This pushes
-main, waits for CI to tag it, creates the GitHub release and updates
-Homebrew and Scoop. It cannot be undone." — options *publish* and
+main, waits for CI to tag it, creates the GitHub release, updates Homebrew
+and Scoop, submits to winget and publishes to npm. It cannot be undone." —
+options *publish* and
 *abort*. Anything but *publish* is abort.
 
 ## 8 — Publish
@@ -174,12 +180,25 @@ has pushed, nothing is undone: a broken release is fixed with a new version.
 End with the final step table and, in plain words:
 
 - the version, the GitHub release URL and the notes file path;
-- each channel's outcome;
+- each channel's outcome — winget reads done once its pull request is open:
+  the version is submitted, and installable with `winget install
+  AiricLenz.Photon` only once winget-pkgs merges it, so say "submitted", not
+  "published";
 - every `setup-pending` channel with the manual command the owner runs to
   clear it (never you), and that re-running `publish vX.Y.Z` afterwards
   converges it:
   - homebrew — create the tap: `gh repo create airiclenz/homebrew-tap --public`;
   - scoop — create the bucket: `gh repo create airiclenz/scoop-bucket --public`;
+  - winget, komac missing — install it: `cargo install --locked komac`,
+    `brew install komac` or `winget install komac`;
+  - winget, no GitHub token — set `GITHUB_TOKEN`, or sign in: `gh auth login`;
+  - winget, first submission not merged — wait for the pull request the
+    detail names to merge in `microsoft/winget-pkgs`;
+  - winget, first `komac submit` failed — run the `komac submit` command the
+    detail names on the kept manifests;
+  - npm, npm missing — install Node.js, which ships npm;
+  - npm, no token — export `NPM_TOKEN`, an npm automation token that may
+    publish under `@airiclenz`;
 - the smoke result `publish` ran last; a SKIP is not a pass — say which.
 
 ## Hard rules

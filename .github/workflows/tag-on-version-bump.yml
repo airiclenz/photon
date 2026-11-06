@@ -4,9 +4,10 @@ name: tag-on-version-bump
 # decision is pinned by a tag instead of by memory. VERSION holds a bare X.Y.Z; the tag
 # this creates is `v` + VERSION, and it IS the release tag: a release cut ends with its
 # VERSION bump (the CHANGELOG rollup lands first) and never tags by hand. It creates a
-# git tag only — it does not publish a GitHub Release, build binaries, or touch the
-# Homebrew tap or Scoop bucket; `go run ./cmd/release publish` does those on top
-# of the tag, locally. Re-runs are harmless: an existing tag is left exactly as it is.
+# git tag only — it does not publish a GitHub Release, build binaries, touch the
+# Homebrew tap or Scoop bucket, submit to winget or publish to npm;
+# `go run ./cmd/release publish` does those on top of the tag, locally. Re-runs are
+# harmless: an existing tag is left exactly as it is.
 #
 # Tags created with GITHUB_TOKEN do not trigger other workflows. That is what keeps this
 # from looping with ci.yml — and it also means a future `on: push: tags:` workflow would

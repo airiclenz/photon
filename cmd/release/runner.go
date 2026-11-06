@@ -10,16 +10,16 @@ import (
 )
 
 // runner is the one seam every external command this program runs goes through — `go`, `git`,
-// `gh`, `brew` alike. The release verbs never call os/exec themselves, so a test hands them a
-// recording fake and no test of a verb ever reaches the network, a real `git` or a real
+// `gh`, `brew`, `npm` alike. The release verbs never call os/exec themselves, so a test hands them
+// a recording fake and no test of a verb ever reaches the network, a real `git` or a real
 // toolchain; only versionbump_test.go runs real `git`, under the workflow's script and never
 // through this seam.
 // What the verbs ask of the photon checkout and its GitHub repository goes through the repo seam
 // (repo.go) instead, whose execRepo is the one caller of the runner with that argv, and what they
 // ask of the package channels' repositories through the channelRepos seam (channelrepos.go), whose
 // execChannelRepos is the one caller with theirs; the runner itself carries the toolchain, dist's
-// read of its source tree's commit time, komac, `gh auth token`, brew and the released binaries
-// the smoke test runs.
+// read of its source tree's commit time, komac, `gh auth token`, brew, the npm smoke check's
+// `npm install` and the released binaries the smoke test runs.
 type runner interface {
 	// run executes name with args in dir, with env appended to the inherited environment (a
 	// later entry overrides an earlier one, so env wins), and returns what the command wrote to

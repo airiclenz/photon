@@ -120,8 +120,10 @@ func newSmokeCommand(commands runner, openRepo repoOpener, channels channelRepos
 			"archives\ndownload and match SHA256SUMS; every binary's build stamp names the " +
 			"tagged commit; the\nhost's archive holds a binary reporting the version; where " +
 			"photon is installed with\nHomebrew and the version is the latest release, `brew " +
-			"upgrade photon` moves it onto\nthe version; and the Scoop bucket's manifest names " +
-			"the version and both Windows\narchives' hashes. A check whose tool or input is " +
+			"upgrade photon` moves it onto\nthe version; the Scoop bucket's manifest names " +
+			"the version and both Windows\narchives' hashes; and `npm install` of " +
+			"@airiclenz/photon at the version gives a photon\nreporting the version. winget, " +
+			"whose pull request merges later, has no check.\nA check whose tool or input is " +
 			"missing prints SKIP and never counts\nas a pass. The version defaults to VERSION; a " +
 			"bare X.Y.Z reads as vX.Y.Z. It exits 1\nwhen any check fails. publish runs it as " +
 			"its last step.",

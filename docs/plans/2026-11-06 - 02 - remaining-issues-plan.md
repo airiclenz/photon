@@ -367,7 +367,11 @@ cmd/release/smoke.go — checkReportsVersion; cmd/release/smoke_test.go — smok
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./cmd/release/`
 **Commit:** `feat(release): publish releases to npm`
 
-## 13. Document the winget and npm channels
+## 13. Document the winget and npm channels — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): steps.go (its setup-pending comment already names the tap, bucket, winget and npm setups) and channels.go:31 (the commit only the tap and the bucket take) name no channel set short of five, so they are left unchanged; the regression-guard grep's other hits are single-channel lines and tests
+NOTES (2026-11-06): publish.go's Long gained an npm-step sentence (it had none) rather than only a list edit; doc.go's map entry for npm.go, stale since item 12 moved the npm probe/describe/converge/smoke check into it, now names them
+NOTES (2026-11-06): retry — re-wrapped every added/changed line to at most 100 columns (tabs as 4): status.go's Long source lines (rendered help text unchanged), the workflow comment (`go run ./cmd/release publish` kept on one line), the .agents SKILL.md bullet, the .claude SKILL.md description (now a folded `>` scalar, as in the .agents copy), and the two new docs/releasing.md table rows (winget How now "a komac pull request", path without trailing slash; npm row "`registry.npmjs.org`: `@airiclenz/photon`, six platform packages | `npm publish` each")
 
 **What:** Depends on items 10 and 12.
 **Goal:** every place naming photon's release channels names all five; `docs/releasing.md` covers winget and npm prerequisites, one-time setup and resume notes; README shows `winget install AiricLenz.Photon` and `npm install -g @airiclenz/photon`.

@@ -41,8 +41,9 @@ func newRootCommand(commands runner, openRepo repoOpener, channels channelRepos)
 		Long: "release does the deterministic work of a photon release: it cross-builds the\n" +
 			"release archives and their checksums, reports the release gate and where each\n" +
 			"publish step stands, makes the CHANGELOG rollup and VERSION bump commits, " +
-			"publishes\nthe GitHub release, the Homebrew formula and the Scoop manifest, and " +
-			"smoke-tests a\npublished release, the same way on every host.",
+			"publishes\nthe GitHub release, the Homebrew formula, the Scoop manifest, the winget " +
+			"submission\nand the npm packages, and smoke-tests a published release, the same way " +
+			"on every\nhost.",
 		SilenceErrors: true,
 	}
 	cmd.AddCommand(newDistCommand(commands))

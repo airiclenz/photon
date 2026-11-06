@@ -67,7 +67,22 @@ scoop bucket add airiclenz https://github.com/airiclenz/scoop-bucket
 scoop install airiclenz/photon
 ```
 
-Both pull in ffmpeg.
+winget (Windows):
+
+```sh
+winget install AiricLenz.Photon
+```
+
+Homebrew, Scoop and winget pull in ffmpeg. A new version reaches winget a little after the
+others, once winget's review of it is done.
+
+npm (Linux, macOS, Windows; Node.js):
+
+```sh
+npm install -g @airiclenz/photon
+```
+
+npm does not install ffmpeg: install it yourself (see below).
 
 From source (Go 1.26 or later):
 
