@@ -1,0 +1,42 @@
+# The tune-page example: photon films its own timing editor. `photon setup` builds photon and
+# records a take of the hello example into the work dir; each take then serves `photon tune` on a
+# copy of the hello storyboard there, so a save never touches the repository. It needs the Go
+# toolchain, this repository and Chromium or Chrome.
+name: tune-page
+
+# setup and reset run by sh -c in this file's dir, with PHOTON_WORK set to the work dir.
+setup: |
+  set -e
+  go build -o "$PHOTON_WORK/photon" ../../cmd/photon
+  "$PHOTON_WORK/photon" setup ../hello/hello.yaml --work "$PHOTON_WORK/hello"
+  "$PHOTON_WORK/photon" record ../hello/hello.yaml --work "$PHOTON_WORK/hello"
+# A fresh copy of the hello storyboard for tune to save into, and the original beside it for the
+# storyboard's run expect to compare against.
+reset: |
+  set -e
+  cp ../hello/hello.yaml "$PHOTON_WORK/hello.yaml"
+  cp ../hello/hello.yaml "$PHOTON_WORK/hello.orig.yaml"
+
+services:
+  # The timing editor on the hello take, with the hello config: from the work dir tune would find
+  # no photon.yaml.
+  tune:
+    command: >-
+      exec "$PHOTON_WORK/photon" tune "$PHOTON_WORK/hello.yaml" --config ../hello/photon.yaml
+      --work "$PHOTON_WORK/hello" --port "$PHOTON_PORT"
+    ready: {line: '^photon tune: http'}
+
+launch:
+  url: 'http://127.0.0.1:${PHOTON_PORT_TUNE}/'
+
+# The take ends once the page has pushed no new frame for 500ms.
+end:
+  idle: 500ms
+
+areas:
+  # The transport bar: play, the time, the status, save and export.
+  transport:
+    selector: '#transport'
+  # The timeline: the beat lanes under the time axis.
+  timeline:
+    selector: '#timeline'

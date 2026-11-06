@@ -60,6 +60,9 @@ jobs:
         with:
           go-version-file: go.mod
       - name: go vet (browser tag)
-        run: go vet -tags browser ./internal/tune ./internal/browser ./internal/rig
+        run: go vet -tags browser ./internal/tune ./internal/browser ./internal/rig ./cmd/photon
       - name: go test (browser tag)
         run: go test -tags browser ./internal/tune ./internal/browser ./internal/rig -run Browser -v
+      # The tune-page example: setup builds photon and a hello take, record films photon tune.
+      - name: go test (browser tag, tune-page example)
+        run: go test -tags browser ./cmd/photon -run TunePage -v

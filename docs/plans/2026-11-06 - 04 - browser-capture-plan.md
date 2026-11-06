@@ -347,7 +347,12 @@ NOTES (2026-11-06): consequential edit — README.md: made necessary by the pick
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/`, then `./internal/storyboard/`
 **Commit:** `feat(tune): propose selector targets from a pick`
 
-## 18. Example: film photon tune's page
+## 18. Example: film photon tune's page — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): reset copies only the hello storyboard (plus an untouched copy, hello.orig.yaml, for a take-level `run` expect that the save changed the file), and the tune service passes `--config ../hello/photon.yaml`, since services run in the config's dir; run expects run in the work dir, hence the copy rather than a compare against the repo file.
+NOTES (2026-11-06): the beat-edge drag aims at `.handle[title="Drag to set duration"]` (beat 1's end), and the wait after it is a 1s pause, because the page shows no text once a drag edit lands; the Save click's `wait: Saved` fails the beat if the edit did not land, since Save stays disabled until an edit makes the storyboard dirty.
+NOTES (2026-11-06): the browser test skips when record's stderr carries browser.ErrNoBrowser's message and PHOTON_TEST_BROWSER_REQUIRED is unset; the example's config carries no launch.browser, so PHOTON_TEST_BROWSER does not apply to it. CI gets a separate `go test -tags browser ./cmd/photon -run TunePage` step, and `./cmd/photon` was added to the browser-tag `go vet` step too.
+NOTES (2026-11-06): the README is not touched here; linking the example and embedding the GIF is item 19. A manual render to a scratch path (`-o`) showed the 1280x640 page with the edited duration (2350ms) in the inspector; nothing was written to docs/media.
 
 **What:**
 **Goal:** `examples/tune-page/` has a `photon.yaml` and storyboard that record `photon tune` on a take of `examples/hello` (play, scrub, drag a beat edge, save) with every expect passing, shipping `docs/media/tune-page.gif`.

@@ -1,0 +1,53 @@
+# The tune-page clip: open photon tune on the hello take, play, scrub, drag a beat's end, save.
+#   photon setup  examples/tune-page/tune-page.yaml
+#   photon record examples/tune-page/tune-page.yaml
+#   photon render examples/tune-page/tune-page.yaml
+clip: tune-page
+ship: ../../docs/media/tune-page.gif
+frame: {viewport: {width: 1280, height: 640}, scale: 1, width: 960, fps: 10, max_colors: 128}
+expect:
+  - seen: 'Export GIF'
+  # The save wrote the edited storyboard over the work dir's copy.
+  - run: '! cmp -s "$PHOTON_WORK/hello.orig.yaml" "$PHOTON_WORK/hello.yaml"'
+beats:
+  - id: 1
+    title: open
+    why: the first paint shows the preview, the transport and the timeline
+    duration: 2s
+    do:
+      - wait: {screen: '3 pick an item', timeout: 30s}
+      - pause: {for: 1s}
+    expect:
+      - seen: '1 open'
+        area: timeline
+  - id: 2
+    title: play
+    duration: 3s
+    do:
+      - click: {target: {selector: '#play'}}
+      - wait: {screen: '0:0[2-9]\.', timeout: 15s}
+      - click: {target: {selector: '#play'}}
+    expect:
+      - seen: '0:0[2-9]\.'
+        area: transport
+  - id: 3
+    title: scrub
+    duration: 2s
+    do:
+      - drag: {from: {selector: '.lane-track.axis'}, to: {offset: {x: -300}}, steps: 12}
+      - pause: {for: 1s}
+  - id: 4
+    title: drag a beat's end
+    duration: 2s
+    do:
+      - drag: {from: {selector: '.handle[title="Drag to set duration"]'}, to: {offset: {x: 60}}, steps: 10}
+      - pause: {for: 1s}
+  - id: 5
+    title: save
+    duration: 2s
+    do:
+      - click: {target: {selector: '#save'}}
+      - wait: {screen: 'Saved', timeout: 10s}
+    expect:
+      - seen: 'Saved'
+        area: transport

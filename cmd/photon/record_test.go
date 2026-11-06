@@ -43,6 +43,13 @@ const dialTimeout = 2 * time.Second
 // helloStoryboard is the example clip, recorded end to end.
 var helloStoryboard = filepath.Join("..", "..", "examples", "hello", "hello.yaml")
 
+// tunePageStoryboard is the example that films photon tune's own page, and tunePageShip the GIF
+// its ship path must reach: the one the README embeds.
+var (
+	tunePageStoryboard = filepath.Join("..", "..", "examples", "tune-page", "tune-page.yaml")
+	tunePageShip       = filepath.Join("..", "..", "docs", "media", "tune-page.gif")
+)
+
 func TestMain(m *testing.M) {
 	switch os.Getenv(roleEnv) {
 	case rolePhoton:
@@ -512,5 +519,29 @@ func TestRetakeLoop(t *testing.T) {
 	}
 	if got, want := strings.TrimSpace(string(output)), "failed takes: 1"; got != want {
 		t.Errorf("the retake loop printed %q, want %q", got, want)
+	}
+}
+
+func TestLintTunePage(t *testing.T) {
+	code, stdout, stderr := runLint(t, []string{"lint", tunePageStoryboard})
+	if code != exitOK || !strings.Contains(stdout, okMarker) {
+		t.Fatalf("lint exit code = %d, want %d with %q (stdout %q, stderr %q)",
+			code, exitOK, okMarker, stdout, stderr)
+	}
+
+	loaded, err := clip.Load(tunePageStoryboard, "", "")
+	if err != nil {
+		t.Fatalf("load the example: %v", err)
+	}
+	got, err := filepath.Abs(loaded.Storyboard.Ship)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.Abs(tunePageShip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Errorf("the example ships to %s, want %s", got, want)
 	}
 }
