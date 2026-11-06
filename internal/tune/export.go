@@ -20,6 +20,10 @@ var (
 	ErrExporting = errors.New("an export is already running")
 )
 
+// errRunEnded is how an export asked for after its run stopped waiting for exports ends: at once,
+// with nothing rendered.
+var errRunEnded = errors.New("the tuning run has ended")
+
 // ExportState is the session's GIF export as `/api/state` sends it: whether it is running, the
 // frames it has streamed through ffmpeg's two passes so far (Done) out of all of them (Total), and,
 // once it has finished, the GIF it wrote (Out) or why it failed (Error), one of the two. A session
@@ -33,18 +37,21 @@ type ExportState struct {
 }
 
 // exportJob is a session's one export: its state under a lock of its own, so a render's progress
-// never waits on the session's lock, and the render's goroutine while one runs.
+// never waits on the session's lock, and the render's goroutine while one runs. Once closed, the
+// run serving the session is waiting for the last render, so no new one starts.
 type exportJob struct {
 	mu        sync.Mutex
 	state     ExportState
+	isClosed  bool
 	rendering sync.WaitGroup
 }
 
 // Export starts rendering the GIF of the storyboard on disk to its ship path in the background,
 // just as `photon render` renders it, against the session's take, and returns at once;
 // [Session.State] reports its progress and how it ended. The render ends early when the run that
-// serves the session ends ([Run]). Neither the export nor its progress changes the history, the
-// unsaved bytes or the state's version.
+// serves the session ends ([Run]); one asked for once that run has stopped waiting for exports
+// ends at once, failed, with nothing rendered. Neither the export nor its progress changes the
+// history, the unsaved bytes or the state's version.
 //
 // It refuses with [ErrStale] when the storyboard on disk is not the one the session loaded or last
 // saved, with [ErrUnsaved] while edits are unsaved, with [ErrProblems] while an error stands, and
@@ -65,10 +72,13 @@ func (s *Session) Export() error {
 	}
 	// Clean and free of problems, the current bytes are the ones on disk and built in full, so
 	// the good pipeline's clip is the saved one.
-	if !s.export.start() {
-		return ErrExporting
+	isStarted, err := s.export.start()
+	if err != nil {
+		return err
 	}
-	go s.runExport(s.runContext, s.renderClip, s.good.loaded, s.takePath)
+	if isStarted {
+		go s.runExport(s.runContext, s.renderClip, s.good.loaded, s.takePath)
+	}
 	return nil
 }
 
@@ -90,6 +100,12 @@ func (s *Session) waitExport() {
 	s.export.rendering.Wait()
 }
 
+// closeExport stops the session from starting exports, then returns once none is running: an
+// export asked for afterwards ends at once, failed, with nothing rendered.
+func (s *Session) closeExport() {
+	s.export.close()
+}
+
 // snapshot is the export's state as it stands.
 func (j *exportJob) snapshot() ExportState {
 	j.mu.Lock()
@@ -98,18 +114,34 @@ func (j *exportJob) snapshot() ExportState {
 	return j.state
 }
 
-// start marks a new export running, its progress and outcome cleared, and reports true; with one
-// running already it changes nothing and reports false. A started export must be finished.
-func (j *exportJob) start() bool {
+// start marks a new export running, its progress and outcome cleared, and reports true; a started
+// export must be finished. With one running already it changes nothing and refuses with
+// [ErrExporting]. Once closed it records a new export as failed with [errRunEnded] and reports
+// false: the render is never started, so the close's wait never races its start.
+func (j *exportJob) start() (bool, error) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
 	if j.state.IsRunning {
-		return false
+		return false, ErrExporting
+	}
+	if j.isClosed {
+		j.state = ExportState{Error: errRunEnded.Error()}
+		return false, nil
 	}
 	j.state = ExportState{IsRunning: true}
 	j.rendering.Add(1)
-	return true
+	return true, nil
+}
+
+// close stops the job from starting renders, then returns once none is running. A render's start
+// either happened before the close took the lock or sees it closed, so none starts during the wait.
+func (j *exportJob) close() {
+	j.mu.Lock()
+	j.isClosed = true
+	j.mu.Unlock()
+
+	j.rendering.Wait()
 }
 
 // finish records how the running export ended: out, the GIF written, or err's text.

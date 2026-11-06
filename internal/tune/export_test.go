@@ -3,11 +3,14 @@ package tune
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -266,5 +269,133 @@ func TestSession_Export_FailingRender_ReportsItsError(t *testing.T) {
 	if after.IsDirty != before.IsDirty || after.Version != before.Version {
 		t.Errorf("session: want dirty %v at version %d kept, got dirty %v at version %d",
 			before.IsDirty, before.Version, after.IsDirty, after.Version)
+	}
+}
+
+func TestSession_Export_AfterClose_EndsAtOnceUnrendered(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixture(t)
+	var isRendered atomic.Bool
+	fixture.session.renderClip = func(context.Context, *clip.Clip, render.Options, io.Writer, io.Writer) error {
+		isRendered.Store(true)
+		return nil
+	}
+	fixture.session.closeExport()
+
+	err := fixture.session.Export()
+
+	if err != nil {
+		t.Fatalf("Export after the close: want nil, got %v", err)
+	}
+	fixture.session.waitExport()
+	if isRendered.Load() {
+		t.Error("Export after the close: want no render started, got one")
+	}
+	if want := (ExportState{Error: errRunEnded.Error()}); fixture.session.State().Export != want {
+		t.Errorf("export after the close: want %+v, got %+v", want, fixture.session.State().Export)
+	}
+}
+
+func TestSession_CloseExport_WaitsForTheRunningOneAndStartsNoOther(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixture(t)
+	held := newHeldRender()
+	fixture.session.renderClip = held.render
+	if err := fixture.session.Export(); err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	<-held.started
+	closed := make(chan struct{})
+	go func() {
+		fixture.session.closeExport()
+		close(closed)
+	}()
+	waitUntilExportClosed(t, fixture.session)
+
+	select {
+	case <-closed:
+		t.Fatal("closeExport: want it waiting for the running export, got it returned")
+	default:
+	}
+	if err := fixture.session.Export(); !errors.Is(err, ErrExporting) {
+		t.Errorf("Export while closing: want ErrExporting, got %v", err)
+	}
+	close(held.release)
+	<-closed
+	if err := fixture.session.Export(); err != nil {
+		t.Fatalf("Export once closed: want nil, got %v", err)
+	}
+
+	select {
+	case options := <-held.started:
+		t.Errorf("Export once closed: want no render started, got one with %+v", options)
+	default:
+	}
+	if want := (ExportState{Error: errRunEnded.Error()}); fixture.session.State().Export != want {
+		t.Errorf("export once closed: want %+v, got %+v", want, fixture.session.State().Export)
+	}
+}
+
+// TestSession_CloseExport_RacingExports_StartsNoRenderDuringOrAfterTheWait asks for exports from
+// several goroutines while the export closes; run it with -race to see the close's wait never
+// overlaps a render's start.
+func TestSession_CloseExport_RacingExports_StartsNoRenderDuringOrAfterTheWait(t *testing.T) {
+	t.Parallel()
+	const askers, asksEach = 4, 50
+	fixture := newSessionFixture(t)
+	var isCloseReturned, isLateRender atomic.Bool
+	var running atomic.Int32
+	firstStarted := make(chan struct{})
+	var once sync.Once
+	fixture.session.renderClip = func(context.Context, *clip.Clip, render.Options, io.Writer, io.Writer) error {
+		running.Add(1)
+		defer running.Add(-1)
+		if isCloseReturned.Load() {
+			isLateRender.Store(true)
+		}
+		once.Do(func() { close(firstStarted) })
+		return nil
+	}
+
+	var asking sync.WaitGroup
+	for range askers {
+		asking.Go(func() {
+			for range asksEach {
+				if err := fixture.session.Export(); err != nil && !errors.Is(err, ErrExporting) {
+					t.Errorf("Export: want nil or ErrExporting, got %v", err)
+					return
+				}
+			}
+		})
+	}
+	<-firstStarted
+	fixture.session.closeExport()
+	isCloseReturned.Store(true)
+	runningAtClose := running.Load()
+	asking.Wait()
+
+	if runningAtClose != 0 {
+		t.Errorf("closeExport: want no render running once it returns, got %d", runningAtClose)
+	}
+	if isLateRender.Load() {
+		t.Error("closeExport: want no render started once it returns, got one")
+	}
+}
+
+// waitUntilExportClosed waits until session's export is closed to new renders.
+func waitUntilExportClosed(t *testing.T, session *Session) {
+	t.Helper()
+	deadline := time.Now().Add(exportTimeout)
+	for {
+		session.export.mu.Lock()
+		isClosed := session.export.isClosed
+		session.export.mu.Unlock()
+		if isClosed {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("export still open after %v", exportTimeout)
+		}
+		time.Sleep(exportPollInterval)
 	}
 }

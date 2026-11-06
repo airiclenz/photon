@@ -66,8 +66,10 @@ func Run(
 		return fmt.Errorf("listen on %s: %w", address, err)
 	}
 	err = serve(ctx, listener, session, stdout, stderr)
-	// The export's render cleans up after itself, its palette file included, before it returns.
-	session.waitExport()
+	// The export's render cleans up after itself, its palette file included, before it returns. A
+	// request still in flight past the shutdown's timeout can ask for an export now: closing first
+	// ends it at once instead of starting a render the wait would miss.
+	session.closeExport()
 	return err
 }
 
