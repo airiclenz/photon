@@ -194,7 +194,8 @@ func ParseButton(name string) (Button, error) {
 		for _, b := range buttonNames {
 			names = append(names, b.name)
 		}
-		return LeftButton, fmt.Errorf("unknown button %q, want one of %s", name, strings.Join(names, ", "))
+		return LeftButton, fmt.Errorf("unknown button %q, want one of %s",
+			name, strings.Join(names, ", "))
 	}
 	return buttonNames[at].button, nil
 }
@@ -215,7 +216,8 @@ func ParseMods(spelling string) (Mods, error) {
 			for _, m := range modNames {
 				names = append(names, m.name)
 			}
-			return 0, fmt.Errorf("unknown modifier %q, want one of %s", name, strings.Join(names, ", "))
+			return 0, fmt.Errorf("unknown modifier %q, want one of %s",
+				name, strings.Join(names, ", "))
 		}
 		mod := modNames[at].mod
 		if mods&mod != 0 {
