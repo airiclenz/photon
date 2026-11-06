@@ -19,17 +19,20 @@ import (
 // Edit is one typed change to a storyboard field, as photon tune's page sends it:
 // {"owner": {"kind": "<kind>", "index": <n>}, "field": "<name>", "value": <JSON>}. Owner is
 // what the field edits: the beat by its id for a beat field, the clip with index 0 for
-// frame.cols, frame.rows, frame.padding, frame.font_size, frame.line_height, frame.scale,
-// frame.width, frame.fps and frame.max_colors, the camera position or zoom by its index in the
-// storyboard's camera.positions or camera.zooms list, from 0, for a position or zoom field, and
-// the caption by its index in the storyboard's captions list, from 0, for a caption field. Value
-// is typed per field:
+// frame.cols, frame.rows, frame.viewport, frame.device_scale, frame.padding, frame.font_size,
+// frame.line_height, frame.scale, frame.width, frame.fps and frame.max_colors, the camera
+// position or zoom by its index in the storyboard's camera.positions or camera.zooms list, from 0,
+// for a position or zoom field, and the caption by its index in the storyboard's captions list,
+// from 0, for a caption field. Value is typed per field:
 //   - duration, hold: a whole number of milliseconds (1850);
 //   - cut: true or false;
 //   - frame.cols, frame.rows, frame.padding, frame.scale, frame.width, frame.fps,
 //     frame.max_colors: a whole number, cols, rows, scale, width and fps at least 1 and
 //     max_colors in 2..256;
 //   - frame.font_size, frame.line_height: a number above 0, the font size in [6, 72];
+//   - frame.viewport: a page's size in CSS pixels, {"width": 1280, "height": 800}, whole numbers
+//     of at least 1; null removes the key;
+//   - frame.device_scale: a number in [1, 4], 1 removing the key;
 //   - position.at, zoom.at: a moment, which replaces the entry's whole at;
 //   - position.hold: a whole number of milliseconds, 0 removing the key;
 //   - position.span: the position's at and hold at once, {"at": {"beat": 3, "offset_ms": 200},
@@ -67,7 +70,8 @@ import (
 //   - caption.position: design pixels, the caption box's top-left corner, which removes the
 //     caption's place, align and offset; null removes the position, as caption.place,
 //     caption.align and caption.offset each do;
-//   - caption.font.size: a number above 0, frame.font_size removing the key;
+//   - caption.font.size: a number above 0, frame.font_size — 16 on a frame with a viewport —
+//     removing the key;
 //   - caption.font.weight: "regular", which removes the key, or "bold";
 //   - caption.color, caption.box.color: a colour, "#ffcc00", its default — "#ffffff" for the
 //     text and "#000000" for the box, in either case — removing the key;
@@ -80,8 +84,8 @@ import (
 //   - caption.move: a whole number, the index the owner's caption moves to.
 //
 // A value of another JSON type or spelling, a null or absent value but caption.until's,
-// caption.position's and a remove's, and an owner of another kind than the field's are refused
-// with an error naming the field.
+// caption.position's, frame.viewport's and a remove's, and an owner of another kind than the
+// field's are refused with an error naming the field.
 type Edit struct {
 	Owner Owner           `json:"owner"`
 	Field string          `json:"field"`
@@ -104,13 +108,17 @@ const (
 	FieldFrameCols      = "frame.cols"
 	FieldFrameRows      = "frame.rows"
 	FieldFrameMaxColors = "frame.max_colors"
+
+	FieldFrameViewport    = "frame.viewport"
+	FieldFrameDeviceScale = "frame.device_scale"
 )
 
 // editFields lists every field Apply takes, as the unknown-field error offers them.
 var editFields = []string{
 	FieldDuration, FieldHold, FieldCut, FieldFrameWidth, FieldFrameFPS, FieldFramePadding,
 	FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldFrameCols, FieldFrameRows,
-	FieldFrameMaxColors, FieldPositionAt, FieldPositionHold,
+	FieldFrameMaxColors, FieldFrameViewport, FieldFrameDeviceScale, FieldPositionAt,
+	FieldPositionHold,
 	FieldPositionSpan, FieldPositionTransition, FieldPositionEase, FieldPositionCell,
 	FieldPositionTarget, FieldZoomAt, FieldZoomOver, FieldZoomEase, FieldZoomTo,
 	FieldPositionInsert, FieldPositionRemove, FieldZoomInsert, FieldZoomRemove, FieldCaptionAt,
@@ -156,8 +164,9 @@ const (
 // plain seconds in seconds with the fewest decimals, any other or new value as
 // time.Duration.String(). A new key goes after the keys that precede it in the storyboard's field
 // order, its yaml struct tags, a position's point keys ahead of its at, hold and ease; a value
-// equal to the default of a key that is absent writes nothing; cut false, a position's hold of 0, a
-// position's or zoom's ease smooth, caption.place bottom, caption.align middle, caption.offset {0,
+// equal to the default of a key that is absent writes nothing; cut false, a frame.device_scale of
+// 1, a null frame.viewport, a position's hold of 0, a position's or zoom's ease smooth,
+// caption.place bottom, caption.align middle, caption.offset {0,
 // 0} and a caption's font, colour, box or fade at the default [Load] fills in delete their key, and
 // a caption's font, box or fade mapping left holding no key goes with it, while a style value a
 // caption lacks the mapping for creates it as a one-key flow mapping. A colour is written quoted,
@@ -257,7 +266,7 @@ func (s *splicer) apply(board *Storyboard, edit Edit) error {
 		return errors.New("want a value, got none")
 	}
 	isNullTaken := edit.Field == FieldCaptionUntil || edit.Field == FieldCaptionPosition ||
-		isRemoveField(edit.Field)
+		edit.Field == FieldFrameViewport || isRemoveField(edit.Field)
 	if isNull(edit.Value) && !isNullTaken {
 		return errors.New("want a value, got null")
 	}

@@ -369,9 +369,27 @@ launch:
   url: 'http://127.0.0.1:${PHOTON_PORT_WEB}/'
 `
 
+// writeURLProject writes a project of urlLaunchConfig, its storyboard's frame a page's viewport
+// instead of the terminal's grid, as a url launch takes it, and returns its dir.
+func writeURLProject(t *testing.T) string {
+	t.Helper()
+	dir := writeSetupProject(t, urlLaunchConfig)
+	path := filepath.Join(dir, storyboardFile)
+	board, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := strings.Replace(string(board), "cols: 60, rows: 12, padding: 16, font_size: 14, line_height: 1.2,",
+		"viewport: {width: 1280, height: 800},", 1)
+	if err := os.WriteFile(path, []byte(page), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 func TestSetup_RefusesAURLLaunch(t *testing.T) {
 	t.Parallel()
-	dir := writeSetupProject(t, urlLaunchConfig)
+	dir := writeURLProject(t)
 	work := filepath.Join(dir, "work")
 	loaded, err := clip.Load(filepath.Join(dir, storyboardFile), "", work)
 	if err != nil {
@@ -390,7 +408,7 @@ func TestSetup_RefusesAURLLaunch(t *testing.T) {
 
 func TestRecord_RefusesAURLLaunch(t *testing.T) {
 	t.Parallel()
-	dir := writeSetupProject(t, urlLaunchConfig)
+	dir := writeURLProject(t)
 	work := filepath.Join(dir, "work")
 	loaded, err := clip.Load(filepath.Join(dir, storyboardFile), "", work)
 	if err != nil {

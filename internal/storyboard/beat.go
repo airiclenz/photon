@@ -126,7 +126,7 @@ func (d DragAction) StepCount() int {
 // DragEnd is a point a drag passes through (a via point) or releases at (its to): either a target
 // resolved on the screen as it stands (its fields sit inline, so `to: {text: …}` reads as a
 // target) or an Offset from the drag's previous point — the press cell for the first via point,
-// or for the to of a drag with none. Exactly one of Text and Offset is set.
+// or for the to of a drag with none. Exactly one of Text, Selector and Offset is set.
 type DragEnd struct {
 	Target `yaml:",inline"`
 	Offset *Offset `yaml:"offset"`
@@ -157,13 +157,16 @@ type PauseAction struct {
 
 // Target is an on-screen place a click, drag or camera position resolves on a screen: Text is a
 // regex over the screen's rows, Nth picks which match counts and Area limits the rows searched to
-// an area the config declares (empty or [AreaAny] means the whole screen). It is also a target on
-// the JSON wire, {"text", "nth", "area"}, as photon tune's pick proposes it: a zero Nth and an
-// empty Area are left out.
+// an area the config declares (empty or [AreaAny] means the whole screen). On a clip that films a
+// page, Selector, a CSS selector, may come instead of Text: the box its element had on the
+// screen, as the source recorded it; exactly one of the two is set. It is also a target on the
+// JSON wire, {"text", "selector", "nth", "area"}, as photon tune's pick proposes it: an empty
+// Selector, a zero Nth and an empty Area are left out.
 type Target struct {
-	Text string `yaml:"text" json:"text"`
-	Nth  Nth    `yaml:"nth" json:"nth,omitempty"`
-	Area string `yaml:"area" json:"area,omitempty"`
+	Text     string `yaml:"text" json:"text"`
+	Selector string `yaml:"selector" json:"selector,omitempty"`
+	Nth      Nth    `yaml:"nth" json:"nth,omitempty"`
+	Area     string `yaml:"area" json:"area,omitempty"`
 }
 
 // AreaAny is the area spelling that searches the whole screen, as an empty area does.

@@ -17,10 +17,10 @@ import (
 //
 // The caption starts At and ends after For or at Until, exactly one of the two. It is placed
 // by Place and Align, nudged by Offset, or set by Position — the box's top-left corner — instead
-// of all three. [Load] fills what a valid caption leaves out: Font's size is frame.font_size and
-// its weight regular, Place is bottom and Align middle (unless Position is set, when both stay
-// empty), Color is white and Box is black at 0.6 opacity. Width is the box's outer width in
-// design pixels; zero leaves it automatic.
+// of all three. [Load] fills what a valid caption leaves out: Font's size is frame.font_size, or
+// [DefaultPageCaptionSize] on a frame with a viewport, and its weight regular, Place is bottom and
+// Align middle (unless Position is set, when both stay empty), Color is white and Box is black at
+// 0.6 opacity. Width is the box's outer width in design pixels; zero leaves it automatic.
 //
 // The authored fields stay as written, defaults filled; [Load] also resolves the caption onto the
 // clip's output clock, its colours and its text's styled runs, which [Caption.Start],
@@ -69,7 +69,8 @@ type RGB struct {
 	R, G, B uint8
 }
 
-// CaptionFont is a caption's face: its Size, in the unit of frame.font_size, and its Weight.
+// CaptionFont is a caption's face: its Size, in the unit of frame.font_size or, on a frame with a
+// viewport, in CSS pixels, and its Weight.
 type CaptionFont struct {
 	Size   float64 `yaml:"size"`
 	Weight Weight  `yaml:"weight"`
@@ -126,11 +127,16 @@ type Fade struct {
 }
 
 // Caption size bounds, in the unit of frame.font_size, which bound frame.font_size too: below 6
-// the text is unreadable in a GIF, beyond 72 one line fills the frame.
+// the text is unreadable in a GIF, beyond 72 one line fills the frame. On a frame with a viewport
+// the unit is the CSS pixel and the bounds are the same.
 const (
 	minCaptionSize = 6
 	maxCaptionSize = 72
 )
+
+// DefaultPageCaptionSize is the size, in CSS pixels, of a caption without its own on a frame with
+// a viewport, which has no frame.font_size to take.
+const DefaultPageCaptionSize = 16
 
 // The colours a caption leaves out.
 const (
@@ -160,7 +166,7 @@ func (s *Storyboard) validateCaptions(collect collector) {
 // validate applies the caption's rules, resolving its times on clock, board's output clock, and
 // its colours, a colour left out resolving to its default. What fails to resolve stays zero.
 func (c *Caption) validate(board *Storyboard, clock OutputClock, report reporter) {
-	c.Font.validate(board.Frame.FontSize, report)
+	c.Font.validate(board.Frame.captionFontSize(), report)
 	c.validatePlacement(report)
 	c.textColor = validateColor("color", cmp.Or(c.Color, defaultCaptionColor), report)
 	c.validateText(report)
@@ -192,9 +198,9 @@ func (c *Caption) validateText(report reporter) {
 	c.runs = runs
 }
 
-// validate checks the font's weight and that its size — its own, or frame.font_size when it has
-// none — lies in the caption bounds. A missing frame.font_size is the header's problem, not the
-// caption's.
+// validate checks the font's weight and that its size — its own, or frameFontSize, the frame's
+// caption size, when it has none — lies in the caption bounds. A missing frame.font_size is the
+// header's problem, not the caption's.
 func (f CaptionFont) validate(frameFontSize float64, report reporter) {
 	if f.Weight != "" && f.Weight != WeightRegular && f.Weight != WeightBold {
 		report("font.weight: want %s or %s, got %q", WeightRegular, WeightBold, f.Weight)
@@ -322,7 +328,7 @@ func parseColor(color string) (parsed RGB, isColor bool) {
 	return RGB{R: uint8(value >> 16), G: uint8(value >> 8), B: uint8(value)}, true
 }
 
-// applyDefaults fills what a valid caption leaves out; frameFontSize is the frame's font size,
+// applyDefaults fills what a valid caption leaves out; frameFontSize is the frame's caption size,
 // the default caption size.
 func (c *Caption) applyDefaults(frameFontSize float64) {
 	c.Text = strings.TrimSuffix(c.Text, "\n")

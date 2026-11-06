@@ -4,7 +4,9 @@
 // get one. [Load] reads a file and [Parse] takes its bytes; both refuse an unknown field and
 // report every rule the file breaks at once, in a [ValidationError]. A problem that belongs to one
 // beat, camera position, camera zoom or caption is a [LocatedError], which [OwnerOf] reads its
-// owner from.
+// owner from. A frame with a viewport films a page rather than a terminal: it takes none of the
+// terminal's grid keys, a target may name a CSS selector instead of a text, and a caption's size
+// defaults to [DefaultPageCaptionSize].
 //
 // Parse is the static tier of the three a storyboard is checked in: every rule the file decides
 // on its own. The font-bound tier lays the captions out with the clip's real fonts (package
@@ -12,19 +14,18 @@
 // positions' text targets on a take's screens (package compose's New).
 //
 // [Apply] changes one field by a typed [Edit] — a beat's duration, hold or cut, the clip's
-// frame.cols, frame.rows, frame.padding, frame.font_size, frame.line_height, frame.scale,
-// frame.width, frame.fps or frame.max_colors, a camera position's start, hold — or both at once
-// — ease, cell or text target, the edges of the camera transition into a position, a camera
-// zoom's start, length, ease or factor, or a caption's start, end — or both at once, shifted —
-// text, place, align, font, colours, box or fade, or adds or removes a camera position or zoom,
-// or adds, removes or reorders a caption — splicing the
-// new value into the source so only the edited key's text changes, a new key placed by the order
-// of the storyboard's yaml struct tags, and refuses an edit whose result fails Parse. A value
-// equal to what an absent key means — a position's hold of 0, an ease of smooth — deletes its
-// key, and a position's cell replaces its text, nth and area, and its target its cell.
-// [Fields] describes every field of a storyboard's owners as photon tune's page shows them: each
-// field an Edit names, the frame's among them, with its [FieldKind], an enum's choices and the
-// default an absent key means.
+// frame.cols, frame.rows, frame.viewport, frame.device_scale, frame.padding, frame.font_size,
+// frame.line_height, frame.scale, frame.width, frame.fps or frame.max_colors, a camera position's
+// start, hold — or both at once — ease, cell or text target, the edges of the camera transition
+// into a position, a camera zoom's start, length, ease or factor, or a caption's start, end — or
+// both at once, shifted — text, place, align, font, colours, box or fade, or adds or removes a
+// camera position or zoom, or adds, removes or reorders a caption — splicing the new value into the
+// source so only the edited key's text changes, a new key placed by the order of the storyboard's
+// yaml struct tags, and refuses an edit whose result fails Parse. A value equal to what an absent
+// key means — a position's hold of 0, an ease of smooth — deletes its key, and a position's cell
+// replaces its text, nth and area, and its target its cell. [Fields] describes every field of a
+// storyboard's owners as photon tune's page shows them: each field an Edit names, the frame's among
+// them, with its [FieldKind], an enum's choices and the default an absent key means.
 //
 // It imports keys, to check that a `key` action names a key photon can send, and yamledit, to
 // splice an edit into the source. Whether an area a target or expect names is declared in the
@@ -36,7 +37,8 @@
 //
 // The file map:
 //   - doc.go: this package comment and file map.
-//   - storyboard.go: the [Storyboard] and its [Frame], [Load], [Parse] and [ValidationError].
+//   - storyboard.go: the [Storyboard] and its [Frame] and [Viewport], [Load], [Parse] and
+//     [ValidationError].
 //   - beat.go: a [Beat], its [Action] forms, [Target] and [Nth], and [Expect].
 //   - camera.go: the [Camera] of positions and zooms, a [ZoomMove], a [Point], [Cell] and [Ease],
 //     and the rules that check and place them.
@@ -44,8 +46,8 @@
 //   - edit.go: an [Edit], [Apply] and the splicing every edit shares: field and owner checks,
 //     durations, moments, key order from yaml tags.
 //   - edit_beat.go: the beat and frame edits — duration, hold, cut, frame.cols, frame.rows,
-//     frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width, frame.fps and
-//     frame.max_colors — and [Target.YAMLFlow].
+//     frame.viewport, frame.device_scale, frame.padding, frame.font_size, frame.line_height,
+//     frame.scale, frame.width, frame.fps and frame.max_colors — and [Target.YAMLFlow].
 //   - edit_camera.go: the camera position and zoom edits — position.at, .hold, .span, .ease,
 //     .cell and .target, and zoom.at, .over, .ease and .to.
 //   - edit_transition.go: the camera transition edit, position.transition, which moves the end of

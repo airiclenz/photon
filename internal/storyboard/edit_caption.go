@@ -88,7 +88,7 @@ func (s *splicer) editCaption(
 		return s.setCaptionPosition(caption, value)
 	case FieldCaptionFontSize, FieldCaptionFontWeight, FieldCaptionColor, FieldCaptionBoxColor,
 		FieldCaptionBoxOpacity, FieldCaptionFadeIn, FieldCaptionFadeOut:
-		return s.setCaptionStyle(caption, board.Frame.FontSize, field, value)
+		return s.setCaptionStyle(caption, board.Frame.captionFontSize(), field, value)
 	default:
 		return fmt.Errorf("unknown caption field %s", field)
 	}

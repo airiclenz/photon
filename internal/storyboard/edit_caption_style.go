@@ -79,7 +79,7 @@ var styleSites = map[string]styleSite{
 }
 
 // setCaptionStyle sets field, a caption style field typed as value, on caption; frameFontSize is
-// the frame's font size, the size a caption's font defaults to. A value equal to the field's
+// the frame's caption size, the size a caption's font defaults to. A value equal to the field's
 // default — the one [Load] fills in, a colour compared case-insensitively — deletes its key and
 // then its font, box or fade mapping once it holds no key; any other value is written, a colour
 // quoted, into that mapping, which is created as a one-key flow mapping when the caption lacks

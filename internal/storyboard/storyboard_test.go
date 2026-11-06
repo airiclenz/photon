@@ -230,6 +230,112 @@ const cameraBase = validBase + `camera:
     - {to: 2, at: {beat: 2, offset: 100ms}, over: 500ms, ease: linear}
 `
 
+// pageBase is a storyboard that films a page and breaks no rule: a viewport and a device scale
+// instead of the terminal's grid keys, selector targets beside text ones, a camera cell inside the
+// viewport and a caption that takes the page's default size. Each row of TestLoadRejects_Page
+// swaps one fragment of it, which must occur in it exactly once.
+const pageBase = `clip: page
+ship: page.gif
+frame: {viewport: {width: 1280, height: 800}, device_scale: 2, scale: 1, width: 640, fps: 24, max_colors: 128}
+beats:
+  - id: 1
+    title: open
+    duration: 3s
+    do:
+      - click: {target: {selector: 'nav a[href="/docs"]', nth: 2}}
+      - drag: {from: {text: 'Grip'}, to: {selector: '#drop'}}
+camera:
+  positions:
+    - {selector: '#hero', at: 500ms}
+    - {cell: {x: 1279, y: 799}, at: 2s}
+captions:
+  - {text: 'Docs', at: 1s, for: 1s}
+`
+
+func TestLoad_PageFrame(t *testing.T) {
+	t.Parallel()
+
+	board, err := Parse([]byte(pageBase), "page.yaml")
+
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	wantFrame := Frame{Viewport: Viewport{Width: 1280, Height: 800}, DeviceScale: 2, Scale: 1, Width: 640, FPS: 24, MaxColors: 128}
+	if board.Frame != wantFrame {
+		t.Errorf("frame: want %+v, got %+v", wantFrame, board.Frame)
+	}
+	if !board.Frame.HasViewport() || board.Frame.Scaling() != 2 {
+		t.Errorf("frame: want a viewport at scaling 2, got viewport %t, scaling %g", board.Frame.HasViewport(), board.Frame.Scaling())
+	}
+	if want := (Target{Selector: `nav a[href="/docs"]`, Nth: 2}); board.Beats[0].Do[0].Click.Target != want {
+		t.Errorf("click target: want %+v, got %+v", want, board.Beats[0].Do[0].Click.Target)
+	}
+	if got := board.Beats[0].Do[1].Drag.To.Selector; got != "#drop" {
+		t.Errorf("drag to selector: want #drop, got %q", got)
+	}
+	if got := board.Camera.Positions[0].Selector; got != "#hero" {
+		t.Errorf("camera position selector: want #hero, got %q", got)
+	}
+	if got := board.Captions[0].Font.Size; got != DefaultPageCaptionSize {
+		t.Errorf("caption size: want %d, got %g", DefaultPageCaptionSize, got)
+	}
+}
+
+func TestFrame_Scaling_DefaultsToOne(t *testing.T) {
+	t.Parallel()
+
+	if got := (Frame{}).Scaling(); got != DefaultDeviceScale {
+		t.Errorf("Scaling of an unset device scale = %g, want %d", got, DefaultDeviceScale)
+	}
+}
+
+func TestLoadRejects_Page(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		old, new string
+		want     string
+		// alsoCell marks a viewport that no longer holds the camera's cell, a second problem.
+		alsoCell bool
+	}{
+		{"cols", "device_scale: 2,", "device_scale: 2, cols: 80,", "frame.cols: a frame with a viewport takes no cols", false},
+		{"rows", "device_scale: 2,", "device_scale: 2, rows: 24,", "frame.rows: a frame with a viewport takes no rows", false},
+		{"padding", "device_scale: 2,", "device_scale: 2, padding: 16,", "frame.padding: a frame with a viewport takes no padding", false},
+		{"font size", "device_scale: 2,", "device_scale: 2, font_size: 14,", "frame.font_size: a frame with a viewport takes no font_size", false},
+		{"line height", "device_scale: 2,", "device_scale: 2, line_height: 1.2,", "frame.line_height: a frame with a viewport takes no line_height", false},
+		{"viewport width", "width: 1280,", "width: 0,", "frame.viewport.width: want ≥1, got 0", true},
+		{"viewport height", "height: 800}", "height: -1}", "frame.viewport.height: want ≥1, got -1", true},
+		{"device scale below one", "device_scale: 2", "device_scale: 0.5", "frame.device_scale: want in [1, 4], got 0.5", false},
+		{"camera cell outside the viewport", "{x: 1279, y: 799}", "{x: 1280, y: 799}",
+			"camera.positions[1]: cell: want x in [0, 1280) and y in [0, 800), got x 1280, y 799", false},
+		{"camera point with selector and cell", "{selector: '#hero',", "{selector: '#hero', cell: {x: 1, y: 1},",
+			"camera.positions[0]: want exactly one of text, selector or cell", false},
+		{"camera selector shape", "{selector: '#hero',", "{selector: '(#hero',", "camera.positions[0]: selector: unclosed '('", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if count := strings.Count(pageBase, tc.old); count != 1 {
+				t.Fatalf("fragment %q occurs %d times in the base, want once", tc.old, count)
+			}
+
+			_, err := Parse([]byte(strings.Replace(pageBase, tc.old, tc.new, 1)), "page.yaml")
+
+			var invalid *ValidationError
+			if !errors.As(err, &invalid) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want a validation error containing %q, got:\n%v", tc.want, err)
+			}
+			wantProblems := 1
+			if tc.alsoCell {
+				wantProblems = 2
+			}
+			if len(invalid.Problems) != wantProblems {
+				t.Fatalf("problems: want %d, got %d:\n%v", wantProblems, len(invalid.Problems), err)
+			}
+		})
+	}
+}
+
 func TestLoadRejects_Camera(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -670,6 +776,15 @@ func TestLoadRejects(t *testing.T) {
 		{"area on a run", "run: 'true'", "run: 'true'\n        area: list", "beat 1: expect[1]: area: only a seen expect takes an area", false},
 		{"run blank", "run: 'true'", "run: '  '", `beat 1: expect[1]: run: want a command, got "  "`, false},
 		{"take-level expect", "  - seen: 'done'", "  - seen: 'done'\n    run: 'true'", "\n  expect[0]: want exactly one of seen or run", false},
+		{"frame device scale", "max_colors: 128", "max_colors: 128, device_scale: 5", "frame.device_scale: want in [1, 4], got 5", false},
+		{"target with text and selector", "{text: 'Item', nth: 1, area: list}", "{text: 'Item', selector: '#item', nth: 1, area: list}",
+			"beat 1: do[2]: click.target.selector: want a text or a selector, not both", false},
+		{"target selector shape", "{text: 'Item', nth: 1, area: list}", "{selector: 'li[data-id', nth: 1, area: list}",
+			"beat 1: do[2]: click.target.selector: unclosed '['", false},
+		{"drag from with text and selector", "from: {text: 'Grip'}", "from: {text: 'Grip', selector: '.grip'}",
+			"beat 1: do[5]: drag.from.selector: want a text or a selector, not both", false},
+		{"drag end with selector and offset", "offset: {x: 4}}", "selector: '.edge', offset: {x: 4}}",
+			"beat 1: do[5]: drag.to: want exactly one of text, selector or offset", false},
 	}
 	if _, err := Load(writeStoryboard(t, validBase)); err != nil {
 		t.Fatalf("the base storyboard must load clean: %v", err)

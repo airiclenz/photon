@@ -1,6 +1,7 @@
 package storyboard
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -13,9 +14,11 @@ import (
 // The storyboard keys a beat or frame edit addresses directly; a field's own key is its name
 // past the dot.
 const (
-	keyBeats = "beats"
-	keyFrame = "frame"
-	keyCut   = "cut"
+	keyBeats       = "beats"
+	keyFrame       = "frame"
+	keyCut         = "cut"
+	keyViewport    = "viewport"
+	keyDeviceScale = "device_scale"
 )
 
 // valueTrue is the YAML text of cut switched on.
@@ -32,11 +35,17 @@ var (
 )
 
 // editFrame sets one of the frame's edit fields: frame.font_size or frame.line_height, a decimal,
-// or frame.cols, frame.rows, frame.padding, frame.scale, frame.width, frame.fps or
-// frame.max_colors, a whole number.
+// frame.cols, frame.rows, frame.padding, frame.scale, frame.width, frame.fps or
+// frame.max_colors, a whole number, or frame.viewport or frame.device_scale.
 func (s *splicer) editFrame(edit Edit) error {
 	if edit.Owner.Index != 0 {
 		return fmt.Errorf("want the clip at index 0, got index %d", edit.Owner.Index)
+	}
+	switch edit.Field {
+	case FieldFrameViewport:
+		return s.setViewport(edit.Value)
+	case FieldFrameDeviceScale:
+		return s.setDeviceScale(edit.Value)
 	}
 	var text string
 	if edit.Field == FieldFrameFontSize || edit.Field == FieldFrameLineHeight {
@@ -54,6 +63,61 @@ func (s *splicer) editFrame(edit Edit) error {
 	}
 	key := strings.TrimPrefix(edit.Field, keyFrame+".")
 	return s.doc.Upsert(yamledit.Path{keyFrame}, key, text, frameKeyOrder)
+}
+
+// setViewport writes frame.viewport as a {width: 1280, height: 800} flow mapping in place of its
+// whole node, or deletes the key for null.
+func (s *splicer) setViewport(value json.RawMessage) error {
+	path := under(yamledit.Path{keyFrame}, keyViewport)
+	if isNull(value) {
+		return s.doc.DeleteIfPresent(path)
+	}
+	viewport, err := decodeViewport(value)
+	if err != nil {
+		return err
+	}
+	return s.replaceOrInsert(yamledit.Path{keyFrame}, keyViewport, viewport.flow(), frameKeyOrder)
+}
+
+// setDeviceScale writes frame.device_scale, or deletes the key for [DefaultDeviceScale], the
+// scale an absent key means.
+func (s *splicer) setDeviceScale(value json.RawMessage) error {
+	scale, err := decodeFrameDecimal(value)
+	if err != nil {
+		return err
+	}
+	if scale == DefaultDeviceScale {
+		return s.doc.DeleteIfPresent(under(yamledit.Path{keyFrame}, keyDeviceScale))
+	}
+	return s.doc.Upsert(yamledit.Path{keyFrame}, keyDeviceScale, formatDecimal(scale),
+		frameKeyOrder)
+}
+
+// flow spells the viewport as the storyboard writes one, a {width: 1280, height: 800} flow
+// mapping.
+func (v Viewport) flow() string {
+	return "{width: " + strconv.Itoa(v.Width) + ", height: " + strconv.Itoa(v.Height) + "}"
+}
+
+// wireViewport is a viewport as an [Edit] types it; a nil field is one the value left out.
+type wireViewport struct {
+	Width  *int `json:"width"`
+	Height *int `json:"height"`
+}
+
+// decodeViewport reads frame.viewport typed as {"width": 1280, "height": 800}, both whole numbers
+// of at least 1, refusing any other key.
+func decodeViewport(value json.RawMessage) (Viewport, error) {
+	decoder := json.NewDecoder(bytes.NewReader(value))
+	decoder.DisallowUnknownFields()
+	var wire wireViewport
+	err := decoder.Decode(&wire)
+	if err != nil || wire.Width == nil || wire.Height == nil ||
+		*wire.Width < 1 || *wire.Height < 1 {
+		return Viewport{}, fmt.Errorf(
+			`want a viewport in CSS pixels such as {"width": 1280, "height": 800}, got %s`, value)
+	}
+	return Viewport{Width: *wire.Width, Height: *wire.Height}, nil
 }
 
 // editBeat applies a beat field's edit, its duration, hold or cut, to the beat at beat.

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -348,5 +349,139 @@ func TestWithStoryboard_KeepsTheConfigAndWorkFlag(t *testing.T) {
 		if wantErr != nil || gotErr != nil || got != want {
 			t.Errorf("%s = %q (%v), want %q (%v)", accessor.name, got, gotErr, want, wantErr)
 		}
+	}
+}
+
+// commandConfig and urlConfig are a project config of each launch kind, declaring no area.
+const (
+	commandConfig = "name: clip-demo\nlaunch:\n  command: ./app --demo\n"
+	urlConfig     = "name: clip-demo\nlaunch:\n  url: http://127.0.0.1:8080/\n"
+)
+
+// terminalFrame and pageFrame are a storyboard frame of each kind.
+const (
+	terminalFrame = "{cols: 80, rows: 24, padding: 16, font_size: 14, line_height: 1.2, scale: 2, width: 600, fps: 24, max_colors: 128}"
+	pageFrame     = "{viewport: {width: 1280, height: 800}, scale: 1, width: 640, fps: 24, max_colors: 128}"
+)
+
+// launchBoard is a storyboard of frame whose one beat clicks target and whose one camera
+// position aims at point.
+func launchBoard(frame, target, point string) string {
+	return "clip: demo\nship: out/demo.gif\nframe: " + frame + `
+beats:
+  - id: 1
+    title: click
+    duration: 2s
+    do:
+      - click: {target: ` + target + `}
+      - drag: {from: {text: 'Grip'}, to: {offset: {x: 4}}}
+camera:
+  positions:
+    - ` + point + `
+`
+}
+
+// writeClip writes config and board as photon.yaml and demo.yaml in a fresh temp dir and returns
+// the storyboard's path.
+func writeClip(t *testing.T, config, board string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "photon.yaml"), []byte(config), 0o600); err != nil {
+		t.Fatalf("write the config: %v", err)
+	}
+	path := filepath.Join(dir, "demo.yaml")
+	if err := os.WriteFile(path, []byte(board), 0o600); err != nil {
+		t.Fatalf("write the storyboard: %v", err)
+	}
+	return path
+}
+
+func TestLoad_CrossChecksTheLaunchKind(t *testing.T) {
+	wholeClip := storyboard.Owner{Kind: storyboard.OwnerClip}
+	textTarget, textPoint := "{text: 'Save'}", "{text: 'Save', at: 1s}"
+	cases := []struct {
+		name   string
+		config string
+		board  string
+		// want is the start of each problem's message, in order; none when the clip loads.
+		want []string
+		// owners is the owner of each wanted problem.
+		owners []storyboard.Owner
+	}{
+		{name: "a command launch with a terminal frame", config: commandConfig,
+			board: launchBoard(terminalFrame, textTarget, textPoint)},
+		{name: "a url launch with a viewport and selector targets", config: urlConfig,
+			board: launchBoard(pageFrame, "{selector: '#save'}", "{selector: '#save', at: 1s}")},
+		{name: "a url launch with a device scale and text targets", config: urlConfig,
+			board: launchBoard(strings.Replace(pageFrame, "scale: 1", "scale: 1, device_scale: 2", 1), textTarget, textPoint)},
+		{
+			name: "a url launch without a viewport", config: urlConfig,
+			board: launchBoard(terminalFrame, textTarget, textPoint),
+			want: []string{
+				"frame.viewport: missing",
+				"frame.cols: a url launch takes no cols",
+				"frame.rows: a url launch takes no rows",
+				"frame.padding: a url launch takes no padding",
+				"frame.font_size: a url launch takes no font_size",
+				"frame.line_height: a url launch takes no line_height",
+			},
+			owners: slices.Repeat([]storyboard.Owner{wholeClip}, 6),
+		},
+		{
+			name: "a command launch with a viewport", config: commandConfig,
+			board:  launchBoard(pageFrame, textTarget, textPoint),
+			want:   []string{"frame.viewport: only a url launch takes a viewport"},
+			owners: []storyboard.Owner{wholeClip},
+		},
+		{
+			name: "a command launch with a device scale", config: commandConfig,
+			board:  launchBoard(strings.Replace(terminalFrame, "scale: 2", "scale: 2, device_scale: 2", 1), textTarget, textPoint),
+			want:   []string{"frame.device_scale: only a url launch takes a device_scale"},
+			owners: []storyboard.Owner{wholeClip},
+		},
+		{
+			name: "a command launch with selector targets", config: commandConfig,
+			board: strings.Replace(launchBoard(terminalFrame, "{selector: '#save'}", "{selector: '#save', at: 1s}"),
+				"to: {offset: {x: 4}}", "to: {selector: '#drop'}", 1),
+			want: []string{
+				"beat 1: do[0]: click.target.selector: only a url launch takes a selector",
+				"beat 1: do[1]: drag.to.selector: only a url launch takes a selector",
+				"camera.positions[0]: selector: only a url launch takes a selector",
+			},
+			owners: []storyboard.Owner{
+				{Kind: storyboard.OwnerBeat, Index: 1},
+				{Kind: storyboard.OwnerBeat, Index: 1},
+				{Kind: storyboard.OwnerPosition, Index: 0},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeClip(t, tc.config, tc.board)
+
+			_, err := Load(path, "", "")
+
+			if len(tc.want) == 0 {
+				if err != nil {
+					t.Fatalf("Load: %v", err)
+				}
+				return
+			}
+			var crossCheckErr *ValidationError
+			if !errors.As(err, &crossCheckErr) {
+				t.Fatalf("Load error = %v, want a *ValidationError", err)
+			}
+			if len(crossCheckErr.Problems) != len(tc.want) {
+				t.Fatalf("problems = %q, want %q", crossCheckErr.Problems, tc.want)
+			}
+			for index, problem := range crossCheckErr.Problems {
+				if !strings.HasPrefix(problem.Error(), tc.want[index]) {
+					t.Errorf("problem %d = %q, want it to start %q", index, problem, tc.want[index])
+				}
+				if got := storyboard.OwnerOf(problem); got != tc.owners[index] {
+					t.Errorf("owner of %q = %+v, want %+v", problem, got, tc.owners[index])
+				}
+			}
+		})
 	}
 }

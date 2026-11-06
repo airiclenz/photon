@@ -418,8 +418,10 @@ camera:                         # push in on beta
 | --- | --- |
 | `clip` | Required. The clip's name. The take is `<work>/<clip>.take`. |
 | `ship` | Required. Where `photon render` writes the GIF, relative to the storyboard's folder. |
-| `frame` | The terminal size and the GIF's shape. Every field except `padding` is required. |
+| `frame` | The terminal size and the GIF's shape. Every field except `padding` is required. With `launch.url` the frame sets `viewport` instead of `cols`, `rows`, `padding`, `font_size` and `line_height`, which it then must not set. |
 | `frame.cols`, `frame.rows` | The pty's size in cells, ≥1. `render` refuses a take recorded at another size; `tune` edits them, previewing at the take's size with a re-record problem. |
+| `frame.viewport` | With `launch.url` only, and required there: the page's `width` and `height` in CSS pixels, `{width: 1280, height: 800}`, each ≥1. One CSS pixel is one cell, so a camera `cell` is a CSS pixel inside the viewport. A caption's `font.size` is then in CSS pixels, default 16. |
+| `frame.device_scale` | With `launch.url` only: device pixels per CSS pixel the page renders at, 1..4. Default 1. |
 | `frame.padding` | Pixels of background around the grid, ≥0. |
 | `frame.font_size` | The font size in points, 6..72, the range a caption's `font.size` takes. A column is the width of Source Code Pro's `M`. A row is `font_size` × `line_height`. |
 | `frame.line_height` | Row height as a multiple of the font size, >0. |
@@ -429,7 +431,7 @@ camera:                         # push in on beta
 | `frame.max_colors` | The palette size, 2..256. The palette is built per clip, without dithering. |
 | `expect` | Take-level expects, checked on every screen of the take. See [Expects](#expects). |
 | `beats` | The beats, at least one. |
-| `camera` | The camera on the clip's clock, as two lists. `camera.positions` says where it aims: each position is a `cell` or a target (`text`, `nth`, `area`), with `at` (a clip time, or a `beat` and an `offset`), `hold` and `ease`; the gap between two positions is a transition. `camera.zooms` says how far it magnifies: each zoom has `to` (a factor), `at`, `over` and `ease`. See [Camera](#camera). |
+| `camera` | The camera on the clip's clock, as two lists. `camera.positions` says where it aims: each position is a `cell` or a target (`text` or `selector`, `nth`, `area`), with `at` (a clip time, or a `beat` and an `offset`), `hold` and `ease`; the gap between two positions is a transition. `camera.zooms` says how far it magnifies: each zoom has `to` (a factor), `at`, `over` and `ease`. See [Camera](#camera). |
 | `captions` | Text drawn over the composed frame on the clip's clock: each has `text`, `at`, and `for` or `until`; a `font` (`size`, `weight`); a `place` and `align` with an `offset`, or a `position`; a `color`, a `box` (`color`, `opacity`) and a `fade` (`in`, `out`). See [Captions](#captions). |
 
 ### Beats
@@ -580,7 +582,7 @@ inspector's **Move up** and **Move down**.
 | `text` | Required. The caption's text. Each line of a YAML block (`text: \|`) is a line of the caption. A line too long to fit wraps at its spaces. Tags inside it style a span of the text: see [Styled spans](#styled-spans). |
 | `at` | When the caption appears, in the same two forms as a camera position's `at`: a bare time such as `4500ms`, or `{beat: N, offset: D}`. Leave it out to start at the clip's first frame. |
 | `for`, `until` | When it goes. Set exactly one: `for` is how long it shows, >0; `until` is the moment it ends, in the same forms as `at`. It must end after it starts and by the clip's end. |
-| `font.size` | The text size, in the same unit as `frame.font_size`, 6..72. Default `frame.font_size`, which matches the terminal text's size. |
+| `font.size` | The text size, in the same unit as `frame.font_size`, 6..72. Default `frame.font_size`, which matches the terminal text's size; with `frame.viewport`, CSS pixels, default 16. |
 | `font.weight` | `regular` (default) or `bold`. See [Fonts and licences](#fonts-and-licences). |
 | `place` | `top`, `middle` or `bottom` (default): where the caption sits vertically. |
 | `align` | `left`, `middle` (default) or `right`: where the caption sits across the frame, and how its lines line up. |
@@ -670,7 +672,8 @@ A **target** is a place on screen that a `click`, `drag` or camera position aims
 
 | Field | Meaning |
 | --- | --- |
-| `text` | Required. A regex (Go syntax) matched against one screen row at a time. It never spans rows. Rows are plain text with trailing blanks trimmed. |
+| `text` | Required, unless `selector` is set. A regex (Go syntax) matched against one screen row at a time. It never spans rows. Rows are plain text with trailing blanks trimmed. |
+| `selector` | With `launch.url` only, instead of `text`: a CSS selector, the box of the element it picks, as recorded with each frame. photon checks only its shape: not blank, with every bracket, paren and quote closed. |
 | `nth` | Which match counts: `first` (default), `last`, or a positive number. |
 | `area` | The area to search. Empty or `any` searches the whole screen. |
 

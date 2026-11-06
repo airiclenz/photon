@@ -37,20 +37,71 @@ type Storyboard struct {
 	Captions []Caption `yaml:"captions"`
 }
 
-// Frame is the recorded terminal and the shipped geometry: the pty's Cols × Rows, the
-// rasterizer's Padding (pixels), FontSize (points) and LineHeight (a multiple of the font size),
-// the Scale frames are rasterized at, the shipped GIF's Width in pixels, its FPS and its palette
-// size. Pixel size is derived from the font metrics by the rasterizer, not here.
+// Frame is the recorded grid and the shipped geometry: the pty's Cols × Rows, the rasterizer's
+// Padding (pixels), FontSize (points) and LineHeight (a multiple of the font size), the Scale
+// frames are rasterized at, the shipped GIF's Width in pixels, its FPS and its palette size. Pixel
+// size is derived from the font metrics by the rasterizer, not here.
+//
+// A clip that films a page sets Viewport instead of the terminal's Cols, Rows, Padding, FontSize
+// and LineHeight: the page's size in CSS pixels, one CSS pixel to a cell, which the browser
+// renders at DeviceScale device pixels per CSS pixel. A zero Viewport and a zero DeviceScale are
+// unset; [Frame.Scaling] reads DeviceScale with its default.
 type Frame struct {
-	Cols       int     `yaml:"cols"`
-	Rows       int     `yaml:"rows"`
-	Padding    int     `yaml:"padding"`
-	FontSize   float64 `yaml:"font_size"`
-	LineHeight float64 `yaml:"line_height"`
-	Scale      int     `yaml:"scale"`
-	Width      int     `yaml:"width"`
-	FPS        int     `yaml:"fps"`
-	MaxColors  int     `yaml:"max_colors"`
+	Cols        int      `yaml:"cols"`
+	Rows        int      `yaml:"rows"`
+	Viewport    Viewport `yaml:"viewport"`
+	DeviceScale float64  `yaml:"device_scale"`
+	Padding     int      `yaml:"padding"`
+	FontSize    float64  `yaml:"font_size"`
+	LineHeight  float64  `yaml:"line_height"`
+	Scale       int      `yaml:"scale"`
+	Width       int      `yaml:"width"`
+	FPS         int      `yaml:"fps"`
+	MaxColors   int      `yaml:"max_colors"`
+}
+
+// Viewport is a filmed page's size in CSS pixels: Width × Height. The zero Viewport is unset.
+type Viewport struct {
+	Width  int `yaml:"width" json:"width"`
+	Height int `yaml:"height" json:"height"`
+}
+
+// Device scale: the default a frame without device_scale takes, and the bounds of one it sets.
+const (
+	DefaultDeviceScale = 1
+	maxDeviceScale     = 4
+)
+
+// HasViewport reports whether the frame films a page: its Viewport is set.
+func (f Frame) HasViewport() bool {
+	return f.Viewport != Viewport{}
+}
+
+// Scaling is the frame's device scale, the device pixels per CSS pixel a page renders at:
+// DeviceScale, or [DefaultDeviceScale] when it is unset.
+func (f Frame) Scaling() float64 {
+	if f.DeviceScale == 0 {
+		return DefaultDeviceScale
+	}
+	return f.DeviceScale
+}
+
+// gridSize is the frame's grid in cells: the viewport's Width × Height on a frame that films a
+// page, one CSS pixel to a cell, else the terminal's Cols × Rows.
+func (f Frame) gridSize() (cols, rows int) {
+	if f.HasViewport() {
+		return f.Viewport.Width, f.Viewport.Height
+	}
+	return f.Cols, f.Rows
+}
+
+// captionFontSize is the size a caption without its own takes: [DefaultPageCaptionSize] CSS
+// pixels on a frame that films a page, else the frame's FontSize.
+func (f Frame) captionFontSize() float64 {
+	if f.HasViewport() {
+		return DefaultPageCaptionSize
+	}
+	return f.FontSize
 }
 
 // Load reads and validates the storyboard at path, exactly as [Parse] does with the file's bytes.
@@ -103,7 +154,7 @@ func (s *Storyboard) BeatIDs() []int {
 // eases [EaseSmooth], and a caption takes the defaults [Caption] lists.
 func (s *Storyboard) applyDefaults() {
 	for index := range s.Captions {
-		s.Captions[index].applyDefaults(s.Frame.FontSize)
+		s.Captions[index].applyDefaults(s.Frame.captionFontSize())
 	}
 	for index := range s.Camera.Positions {
 		if position := &s.Camera.Positions[index]; position.Ease == "" {

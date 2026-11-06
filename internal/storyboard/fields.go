@@ -54,6 +54,8 @@ const (
 	// KindPixels is a pair of whole lengths in design pixels, {"x": 8, "y": -4}: X to the right
 	// and Y down.
 	KindPixels FieldKind = "pixels"
+	// KindViewport is a page's size in CSS pixels, {"width": 1280, "height": 800}.
+	KindViewport FieldKind = "viewport"
 )
 
 // Field describes one field of a storyboard's owner — the clip, a beat, a camera position, a
@@ -131,7 +133,7 @@ func Fields(board *Storyboard) []Field {
 	}
 	fields = append(fields, zoomInsertField())
 	for index := range board.Captions {
-		fields = append(fields, captionFields(index, board.Frame.FontSize)...)
+		fields = append(fields, captionFields(index, board.Frame.captionFontSize())...)
 	}
 	return append(fields, insertField(OwnerCaption, FieldCaptionInsert, captionEntryKinds))
 }
@@ -149,9 +151,10 @@ func insertField(kind OwnerKind, name string, kinds []string) Field {
 }
 
 // positionInsertField describes the camera positions' insert, owned by the list's first index:
-// a point in time at the clip's start on frame's centre cell.
+// a point in time at the clip's start on the centre cell of frame's grid.
 func positionInsertField(frame Frame) Field {
-	centre := cellJSON(Cell{X: frame.Cols / 2, Y: frame.Rows / 2})
+	cols, rows := frame.gridSize()
+	centre := cellJSON(Cell{X: cols / 2, Y: rows / 2})
 	return Field{
 		Owner:   Owner{Kind: OwnerPosition},
 		Name:    FieldPositionInsert,
@@ -193,7 +196,9 @@ func removeField(owner Owner, name string) Field {
 // clipFields describes the frame's fields in its field order, each named frame.<key> after its
 // yaml tag, as an [Edit] names it; a frame field Apply did not take would be read-only under its
 // bare key, and none is.
-// A floating-point field is a decimal and every other a count; each defaults to zero.
+// frame.viewport is a viewport defaulting to null, the unset viewport; frame.device_scale a
+// decimal defaulting to [DefaultDeviceScale]; any other floating-point field a decimal and every
+// other a count, each defaulting to zero.
 func clipFields() []Field {
 	frame := reflect.TypeFor[Frame]()
 	owner := Owner{Kind: OwnerClip}
@@ -203,7 +208,13 @@ func clipFields() []Field {
 		described := Field{
 			Owner: owner, Name: frameFieldPrefix + key, Kind: KindCount, Default: raw(defaultZero),
 		}
-		if kind := goField.Type.Kind(); kind == reflect.Float32 || kind == reflect.Float64 {
+		switch kind := goField.Type.Kind(); {
+		case goField.Type == reflect.TypeFor[Viewport]():
+			described.Kind, described.Default = KindViewport, raw(jsonNull)
+		case described.Name == FieldFrameDeviceScale:
+			described.Kind = KindDecimal
+			described.Default = raw(formatDecimal(DefaultDeviceScale))
+		case kind == reflect.Float32 || kind == reflect.Float64:
 			described.Kind = KindDecimal
 		}
 		if !slices.Contains(editFields, described.Name) {
@@ -271,8 +282,8 @@ func easeField(owner Owner, name string) Field {
 
 // captionFields describes the fields of the caption at index: its start, its end — a for or an
 // until — the shift of both, its text, where it sits — its place, align and offset, or its
-// position — its font, its size defaulting to frameFontSize, its colours, its box and its fade,
-// and its remove and move.
+// position — its font, its size defaulting to frameFontSize, the frame's caption size, its colours,
+// its box and its fade, and its remove and move.
 func captionFields(index int, frameFontSize float64) []Field {
 	owner := Owner{Kind: OwnerCaption, Index: index}
 	fields := []Field{

@@ -89,32 +89,73 @@ func (s *Storyboard) validateHeader(report reporter) {
 		}
 	}
 	frame := s.Frame
-	for _, positive := range []struct {
-		name  string
-		value int
-	}{
-		{"cols", frame.Cols}, {"rows", frame.Rows}, {"scale", frame.Scale},
-		{"width", frame.Width}, {"fps", frame.FPS},
-	} {
+	positives := []frameCount{{"scale", frame.Scale}, {"width", frame.Width}, {"fps", frame.FPS}}
+	if !frame.HasViewport() {
+		positives = append([]frameCount{{"cols", frame.Cols}, {"rows", frame.Rows}}, positives...)
+	}
+	for _, positive := range positives {
 		if positive.value < 1 {
 			report("frame.%s: want ≥1, got %d", positive.name, positive.value)
 		}
 	}
-	if frame.Padding < 0 {
-		report("frame.padding: want ≥0, got %d", frame.Padding)
+	if frame.HasViewport() {
+		frame.validatePage(report)
+	} else {
+		frame.validateTerminal(report)
 	}
-	switch {
-	case frame.FontSize <= 0:
-		report("frame.font_size: want >0, got %g", frame.FontSize)
-	case frame.FontSize < minCaptionSize || frame.FontSize > maxCaptionSize:
-		report("frame.font_size: want in [%d, %d], got %g",
-			minCaptionSize, maxCaptionSize, frame.FontSize)
-	}
-	if frame.LineHeight <= 0 {
-		report("frame.line_height: want >0, got %g", frame.LineHeight)
+	if frame.DeviceScale != 0 &&
+		(frame.DeviceScale < DefaultDeviceScale || frame.DeviceScale > maxDeviceScale) {
+		report("frame.device_scale: want in [%d, %d], got %g",
+			DefaultDeviceScale, maxDeviceScale, frame.DeviceScale)
 	}
 	if frame.MaxColors < minMaxColors || frame.MaxColors > maxMaxColors {
 		report("frame.max_colors: want %d..%d, got %d", minMaxColors, maxMaxColors, frame.MaxColors)
+	}
+}
+
+// frameCount is one whole-number frame key with its value.
+type frameCount struct {
+	name  string
+	value int
+}
+
+// validateTerminal checks the terminal keys of a frame without a viewport beyond its cols and
+// rows: its padding, font size and line height.
+func (f Frame) validateTerminal(report reporter) {
+	if f.Padding < 0 {
+		report("frame.padding: want ≥0, got %d", f.Padding)
+	}
+	switch {
+	case f.FontSize <= 0:
+		report("frame.font_size: want >0, got %g", f.FontSize)
+	case f.FontSize < minCaptionSize || f.FontSize > maxCaptionSize:
+		report("frame.font_size: want in [%d, %d], got %g",
+			minCaptionSize, maxCaptionSize, f.FontSize)
+	}
+	if f.LineHeight <= 0 {
+		report("frame.line_height: want >0, got %g", f.LineHeight)
+	}
+}
+
+// validatePage checks the page grid of a frame with a viewport: the viewport's width and height,
+// and that none of the terminal's keys is set beside it.
+func (f Frame) validatePage(report reporter) {
+	if f.Viewport.Width < 1 {
+		report("frame.viewport.width: want ≥1, got %d", f.Viewport.Width)
+	}
+	if f.Viewport.Height < 1 {
+		report("frame.viewport.height: want ≥1, got %d", f.Viewport.Height)
+	}
+	for _, terminal := range []struct {
+		name  string
+		isSet bool
+	}{
+		{"cols", f.Cols != 0}, {"rows", f.Rows != 0}, {"padding", f.Padding != 0},
+		{"font_size", f.FontSize != 0}, {"line_height", f.LineHeight != 0},
+	} {
+		if terminal.isSet {
+			report("frame.%s: a frame with a viewport takes no %s", terminal.name, terminal.name)
+		}
 	}
 }
 
@@ -233,13 +274,17 @@ func (d DragAction) validate(report reporter) {
 	d.Press.validate(report)
 }
 
-// validate checks that the drag point sets exactly one of text or offset, then the target's fields
-// or the offset's. An offset is relative to the drag's previous point, so a target's nth and area
-// do not apply to it. Problems are filed under field, the point's own field of the drag (`to`,
-// `via[1]`).
+// validate checks that the drag point sets exactly one of text, selector or offset, then the
+// target's fields or the offset's. An offset is relative to the drag's previous point, so a
+// target's nth and area do not apply to it. Problems are filed under field, the point's own field
+// of the drag (`to`, `via[1]`).
 func (e DragEnd) validate(field string, report reporter) {
-	if (e.Text == "") == (e.Offset == nil) {
-		report("%s: want exactly one of text or offset", field)
+	if e.Target.isSet() == (e.Offset != nil) {
+		if e.Selector == "" {
+			report("%s: want exactly one of text or offset", field)
+		} else {
+			report("%s: want exactly one of text, selector or offset", field)
+		}
 		return
 	}
 	if e.Offset == nil {
@@ -275,10 +320,25 @@ func (w WaitAction) validate(report reporter) {
 	}
 }
 
-// validate checks the target's regex and area.
+// validate checks the target's regex, or its selector's shape, and its area. A target with
+// neither is missing its text; one with both is one problem, filed under selector.
 func (t Target) validate(report reporter) {
-	validateRegex("text", t.Text, report)
+	switch {
+	case t.Selector == "":
+		validateRegex("text", t.Text, report)
+	case t.Text != "":
+		report("selector: want a text or a selector, not both")
+	default:
+		if err := CheckSelector(t.Selector); err != nil {
+			report("selector: %v", err)
+		}
+	}
 	validateArea(t.Area, report)
+}
+
+// isSet reports whether the target names a place: it has a text or a selector.
+func (t Target) isSet() bool {
+	return t.Text != "" || t.Selector != ""
 }
 
 // validate checks that the expect sets exactly one of seen or run, that a seen regex compiles,

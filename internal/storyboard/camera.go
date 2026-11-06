@@ -30,14 +30,15 @@ type ZoomMove struct {
 func (z ZoomMove) Start() time.Duration { return z.start }
 
 // Point is where a camera position aims: either an on-screen target (its fields sit inline, so
-// `{text: …}` reads as a target) or a Cell of the terminal grid. Exactly one of Text and Cell is
+// `{text: …}` reads as a target) or a Cell of the grid. Exactly one of Text, Selector and Cell is
 // set.
 type Point struct {
 	Target `yaml:",inline"`
 	Cell   *Cell `yaml:"cell"`
 }
 
-// Cell is one cell of the terminal grid: column X and row Y, both 0-based.
+// Cell is one cell of the grid: column X and row Y, both 0-based. On a frame with a viewport a
+// cell is one CSS pixel of the page.
 type Cell struct {
 	X int `yaml:"x"`
 	Y int `yaml:"y"`
@@ -153,17 +154,22 @@ func (z ZoomMove) validate(report reporter) {
 	}
 }
 
-// validate checks that the point sets exactly one of text and cell, then the target's fields or
-// that the cell lies inside the frame. A cell is a fixed place, so a target's nth and area do
-// not apply to it. Problems are filed under field, or under the owner itself when field is empty,
-// as for a position whose point keys sit beside its own.
+// validate checks that the point sets exactly one of text, selector and cell, then the target's
+// fields or that the cell lies inside the frame's grid, the viewport on a frame with one. A cell
+// is a fixed place, so a target's nth and area do not apply to it. Problems are filed under field,
+// or under the owner itself when field is empty, as for a position whose point keys sit beside
+// its own.
 func (p Point) validate(field string, frame Frame, report reporter) {
 	whole, keys := report, report
 	if field != "" {
 		whole, keys = prefixed(report, field+": "), prefixed(report, field+".")
 	}
-	if (p.Text == "") == (p.Cell == nil) {
-		whole("want exactly one of text or cell")
+	if p.Target.isSet() == (p.Cell != nil) {
+		if p.Selector == "" {
+			whole("want exactly one of text or cell")
+		} else {
+			whole("want exactly one of text, selector or cell")
+		}
 		return
 	}
 	if p.Cell == nil {
@@ -177,9 +183,9 @@ func (p Point) validate(field string, frame Frame, report reporter) {
 		keys("area: only a text point takes an area")
 	}
 	cell := *p.Cell
-	if cell.X < 0 || cell.X >= frame.Cols || cell.Y < 0 || cell.Y >= frame.Rows {
-		keys("cell: want x in [0, %d) and y in [0, %d), got x %d, y %d",
-			frame.Cols, frame.Rows, cell.X, cell.Y)
+	cols, rows := frame.gridSize()
+	if cell.X < 0 || cell.X >= cols || cell.Y < 0 || cell.Y >= rows {
+		keys("cell: want x in [0, %d) and y in [0, %d), got x %d, y %d", cols, rows, cell.X, cell.Y)
 	}
 }
 

@@ -237,7 +237,18 @@ internal/rig/record.go — Record; internal/rig/setup.go — Setup; cmd/photon/r
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/config/`, then `./internal/storyboard/`, then `./internal/rig/`, then `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run Lint`, then `GOMEMLIMIT=2GiB go test ./cmd/photon/ -run TestREADMEDocumentsEveryField`
 **Commit:** `feat(config): a browser launch by url and areas by selector`
 
-## 11. Storyboard: viewport, device scale and selector targets
+## 11. Storyboard: viewport, device scale and selector targets — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): re-derived from "the frame edit lives in edit.go": editFrame is in internal/storyboard/edit_beat.go, which now writes frame.viewport (a flow mapping, null removes it) and frame.device_scale (1 removes it).
+NOTES (2026-11-06): consequential edit — internal/storyboard/edit_caption.go: made necessary by the page caption default of 16 (caption.font.size's default for an edit reads the frame's caption size).
+NOTES (2026-11-06): consequential edit — internal/storyboard/edit_caption_style.go: made necessary by the caption-size default change (setCaptionStyle doc comment).
+NOTES (2026-11-06): consequential edit — internal/storyboard/doc.go: made necessary by the new frame keys, Viewport type and selector targets (package comment and file map).
+NOTES (2026-11-06): consequential edit — internal/clip/doc.go: made necessary by the new launch-kind cross-checks (package comment).
+NOTES (2026-11-06): consequential edit — internal/rig/record_test.go: made necessary by the url-launch cross-check that now refuses a terminal frame at clip.Load (TestSetup_RefusesAURLLaunch and TestRecord_RefusesAURLLaunch, from item 10, now write a viewport frame through the new helper writeURLProject; their assertions are unchanged).
+NOTES (2026-11-06): retry: rewrapped the 11 lines over 100 columns (clip.go, caption.go, doc.go, edit.go, edit_beat.go, fields.go); doc.go's Apply paragraph, already edited by this item, is refilled whole.
+NOTES (2026-11-06): with a url launch and no viewport, clip.Load reports `frame.viewport: missing` and also each terminal key that is set (`frame.cols: a url launch takes no cols`, and so on). With a viewport set, the storyboard loader itself refuses those keys (`frame.cols: a frame with a viewport takes no cols`).
+NOTES (2026-11-06): clip.go's area walk is now built from shared per-target helpers (actionTargets and cameraTargets), so the selector check and the undeclared-area check walk the same targets. The area problems keep their order and wording.
+NOTES (2026-11-06): new Frame accessors: HasViewport and Scaling (device scale, default 1), plus the unexported gridSize and captionFontSize. Also a new FieldKind, KindViewport ("viewport"), whose default is null. tune's page does not show frame.viewport or frame.device_scale yet (it lists its frame inputs by hand).
 
 **What:** Recast at the regression check (2026-11-06).
 **Goal:** a storyboard accepts `frame.viewport: {width, height}`, `frame.device_scale` and a target with `selector` instead of `text` (exactly one); `clip.Load` cross-checks a url-launch clip: viewport required; `frame.cols`, `rows`, `font_size`, `line_height`, `padding` refused; and refuses viewport, device_scale and selector targets on a command-launch clip, each error naming its key.

@@ -145,6 +145,8 @@ func TestApply_DefaultOrAbsentKey_LeavesTheSourceAsItIs(t *testing.T) {
 	}{
 		{"a zero hold is not written out", beatEdit(5, FieldHold, 0)},
 		{"cut off on a beat with no cut", beatEdit(5, FieldCut, false)},
+		{"a device scale of 1 is not written out", frameEdit(FieldFrameDeviceScale, 1)},
+		{"a null viewport on a frame with none", frameEdit(FieldFrameViewport, nil)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -309,6 +311,13 @@ func TestApply_WireSpellings(t *testing.T) {
 		{"a whole frame line height", frameEdit(FieldFrameLineHeight, 2), true},
 		{"a zero frame line height", frameEdit(FieldFrameLineHeight, 0), false},
 		{"a frame font size as a string", frameEdit(FieldFrameFontSize, "14"), false},
+		{"a decimal device scale", frameEdit(FieldFrameDeviceScale, 1.5), true},
+		{"a device scale as a string", frameEdit(FieldFrameDeviceScale, "2"), false},
+		{"a zero device scale", frameEdit(FieldFrameDeviceScale, 0), false},
+		{"a viewport as a string", frameEdit(FieldFrameViewport, "1280x800"), false},
+		{"a viewport without a height", frameEdit(FieldFrameViewport, map[string]any{"width": 1280}), false},
+		{"a viewport of zero width", frameEdit(FieldFrameViewport, map[string]any{"width": 0, "height": 800}), false},
+		{"a viewport with another key", frameEdit(FieldFrameViewport, map[string]any{"width": 1280, "height": 800, "x": 1}), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -322,6 +331,37 @@ func TestApply_WireSpellings(t *testing.T) {
 			}
 			if !tc.isAccepted && (err == nil || !strings.Contains(err.Error(), tc.edit.Field+": want")) {
 				t.Errorf("Apply(%+v) = %v, want a spelling error naming %s", tc.edit, err, tc.edit.Field)
+			}
+		})
+	}
+}
+
+func TestApply_PageFrameEdit_ChangesOnlyTheEditedText(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		edit     Edit
+		old, new string
+	}{
+		{"viewport", frameEdit(FieldFrameViewport, map[string]any{"width": 1440, "height": 900}),
+			"viewport: {width: 1280, height: 800}", "viewport: {width: 1440, height: 900}"},
+		{"device scale", frameEdit(FieldFrameDeviceScale, 3), "device_scale: 2", "device_scale: 3"},
+		{"device scale of 1", frameEdit(FieldFrameDeviceScale, 1), "device_scale: 2, ", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, board, err := Apply([]byte(pageBase), "page.yaml", tc.edit)
+
+			if err != nil {
+				t.Fatalf("Apply(%+v): %v", tc.edit, err)
+			}
+			if want := strings.Replace(pageBase, tc.old, tc.new, 1); string(got) != want {
+				t.Errorf("Apply(%+v):\n%s\nwant:\n%s", tc.edit, got, want)
+			}
+			if !board.Frame.HasViewport() {
+				t.Errorf("Apply(%+v) left the frame no viewport", tc.edit)
 			}
 		})
 	}
@@ -377,6 +417,7 @@ func TestTarget_JSON_LeavesTheFirstMatchAndTheWholeScreenOut(t *testing.T) {
 		{Target{Text: "ok", Area: "list"}, `{"text":"ok","area":"list"}`},
 		{Target{Text: "ok", Nth: 2}, `{"text":"ok","nth":2}`},
 		{Target{Text: "ok", Nth: NthLast, Area: "list"}, `{"text":"ok","nth":"last","area":"list"}`},
+		{Target{Selector: "#go", Nth: 2}, `{"text":"","selector":"#go","nth":2}`},
 	}
 	for _, test := range tests {
 		t.Run(test.want, func(t *testing.T) {
@@ -405,7 +446,7 @@ func TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder(t *testing.T) {
 		{"a beat", reflect.TypeFor[Beat](),
 			[]string{"id", "title", "why", "notes", "do", "duration", "hold", "cut", "zoom", "expect"}},
 		{"the frame", reflect.TypeFor[Frame](),
-			[]string{"cols", "rows", "padding", "font_size", "line_height", "scale", "width", "fps", "max_colors"}},
+			[]string{"cols", "rows", "viewport", "device_scale", "padding", "font_size", "line_height", "scale", "width", "fps", "max_colors"}},
 		{"a storyboard skips its path", reflect.TypeFor[Storyboard](),
 			[]string{"clip", "ship", "frame", "expect", "beats", "camera", "captions"}},
 		{"a point leaves its inline target out", reflect.TypeFor[Point](), []string{"cell"}},
@@ -430,7 +471,7 @@ func TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder(t *testing.T) {
 
 	t.Run("a position's point keys lead its own", func(t *testing.T) {
 		t.Parallel()
-		want := []string{"text", "nth", "area", "cell", "at", "hold", "ease"}
+		want := []string{"text", "selector", "nth", "area", "cell", "at", "hold", "ease"}
 
 		if !slices.Equal(positionKeyOrder, want) {
 			t.Errorf("positionKeyOrder = %q, want %q", positionKeyOrder, want)

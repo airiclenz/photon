@@ -162,7 +162,7 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		owner Owner
 		want  []string
 	}{
-		{clipOwner, []string{FieldFrameCols, FieldFrameRows, FieldFramePadding, FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldFrameWidth, FieldFrameFPS, FieldFrameMaxColors}},
+		{clipOwner, []string{FieldFrameCols, FieldFrameRows, FieldFrameViewport, FieldFrameDeviceScale, FieldFramePadding, FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldFrameWidth, FieldFrameFPS, FieldFrameMaxColors}},
 		{beatOwner(1), []string{FieldDuration, FieldHold, FieldCut}},
 		{beatOwner(2), []string{FieldDuration, FieldHold, FieldCut}},
 		{positionOwner(0), []string{FieldPositionAt, FieldPositionHold, FieldPositionSpan, FieldPositionEase, FieldPositionCell, FieldPositionTarget, FieldPositionRemove, FieldPositionInsert}},
@@ -191,6 +191,8 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		{fieldKey{clipOwner, FieldFramePadding}, KindCount, nil, "0", false},
 		{fieldKey{clipOwner, FieldFrameMaxColors}, KindCount, nil, "0", false},
 		{fieldKey{clipOwner, FieldFrameFPS}, KindCount, nil, "0", false},
+		{fieldKey{clipOwner, FieldFrameViewport}, KindViewport, nil, "null", false},
+		{fieldKey{clipOwner, FieldFrameDeviceScale}, KindDecimal, nil, "1", false},
 		{fieldKey{beatOwner(1), FieldCut}, KindBool, nil, "false", false},
 		{fieldKey{positionOwner(0), FieldPositionAt}, KindMoment, nil, `{"beat":0,"offset_ms":0}`, false},
 		{fieldKey{positionOwner(0), FieldPositionHold}, KindDuration, nil, "0", false},
@@ -256,5 +258,30 @@ func TestField_JSONKeys(t *testing.T) {
 	}
 	if len(keys) != 6 {
 		t.Errorf("a Field encodes %d keys, want 6: %s", len(keys), encoded)
+	}
+}
+
+func TestFields_OnAPageFrame_DefaultFromTheViewport(t *testing.T) {
+	t.Parallel()
+	board, err := Parse([]byte(pageBase), "page.yaml")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	described := map[fieldKey]Field{}
+	for _, field := range Fields(board) {
+		described[fieldKey{field.Owner, field.Name}] = field
+	}
+
+	wants := []struct {
+		key      fieldKey
+		defaults string
+	}{
+		{fieldKey{textOwner(0), FieldCaptionFontSize}, "16"},
+		{fieldKey{positionOwner(0), FieldPositionInsert}, `{"at":{"beat":0,"offset_ms":0},"cell":{"x":640,"y":400}}`},
+	}
+	for _, want := range wants {
+		if got := string(described[want.key].Default); got != want.defaults {
+			t.Errorf("%v %s default %s, want %s", want.key.owner, want.key.name, got, want.defaults)
+		}
 	}
 }

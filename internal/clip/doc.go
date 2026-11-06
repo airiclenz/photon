@@ -7,9 +7,11 @@
 // config.
 //
 // A broken storyboard and a broken config are reported together, so one lint pass shows every
-// problem of both files. The cross-checks — every area the storyboard names is one the config
-// declares — run only once both files load clean, since a half-loaded file has nothing reliable
-// to check against.
+// problem of both files. The cross-checks — the storyboard's frame and targets fit the config's
+// launch kind (a url launch's storyboard sets frame.viewport and none of the terminal's grid
+// keys; a command launch's sets no viewport, device_scale or target selector), and every area
+// the storyboard names is one the config declares — run only once both files load clean, since a
+// half-loaded file has nothing reliable to check against.
 //
 // It imports only storyboard and config; it runs no command and touches no file beyond reading
 // the two it loads.
