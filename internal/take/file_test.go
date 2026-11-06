@@ -1,12 +1,17 @@
 package take
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -102,27 +107,46 @@ func TestWrite_HeaderNamesFormatAndVersion(t *testing.T) {
 func TestLoad_RefusesWhatItCannotRead(t *testing.T) {
 	t.Parallel()
 	whole := encodeTake(t, sampleTake())
+	const (
+		head  = `{"format":"photon-take","version":1,"cols":3,"rows":2}`
+		event = `{"event":{"at":0,"kind":"beat-start","beat":1}}`
+		snap  = `{"snap":{"at":0,"cursor":{"x":0,"y":0,"visible":false},"cells":[[{"g":"a","w":1}]]}}`
+	)
 	cases := []struct {
-		name string
-		data []byte
-		want error
+		name  string
+		data  []byte
+		want  error
+		texts []string
 	}{
-		{"plain text", []byte("not gzip at all"), ErrFormat},
-		{"another format", gzipLines(t, `{"format":"other-take","version":1,"cols":3,"rows":2}`), ErrFormat},
-		{"no version", gzipLines(t, `{"format":"photon-take","cols":3,"rows":2}`), ErrFormat},
-		{"newer version", gzipLines(t, `{"format":"photon-take","version":2,"cols":3,"rows":2}`), ErrNewerVersion},
+		{"plain text", []byte("not gzip at all"), ErrFormat, nil},
+		{"another format", gzipLines(t, `{"format":"other-take","version":1,"cols":3,"rows":2}`), ErrFormat, nil},
+		{"no version", gzipLines(t, `{"format":"photon-take","cols":3,"rows":2}`), ErrFormat, nil},
+		{"newer version", gzipLines(t, `{"format":"photon-take","version":2,"cols":3,"rows":2}`), ErrNewerVersion, nil},
 		{"newer version with a new field",
 			gzipLines(t, `{"format":"photon-take","version":2,"cols":3,"rows":2,"palette":"dark"}`),
-			ErrNewerVersion},
+			ErrNewerVersion, nil},
 		{"unknown header field",
 			gzipLines(t, `{"format":"photon-take","version":1,"cols":3,"rows":2,"palette":"dark"}`),
-			ErrFormat},
-		{"no terminal", gzipLines(t, `{"format":"photon-take","version":1,"cols":0,"rows":2}`), ErrFormat},
-		{"unknown line", gzipLines(t, `{"format":"photon-take","version":1,"cols":3,"rows":2}`, `{}`), ErrFormat},
-		{"bad colour", gzipLines(t, `{"format":"photon-take","version":1,"cols":3,"rows":2}`,
-			`{"snap":{"at":0,"cursor":{"x":0,"y":0,"visible":false},"cells":[[{"g":"a","w":1,"fg":"red"}]]}}`), ErrFormat},
-		{"truncated gzip", whole[:len(whole)-4], ErrFormat},
-		{"truncated mid-stream", whole[:len(whole)/2], ErrFormat},
+			ErrFormat, nil},
+		{"no terminal", gzipLines(t, `{"format":"photon-take","version":1,"cols":0,"rows":2}`), ErrFormat, nil},
+		{"unknown line", gzipLines(t, head, `{}`), ErrFormat,
+			[]string{"line 2 ", "neither one snapshot nor one event"}},
+		{"bad colour", gzipLines(t, head,
+			`{"snap":{"at":0,"cursor":{"x":0,"y":0,"visible":false},"cells":[[{"g":"a","w":1,"fg":"red"}]]}}`), ErrFormat,
+			[]string{"line 2:"}},
+		{"corrupt line", gzipLines(t, head, event, snap, `{"event":{"at":`, event), ErrFormat,
+			[]string{"line 4:"}},
+		{"two-field line", gzipLines(t, head, event,
+			`{"snap":{"at":0,"cursor":{"x":0,"y":0,"visible":false},"cells":[]},"event":{"at":0,"kind":"click","beat":1}}`),
+			ErrFormat, []string{"line 3 ", "neither one snapshot nor one event"}},
+		{"unknown field", gzipLines(t, head, event, event, `{"event":{"at":0,"kind":"click","beat":1,"colour":"red"}}`),
+			ErrFormat, []string{"line 4:", "colour"}},
+		{"trailing bytes after a value", gzipLines(t, head, snap, event+` {"event":{}}`), ErrFormat,
+			[]string{"line 3:", errTrailingData.Error()}},
+		{"blank line before a value", gzipLines(t, head, event, "  ", "", event), ErrFormat,
+			[]string{"line 3 is blank"}},
+		{"truncated gzip", whole[:len(whole)-4], ErrFormat, nil},
+		{"truncated mid-stream", whole[:len(whole)/2], ErrFormat, nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -137,8 +161,101 @@ func TestLoad_RefusesWhatItCannotRead(t *testing.T) {
 			if !errors.Is(err, c.want) {
 				t.Fatalf("Load error = %v, want %v", err, c.want)
 			}
-			if !strings.Contains(err.Error(), path) {
-				t.Fatalf("Load error = %v, want it to name %s", err, path)
+			for _, text := range append([]string{path}, c.texts...) {
+				if !strings.Contains(err.Error(), text) {
+					t.Errorf("Load error = %v, want it to say %q", err, text)
+				}
+			}
+		})
+	}
+}
+
+func TestRead_NamesTheLowestBadLine(t *testing.T) {
+	t.Parallel()
+	lines := takeLines(t, largeTake(smallCols, smallRows, smallSnapshots))
+	lines[6] = `{"event":{"at":"seven"}}`
+	lines[2] = `{"snap":{"at":"three"}}`
+
+	_, err := Read(bytes.NewReader(gzipLines(t, lines...)))
+
+	if !errors.Is(err, ErrFormat) {
+		t.Fatalf("Read error = %v, want %v", err, ErrFormat)
+	}
+	if !strings.Contains(err.Error(), "line 3:") || strings.Contains(err.Error(), "line 7") {
+		t.Fatalf("Read error = %v, want it to name line 3 and not line 7", err)
+	}
+}
+
+func TestRead_SkipsTrailingWhitespace(t *testing.T) {
+	t.Parallel()
+	want := sampleTake()
+	lines := append(takeLines(t, want), "", " \t", "")
+
+	got, err := Read(bytes.NewReader(gzipLines(t, lines...)))
+
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Read changed the take:\n got %+v\nwant %+v", got, want)
+	}
+}
+
+// Not parallel: it counts the goroutines the whole test binary runs.
+func TestRead_EndsItsGoroutinesOnABadStream(t *testing.T) {
+	lines := takeLines(t, largeTake(smallCols, smallRows, smallSnapshots))
+	lines[3] = `{"snap":`
+	whole := encodeTake(t, largeTake(smallCols, smallRows, smallSnapshots))
+	cases := []struct {
+		name string
+		data []byte
+	}{
+		{"corrupt", gzipLines(t, lines...)},
+		{"truncated", whole[:len(whole)/2]},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			before := runtime.NumGoroutine()
+
+			_, err := Read(bytes.NewReader(c.data))
+
+			if !errors.Is(err, ErrFormat) {
+				t.Fatalf("Read error = %v, want %v", err, ErrFormat)
+			}
+			if after := settledGoroutines(before); after != before {
+				t.Fatalf("goroutines = %d after Read, want %d as before it", after, before)
+			}
+		})
+	}
+}
+
+func TestReadMatchesSequentialDecoder(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		take *Take
+	}{
+		{"sample", sampleTake()},
+		{"large", largeTake(smallCols, smallRows, smallSnapshots)},
+		{"empty", &Take{Cols: 3, Rows: 2, FPS: 30,
+			Started: time.Date(2026, time.November, 6, 9, 30, 0, 0, time.UTC)}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			data := encodeTake(t, c.take)
+
+			got, err := Read(bytes.NewReader(data))
+
+			if err != nil {
+				t.Fatalf("Read: %v", err)
+			}
+			want, err := readSequentially(bytes.NewReader(data))
+			if err != nil {
+				t.Fatalf("readSequentially: %v", err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("Read and the sequential decoder differ:\n got %+v\nwant %+v", got, want)
 			}
 		})
 	}
@@ -212,4 +329,72 @@ func firstLine(t *testing.T, data []byte) string {
 	}
 	first, _, _ := strings.Cut(plain.String(), "\n")
 	return first
+}
+
+// takeLines is the decompressed lines of take's file, without their newlines.
+func takeLines(t *testing.T, take *Take) []string {
+	t.Helper()
+	zr, err := gzip.NewReader(bytes.NewReader(encodeTake(t, take)))
+	if err != nil {
+		t.Fatalf("open the gzip stream: %v", err)
+	}
+	var plain bytes.Buffer
+	if _, err := plain.ReadFrom(zr); err != nil {
+		t.Fatalf("decompress: %v", err)
+	}
+	return strings.Split(strings.TrimSuffix(plain.String(), "\n"), "\n")
+}
+
+// goroutineSettleTimeout is how long settledGoroutines waits for goroutines that have finished
+// their work to leave the count.
+const goroutineSettleTimeout = 2 * time.Second
+
+// settledGoroutines is the goroutine count once it has fallen back to want, or what it is when
+// goroutineSettleTimeout runs out: a goroutine past its last statement is counted a moment longer.
+func settledGoroutines(want int) int {
+	deadline := time.Now().Add(goroutineSettleTimeout)
+	for runtime.NumGoroutine() > want && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	return runtime.NumGoroutine()
+}
+
+// readSequentially is the take decoder before lines were decoded in parallel: one strict
+// decoder reading value after value to the end of the stream. The tests hold Read to it.
+func readSequentially(r io.Reader) (*Take, error) {
+	zr, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFormat, err)
+	}
+	defer zr.Close() //nolint:errcheck // a read-side close reports nothing the decode has not
+
+	dec := json.NewDecoder(bufio.NewReader(zr))
+	dec.DisallowUnknownFields()
+	var raw json.RawMessage
+	if err := dec.Decode(&raw); err != nil {
+		return nil, fmt.Errorf("%w: read the header: %w", ErrFormat, err)
+	}
+	take, err := readHeader(raw)
+	if err != nil {
+		return nil, err
+	}
+	for number := firstLineNumber; ; number++ {
+		var next line
+		err := dec.Decode(&next)
+		if errors.Is(err, io.EOF) {
+			return take, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%w: line %d: %w", ErrFormat, number, err)
+		}
+		switch {
+		case next.Snapshot != nil && next.Event == nil:
+			take.Snapshots = append(take.Snapshots, *next.Snapshot)
+		case next.Event != nil && next.Snapshot == nil:
+			take.Events = append(take.Events, *next.Event)
+		default:
+			return nil, fmt.Errorf("%w: line %d is neither one snapshot nor one event",
+				ErrFormat, number)
+		}
+	}
 }

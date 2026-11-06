@@ -72,7 +72,14 @@ encodeTake; internal/take/take.go — Take, Snapshot; internal/tune/server_test.
 - `GOMEMLIMIT=2GiB go test ./internal/take -bench BenchmarkLoad -run '^$' -benchtime 3x`
 **Commit:** `test(take): benchmark loading a large take`
 
-## 2. Decode take lines in parallel
+## 2. Decode take lines in parallel — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): after, on the Pi 5 host, `GOMEMLIMIT=2GiB go test ./internal/take -bench BenchmarkLoad -run '^$' -benchtime 3x`: BenchmarkLoad-4 1972008731 ns/op, 1299073760 B/op, 4369664 allocs/op (baseline 6074185242 ns/op: 0.32x). B/op rises from 721 MB because each line gets its own strict `json.Decoder`, which copies the line into a fresh buffer. Peak memory stays bounded by the lines in flight.
+NOTES (2026-11-06): the lines are read with `ReadBytes('\n')` in a feeder goroutine. Before reading a line, the feeder reserves a result slot in line order (channel capacity 4×workers−1, plus the one slot being collected, so at most 4×workers lines are in flight). Workers fill the slots and `readLines` takes them in order, so the first error it meets is the lowest-numbered failing line's. On any error it closes `stop` and waits on a `sync.WaitGroup` for the feeder and every worker before it returns.
+NOTES (2026-11-06): a whitespace-only line before the last value is now `ErrFormat` with "line N is blank". The plan's "skip only whitespace-only trailing input" requires this. The old stream decoder skipped such lines anywhere, but `Write` never writes them.
+NOTES (2026-11-06): the "neither one snapshot nor one event" error keeps its old wording, `line N is neither one snapshot nor one event`, rather than the `line N: <err>` form. Every other line failure, including read errors and truncation, uses `"%w: line %d: %w"` with `ErrFormat`.
+NOTES (2026-11-06): beyond the plan's listed tests: `TestRead_SkipsTrailingWhitespace`, and a "blank line before a value" case in `TestLoad_RefusesWhatItCannotRead`. The goroutine test is `TestRead_EndsItsGoroutinesOnABadStream`. It is not parallel, so the count is stable, and it waits up to 2 s for exited goroutines to leave the count.
+NOTES (2026-11-06): golangci-lint is not installed on this host. gofmt, go vet and a 100-column check on file.go were run instead.
 
 **What:**
 **Goal:** `take.Read` returns a take `reflect.DeepEqual` to the sequential decoder's on every
