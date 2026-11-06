@@ -359,3 +359,50 @@ launch:
 		t.Errorf("setup's output %q did not reach the writer", out.String())
 	}
 }
+
+// urlLaunchConfig is a project that launches a page by url, with a setup and a reset that each
+// leave a marker in the work dir if they run.
+const urlLaunchConfig = `name: rig-test
+setup: touch "$PHOTON_WORK/setup.out"
+reset: touch "$PHOTON_WORK/` + resetMarker + `"
+launch:
+  url: 'http://127.0.0.1:${PHOTON_PORT_WEB}/'
+`
+
+func TestSetup_RefusesAURLLaunch(t *testing.T) {
+	t.Parallel()
+	dir := writeSetupProject(t, urlLaunchConfig)
+	work := filepath.Join(dir, "work")
+	loaded, err := clip.Load(filepath.Join(dir, storyboardFile), "", work)
+	if err != nil {
+		t.Fatalf("load the clip: %v", err)
+	}
+
+	err = Setup(context.Background(), loaded, &bytes.Buffer{})
+
+	if err == nil || !strings.Contains(err.Error(), "launch.url") {
+		t.Fatalf("Setup = %v, want an error naming launch.url", err)
+	}
+	if exists(work) {
+		t.Errorf("Setup created the work dir %s before refusing", work)
+	}
+}
+
+func TestRecord_RefusesAURLLaunch(t *testing.T) {
+	t.Parallel()
+	dir := writeSetupProject(t, urlLaunchConfig)
+	work := filepath.Join(dir, "work")
+	loaded, err := clip.Load(filepath.Join(dir, storyboardFile), "", work)
+	if err != nil {
+		t.Fatalf("load the clip: %v", err)
+	}
+
+	rows, err := Record(context.Background(), loaded, "", &bytes.Buffer{})
+
+	if err == nil || !strings.Contains(err.Error(), "launch.url") {
+		t.Fatalf("Record = %v, want an error naming launch.url", err)
+	}
+	if rows != nil || exists(work) {
+		t.Errorf("Record returned rows %v or made the work dir %s before refusing", rows, work)
+	}
+}

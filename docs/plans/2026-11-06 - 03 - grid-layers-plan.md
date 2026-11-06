@@ -216,7 +216,13 @@ internal/engine/fixture_test.go — TestEngine_Run_FixtureTUI; internal/keys/key
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/keys/`, then `./internal/engine/`, then `./internal/terminal/`, then `./internal/rig/`; `GOOS=windows go vet ./internal/terminal/ ./internal/engine/`
 **Commit:** `refactor(engine): drive a Source with typed input instead of bytes`
 
-## 10. Config: browser launch and selector areas
+## 10. Config: browser launch and selector areas — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): consequential edit — internal/config/doc.go: made necessary by config importing storyboard (the package comment said it imports only keys) and by the url launch
+NOTES (2026-11-06): consequential edit — internal/storyboard/doc.go: made necessary by adding CheckSelector to validate.go (file map entry names it)
+NOTES (2026-11-06): `launch.browser` is also refused on a command launch ("only a url launch takes a browser") and when blank; it is kept as written, not resolved against the config dir — plan B decides how the capture source finds it
+NOTES (2026-11-06): with both command and url set, IsBrowser is false (url and no command), so the file's other rules are judged as a command launch and the launch reports its one "launch: want exactly one of command or url" problem; Launch.validate now takes the unprefixed reporter and files its own fields under `launch.`
+NOTES (2026-11-06): TestLoadRejects' runner is extracted into assertRejects with a named rejectCase type, shared by the new url-launch and area rejects tables
 
 **What:** Recast at the regression check (2026-11-06).
 **Goal:** `photon.yaml` accepts `launch.url` and `launch.browser`, and `areas.<name>.selector`; strict decode and validation report `launch.url`, `launch.browser`, `areas.<name>.selector` by key; exactly one of `launch.command`/`launch.url`; `strip` with `url` refused; a selector area has no anchors and vice versa; `offset` in any anchor is refused when `launch.url` is set.

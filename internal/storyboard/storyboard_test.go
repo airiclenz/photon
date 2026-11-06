@@ -881,3 +881,42 @@ func TestPressMouse(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckSelector(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		selector string
+		want     string // "" when the selector is accepted
+	}{
+		{"type", "button", ""},
+		{"attribute with a quoted bracket", `a[title="x]y"] > span`, ""},
+		{"nested parens", "li:not(:has(> a[href]))", ""},
+		{"escaped bracket", `#a\[1\]`, ""},
+		{"single-quoted quote", `[data-x='say "hi"']`, ""},
+		{"empty", "", `want a CSS selector, got ""`},
+		{"blank", "  ", `want a CSS selector, got "  "`},
+		{"unclosed bracket", "a[href", `unclosed '['`},
+		{"unclosed paren", "li:not(.done", `unclosed '('`},
+		{"stray closer", "a]", `unbalanced ']'`},
+		{"crossed", "a[b(c])", `unbalanced ']'`},
+		{"unclosed quote", `a[title="x]`, `unclosed '"'`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := CheckSelector(tc.selector)
+
+			if tc.want == "" {
+				if err != nil {
+					t.Errorf("CheckSelector(%q) = %v, want nil", tc.selector, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("CheckSelector(%q) = %v, want an error containing %q", tc.selector, err, tc.want)
+			}
+		})
+	}
+}

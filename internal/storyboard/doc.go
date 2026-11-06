@@ -68,5 +68,6 @@
 //   - located.go: a problem's [Owner] and [OwnerKind], the [LocatedError] that carries one,
 //     [AtBeat], [AtPosition], [AtZoom], [AtCaption] and [OwnerOf].
 //   - moment.go: a [Moment] on the clip's output clock and how it decodes.
-//   - validate.go: every other validation rule, each reporting its problem under the field's path.
+//   - validate.go: every other validation rule, each reporting its problem under the field's path,
+//     and [CheckSelector], the CSS selector shape check config shares.
 package storyboard

@@ -326,10 +326,12 @@ fonts: fonts/
 | `setup` | A command `photon setup` runs once to build what the takes need. |
 | `reset` | A command run before every take to restore a clean state. It runs before the services start, so it sees `PHOTON_WORK` but no ports. |
 | `launch` | The program to film. |
-| `launch.command` | Required. Run as `sh -c '<command>'`. No `exec` is added, so `. env.sh && exec app` works. The whole process group is killed at the end of the take. |
+| `launch.command` | Required unless `launch.url` is set. Run as `sh -c '<command>'`. No `exec` is added, so `. env.sh && exec app` works. The whole process group is killed at the end of the take. |
+| `launch.url` | Instead of `launch.command`: a page to film in a browser, an `http` or `https` url. Set exactly one of the two. `${NAME}` in it expands from the launch env, so `http://127.0.0.1:${PHOTON_PORT_WEB}/` reaches a service. Browser capture is not available yet: `photon setup` and `photon record` refuse a url launch. |
+| `launch.browser` | With `launch.url` only: the browser binary to drive, instead of the one photon finds. |
 | `launch.dir` | The working directory, relative to the config's folder. Default: the config's folder. |
 | `launch.env` | Variables set for the program. Values may use `${PHOTON_*}`, which photon expands. |
-| `launch.strip` | Globs of variable names (`MYAPP_*`) removed from your environment before launch, so your own settings cannot change the app. |
+| `launch.strip` | Globs of variable names (`MYAPP_*`) removed from your environment before launch, so your own settings cannot change the app. Not with `launch.url`. |
 | `services` | Helper processes a take starts, by name. See [Services and profiles](#services-and-profiles). |
 | `profiles` | Named variants of the services, picked with `photon record --profile`. |
 | `end` | How a take ends. |
@@ -338,6 +340,7 @@ fonts: fonts/
 | `end.settle_timeout` | The longest photon waits for that idle. Default `15s`. |
 | `end.kill_after` | How long after the keys a still-running program is killed. Default `10s`. |
 | `areas` | Named bands of screen rows. See [Targets and areas](#targets-and-areas). |
+| `areas.<name>.selector` | With `launch.url` only: a CSS selector whose element's box is the area, in place of `top` and `bottom`. |
 | `theme` | The colours used to draw frames. |
 | `theme.fg`, `theme.bg` | The default foreground and background, `#rrggbb`. Default `#cdd6f4` on `#0e1117`. |
 | `theme.ansi` | The 16 ANSI colours, normal then bright: all 16 or none. Default: Catppuccin Mocha. Colours 16-255 use the standard xterm palette. Truecolor is drawn as is. |
@@ -698,6 +701,17 @@ areas:
       pick: last
       above: {match: '^> '}
       offset: -1
+```
+
+With `launch.url`, an area may be a CSS `selector` instead: the box of the element it picks, as
+recorded with each frame. A selector area has no `top` or `bottom`. photon checks only its shape:
+not blank, with every bracket, paren and quote closed. On a url launch the text anchors read
+bands of the page, not rows, so they take no `offset`.
+
+```yaml
+areas:
+  sidebar:
+    selector: 'nav[aria-label="Main"] > ul'
 ```
 
 If an anchor finds no row, or the top lands below the bottom, the area is not on screen. A

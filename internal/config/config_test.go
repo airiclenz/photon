@@ -59,6 +59,37 @@ theme:
 fonts: fonts
 `
 
+// urlBase is a config that launches a page by url, with a selector area and a text area, and
+// breaks no rule. Each row of a url-launch rejects table swaps one fragment of it, which must
+// occur in it exactly once, to break one rule.
+const urlBase = `name: demo-web
+launch:
+  url: 'http://127.0.0.1:${PHOTON_PORT_WEB}/inbox'
+  browser: /usr/bin/chromium
+  env: {APP_HOME: '${PHOTON_WORK}/home'}
+services:
+  web:
+    command: ./bin/web
+    port: 0
+    ready: {tcp: true}
+areas:
+  sidebar:
+    selector: 'nav[aria-label="Main"] > ul'
+  thread:
+    top: {match: '^Inbox$', pick: last, below: {match: 'Search'}}
+    bottom: {match: '^Sent$'}
+`
+
+// rejectCase is one row of a rejects table: the fragment of a base config swapped, what it
+// becomes, and the problem the load must report.
+type rejectCase struct {
+	name   string
+	old    string
+	new    string
+	want   string
+	decode bool // true: a decode error, not a *ValidationError
+}
+
 // writeConfig writes body to a photon.yaml in a fresh temp dir and returns its path.
 func writeConfig(t *testing.T, body string) string {
 	t.Helper()
@@ -295,13 +326,7 @@ func TestLoadRejects(t *testing.T) {
 	t.Parallel()
 	const servicesSection = "  mail-relay:\n    command: ./bin/relay\n"
 
-	cases := []struct {
-		name   string
-		old    string
-		new    string
-		want   string
-		decode bool // true: a decode error, not a *ValidationError
-	}{
+	cases := []rejectCase{
 		{"unknown field", "fonts: fonts", "fonts: fonts\ncolour: red", "field colour not found", true},
 		{"unknown nested field", "kill_after: 3s", "kill_after: 3s\n  quit: 1s", "field quit not found", true},
 		{"duration spelling", "idle: 2s", "idle: soon", "cannot unmarshal", true},
@@ -310,6 +335,10 @@ func TestLoadRejects(t *testing.T) {
 		{"setup blank", "setup: ./scripts/setup.sh", "setup: ' '", `setup: want a command, got " "`, false},
 		{"reset blank", "reset: ./scripts/reset.sh", "reset: ' '", `reset: want a command, got " "`, false},
 		{"launch command missing", "  command: ./bin/app --demo\n", "", "launch.command: missing", false},
+		{"launch command and url", "  command: ./bin/app --demo\n", "  command: ./bin/app --demo\n  url: http://127.0.0.1/\n",
+			"launch: want exactly one of command or url", false},
+		{"launch browser with command", "  dir: stage\n", "  browser: /usr/bin/chromium\n  dir: stage\n",
+			"launch.browser: only a url launch takes a browser", false},
 		{"launch env name", "APP_HOME:", "APP HOME:", `launch.env: "APP HOME" is not a variable name`, false},
 		{"strip glob", "'APP_*'", "'APP_['", `launch.strip[0]: want a glob of variable names, got "APP_["`, false},
 		{"strip empty", "'APP_*'", "''", `launch.strip[0]: want a glob of variable names, got ""`, false},
@@ -351,17 +380,91 @@ func TestLoadRejects(t *testing.T) {
 		{"theme ansi count", "'#000001', ", "", "theme.ansi: want 16 colours, got 15", false},
 		{"theme ansi colour", "'#000003'", "'#00000g'", `theme.ansi[2]: want #rrggbb, got "#00000g"`, false},
 	}
-	if _, err := Load(writeConfig(t, validBase)); err != nil {
+	assertRejects(t, validBase, cases)
+}
+
+func TestLoadRejectsOnAURLLaunch(t *testing.T) {
+	t.Parallel()
+	const launchURL = "'http://127.0.0.1:${PHOTON_PORT_WEB}/inbox'"
+	cases := []rejectCase{
+		{"url scheme", launchURL, "'ftp://127.0.0.1/inbox'", `launch.url: want an http or https url, got "ftp://127.0.0.1/inbox"`, false},
+		{"url host missing", launchURL, "'http:///inbox'", `launch.url: want an http or https url, got "http:///inbox"`, false},
+		{"url relative", launchURL, "inbox", `launch.url: want an http or https url, got "inbox"`, false},
+		{"url port not a reference", launchURL, "'http://127.0.0.1:$PORT/'", `launch.url: want an http or https url, got "http://127.0.0.1:$PORT/"`, false},
+		{"url blank", launchURL, "' '", `launch.url: want an http or https url, got " "`, false},
+		{"browser blank", "browser: /usr/bin/chromium", "browser: ' '", `launch.browser: want a path, got " "`, false},
+		{"strip", "  browser: /usr/bin/chromium\n", "  browser: /usr/bin/chromium\n  strip: ['APP_*']\n",
+			"launch.strip: only a command launch takes strip", false},
+	}
+	assertRejects(t, urlBase, cases)
+}
+
+func TestLoadURLLaunch(t *testing.T) {
+	t.Parallel()
+
+	config, err := Load(writeConfig(t, urlBase))
+
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !config.IsBrowser() {
+		t.Error("IsBrowser: want true for a url launch")
+	}
+	want := Launch{URL: "http://127.0.0.1:${PHOTON_PORT_WEB}/inbox", Browser: "/usr/bin/chromium"}
+	if config.Launch.URL != want.URL || config.Launch.Browser != want.Browser || config.Launch.Command != "" {
+		t.Errorf("launch: want url %q and browser %q kept as written, got %+v", want.URL, want.Browser, config.Launch)
+	}
+}
+
+func TestLoadAcceptsLaunchURLs(t *testing.T) {
+	t.Parallel()
+	const launchURL = "'http://127.0.0.1:${PHOTON_PORT_WEB}/inbox'"
+	for _, written := range []string{
+		"'https://example.test/app?tab=inbox#top'",
+		"'http://${APP_HOST}:8080/'",
+		"'http://${APP_HOST}:${PHOTON_PORT_WEB}/${APP_PATH}'",
+		"HTTP://localhost:3000",
+	} {
+		t.Run(written, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := Load(writeConfig(t, strings.Replace(urlBase, launchURL, written, 1)))
+
+			if err != nil {
+				t.Errorf("Load: want the url %s accepted, got %v", written, err)
+			}
+		})
+	}
+}
+
+func TestIsBrowserOnACommandLaunch(t *testing.T) {
+	t.Parallel()
+
+	config, err := Load(writeConfig(t, validBase))
+
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if config.IsBrowser() {
+		t.Error("IsBrowser: want false for a command launch")
+	}
+}
+
+// assertRejects checks that base loads clean and that each case, swapped into it, is refused
+// with exactly its one problem (or the decode error it names).
+func assertRejects(t *testing.T, base string, cases []rejectCase) {
+	t.Helper()
+	if _, err := Load(writeConfig(t, base)); err != nil {
 		t.Fatalf("the base config must load clean: %v", err)
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if count := strings.Count(validBase, tc.old); count != 1 {
+			if count := strings.Count(base, tc.old); count != 1 {
 				t.Fatalf("fragment %q occurs %d times in the base, want once", tc.old, count)
 			}
 
-			_, err := Load(writeConfig(t, strings.Replace(validBase, tc.old, tc.new, 1)))
+			_, err := Load(writeConfig(t, strings.Replace(base, tc.old, tc.new, 1)))
 
 			if err == nil {
 				t.Fatalf("want an error containing %q, got none", tc.want)

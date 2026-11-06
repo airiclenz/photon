@@ -319,3 +319,47 @@ func validateArea(area string, report reporter) {
 	}
 	report("area: want an area name or %s, got %q", AreaAny, area)
 }
+
+// selectorClosers maps each bracket a CSS selector opens to the one that closes it.
+var selectorClosers = map[rune]rune{'[': ']', '(': ')'}
+
+// CheckSelector checks a CSS selector's shape, not its meaning: it is not blank, every `[` and
+// `(` is closed by its own `]` or `)` in order, and every quote is closed. Brackets inside a
+// quote and any character after a backslash are text. The problem it returns reads without a
+// field name, so the caller files it under its own.
+func CheckSelector(selector string) error {
+	if strings.TrimSpace(selector) == "" {
+		return fmt.Errorf("want a CSS selector, got %q", selector)
+	}
+	var open []rune
+	var quote rune
+	isEscaped := false
+	for _, char := range selector {
+		switch {
+		case isEscaped:
+			isEscaped = false
+		case char == '\\':
+			isEscaped = true
+		case quote != 0:
+			if char == quote {
+				quote = 0
+			}
+		case char == '\'' || char == '"':
+			quote = char
+		case selectorClosers[char] != 0:
+			open = append(open, char)
+		case char == ']' || char == ')':
+			if len(open) == 0 || selectorClosers[open[len(open)-1]] != char {
+				return fmt.Errorf("unbalanced %q in %q", char, selector)
+			}
+			open = open[:len(open)-1]
+		}
+	}
+	if quote != 0 {
+		return fmt.Errorf("unclosed %q in %q", quote, selector)
+	}
+	if len(open) > 0 {
+		return fmt.Errorf("unclosed %q in %q", open[len(open)-1], selector)
+	}
+	return nil
+}

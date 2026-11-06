@@ -25,8 +25,12 @@ const (
 // Setup runs the config's `setup` once, to build the rig: `sh -c <setup>` in the config's dir,
 // with PHOTON_WORK set to the work dir, which is created first. Its output, both streams, goes to
 // out. A config with no setup creates the work dir and runs nothing. A setup that exits non-zero
-// is an error naming it.
+// is an error naming it. A config that launches by `launch.url` is refused before the work dir is
+// created: browser capture is not available yet.
 func Setup(ctx context.Context, loaded *clip.Clip, out io.Writer) error {
+	if loaded.Config.IsBrowser() {
+		return errBrowserCapture
+	}
 	work, err := prepareWork(loaded)
 	if err != nil {
 		return err

@@ -6,11 +6,12 @@
 // may leave out.
 //
 // The config is how a project plugs into photon: the commands that build and reset its rig, the
-// one it films, the services a take needs and the profiles that swap them, how a take ends, the
-// areas its screen is divided into, the theme the raster draws with and the fonts it uses. Every
-// command is one string, run later by `sh -c`; nothing here runs one.
+// one it films (or the page, by url), the services a take needs and the profiles that swap them,
+// how a take ends, the areas its screen is divided into, the theme the raster draws with and the
+// fonts it uses. Every command is one string, run later by `sh -c`; nothing here runs one.
 //
-// It imports only keys, to check that the end keys name keys photon can send. Whether an area a
+// It imports keys, to check that the end keys name keys photon can send, and storyboard, for the
+// CSS selector shape check a selector area shares with storyboard targets. Whether an area a
 // storyboard names is declared here is checked where the two are loaded together, not here.
 //
 // The file map:

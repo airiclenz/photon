@@ -14,7 +14,7 @@ imports upward, and there are no cycles.
 | `internal/pixels` | a take's image layer: frames encoded as PNG key frames (the first frame, every 2 s, a new frame size, or a change over half the frame) and patches of the changed rectangle, and decoded back at any snapshot | `take` |
 | `internal/yamledit` | YAML source splicing: replace, insert or remove one scalar or key, leaving the rest of the bytes as written | — |
 | `internal/storyboard` | a clip's Storyboard; strict decode and validation; typed edits (`Apply`) spliced into its source, a new key placed by its yaml struct tags | `keys`, `yamledit` |
-| `internal/config` | the project's `photon.yaml` (rig, launch, services, profiles, end, areas, theme, fonts) and its lookup | `keys` |
+| `internal/config` | the project's `photon.yaml` (rig, launch by command or url, services, profiles, end, areas by anchors or selector, theme, fonts) and its lookup; the selector shape check is storyboard's | `keys`, `storyboard` |
 | `internal/clip` | a storyboard and its config loaded together, cross-checked; work dir and take path | `storyboard`, `config` |
 | `internal/target` | a target's cell box and an area's rows on a snapshot; the only resolver (clicks, drags, camera positions, `seen`) | `take`, `storyboard`, `config` |
 | `internal/terminal` | the program in a pty, the vt emulator, sampled snapshots, first paint, settle, quit, the EPERM probe; typed text, named keys and pointer events encoded as xterm bytes and SGR reports (the engine's `Source`); a Windows stand-in that refuses | `take`, `keys` |

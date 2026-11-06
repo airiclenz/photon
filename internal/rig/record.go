@@ -33,6 +33,10 @@ const quitKeyGap = 100 * time.Millisecond
 // takeEnv names the absolute path of the take just written, for `on_success`.
 const takeEnv = "PHOTON_TAKE"
 
+// errBrowserCapture refuses a config that launches a page by url: the browser source that would
+// film it is not built yet.
+var errBrowserCapture = errors.New("launch.url: browser capture is not available yet")
+
 // Record records one take of loaded under the named profile ("" for the services as declared) and
 // checks it, returning the check's rows. Command output (reset, on_success) and a `take: <path>`
 // line once the take is written go to out.
@@ -48,10 +52,15 @@ const takeEnv = "PHOTON_TAKE"
 // writes the take, then returns that error (a beat's is an *[engine.BeatError]) without checking
 // the take or running `on_success`. A failure before the launch records nothing. The services are
 // stopped on every path. Rows come back whenever the check ran, even when `on_success` then fails.
+// A config that launches by `launch.url` is refused before anything runs: browser capture is not
+// available yet.
 func Record(
 	ctx context.Context, loaded *clip.Clip, profile string, out io.Writer,
 ) ([]check.Row, error) {
 	cfg := loaded.Config
+	if cfg.IsBrowser() {
+		return nil, errBrowserCapture
+	}
 	onSuccess, err := onSuccessOf(cfg, profile)
 	if err != nil {
 		return nil, err

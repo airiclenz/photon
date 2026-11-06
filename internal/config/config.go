@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"io"
 	"maps"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -68,8 +69,15 @@ type CaptionFont struct {
 // the app's process group, which is what the terminal kills. Strip lists globs of the operator's
 // environment variable names removed before the launch, such as `MYAPP_*`, so the operator's own
 // settings cannot steer the app away from the rig.
+//
+// URL is the alternative to Command: a page filmed in a browser, an http or https url whose
+// `${NAME}` references expand from the launch env. Exactly one of the two is set; a url launch
+// takes no Strip. Browser, only with URL, is the browser binary to drive instead of the one
+// photon finds.
 type Launch struct {
 	Command string            `yaml:"command"`
+	URL     string            `yaml:"url"`
+	Browser string            `yaml:"browser"`
 	Dir     string            `yaml:"dir"`
 	Env     map[string]string `yaml:"env"`
 	Strip   []string          `yaml:"strip"`
@@ -151,7 +159,23 @@ var (
 	// projectName is the spelling of the config's name.
 	projectName = regexp.MustCompile(`^[a-z0-9-]+$`)
 	// envName is the spelling of an environment variable name.
-	envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	envName = regexp.MustCompile(`^` + envNameSpelling + `$`)
+	// urlReference is a `${NAME}` reference in a launch url.
+	urlReference = regexp.MustCompile(`\$\{` + envNameSpelling + `\}`)
+)
+
+// envNameSpelling is the unanchored spelling of an environment variable name.
+const envNameSpelling = `[A-Za-z_][A-Za-z0-9_]*`
+
+// urlReferenceStandIn replaces each `${NAME}` reference before a launch url is parsed. It is a
+// digit string so a reference in the port position, such as `:${PHOTON_PORT_WEB}`, parses as a
+// port; a reference anywhere else parses as ordinary text.
+const urlReferenceStandIn = "1"
+
+// The schemes a launch url may have.
+const (
+	schemeHTTP  = "http"
+	schemeHTTPS = "https"
 )
 
 // Load reads and validates a config. The decode is strict — an unknown field is an error — and
@@ -230,6 +254,13 @@ func (c *Config) applyDefaults() {
 	}
 }
 
+// IsBrowser reports whether the config launches a page by url rather than a command. A launch
+// that sets both, which [Load] refuses, is not a browser launch, so validation judges the rest of
+// such a file by the command launch's rules and reports the launch's one problem only once.
+func (c *Config) IsBrowser() bool {
+	return c.Launch.isBrowser()
+}
+
 // ValidationError lists every rule a config breaks.
 type ValidationError struct {
 	Path     string
@@ -274,23 +305,63 @@ func (c *Config) validate() []error {
 	}
 	validateCommand("setup", c.Setup, false, report)
 	validateCommand("reset", c.Reset, false, report)
-	c.Launch.validate(prefixed(report, "launch."))
+	c.Launch.validate(report)
 	validateServices(c.Services, report)
 	validateProfiles(c.Profiles, c.Services, report)
 	c.End.validate(prefixed(report, "end."))
-	validateAreas(c.Areas, report)
+	validateAreas(c.Areas, c.IsBrowser(), report)
 	c.Theme.validate(prefixed(report, "theme."))
 	return problems
 }
 
-// validate checks the launch command, its env and its strip globs.
+// validate checks that exactly one of a command and a url is set, then the command, the url,
+// the browser, the env and the strip globs. Every problem is filed under `launch`.
 func (l Launch) validate(report reporter) {
-	validateCommand("command", l.Command, true, report)
-	validateEnv("env", l.Env, report)
+	isURL := l.URL != ""
+	if l.Command != "" && isURL {
+		report("launch: want exactly one of command or url")
+	}
+	field := prefixed(report, "launch.")
+	validateCommand("command", l.Command, !isURL, field)
+	if isURL {
+		validateURL(l.URL, field)
+	}
+	l.validateBrowser(field)
+	validateEnv("env", l.Env, field)
+	if l.isBrowser() && len(l.Strip) > 0 {
+		field("strip: only a command launch takes strip")
+		return
+	}
 	for index, glob := range l.Strip {
 		if _, err := path.Match(glob, ""); glob == "" || err != nil {
-			report("strip[%d]: want a glob of variable names, got %q", index, glob)
+			field("strip[%d]: want a glob of variable names, got %q", index, glob)
 		}
+	}
+}
+
+// isBrowser reports a url launch: a url and no command.
+func (l Launch) isBrowser() bool {
+	return l.URL != "" && l.Command == ""
+}
+
+// validateBrowser reports a browser set on a command launch, and one that is only whitespace.
+func (l Launch) validateBrowser(report reporter) {
+	switch {
+	case l.Browser == "":
+	case l.URL == "":
+		report("browser: only a url launch takes a browser")
+	case strings.TrimSpace(l.Browser) == "":
+		report("browser: want a path, got %q", l.Browser)
+	}
+}
+
+// validateURL reports a launch url that is not an http or https url with a host once each
+// `${NAME}` reference in it stands for [urlReferenceStandIn].
+func validateURL(raw string, report reporter) {
+	parsed, err := url.Parse(urlReference.ReplaceAllString(raw, urlReferenceStandIn))
+	isWeb := err == nil && (parsed.Scheme == schemeHTTP || parsed.Scheme == schemeHTTPS)
+	if !isWeb || parsed.Host == "" {
+		report("url: want an http or https url, got %q", raw)
 	}
 }
 
