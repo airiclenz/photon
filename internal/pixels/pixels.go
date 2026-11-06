@@ -94,7 +94,8 @@ func (e *Encoder) key(at time.Duration, frame *image.RGBA) (*take.ImageEntry, er
 		return nil, fmt.Errorf("encode the key frame at %s: %w", at, err)
 	}
 	e.lastKey = at
-	return &take.ImageEntry{Key: true, Patches: []take.Patch{{Rect: box(e.prev.Rect), PNG: encoded}}}, nil
+	patch := take.Patch{Rect: box(e.prev.Rect), PNG: encoded}
+	return &take.ImageEntry{Key: true, Patches: []take.Patch{patch}}, nil
 }
 
 // changed returns the rectangles, in the frame's own pixels from (0, 0), that together hold every

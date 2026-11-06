@@ -370,7 +370,8 @@ func validateURL(raw string, report reporter) {
 // and that no timeout is negative.
 func (e End) validate(isBrowser bool, report reporter) {
 	if isBrowser && len(e.Keys) > 0 {
-		report("keys: only a command launch takes end keys; a url launch ends when the page settles")
+		report("keys: only a command launch takes end keys; " +
+			"a url launch ends when the page settles")
 	}
 	for index, name := range e.Keys {
 		if _, known := keys.Lookup(name); !known {

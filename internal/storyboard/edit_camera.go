@@ -54,9 +54,9 @@ const (
 )
 
 // positionKeyOrder is a position's keys in its struct field order: its point's — the target's
-// text, selector, nth and area, then cell — ahead of its at, hold and ease, as Point leads Position.
-// keyOrder leaves an inline field out, so the order is put together here. zoomKeyOrder is a
-// zoom's keys in its struct field order.
+// text, selector, nth and area, then cell — ahead of its at, hold and ease, as Point leads
+// Position. keyOrder leaves an inline field out, so the order is put together here. zoomKeyOrder
+// is a zoom's keys in its struct field order.
 var (
 	positionKeyOrder = slices.Concat(
 		keyOrder(reflect.TypeFor[Target]()),
@@ -206,7 +206,8 @@ func (s *splicer) setEase(mapping yamledit.Path, order []string, value json.RawM
 
 // setPositionCell writes the position's cell, typed as {"x", "y"}, as a {x: 3, y: 4} flow
 // mapping in place of its whole node, then deletes its text, selector, nth and area, which the
-// cell comes instead of. The cell goes in first: a block sequence item's only key cannot be deleted.
+// cell comes instead of. The cell goes in first: a block sequence item's only key cannot be
+// deleted.
 func (s *splicer) setPositionCell(position yamledit.Path, value json.RawMessage) error {
 	cell, err := decodeCell(value)
 	if err != nil {
@@ -309,7 +310,8 @@ func decodeTarget(value json.RawMessage) (Target, error) {
 	decoder := json.NewDecoder(bytes.NewReader(value))
 	decoder.DisallowUnknownFields()
 	var target Target
-	if err := decoder.Decode(&target); err != nil || (target.Text == "") == (target.Selector == "") {
+	if err := decoder.Decode(&target); err != nil ||
+		(target.Text == "") == (target.Selector == "") {
 		return Target{}, fmt.Errorf(`want a target such as {"text": "ok", "nth": 2, "area": `+
 			`"list"} or {"selector": "#save"}, exactly one of text and selector, got %s`, value)
 	}
