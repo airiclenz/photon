@@ -173,30 +173,29 @@ func TestResolver_TargetFailures(t *testing.T) {
 	}
 }
 
-func TestResolver_Rows(t *testing.T) {
+func TestResolver_Area(t *testing.T) {
 	t.Parallel()
 	resolver := newResolver(t)
 	full := snapshotOf(t, chromeScreen)
 
 	for _, tc := range []struct {
 		area     string
-		wantTop  int
-		wantEnd  int
+		want     take.Box
 		wantText string
 	}{
-		{"footer", 8, 9, "  Auto 漢 model"},
-		{"status", 3, 4, "  working  ctx 12%"},
-		{"history", 0, 2, "  ctx 99% Auto in the history\n  deploy here"},
-		{"to-first", 0, 1, "  ctx 99% Auto in the history"},
-		{"below-rule", 3, 4, "  working  ctx 12%"},
-		{"", 0, len(chromeScreen), strings.Join(chromeScreen, "\n")},
-		{config.AreaAny, 0, len(chromeScreen), strings.Join(chromeScreen, "\n")},
+		{"footer", take.Box{X: 0, Y: 8, W: screenCols, H: 1}, "  Auto 漢 model"},
+		{"status", take.Box{X: 0, Y: 3, W: screenCols, H: 1}, "  working  ctx 12%"},
+		{"history", take.Box{X: 0, Y: 0, W: screenCols, H: 2}, "  ctx 99% Auto in the history\n  deploy here"},
+		{"to-first", take.Box{X: 0, Y: 0, W: screenCols, H: 1}, "  ctx 99% Auto in the history"},
+		{"below-rule", take.Box{X: 0, Y: 3, W: screenCols, H: 1}, "  working  ctx 12%"},
+		{"", take.Box{X: 0, Y: 0, W: screenCols, H: len(chromeScreen)}, strings.Join(chromeScreen, "\n")},
+		{config.AreaAny, take.Box{X: 0, Y: 0, W: screenCols, H: len(chromeScreen)}, strings.Join(chromeScreen, "\n")},
 	} {
 		t.Run(tc.area, func(t *testing.T) {
 			t.Parallel()
-			top, end, err := resolver.Rows(full, tc.area)
-			if err != nil || top != tc.wantTop || end != tc.wantEnd {
-				t.Fatalf("Rows = [%d, %d), %v; want [%d, %d)", top, end, err, tc.wantTop, tc.wantEnd)
+			box, err := resolver.Area(full, tc.area)
+			if err != nil || box != tc.want {
+				t.Fatalf("Area = %+v, %v; want %+v", box, err, tc.want)
 			}
 			text, err := resolver.Text(full, tc.area)
 			if err != nil || text != tc.wantText {
@@ -224,8 +223,8 @@ func TestResolver_ZeroValueKnowsOnlyTheWholeScreen(t *testing.T) {
 	if box, err := resolver.Target(full, storyboard.Target{Text: "deploy"}); err != nil || box != (take.Box{X: 2, Y: 1, W: 6, H: 1}) {
 		t.Fatalf("Target = %+v, %v; want deploy on row 1", box, err)
 	}
-	if _, _, err := resolver.Rows(full, "footer"); err == nil {
-		t.Fatal("Rows(footer) on the zero Resolver succeeded, want an undeclared-area error")
+	if _, err := resolver.Area(full, "footer"); err == nil {
+		t.Fatal("Area(footer) on the zero Resolver succeeded, want an undeclared-area error")
 	}
 }
 
@@ -239,4 +238,145 @@ func TestNew_RefusesABadAnchor(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "area broken: bottom.above anchor") {
 		t.Fatalf("New = %v, want an error naming area broken's bottom.above anchor", err)
 	}
+}
+
+// pageScreen is a page's text layer laid out in CSS pixels, off any character cell: a heading, a
+// line holding two runs (stored right one first) and a footer run that starts at a fractional
+// cell. Each run's edges are the x of every byte, then its right edge.
+func pageScreen() take.Snapshot {
+	return take.Snapshot{Runs: []take.TextRun{
+		{Text: "Inbox", Box: take.Box{X: 13, Y: 7, W: 41, H: 18}, Edges: []int{13, 21, 26, 33, 44, 54}},
+		{Text: "Cancel", Box: take.Box{X: 90, Y: 40, W: 47, H: 18}, Edges: []int{90, 98, 106, 114, 122, 129, 137}},
+		{Text: "Save", Box: take.Box{X: 12, Y: 40, W: 30, H: 18}, Edges: []int{12, 20, 27, 34, 42}},
+		{Text: "Save draft", Box: take.Box{X: 12, Y: 300, W: 70, H: 16}, Edges: []int{12, 19, 26, 33, 40, 44, 51, 58, 65, 72, 82}},
+	}}
+}
+
+// pageAreas declares the line holding Cancel as an area, and one from it to the page's end.
+func pageAreas() map[string]config.Area {
+	cancel := config.Anchor{Match: `Cancel`}
+	return map[string]config.Area{
+		"actions": {Top: &cancel, Bottom: &cancel},
+		"lower":   {Top: &cancel},
+	}
+}
+
+func TestResolver_TargetOnRuns(t *testing.T) {
+	t.Parallel()
+	resolver, err := New(pageAreas())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	page := pageScreen()
+
+	for _, tc := range []struct {
+		name   string
+		target storyboard.Target
+		want   take.Box
+	}{
+		{"box from the run's edges", storyboard.Target{Text: "Cancel"}, take.Box{X: 90, Y: 40, W: 47, H: 18}},
+		{"a span inside a run", storyboard.Target{Text: "nc"}, take.Box{X: 106, Y: 40, W: 16, H: 18}},
+		{"first of two runs on one line", storyboard.Target{Text: "a", Area: "actions"}, take.Box{X: 20, Y: 40, W: 7, H: 18}},
+		{"nth counts across runs", storyboard.Target{Text: "a", Nth: 2, Area: "actions"}, take.Box{X: 98, Y: 40, W: 8, H: 18}},
+		{"last across runs on one line", storyboard.Target{Text: "a", Nth: storyboard.NthLast, Area: "actions"}, take.Box{X: 98, Y: 40, W: 8, H: 18}},
+		{"last is the lowest line", storyboard.Target{Text: "Save", Nth: storyboard.NthLast}, take.Box{X: 12, Y: 300, W: 28, H: 16}},
+		{"area keeps to its lines", storyboard.Target{Text: "Save", Nth: storyboard.NthLast, Area: "actions"}, take.Box{X: 12, Y: 40, W: 30, H: 18}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			box, err := resolver.Target(page, tc.target)
+			if err != nil || box != tc.want {
+				t.Fatalf("Target = %+v, %v; want %+v", box, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolver_RegexNeverSpansRuns(t *testing.T) {
+	t.Parallel()
+	var resolver Resolver
+
+	box, err := resolver.Target(pageScreen(), storyboard.Target{Text: "Save Cancel"})
+	if !errors.Is(err, ErrNotOnScreen) {
+		t.Fatalf("Target = %+v, %v; want a not-on-screen error", box, err)
+	}
+}
+
+func TestResolver_AreaOnRuns(t *testing.T) {
+	t.Parallel()
+	resolver, err := New(pageAreas())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	page := pageScreen()
+
+	for _, tc := range []struct {
+		area     string
+		want     take.Box
+		wantText string
+	}{
+		{"actions", take.Box{X: 12, Y: 40, W: 125, H: 18}, "Save Cancel"},
+		{"lower", take.Box{X: 12, Y: 40, W: 125, H: 276}, "Save Cancel\nSave draft"},
+		{config.AreaAny, take.Box{X: 12, Y: 7, W: 125, H: 309}, "Inbox\nSave Cancel\nSave draft"},
+	} {
+		t.Run(tc.area, func(t *testing.T) {
+			t.Parallel()
+			box, err := resolver.Area(page, tc.area)
+			if err != nil || box != tc.want {
+				t.Fatalf("Area = %+v, %v; want %+v", box, err, tc.want)
+			}
+			text, err := resolver.Text(page, tc.area)
+			if err != nil || text != tc.wantText {
+				t.Fatalf("Text = %q, %v; want %q", text, err, tc.wantText)
+			}
+		})
+	}
+}
+
+func TestResolver_RaggedRowFoundInItsArea(t *testing.T) {
+	t.Parallel()
+	ragged := take.Snapshot{Cells: [][]take.Cell{cellsOf("top"), cellsOf("a row longer than row 0 ok")}}
+	resolver, err := New(map[string]config.Area{
+		"under-top": {Top: &config.Anchor{Match: `^top$`, Offset: 1}},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	box, err := resolver.Target(ragged, storyboard.Target{Text: "ok", Area: "under-top"})
+
+	if want := (take.Box{X: 24, Y: 1, W: 2, H: 1}); err != nil || box != want {
+		t.Fatalf("Target = %+v, %v; want %+v", box, err, want)
+	}
+}
+
+func TestResolver_OffsetAcrossABlankRow(t *testing.T) {
+	t.Parallel()
+	screen := snapshotOf(t, []string{"head", "", "body", "end"})
+	resolver, err := New(map[string]config.Area{
+		"body":    {Top: &config.Anchor{Match: `^head`, Offset: 2}, Bottom: &config.Anchor{Match: `^end`, Offset: -1}},
+		"to-body": {Bottom: &config.Anchor{Match: `^body`}},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	box, err := resolver.Area(screen, "body")
+	if want := (take.Box{X: 0, Y: 2, W: screenCols, H: 1}); err != nil || box != want {
+		t.Fatalf("Area(body) = %+v, %v; want %+v", box, err, want)
+	}
+	text, err := resolver.Text(screen, "to-body")
+	if err != nil || text != "head\n\nbody" {
+		t.Fatalf("Text(to-body) = %q, %v; want %q", text, err, "head\n\nbody")
+	}
+}
+
+// cellsOf lays line out as one-cell graphemes with no blank cells after it, so rows of different
+// lengths make a ragged grid.
+func cellsOf(line string) []take.Cell {
+	cells := make([]take.Cell, 0, len(line))
+	for _, r := range line {
+		cells = append(cells, take.Cell{Grapheme: string(r), Width: 1})
+	}
+	return cells
 }

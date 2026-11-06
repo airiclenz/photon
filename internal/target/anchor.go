@@ -26,17 +26,17 @@ func compileArea(spec config.Area) (area, error) {
 	return area{top: top, bottom: bottom}, nil
 }
 
-// rows returns the half-open row range [top, end) the area covers on screen. Both edges are
-// inclusive, so an area whose two edges pick the same row is that one row.
-func (a area) rows(screen []screenRow) (top, end int, err error) {
+// lines returns the half-open range [top, end) of the screen's lines the area covers. Both edges
+// are inclusive, so an area whose two edges pick the same line is that one line.
+func (a area) lines(screen []line) (top, end int, err error) {
 	top, bottom := 0, len(screen)-1
 	if a.top != nil {
-		if top, err = a.top.row(screen); err != nil {
+		if top, err = a.top.line(screen); err != nil {
 			return 0, 0, err
 		}
 	}
 	if a.bottom != nil {
-		if bottom, err = a.bottom.row(screen); err != nil {
+		if bottom, err = a.bottom.line(screen); err != nil {
 			return 0, 0, err
 		}
 	}
@@ -47,7 +47,7 @@ func (a area) rows(screen []screenRow) (top, end int, err error) {
 	return top, bottom + 1, nil
 }
 
-// anchor is a config anchor with its regex compiled: it picks one row of a screen.
+// anchor is a config anchor with its regex compiled: it picks one line of a screen.
 type anchor struct {
 	// path names the anchor within its area the way the config nests it, such as top or
 	// bottom.above, so an error points at the field to fix.
@@ -82,20 +82,21 @@ func compileAnchor(path string, spec *config.Anchor) (*anchor, error) {
 	}, nil
 }
 
-// row picks the anchor's row on screen: the first row whose text the pattern finds, or the last
-// for [config.PickLast], searching only the rows strictly above or below the row the limiting
-// anchor picks, then moved by the offset. A pick left empty is the first.
-func (a *anchor) row(screen []screenRow) (int, error) {
+// line picks the anchor's line on screen: the first line whose text the pattern finds, or the
+// last for [config.PickLast], searching only the lines strictly above or below the line the
+// limiting anchor picks, then moved by the offset in lines. A pick left empty is the first. On a
+// terminal a line is a row, so errors count rows.
+func (a *anchor) line(screen []line) (int, error) {
 	start, end := 0, len(screen)
 	switch {
 	case a.above != nil:
-		limit, err := a.above.row(screen)
+		limit, err := a.above.line(screen)
 		if err != nil {
 			return 0, err
 		}
 		end = limit
 	case a.below != nil:
-		limit, err := a.below.row(screen)
+		limit, err := a.below.line(screen)
 		if err != nil {
 			return 0, err
 		}

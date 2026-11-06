@@ -1,9 +1,11 @@
 package target
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/airiclenz/photon/internal/config"
@@ -12,12 +14,12 @@ import (
 )
 
 // ErrNotOnScreen is wrapped by every failure that depends only on what the snapshot shows: a
-// target with no match, an nth past the matches, an anchor that finds no row or lands off the
+// target with no match, an nth past the matches, an anchor that finds no line or lands off the
 // screen. A later snapshot may resolve where this one did not.
 var ErrNotOnScreen = errors.New("not on screen")
 
-// blankGrapheme is what a cell with no grapheme shows.
-const blankGrapheme = " "
+// runSeparator joins the runs of one line into the line's text.
+const runSeparator = " "
 
 // Resolver resolves targets and areas on snapshots against one config's declared areas. The
 // zero Resolver knows no areas, so it resolves only the whole screen (an empty area or
@@ -40,69 +42,88 @@ func New(areas map[string]config.Area) (Resolver, error) {
 	return Resolver{areas: compiled}, nil
 }
 
-// Target finds the target on screen: every match of its regex within its area's rows, in reading
-// order (top to bottom, left to right), from which Nth picks one — the first, the Nth, or the
-// last, which is the lowest row's rightmost match. The box is one row high and spans the columns
-// the match covers. An empty match never counts.
+// Target finds the target on screen: every match of its regex within a run of the text layer
+// that lies inside its area, in reading order (top to bottom, left to right), from which Nth picks
+// one — the first, the Nth, or the last, which is the lowest line's rightmost match. The box spans
+// the grid columns the match covers over its run's height. An empty match never counts.
 func (r Resolver) Target(screen take.Snapshot, target storyboard.Target) (take.Box, error) {
 	pattern, err := regexp.Compile(target.Text)
 	if err != nil {
 		return take.Box{}, fmt.Errorf("target /%s/: %w", target.Text, err)
 	}
-	rows := rowsOf(screen)
-	top, end, err := r.band(rows, target.Area)
+	lines := linesOf(screen)
+	box, err := r.box(screen, lines, target.Area)
 	if err != nil {
 		return take.Box{}, fmt.Errorf("target /%s/: %w", target.Text, err)
 	}
 	var matches []take.Box
-	for y := top; y < end; y++ {
-		row := rows[y]
-		for _, span := range pattern.FindAllStringIndex(row.text, -1) {
-			if span[0] == span[1] {
+	for _, line := range lines {
+		for _, run := range line.runs {
+			if !withinBand(run.Box, box) {
 				continue
 			}
-			x := row.cols[span[0]]
-			matches = append(matches, take.Box{X: x, Y: y, W: row.cols[span[1]] - x, H: 1})
+			for _, span := range pattern.FindAllStringIndex(run.Text, -1) {
+				if span[0] == span[1] {
+					continue
+				}
+				matches = append(matches, run.Span(span[0], span[1]))
+			}
 		}
 	}
 	return pickMatch(matches, target)
 }
 
-// Rows returns the half-open row range [top, end) the named area covers on screen. An empty
-// name or [config.AreaAny] is every row.
-func (r Resolver) Rows(screen take.Snapshot, areaName string) (top, end int, err error) {
-	return r.band(rowsOf(screen), areaName)
+// Area returns the Box the named area covers on screen: the full width of the grid, from the top
+// of the line its top anchor picks to the bottom of the line its bottom anchor picks. An empty
+// name or [config.AreaAny] is the whole grid ([take.Snapshot.Bounds]). The area holds whatever
+// lies within its top and bottom, whatever its columns.
+func (r Resolver) Area(screen take.Snapshot, areaName string) (take.Box, error) {
+	return r.box(screen, linesOf(screen), areaName)
 }
 
-// Text returns what the named area shows on screen: its rows as plain text, trailing blanks
-// trimmed, joined by newlines. An empty name or [config.AreaAny] is the whole screen.
+// Text returns what the named area shows on screen: each of its lines as plain text, the line's
+// runs joined by one space, the lines joined by newlines. A terminal line is a row, trailing
+// blanks trimmed. An empty name or [config.AreaAny] is the whole screen.
 func (r Resolver) Text(screen take.Snapshot, areaName string) (string, error) {
-	rows := rowsOf(screen)
-	top, end, err := r.band(rows, areaName)
+	lines := linesOf(screen)
+	box, err := r.box(screen, lines, areaName)
 	if err != nil {
 		return "", err
 	}
-	lines := make([]string, 0, end-top)
-	for _, row := range rows[top:end] {
-		lines = append(lines, row.text)
+	shown := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if text, isShown := line.textWithin(box); isShown {
+			shown = append(shown, text)
+		}
 	}
-	return strings.Join(lines, "\n"), nil
+	return strings.Join(shown, "\n"), nil
 }
 
-// band resolves the named area on rows, every error naming the area.
-func (r Resolver) band(rows []screenRow, areaName string) (top, end int, err error) {
+// box resolves the named area on the screen's lines, every error naming the area.
+func (r Resolver) box(screen take.Snapshot, lines []line, areaName string) (take.Box, error) {
+	grid := screen.Bounds()
 	if areaName == "" || areaName == config.AreaAny {
-		return 0, len(rows), nil
+		return grid, nil
 	}
 	declared, isDeclared := r.areas[areaName]
 	if !isDeclared {
-		return 0, 0, fmt.Errorf("area %s: not declared in the config", areaName)
+		return take.Box{}, fmt.Errorf("area %s: not declared in the config", areaName)
 	}
-	top, end, err = declared.rows(rows)
+	top, end, err := declared.lines(lines)
 	if err != nil {
-		return 0, 0, fmt.Errorf("area %s: %w", areaName, err)
+		return take.Box{}, fmt.Errorf("area %s: %w", areaName, err)
 	}
-	return top, end, nil
+	return take.Box{
+		X: grid.X,
+		Y: lines[top].top,
+		W: grid.W,
+		H: lines[end-1].bottom - lines[top].top,
+	}, nil
+}
+
+// withinBand reports whether inner lies within the rows of area, whatever its columns.
+func withinBand(inner, area take.Box) bool {
+	return area.Y <= inner.Y && inner.Y+inner.H <= area.Y+area.H
 }
 
 // pickMatch applies the target's Nth to its matches.
@@ -126,39 +147,58 @@ func pickMatch(matches []take.Box, target storyboard.Target) (take.Box, error) {
 	return matches[target.Nth-1], nil
 }
 
-// screenRow is one snapshot row as plain text, trailing blanks trimmed, with the terminal column
-// every byte of the text starts in: cols has one entry per byte plus one for the end of the text,
-// so a match's byte span [start, end) covers the columns [cols[start], cols[end]). The cells a
-// wide grapheme covers after its first contribute no text, so a wide grapheme counts once.
-type screenRow struct {
-	text string
-	cols []int
+// line is one line of the text layer: the runs sharing a top edge, left to right, and the text
+// an anchor reads, the runs' text joined by one space. A terminal row is one line holding one
+// run, a blank row included.
+type line struct {
+	runs   []take.TextRun
+	text   string
+	top    int
+	bottom int
 }
 
-// rowsOf reads every row of screen.
-func rowsOf(screen take.Snapshot) []screenRow {
-	rows := make([]screenRow, len(screen.Cells))
-	for y, cells := range screen.Cells {
-		var text strings.Builder
-		cols := make([]int, 0, len(cells)+1)
-		end, endCol := 0, 0
-		for x, cell := range cells {
-			if cell.Width == 0 {
-				continue
-			}
-			grapheme := cell.Grapheme
-			if grapheme == "" {
-				grapheme = blankGrapheme
-			}
-			for range len(grapheme) {
-				cols = append(cols, x)
-			}
-			text.WriteString(grapheme)
-			if grapheme != blankGrapheme {
-				end, endCol = text.Len(), x+cell.Width
-			}
+// linesOf groups the screen's text layer into lines, top to bottom.
+func linesOf(screen take.Snapshot) []line {
+	runs := slices.Clone(screen.Text())
+	slices.SortStableFunc(runs, func(a, b take.TextRun) int {
+		return cmp.Or(cmp.Compare(a.Box.Y, b.Box.Y), cmp.Compare(a.Box.X, b.Box.X))
+	})
+	var lines []line
+	for first := 0; first < len(runs); {
+		end := first + 1
+		for end < len(runs) && runs[end].Box.Y == runs[first].Box.Y {
+			end++
 		}
-		rows[y] = screenRow{text: text.String()[:end], cols: append(cols[:end], endCol)}
+		lines = append(lines, lineOf(runs[first:end]))
+		first = end
 	}
-	return rows
+	return lines
+}
+
+// lineOf makes one line of runs that share a top edge and are in x order.
+func lineOf(runs []take.TextRun) line {
+	texts := make([]string, len(runs))
+	bottom := runs[0].Box.Y
+	for i, run := range runs {
+		texts[i] = run.Text
+		bottom = max(bottom, run.Box.Y+run.Box.H)
+	}
+	return line{
+		runs:   runs,
+		text:   strings.Join(texts, runSeparator),
+		top:    runs[0].Box.Y,
+		bottom: bottom,
+	}
+}
+
+// textWithin returns the text of the line's runs that lie within the rows of area, joined by one
+// space, and whether any does.
+func (l line) textWithin(area take.Box) (string, bool) {
+	var texts []string
+	for _, run := range l.runs {
+		if withinBand(run.Box, area) {
+			texts = append(texts, run.Text)
+		}
+	}
+	return strings.Join(texts, runSeparator), texts != nil
 }

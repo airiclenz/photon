@@ -181,7 +181,7 @@ type proposer struct {
 	text     string
 }
 
-// candidate is a declared area holding the picked row, and how many rows it covers.
+// candidate is a declared area holding the picked row, and the height of its box.
 type candidate struct {
 	name   string
 	height int
@@ -227,20 +227,21 @@ func (p proposer) propose(areas map[string]config.Area) (storyboard.Target, take
 	return p.checked(proposed)
 }
 
-// areasHolding returns the declared areas whose rows on the screen hold the picked row, fewest
-// rows first and equal heights in name order. An area the screen does not show holds nothing.
+// areasHolding returns the declared areas whose box on the screen holds the picked cells within
+// its top and bottom, whatever their columns, shortest first and equal heights in name order. An
+// area the screen does not show holds nothing.
 func (p proposer) areasHolding(areas map[string]config.Area) ([]candidate, error) {
 	var holding []candidate
 	for name := range areas {
-		top, end, err := p.resolver.Rows(p.screen, name)
+		box, err := p.resolver.Area(p.screen, name)
 		if errors.Is(err, target.ErrNotOnScreen) {
 			continue
 		}
 		if err != nil {
 			return nil, err
 		}
-		if top <= p.picked.Y && p.picked.Y < end {
-			holding = append(holding, candidate{name: name, height: end - top})
+		if box.Y <= p.picked.Y && p.picked.Y+p.picked.H <= box.Y+box.H {
+			holding = append(holding, candidate{name: name, height: box.H})
 		}
 	}
 	slices.SortFunc(holding, func(a, b candidate) int {

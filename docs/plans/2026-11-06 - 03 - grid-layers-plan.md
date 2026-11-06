@@ -85,7 +85,10 @@ internal/take/file_test.go — sampleTake, TestFile_SaveLoadRoundTrip; internal/
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/take/`
 **Commit:** `feat(take): give a snapshot a text layer`
 
-## 3. Resolve targets and areas on the text layer
+## 3. Resolve targets and areas on the text layer — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): anchor error messages keep the word "row" ("top row 7 is below bottom row 5", "row 0 offset by -1") so existing resolver test expectations stay unchanged; the number is a line index, which on a terminal is the row.
+NOTES (2026-11-06): an anchor matches against a line's text (its runs joined by one space), while a target regex matches within one run at a time and never spans runs.
 
 **What:** Recast at the regression check (2026-11-06).
 **Goal:** `internal/target` reads only `Snapshot.Text()` (no `.Cells`); an area resolves to a `take.Box`; a target's box comes from its run's Edges; every existing resolver test passes unchanged in expectation; a target resolves on hand-built runs that sit off character cells.
