@@ -42,10 +42,14 @@ jobs:
           go run "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${version}" run ./...
 
   browser:
-    name: tune page in headless Chromium (ubuntu-latest)
-    # The runner image ships Google Chrome; the test finds it on PATH, and the required variable
-    # makes a missing browser fail the job instead of skipping the test.
-    runs-on: ubuntu-latest
+    name: headless Chromium
+    # The runner images ship Google Chrome; the tests find it on PATH or in /Applications, and
+    # the required variable makes a missing browser fail the job instead of skipping the tests.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     env:
       PHOTON_TEST_BROWSER_REQUIRED: "1"
     steps:
@@ -56,6 +60,6 @@ jobs:
         with:
           go-version-file: go.mod
       - name: go vet (browser tag)
-        run: go vet -tags browser ./internal/tune
+        run: go vet -tags browser ./internal/tune ./internal/browser
       - name: go test (browser tag)
-        run: go test -tags browser ./internal/tune -run Browser -v
+        run: go test -tags browser ./internal/tune ./internal/browser -run Browser -v

@@ -27,8 +27,8 @@ const (
 	browserRequiredEnv = "PHOTON_TEST_BROWSER_REQUIRED"
 )
 
-// browserNames are the names and paths a Chromium is looked up under on a unix-like host, in the
-// order chromedp's own allocator tries them.
+// browserNames are the names and paths a Chromium is looked up under, in the order chromedp's own
+// allocator tries them on a unix-like host, then the macOS application bundles it tries on darwin.
 var browserNames = []string{
 	"headless_shell",
 	"headless-shell",
@@ -42,6 +42,8 @@ var browserNames = []string{
 	"/usr/local/bin/chrome",
 	"/snap/bin/chromium",
 	"chrome",
+	"/Applications/Chromium.app/Contents/MacOS/Chromium",
+	"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 }
 
 // The browser's limits: a small window keeps a Pi host's memory in bounds, browserTimeout caps

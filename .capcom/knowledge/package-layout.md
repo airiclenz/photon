@@ -18,6 +18,7 @@ imports upward, and there are no cycles.
 | `internal/clip` | a storyboard and its config loaded together, cross-checked; work dir and take path | `storyboard`, `config` |
 | `internal/target` | a target's cell box and an area's rows on a snapshot; the only resolver (clicks, drags, camera positions, `seen`) | `take`, `storyboard`, `config` |
 | `internal/terminal` | the program in a pty, the vt emulator, sampled snapshots, first paint, settle, quit, the EPERM probe; typed text, named keys and pointer events encoded as xterm bytes and SGR reports (the engine's `Source`); a Windows stand-in that refuses | `take`, `keys` |
+| `internal/browser` | the Chromium capture source behind a url launch: finding the browser (`launch.browser` or a fixed list of names and paths, else `ErrNoBrowser`), starting it headless at the url with the clip's viewport and device scale, closing it; drives it through chromedp | — |
 | `internal/engine` | performing a beat's actions; defines the `Source` interface it drives (`Type`, `Key`, `Pointer` with `PointerEvent` = `keys.Pointer`, plus `Current`, `Match`, `Done`, `Event`; pty terminal plus a test fake) and builds no input bytes | `take`, `target`, `storyboard`, `keys` |
 | `internal/service` | a take's services: start, readiness, ports, logs, stop; profiles | `config` |
 | `internal/check` | judging a take: one PASS/FAIL row per expect | `take`, `target`, `storyboard` |
@@ -51,7 +52,7 @@ updates `VERSION` and nothing in Go code.
 **Grid surfaces (Note `grid-surfaces`, 2026-11-06).** A snapshot carries a text layer and an
 image layer on one grid. `take` owns both layers, text runs, recorded selector boxes and the
 cell geometry, and stays free of image code; a new `internal/pixels` owns encoding, decoding and
-seeking the image layer's frames; a planned `internal/browser`, the Chromium capture source,
-imports `take`, `pixels` and `keys`. The engine's `Terminal` interface became `Source` (grid-layers
+seeking the image layer's frames; `internal/browser`, the Chromium capture source, comes to
+import `take`, `pixels` and `keys` as it records. The engine's `Terminal` interface became `Source` (grid-layers
 plan item 9; the pty terminal and the browser are its two adapters, plus a test fake); `engine` never imports
 `terminal` or `browser`. The rows above change as each package's imports change.

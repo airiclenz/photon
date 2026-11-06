@@ -141,7 +141,14 @@ NOTES (2026-11-06): no CHANGELOG entry: browser takes (the only image-layer take
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/pixels/`
 **Commit:** `fix(pixels): one patch rectangle per far-apart change`
 
-## 7. A Chromium launcher
+## 7. A Chromium launcher — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): `Options` carries URL, ExecPath, Width, Height, DeviceScale and Env only; FPS and Selectors are left to the items that first use them (screencast, selector boxes), since no code in this item reads them.
+NOTES (2026-11-06): a set ExecPath (launch.browser) is the only browser tried: when it is missing, `findBrowser` fails with `ErrNoBrowser` rather than falling back to the discovery list, so a launch that names a browser never runs another.
+NOTES (2026-11-06): the viewport and scale are set with chromedp's `EmulateViewport`/`EmulateScale`, which wrap `emulation.SetDeviceMetricsOverride`; NoSandbox is applied only as root on Linux (Chromium refuses its sandbox there). The Pi host's Chromium ran sandboxed as uid 1000; the ubuntu/macos runners are unverified until CI runs.
+NOTES (2026-11-06): the package-layout row lists no photon imports ("—"): the launcher imports only chromedp so far; `take`, `pixels` and `keys` join the row as items 8-10 add those imports.
+NOTES (2026-11-06): consequential edit — .capcom/knowledge/package-layout.md: made necessary by adding internal/browser (the grid-surfaces paragraph no longer calls it "planned").
+NOTES (2026-11-06): the CI `browser` job is named "headless Chromium"; GitHub appends the matrix os, so the ubuntu check reads "headless Chromium (ubuntu-latest)".
 
 **What:**
 **Goal:** a new package `internal/browser` starts headless Chromium at a URL with a viewport and device scale, finds the browser from `launch.browser` or a fixed discovery list, and fails with `ErrNoBrowser` when none is found; CI runs its browser tests on Linux and macOS.
