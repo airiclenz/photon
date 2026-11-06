@@ -5,6 +5,7 @@ type: feature
 priority: 3
 labels: [browser]
 deps: [film-tune-page]
+plan: 2026-11-06 - 04 - browser-capture-plan
 created: 2026-11-06T13:42:51Z
 ---
 

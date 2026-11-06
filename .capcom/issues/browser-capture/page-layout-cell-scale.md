@@ -4,6 +4,7 @@ status: open
 type: bug
 priority: 3
 labels: [browser]
+plan: 2026-11-06 - 04 - browser-capture-plan
 created: 2026-11-06T15:52:57Z
 ---
 

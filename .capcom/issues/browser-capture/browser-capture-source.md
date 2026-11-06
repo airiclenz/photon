@@ -5,6 +5,7 @@ type: feature
 priority: 3
 labels: [browser]
 deps: [snapshot-two-layers, take-cell-geometry, text-layer-resolver, pixel-take-storage, browser-launch-config]
+plan: 2026-11-06 - 04 - browser-capture-plan
 created: 2026-11-06T13:42:51Z
 ---
 
