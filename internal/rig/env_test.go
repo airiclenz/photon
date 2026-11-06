@@ -56,6 +56,12 @@ func TestLaunchEnv(t *testing.T) {
 			want:    []string{"PHOTON_WORK=/rig/work", "PHOTON_PORT_BACKEND=4000"},
 		},
 		{
+			name:    "a strip glob removes its variables from a url launch's env",
+			environ: []string{"APP_KEY=secret", "HOME=/home/me"},
+			launch:  config.Launch{URL: "http://127.0.0.1:${PHOTON_PORT_BACKEND}/", Strip: []string{"APP_*"}},
+			want:    []string{"HOME=/home/me", "PHOTON_WORK=/rig/work", "PHOTON_PORT_BACKEND=4000"},
+		},
+		{
 			name:    "a strip glob does not remove what launch env sets",
 			environ: []string{"APP_MODE=dev"},
 			launch:  config.Launch{Strip: []string{"APP_*"}, Env: map[string]string{"APP_MODE": "demo"}},

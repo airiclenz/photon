@@ -393,8 +393,8 @@ func TestLoadRejectsOnAURLLaunch(t *testing.T) {
 		{"url port not a reference", launchURL, "'http://127.0.0.1:$PORT/'", `launch.url: want an http or https url, got "http://127.0.0.1:$PORT/"`, false},
 		{"url blank", launchURL, "' '", `launch.url: want an http or https url, got " "`, false},
 		{"browser blank", "browser: /usr/bin/chromium", "browser: ' '", `launch.browser: want a path, got " "`, false},
-		{"strip", "  browser: /usr/bin/chromium\n", "  browser: /usr/bin/chromium\n  strip: ['APP_*']\n",
-			"launch.strip: only a command launch takes strip", false},
+		{"strip glob", "  browser: /usr/bin/chromium\n", "  browser: /usr/bin/chromium\n  strip: ['APP_[']\n",
+			`launch.strip[0]: want a glob of variable names, got "APP_["`, false},
 		{"end keys", "areas:\n", "end:\n  keys: [ctrl+c]\nareas:\n",
 			"end.keys: only a command launch takes end keys", false},
 	}
@@ -418,6 +418,20 @@ func TestLoadURLLaunch(t *testing.T) {
 	}
 	if len(config.End.Keys) != 0 {
 		t.Errorf("end.keys: want none on a url launch, got %v", config.End.Keys)
+	}
+}
+
+func TestLoadURLLaunchKeepsStrip(t *testing.T) {
+	t.Parallel()
+	written := strings.Replace(urlBase, "  browser: /usr/bin/chromium\n", "  browser: /usr/bin/chromium\n  strip: ['APP_*']\n", 1)
+
+	config, err := Load(writeConfig(t, written))
+
+	if err != nil {
+		t.Fatalf("Load: want a url launch with strip accepted, got %v", err)
+	}
+	if want := []string{"APP_*"}; !slices.Equal(config.Launch.Strip, want) {
+		t.Errorf("launch.strip: want %q kept, got %q", want, config.Launch.Strip)
 	}
 }
 

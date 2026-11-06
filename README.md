@@ -349,7 +349,7 @@ fonts: fonts/
 | `launch.browser` | With `launch.url` only: the browser binary to drive, instead of the one photon finds. |
 | `launch.dir` | The working directory, relative to the config's folder. Default: the config's folder. |
 | `launch.env` | Variables set for the program. Values may use `${PHOTON_*}`, which photon expands. |
-| `launch.strip` | Globs of variable names (`MYAPP_*`) removed from your environment before launch, so your own settings cannot change the app. Not with `launch.url`. |
+| `launch.strip` | Globs of variable names (`MYAPP_*`) removed from your environment before launch, so your own settings cannot change the program or, with `launch.url`, the browser. |
 | `services` | Helper processes a take starts, by name. See [Services and profiles](#services-and-profiles). |
 | `profiles` | Named variants of the services, picked with `photon record --profile`. |
 | `end` | How a take ends. |

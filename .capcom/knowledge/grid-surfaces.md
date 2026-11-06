@@ -29,8 +29,9 @@ loses all three. The boundary changes every later browser issue, so it is settle
 - **headless Chromium**, driven over the DevTools Protocol through chromedp (planned
   `internal/browser`). The config's `launch.url` starts it (the alternative to `launch.command`,
   exactly one set; `${VAR}` in the url expands from the launch env; optional `launch.browser`
-  overrides Chromium discovery; `strip` is refused with a url). The storyboard sets the page size
-  with `frame.viewport: {width, height}` and `frame.device_scale`.
+  overrides Chromium discovery; `strip` removes its globs from the browser's env as from a
+  command's). The storyboard sets the page size with `frame.viewport: {width, height}` and
+  `frame.device_scale`.
 
 ## Grid unit and cell geometry
 

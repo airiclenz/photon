@@ -65,7 +65,10 @@ that writes `env` to a file and exits 1, and `Env` holding a marker var but not 
 - `GOMEMLIMIT=2GiB go build ./...`
 **Commit:** `fix(browser): run the browser with exactly the launch env`
 
-## 2. launch.strip on a url launch
+## 2. launch.strip on a url launch — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): CHANGELOG is an amendment of the existing Unreleased entry (CHANGELOG.md:11), per the plan, not a new entry; the closeout applies it as a replacement of that sentence.
+NOTES (2026-11-06): the valid case is a new test `TestLoadURLLaunchKeepsStrip` on `urlBase` plus `strip: ['APP_*']`, rather than an extension of `TestLoadURLLaunch`.
 
 **What:**
 **Goal:** a config with `launch.url` and `launch.strip` loads without a problem; a url take's

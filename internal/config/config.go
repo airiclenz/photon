@@ -71,9 +71,9 @@ type CaptionFont struct {
 // settings cannot steer the app away from the rig.
 //
 // URL is the alternative to Command: a page filmed in a browser, an http or https url whose
-// `${NAME}` references expand from the launch env. Exactly one of the two is set; a url launch
-// takes no Strip. Browser, only with URL, is the browser binary to drive instead of the one
-// photon finds.
+// `${NAME}` references expand from the launch env. Exactly one of the two is set; on a url launch
+// Strip removes its globs from the browser's environment. Browser, only with URL, is the browser
+// binary to drive instead of the one photon finds.
 type Launch struct {
 	Command string            `yaml:"command"`
 	URL     string            `yaml:"url"`
@@ -329,10 +329,6 @@ func (l Launch) validate(report reporter) {
 	}
 	l.validateBrowser(field)
 	validateEnv("env", l.Env, field)
-	if l.isBrowser() && len(l.Strip) > 0 {
-		field("strip: only a command launch takes strip")
-		return
-	}
 	for index, glob := range l.Strip {
 		if _, err := path.Match(glob, ""); glob == "" || err != nil {
 			field("strip[%d]: want a glob of variable names, got %q", index, glob)
