@@ -123,7 +123,11 @@ alongside it still blocks `Save`; undo clears the problem.
 **Commit:** `feat(tune): keep previewing at the take's size when the frame size changes`
 Depends on item 1.
 
-## 3. render: quantize a frame to max_colors for preview
+## 3. render: quantize a frame to max_colors for preview — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): on the fast path (no more than maxColors colours) Quantize returns img itself rather than a copy; documented in its doc comment, and img is never modified on either path.
+NOTES (2026-11-06): a maxColors below 1 is taken as 1 (the function has no error return; storyboard validation already holds max_colors to 2..256).
+NOTES (2026-11-06): golangci-lint is not installed on this host; gofmt, go vet and a manual 100-column check passed instead.
 
 **What:**
 **Goal:** `render.Quantize(img *image.RGBA, maxColors int) *image.RGBA` returns an image of the

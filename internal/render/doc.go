@@ -63,4 +63,6 @@
 //     stamps.
 //   - encode.go: the palette pass's and the GIF pass's ffmpeg command lines, streaming the frames
 //     into each, and the gifsicle pass.
+//   - quantize.go: [Quantize], a frame mapped onto a median-cut palette of `max_colors`
+//     entries without dithering, the shipped palette's stand-in for a preview.
 package render
