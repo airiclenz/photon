@@ -160,7 +160,14 @@ NOTES (2026-11-06): the CI `browser` job is named "headless Chromium"; GitHub ap
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/browser/`, then `GOMEMLIMIT=2GiB go test -tags browser ./internal/browser/`, then `grep -n 'internal/browser' .github/workflows/ci.yml && grep -A12 '^  browser:' .github/workflows/ci.yml | grep -q macos-latest`
 **Commit:** `feat(browser): start headless Chromium at a url and viewport`
 
-## 8. Read a page's text layer and selector boxes
+## 8. Read a page's text layer and selector boxes — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the reader is the exported method `Browser.ReadText(selectors) ([]take.TextRun, map[string][]take.Box, error)` with a fixed 10s read timeout: item 9 is its first production caller, and an unexported method used only by `browser`-tagged tests would fail CI's untagged golangci-lint (`unused`).
+NOTES (2026-11-06): "rects whose vertical extents overlap form one visual line" is read as overlapping by more than half the shorter extent (`sameLineShare`): glyph boxes of two tight lines (line-height below the font's height) overlap by a sliver and must stay two lines; a label beside a padded button still shares one top (tested hermetically and in Chromium).
+NOTES (2026-11-06): the JS reports raw per-grapheme rects and the Go side does the dropping, trimming, line grouping and rounding, so the conversion cases run hermetically; a rendered whitespace grapheme (a newline or tab laid out as a gap) reads as one space, and a grapheme with a zero-width rect counts as not rendered.
+NOTES (2026-11-06): "visible" text and selector boxes are those whose element is `visibility: visible`, that render a non-empty rect, and that touch the viewport (text or elements scrolled wholly out of the viewport have no run or box); a selector that matches nothing has no key in the map.
+NOTES (2026-11-06): the `browser`-tagged Chromium test lives in a new file `internal/browser/textlayer_browser_test.go` (not in the item's Files): a file is tagged whole, and the hermetic conversion cases in `textlayer_test.go` must run untagged per the Acceptance's first command.
+NOTES (2026-11-06): Note `package-layout`'s `internal/browser` row now lists the `take` import and the text-layer read, per the plan's standing requirement.
 
 **What:**
 **Goal:** the browser package reads the page's text layer as `take.TextRun`s and the box of every element each named selector picks, in CSS pixels; runs on one visual line share one top Y and a run's `Edges` map each byte to its CSS-px column.
