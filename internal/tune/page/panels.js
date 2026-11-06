@@ -16,16 +16,16 @@
     millisecondsField,
     countField,
     decimalField,
-    fieldsOf,
     errorRows,
     needsRecord,
   } = page;
   // The steps the frame's font size and line height are typed in, and the least whole number a
-  // frame count takes: padding may be 0, every other at least 1.
+  // frame count takes: padding may be 0, max_colors at least 2, every other at least 1.
   const FONT_SIZE_STEP = "0.5";
   const LINE_HEIGHT_STEP = "0.05";
   const MIN_ZERO = "0";
   const MIN_ONE = "1";
+  const MIN_COLORS = "2";
 
   // beatPanel is the selected beat's fields, its read-only pauses, its report row and the errors
   // standing on it.
@@ -41,12 +41,11 @@
     ];
   }
 
-  // framePanel is the clip's frame: width, fps, font size, line height, padding and scale edit,
-  // and the fields /api/state describes as read-only show under their key, which the state sends
-  // their value under.
+  // framePanel is the clip's frame: width, fps, font size, line height, padding, scale, cols,
+  // rows and max_colors edit. A cols or rows other than the take's previews at the take's size
+  // and stands as a clip problem until the take is re-recorded.
   function framePanel() {
     const state = page.state();
-    const readOnly = fieldsOf(CLIP).filter((field) => field.read_only);
     return [
       element("h2", {}, "Clip frame"),
       countField("width (px)", "frame.width", state.width, MIN_ONE),
@@ -55,9 +54,9 @@
       decimalField("line height", CLIP, "frame.line_height", state.line_height, LINE_HEIGHT_STEP),
       countField("padding (px)", "frame.padding", state.padding, MIN_ZERO),
       countField("scale", "frame.scale", state.scale, MIN_ONE),
-      ...readOnly.map((field) =>
-        fieldRow(field.name, element("span", { className: "read-only" }, String(state[field.name]))),
-      ),
+      countField("cols", "frame.cols", state.cols, MIN_ONE),
+      countField("rows", "frame.rows", state.rows, MIN_ONE),
+      countField("max_colors", "frame.max_colors", state.max_colors, MIN_COLORS),
       element("p", { className: "read-only" }, "Length " + formatTime(state.length_ms)),
       ...state.warnings.map((warning) => element("p", { className: "error" }, warning)),
       ...errorRows(CLIP),

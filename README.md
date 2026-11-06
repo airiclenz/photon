@@ -170,7 +170,10 @@ while it plays or scrubs it shows draft frames, in either view, drawn from a ras
 shipped size with a fast scaler, and once stopped it settles on the exact frame: `photon render`'s
 composed frame, quantized to `frame.max_colors` colours as the GIF is. Its timeline edits
 each beat's `duration`, `hold` and `cut`, and its inspector the clip's `frame.width`,
-`fps`, `font_size`, `line_height`, `padding` and `scale`; `cols`, `rows` and `max_colors` show read-only. The
+`fps`, `font_size`, `line_height`, `padding`, `scale`, `cols`, `rows` and `max_colors`, each
+refused outside the range the loader takes. A `cols` or `rows` other than the take's keeps the
+preview at the take's recorded size and stands as a clip problem until the take is re-recorded
+with `photon record`; Save still writes it, and `photon render` refuses the mismatch. The
 storyboard's `camera.positions`, `camera.zooms` and `captions` show on lanes of their own under
 the beats. The position lane draws each position as a bar over its `hold`, or as a point when it
 has none, and each transition, the gap into the next position by start, as a bar in its own
@@ -394,7 +397,7 @@ camera:                         # push in on beta
 | `clip` | Required. The clip's name. The take is `<work>/<clip>.take`. |
 | `ship` | Required. Where `photon render` writes the GIF, relative to the storyboard's folder. |
 | `frame` | The terminal size and the GIF's shape. Every field except `padding` is required. |
-| `frame.cols`, `frame.rows` | The pty's size in cells, ≥1. `render` refuses a take recorded at another size. |
+| `frame.cols`, `frame.rows` | The pty's size in cells, ≥1. `render` refuses a take recorded at another size; `tune` edits them, previewing at the take's size with a re-record problem. |
 | `frame.padding` | Pixels of background around the grid, ≥0. |
 | `frame.font_size` | The font size in points, 6..72, the range a caption's `font.size` takes. A column is the width of Source Code Pro's `M`. A row is `font_size` × `line_height`. |
 | `frame.line_height` | Row height as a multiple of the font size, >0. |

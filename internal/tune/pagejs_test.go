@@ -1652,8 +1652,14 @@ func TestPageJS_ClipFrame_EditsTheFontFields(t *testing.T) {
 		{"line height", storyboard.FieldFrameLineHeight, "1.25", 1.25, func(s State) any { return s.LineHeight }},
 		{"padding (px)", storyboard.FieldFramePadding, "0", 0, func(s State) any { return s.Padding }},
 		{"scale", storyboard.FieldFrameScale, "3", 3, func(s State) any { return s.Scale }},
+		{"max_colors", storyboard.FieldFrameMaxColors, "8", 8, func(s State) any { return s.MaxColors }},
+		{"cols", storyboard.FieldFrameCols, "24", 24, func(s State) any { return s.Cols }},
+		{"rows", storyboard.FieldFrameRows, "6", 6, func(s State) any { return s.Rows }},
 	}
 	for _, edit := range cases {
+		if !page.hasField(edit.label) {
+			t.Fatalf("the clip frame's inspector shows no %q field row", edit.label)
+		}
 		page.setField(edit.label, "value", edit.typed)
 
 		page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":0},"field":%q,"value":%v}`,
@@ -1664,6 +1670,25 @@ func TestPageJS_ClipFrame_EditsTheFontFields(t *testing.T) {
 		if !page.isRequestedAfter("/api/edit", frameAPIPrefix) {
 			t.Errorf("the page did not reload the preview frame after the %s edit", edit.label)
 		}
+	}
+}
+
+func TestPageJS_ClipFrame_RefusedMaxColors_ShowsTheLoadersMessage(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixture(t).session
+	page := loadPage(t, session)
+	want := session.State().MaxColors
+
+	page.setField("max_colors", "value", "1")
+
+	if got := page.lastRequest("/api/edit"); got.status == http.StatusOK {
+		t.Fatalf("the max_colors 1 edit: want it refused, got 200: %s", got.answer)
+	}
+	if !containsRow(page.errorRows(), "2..256") {
+		t.Errorf("the clip frame's panel: want the max_colors range, got %q", page.errorRows())
+	}
+	if got := session.State().MaxColors; got != want {
+		t.Errorf("the frame's max_colors after the refused edit: want %d, got %d", want, got)
 	}
 }
 

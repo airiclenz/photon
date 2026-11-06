@@ -18,5 +18,6 @@ Shelved as out of scope by `docs/plans/archived/2026-10-18 - 02 - tune-polish-pl
 
 - The tune page shows `cols`, `rows` and `max_colors` as editable values and writes changes back
   to the YAML.
-- The preview reflects a change without restarting `photon tune`.
+- The preview reflects a change without restarting `photon tune`: cols/rows changes preview at
+  the take's size with a re-record problem (ratified 2026-11-06).
 - Out-of-range values are refused with the same rules the loader applies.

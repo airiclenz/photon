@@ -181,7 +181,11 @@ compare against the quantized render.
 **Commit:** `feat(tune): show max_colors in the paused preview`
 Depends on items 1 and 3.
 
-## 5. tune page: cols, rows and max_colors edit in the clip panel; docs
+## 5. tune page: cols, rows and max_colors edit in the clip panel; docs — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the refused `max_colors: 1` test checks the clip panel's error rows, not the transport bar's status. That is where `applyEdit` shows an inspector field's refusal, and the status stays empty for it. The new test is TestPageJS_ClipFrame_RefusedMaxColors_ShowsTheLoadersMessage.
+NOTES (2026-11-06): the cols, rows and max_colors cases went into TestPageJS_ClipFrame_EditsTheFontFields' table (each case now also asserts its field row with hasField), so cols is covered there by assertEdit; `fieldsOf` is no longer imported by panels.js.
+NOTES (2026-11-06): the State.Fields comment in internal/tune/state.go still speaks of "a read-only frame field", which no longer exists since item 1; that predates this item and is left as is.
 
 **What:**
 **Goal:** the page's clip panel shows `cols`, `rows` and `max_colors` as editable inputs that
