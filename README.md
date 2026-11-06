@@ -21,7 +21,7 @@ binary for Linux, macOS and Windows, written in Go.
 [Targets and areas](#targets-and-areas) · [Expects](#expects) ·
 [Services and profiles](#services-and-profiles) · [Sections and cursor](#sections-and-cursor) ·
 [Environment variables](#environment-variables) · [Fonts](#fonts-and-licences) · [FAQ](#faq) ·
-[License](#license)
+[Development](#development) · [License](#license)
 
 ## Why
 
@@ -799,6 +799,22 @@ Yes, on Linux or macOS. `photon lint` checks storyboards without recording.
 **Does it work on Windows?**
 `lint`, `check`, `render` and `tune` do. `setup` and `record` need a unix pty, so record on Linux or
 macOS.
+
+## Development
+
+`make test`, `make vet` and `make lint` run the tests, `go vet` and golangci-lint over the module.
+
+The tune page also has a test that drives it in a headless Chromium against a real `photon tune`
+server: it loads the page, plays, scrubs, edits a beat and saves. It sits behind the `browser`
+build tag:
+
+```sh
+go test -tags browser ./internal/tune -run Browser -v
+```
+
+It finds Chromium or Chrome on `PATH`; set `PHOTON_TEST_BROWSER` to the browser's path to use
+another. Without a browser the test is skipped. Set `PHOTON_TEST_BROWSER_REQUIRED=1` to make it
+fail instead, as CI does. On a small host, cap the Go heap with `GOMEMLIMIT=2GiB`.
 
 ## License
 

@@ -281,7 +281,12 @@ now-missing index, and compare `session.State()` before and after; a new drag he
 **Commit:** `feat(tune): reorder captions by dragging on their lane`
 Depends on item 6.
 
-## 8. tune: headless browser test against a real tune server
+## 8. tune: headless browser test against a real tune server — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): chromedp v0.23.0 (generic `Action[T]` API) with cdproto v0.159.0; the env vars are `PHOTON_TEST_BROWSER` (exec-path override) and `PHOTON_TEST_BROWSER_REQUIRED` (missing browser fails, set by the CI `browser` job).
+NOTES (2026-11-06): Chromium runs with `--no-sandbox` besides the plan's headless, `--disable-gpu`, `--disable-dev-shm-usage` (from chromedp's defaults) and a 1024x768 window, so a CI container that refuses the sandbox's namespaces still starts it; the browser loads only the test's loopback page.
+NOTES (2026-11-06): the scrub's settle check reads `window.tunePage.frameQuality()` (the page's internal namespace) to tell the exact frame from a draft; the test also fails on any uncaught page exception.
+NOTES (2026-11-06): README's Contents line gains a `Development` link beside the new `## Development` section.
 
 **What:**
 **Goal:** `go test -tags browser ./internal/tune -run Browser` starts the real tune HTTP server
