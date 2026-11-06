@@ -18,15 +18,14 @@ import (
 	"github.com/airiclenz/photon/internal/target"
 )
 
-// Layout is where the terminal's cells sit in a rasterized frame: the frame's pixel Size, the
-// Padding around the grid, one cell's pixel size and the Scale the frame was rasterized at (0
+// Layout is where the grid's cells sit in a rasterized frame: the frame's pixel Size, the
+// Padding around the grid, one Cell's pixel size and the Scale the frame was rasterized at (0
 // reads as the design scale, 2).
 type Layout struct {
-	Size       image.Point
-	Padding    int
-	CellWidth  int
-	LineHeight int
-	Scale      int
+	Size    image.Point
+	Padding int
+	Cell    take.CellSize
+	Scale   int
 }
 
 // pointF is a fractional pixel position.
@@ -41,26 +40,26 @@ func (r rectF) centre() pointF { return pointF{r.X + r.W/2, r.Y + r.H/2} }
 // boxRect is the pixel rectangle a cell box covers.
 func (l Layout) boxRect(b take.Box) rectF {
 	return rectF{
-		X: float64(l.Padding + b.X*l.CellWidth),
-		Y: float64(l.Padding + b.Y*l.LineHeight),
-		W: float64(b.W * l.CellWidth),
-		H: float64(b.H * l.LineHeight),
+		X: float64(l.Padding) + float64(b.X)*l.Cell.W,
+		Y: float64(l.Padding) + float64(b.Y)*l.Cell.H,
+		W: float64(b.W) * l.Cell.W,
+		H: float64(b.H) * l.Cell.H,
 	}
 }
 
 // cellCentre is the pixel centre of the cell at column x, row y.
 func (l Layout) cellCentre(x, y int) pointF {
 	return pointF{
-		X: float64(l.Padding) + (float64(x)+0.5)*float64(l.CellWidth),
-		Y: float64(l.Padding) + (float64(y)+0.5)*float64(l.LineHeight),
+		X: float64(l.Padding) + (float64(x)+0.5)*l.Cell.W,
+		Y: float64(l.Padding) + (float64(y)+0.5)*l.Cell.H,
 	}
 }
 
 // cellAt is the cell, column and row, holding the source pixel p, and whether p lies on the
 // grid; off the grid it is the nearest cell, clamped into the grid.
 func (l Layout) cellAt(p pointF) (col, row int, isOnGrid bool) {
-	column := math.Floor((p.X - float64(l.Padding)) / float64(l.CellWidth))
-	line := math.Floor((p.Y - float64(l.Padding)) / float64(l.LineHeight))
+	column := math.Floor((p.X - float64(l.Padding)) / l.Cell.W)
+	line := math.Floor((p.Y - float64(l.Padding)) / l.Cell.H)
 	grid := l.grid()
 	isOnGrid = column >= 0 && line >= 0 && int(column) < grid.X && int(line) < grid.Y
 	col = min(max(int(column), 0), grid.X-1)
@@ -70,14 +69,17 @@ func (l Layout) cellAt(p pointF) (col, row int, isOnGrid bool) {
 
 // grid is the number of whole columns and rows of cells the frame holds inside its padding.
 func (l Layout) grid() image.Point {
-	return image.Pt((l.Size.X-2*l.Padding)/l.CellWidth, (l.Size.Y-2*l.Padding)/l.LineHeight)
+	return image.Pt(
+		int(float64(l.Size.X-2*l.Padding)/l.Cell.W),
+		int(float64(l.Size.Y-2*l.Padding)/l.Cell.H),
+	)
 }
 
 // home is where the very first cursor appears: the frame's centre column, on the last row.
 func (l Layout) home() pointF {
 	return pointF{
 		X: float64(l.Size.X) / 2,
-		Y: float64(l.Size.Y-l.Padding) - float64(l.LineHeight)/2,
+		Y: float64(l.Size.Y-l.Padding) - l.Cell.H/2,
 	}
 }
 
@@ -150,7 +152,7 @@ func New(
 // size however far the frame pushes in. It fails on a layout with no size and a width that is
 // not positive.
 func Output(layout Layout, width int) (size image.Point, unit float64, err error) {
-	if layout.Size.X <= 0 || layout.Size.Y <= 0 || layout.CellWidth <= 0 || layout.LineHeight <= 0 {
+	if layout.Size.X <= 0 || layout.Size.Y <= 0 || layout.Cell.W <= 0 || layout.Cell.H <= 0 {
 		return image.Point{}, 0, fmt.Errorf("compose: invalid cell layout %+v", layout)
 	}
 	if width <= 0 {

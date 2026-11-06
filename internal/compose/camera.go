@@ -212,8 +212,8 @@ func (c *Compositor) ViewAt(t time.Duration) View {
 	padding := float64(c.layout.Padding)
 	origin := c.toOutput(pointF{X: padding, Y: padding}, full)
 	cellEnd := c.toOutput(pointF{
-		X: padding + float64(c.layout.CellWidth),
-		Y: padding + float64(c.layout.LineHeight),
+		X: padding + c.layout.Cell.W,
+		Y: padding + c.layout.Cell.H,
 	}, full)
 	col, row, _ := c.layout.cellAt(c.camera.centreAt(t))
 	return View{

@@ -125,7 +125,11 @@ internal/compose/camera.go — target call via p.resolver.Target
 - `grep -rn "\.Cells" --include=*.go internal | grep -v _test | grep -v "internal/\(take\|raster\|terminal\)/"` prints nothing.
 **Commit:** `refactor: read the text layer instead of cells outside take, raster and terminal`
 
-## 5. Put cell geometry in the take
+## 5. Put cell geometry in the take — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): internal/compose/camera_test.go needed no edit — `cameraLayout` is `Layout{Size: testLayout.Size}` and sets no cell size, so it compiles and passes unchanged.
+NOTES (2026-11-06): `render.cellLayout` takes `recorded *take.Take` with nil read as a take holding no cell size; `CheckCaptions` (no take) passes nil and so keeps the rasterizer's metrics.
+NOTES (2026-11-06): the new test is `TestCompositorRect_OnePixelCells_IsTheBoxsPixelRectangle` in compose_test.go (1×1 cells, no padding, shipped at the source width: box {120,40,300,80} maps to Rect(120,40,420,120)).
 
 **What:**
 **Goal:** compose places boxes from a `take.CellSize{W, H float64}` in its Layout; render fills it from the take's recorded geometry when set, else from the rasterizer's metrics; terminal renders are byte-identical; a camera box on a 1×1 grid maps to the matching pixel rectangle.

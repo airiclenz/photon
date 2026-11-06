@@ -27,7 +27,7 @@ const sec = time.Second
 
 // testLayout is a small source frame: 49 × 14 cells of 20 × 40 pixels inside a 10-pixel
 // padding, rasterized at the design scale and shipped at half its width.
-var testLayout = Layout{Size: image.Pt(1000, 600), Padding: 10, CellWidth: 20, LineHeight: 40, Scale: 2}
+var testLayout = Layout{Size: image.Pt(1000, 600), Padding: 10, Cell: take.CellSize{W: 20, H: 40}, Scale: 2}
 
 // The test frame's grid, in cells.
 const (
@@ -458,6 +458,32 @@ func TestCompositorRect(t *testing.T) {
 				t.Errorf("Rect(%s, %+v): want %v, got %v", test.at, box, test.want, got)
 			}
 		})
+	}
+}
+
+func TestCompositorRect_OnePixelCells_IsTheBoxsPixelRectangle(t *testing.T) {
+	t.Parallel()
+	const shippedAtSourceWidth = 1000
+	layout := Layout{Size: image.Pt(shippedAtSourceWidth, 600), Cell: take.CellSize{W: 1, H: 1}, Scale: designScale}
+	board := &storyboard.Storyboard{
+		Frame: storyboard.Frame{Width: shippedAtSourceWidth},
+		Beats: []storyboard.Beat{{ID: 1, Duration: sec}},
+	}
+	recorded := &take.Take{Snapshots: []take.Snapshot{{At: 0}, {At: sec}}, Events: []take.Event{beatStart(0, 1)}}
+	clipSchedule, err := schedule.New(board, recorded)
+	if err != nil {
+		t.Fatalf("schedule.New: %v", err)
+	}
+	compositor, err := New(board, recorded, clipSchedule, target.Resolver{}, layout, testBackground, fonts.CaptionSet{})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	box := take.Box{X: 120, Y: 40, W: 300, H: 80}
+
+	got := compositor.Rect(0, box)
+
+	if want := image.Rect(120, 40, 420, 120); got != want {
+		t.Errorf("Rect(0, %+v): want %v, got %v", box, want, got)
 	}
 }
 

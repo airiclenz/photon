@@ -31,9 +31,19 @@ type Take struct {
 	FPS int
 	// Started is the wall-clock time the take's clock counts from.
 	Started time.Time
+	// Cell is one grid cell's size in pixels of the frames the take was captured as; zero for a
+	// terminal take, whose cell size is the rasterizer's font metrics.
+	Cell CellSize
 
 	Snapshots []Snapshot
 	Events    []Event
+}
+
+// CellSize is the pixel width W and height H of one grid cell. Each is fractional, so a cell of
+// one CSS pixel can sit at any device scale.
+type CellSize struct {
+	W float64
+	H float64
 }
 
 // Snapshot is what the terminal showed from At (measured from the take's start) until the next

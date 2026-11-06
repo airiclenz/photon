@@ -29,7 +29,7 @@ func CheckCaptions(loaded *clip.Clip) error {
 	if err != nil {
 		return err
 	}
-	out, unit, err := compose.Output(cellLayout(board.Frame, rasterizer), board.Frame.Width)
+	out, unit, err := compose.Output(cellLayout(board.Frame, nil, rasterizer), board.Frame.Width)
 	if err != nil {
 		return err
 	}
