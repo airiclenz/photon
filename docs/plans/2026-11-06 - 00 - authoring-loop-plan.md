@@ -353,7 +353,9 @@ A cmd test checks the `--watch` flag is registered.
 **Closes:** render-watch
 **Commit:** `feat(render): re-render on change with --watch`
 
-## 9. Caption width field
+## 9. Caption width field — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the accepted cases (absent, 0, 300) are a new test TestLoad_CaptionWidth beside TestLoadRejects_Captions, and the edit-on-a-board-with-width check is a new TestApply_CaptionEdit_KeepsAWidth reusing captionEditBoard with block and flow `width` keys added; README `### Captions` is left to item 10, which documents `width` with wrapping.
 
 **What:**
 **Goal:** A caption accepts an optional `width:` (int, design pixels, the box's outer width).

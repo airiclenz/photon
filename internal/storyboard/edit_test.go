@@ -362,7 +362,7 @@ func TestKeyOrder_StructTags_GiveTheStoryboardKeyOrder(t *testing.T) {
 		{"a zoom move skips its unexported start", reflect.TypeFor[ZoomMove](), []string{"to", "at", "over", "ease"}},
 		{"a position leaves its inline point out", reflect.TypeFor[Position](), []string{"at", "hold", "ease"}},
 		{"a caption skips its resolved times and colours", reflect.TypeFor[Caption](), []string{
-			"text", "at", "for", "until", "font", "place", "align", "offset", "position", "color", "box", "fade",
+			"text", "at", "for", "until", "font", "place", "align", "offset", "position", "color", "box", "fade", "width",
 		}},
 	}
 	for _, tc := range cases {
@@ -502,6 +502,44 @@ func TestApply_CaptionEdit_ChangesOnlyTheEditedText(t *testing.T) {
 			want := strings.Replace(captionEditBoard, tc.old, tc.new, 1)
 
 			got, _, err := Apply([]byte(captionEditBoard), captionEditPath, tc.edit)
+
+			if err != nil {
+				t.Fatalf("Apply(%+v): %v", tc.edit, err)
+			}
+			if string(got) != want {
+				t.Errorf("Apply(%+v) =\n%s\nwant\n%s", tc.edit, got, want)
+			}
+		})
+	}
+}
+
+func TestApply_CaptionEdit_KeepsAWidth(t *testing.T) {
+	t.Parallel()
+	board := strings.Replace(captionEditBoard, "    place: top\n", "    place: top\n    width: 300\n", 1)
+	board = strings.Replace(board, ", align: right}", ", align: right, width: 200}", 1)
+	cases := []struct {
+		name     string
+		edit     Edit
+		old, new string
+	}{
+		{"align goes after place, before a block width", captionEdit(0, FieldCaptionAlign, "left"),
+			"    place: top\n", "    place: top\n    align: left\n"},
+		{"text is replaced beside a block width", captionEdit(0, FieldCaptionText, "Look"),
+			"text: |\n      Watch\n      this\n", "text: \"Look\"\n"},
+		{"place goes after until, before a flow width", captionEdit(1, FieldCaptionPlace, "top"),
+			"1200ms}, align", "1200ms}, place: top, align"},
+		{"middle deletes an align before a flow width", captionEdit(1, FieldCaptionAlign, "middle"),
+			", align: right, width: 200}", ", width: 200}"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if count := strings.Count(board, tc.old); count != 1 {
+				t.Fatalf("the board holds %q %d times, want once", tc.old, count)
+			}
+			want := strings.Replace(board, tc.old, tc.new, 1)
+
+			got, _, err := Apply([]byte(board), captionEditPath, tc.edit)
 
 			if err != nil {
 				t.Fatalf("Apply(%+v): %v", tc.edit, err)

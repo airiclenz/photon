@@ -17,6 +17,7 @@ import (
 // top-left corner — instead of all three. [Load] fills what a valid caption leaves out: Font's
 // size is frame.font_size and its weight regular, Place is bottom and Align middle (unless
 // Position is set, when both stay empty), Color is white and Box is black at 0.6 opacity.
+// Width is the box's outer width in design pixels; zero leaves it automatic.
 //
 // The authored fields stay as written, defaults filled; [Load] also resolves the caption onto the
 // clip's output clock and its colours, which [Caption.Start], [Caption.Stop],
@@ -35,6 +36,7 @@ type Caption struct {
 	Color    string        `yaml:"color"`
 	Box      CaptionBox    `yaml:"box"`
 	Fade     Fade          `yaml:"fade"`
+	Width    int           `yaml:"width"`
 
 	start, stop         time.Duration
 	textColor, boxColor RGB
@@ -137,8 +139,8 @@ const (
 // hexColor is the spelling of a caption colour: #rrggbb.
 var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
-// validateCaptions checks every caption's text, font, placement, colours, timing and fades, and
-// keeps what it resolves. Problems are filed under captions[i].
+// validateCaptions checks every caption's text, font, placement, colours, timing, fades and
+// width, and keeps what it resolves. Problems are filed under captions[i].
 func (s *Storyboard) validateCaptions(collect collector) {
 	clock := s.Clock()
 	for index := range s.Captions {
@@ -161,6 +163,9 @@ func (c *Caption) validate(board *Storyboard, clock OutputClock, report reporter
 		c.start, c.stop = start, stop
 	}
 	c.Fade.validate(stop-start, isTimed, report)
+	if c.Width < 0 {
+		report("width: want ≥0, got %d", c.Width)
+	}
 }
 
 // validate checks the font's weight and that its size — its own, or frame.font_size when it has

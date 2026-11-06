@@ -327,6 +327,8 @@ func TestLoadRejects_Captions(t *testing.T) {
 		{"fade out negative", "in: 600ms, out: 400ms", "in: 600ms, out: -1s", "captions[0]: fade.out: want ≥0, got -1s", false},
 		{"fades longer than the caption", "in: 600ms, out: 400ms", "in: 2s, out: 600ms",
 			"captions[0]: fade: want in + out within the caption's length 2.5s, got 2.6s", false},
+		{"width negative", "position: {x: 10, y: 20}", "position: {x: 10, y: 20}, width: -1",
+			"captions[1]: width: want ≥0, got -1", false},
 	}
 	// cutBeatCases swap fragments of captionCutBase, whose beat 2 is cut.
 	cutBeatCases := []rejectCase{
@@ -380,6 +382,34 @@ func TestLoadRejects_Captions(t *testing.T) {
 			owner := OwnerOf(invalid.Problems[0])
 			if owner.Kind != OwnerCaption || !strings.HasPrefix(tc.want, fmt.Sprintf("captions[%d]: ", owner.Index)) {
 				t.Errorf("owner: want the one %q names, got %+v", tc.want, owner)
+			}
+		})
+	}
+}
+
+func TestLoad_CaptionWidth(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		width string
+		want  int
+	}{
+		{"absent is automatic", "", 0},
+		{"zero is automatic", ", width: 0", 0},
+		{"a positive width is kept", ", width: 300", 300},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := validBase + "captions:\n  - {text: 'Hi', at: 1s, for: 1s" + tc.width + "}\n"
+
+			board, err := Parse([]byte(body), "captions.yaml")
+
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			if got := board.Captions[0].Width; got != tc.want {
+				t.Errorf("width: want %d, got %d", tc.want, got)
 			}
 		})
 	}
