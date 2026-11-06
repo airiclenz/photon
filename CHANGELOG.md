@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- The render pipeline draws a snapshot of a take with an image layer from that layer's frame instead of rasterizing its cells; terminal renders are unchanged.
+- `photon.yaml` accepts `launch.url` (an http or https page, `${NAME}` expanded from the launch env) as the alternative to `launch.command`, with an optional `launch.browser`, and `areas.<name>.selector` for an area taken from a CSS selector's box. A url launch refuses `launch.strip` and anchor `offset`; `photon setup` and `photon record` refuse a url launch until browser capture lands.
+- A storyboard can describe a page instead of a terminal: `frame.viewport: {width, height}` in CSS pixels and an optional `frame.device_scale` (1..4, default 1) replace `cols`, `rows`, `padding`, `font_size` and `line_height`, and a target (click, drag point, camera position) may name a CSS `selector` instead of `text`. `photon lint` requires the viewport with `launch.url` and refuses the viewport, device scale and selector targets with `launch.command`. On such a frame a camera `cell` is a CSS pixel inside the viewport, and a caption's size defaults to 16 CSS pixels.
+- `photon lint` checks a `launch.url` clip without starting a browser: it lays the captions out on the viewport, a caption's `font.size` in CSS pixels drawn at `font.size` × `frame.device_scale` × `frame.scale`, and loads no terminal font. The README's Targets and areas section now describes how selector targets, selector areas, text targets and anchor bands read a page.
+
 ## [0.3.0] - 2026-11-06
 
 - A caption's `text` may style spans of itself with inline tags: `[#rrggbb]`, `[bold]` or `[bold #rrggbb]` opens a span and `[/]` closes it; spans do not nest. A literal `[` is now written `[[`: a caption holding a bare `[` (such as `Press [Enter]`) fails to load with a message that names the `[[` escape.
