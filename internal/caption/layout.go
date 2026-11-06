@@ -84,9 +84,10 @@ func newTextBlock(
 }
 
 // wrapLine splits one hard line of caption text into lines no wider than maxWidth pixels in
-// face. A line that fits comes back unchanged. One that does not is broken greedily at single
-// spaces, each break dropping the space it falls on; a word wider than maxWidth stays whole, alone
-// on its line, and a run of leading spaces stays with the word that follows it.
+// face. A line that fits comes back unchanged. One that does not is broken greedily at spaces,
+// each break dropping the whole run of spaces it falls on, so no line it yields ends in a space
+// and none but the first starts with one; a word wider than maxWidth stays whole, alone on its
+// line, and a run of leading spaces stays with the word that follows it.
 func wrapLine(face font.Face, line string, maxWidth fixed.Int26_6) []string {
 	if font.MeasureString(face, line) <= maxWidth {
 		return []string{line}
@@ -96,13 +97,22 @@ func wrapLine(face font.Face, line string, maxWidth fixed.Int26_6) []string {
 	var wrapped []string
 	current := words[0]
 	for _, word := range words[1:] {
-		candidate := current + " " + word
-		if strings.TrimSpace(current) == "" || font.MeasureString(face, candidate) <= maxWidth {
-			current = candidate
-			continue
+		switch {
+		case current == "" && len(wrapped) > 0:
+			// The last break fell inside a run of spaces; the rest of the run goes with it.
+			current = word
+		case strings.TrimSpace(current) == "" ||
+			font.MeasureString(face, current+" "+word) <= maxWidth:
+			current += " " + word
+		default:
+			wrapped = append(wrapped, strings.TrimRight(current, " "))
+			current = word
 		}
-		wrapped = append(wrapped, current)
-		current = word
+	}
+	current = strings.TrimRight(current, " ")
+	if current == "" && len(wrapped) > 0 {
+		// The line ended in the run of spaces the last break fell on.
+		return wrapped
 	}
 	return append(wrapped, current)
 }

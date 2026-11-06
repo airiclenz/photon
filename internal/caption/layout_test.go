@@ -157,6 +157,9 @@ func TestNewTextBlock_Wrap_KeepsOrBreaksLines(t *testing.T) {
 		{"fitting indented line", "   indented", []string{"   indented"}},
 		{"overlong word", "a " + overlongWord + " b", []string{"a", overlongWord, "b"}},
 		{"overlong word alone", overlongWord, []string{overlongWord}},
+		{"break after a run of spaces", "a  " + overlongWord, []string{"a", overlongWord}},
+		{"break before a run of spaces", overlongWord + "  b", []string{overlongWord, "b"}},
+		{"trailing run of spaces", overlongWord + "  ", []string{overlongWord}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
