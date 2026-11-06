@@ -1653,12 +1653,6 @@ func TestPageJS_ClipFrame_EditsTheFontFields(t *testing.T) {
 		{"padding (px)", storyboard.FieldFramePadding, "0", 0, func(s State) any { return s.Padding }},
 		{"scale", storyboard.FieldFrameScale, "3", 3, func(s State) any { return s.Scale }},
 	}
-	for _, label := range []string{"cols", "rows", "max_colors"} {
-		if !page.hasField(label) {
-			t.Errorf("the Clip frame panel shows no read-only %q row", label)
-		}
-	}
-
 	for _, edit := range cases {
 		page.setField(edit.label, "value", edit.typed)
 

@@ -1,6 +1,7 @@
 package storyboard
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -74,6 +75,9 @@ func TestApply_Edit_ChangesOnlyTheEditedText(t *testing.T) {
 		{"frame font size in a flow frame", frameEdit(FieldFrameFontSize, 18), "font_size: 14", "font_size: 18"},
 		{"frame line height in a flow frame", frameEdit(FieldFrameLineHeight, 1.35), "line_height: 1.2", "line_height: 1.35"},
 		{"frame scale in a flow frame", frameEdit(FieldFrameScale, 3), "scale: 2", "scale: 3"},
+		{"frame cols in a flow frame", frameEdit(FieldFrameCols, 80), "cols: 60", "cols: 80"},
+		{"frame rows in a flow frame", frameEdit(FieldFrameRows, 20), "rows: 12", "rows: 20"},
+		{"frame max colors in a flow frame", frameEdit(FieldFrameMaxColors, 64), "max_colors: 128", "max_colors: 64"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -107,6 +111,10 @@ func TestApply_FrameEdit_InABlockFrame_ChangesOnlyTheEditedLine(t *testing.T) {
 		{"font size", frameEdit(FieldFrameFontSize, 12.5), "  font_size: 14\n", "  font_size: 12.5\n"},
 		{"line height", frameEdit(FieldFrameLineHeight, 1.4), "  line_height: 1.2\n", "  line_height: 1.4\n"},
 		{"scale", frameEdit(FieldFrameScale, 1), "  scale: 2\n", "  scale: 1\n"},
+		{"cols", frameEdit(FieldFrameCols, 100), "  cols: 80\n", "  cols: 100\n"},
+		{"rows", frameEdit(FieldFrameRows, 30), "  rows: 24\n", "  rows: 30\n"},
+		{"max colors at the top of its range", frameEdit(FieldFrameMaxColors, 256), "  max_colors: 128\n", "  max_colors: 256\n"},
+		{"max colors at the bottom of its range", frameEdit(FieldFrameMaxColors, 2), "  max_colors: 128\n", "  max_colors: 2\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -195,6 +203,49 @@ func TestApply_InvalidResult_IsRefusedWithTheValidationError(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tc.edit.Field) {
 				t.Errorf("Apply(%+v) = %q, want it to name %s", tc.edit, err, tc.edit.Field)
+			}
+		})
+	}
+}
+
+func TestApply_FrameSizeOutOfRange_IsRefusedWithTheLoadersMessage(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		path    string
+		edit    Edit
+		message string
+	}{
+		{"zero cols", boardPath, frameEdit(FieldFrameCols, 0), "frame.cols: want ≥1, got 0"},
+		{"zero rows", boardPath, frameEdit(FieldFrameRows, 0), "frame.rows: want ≥1, got 0"},
+		{"one colour", boardPath, frameEdit(FieldFrameMaxColors, 1), "frame.max_colors: want 2..256, got 1"},
+		{"too many colours", boardPath, frameEdit(FieldFrameMaxColors, 257), "frame.max_colors: want 2..256, got 257"},
+		{"cols shrunk below a position's cell", everyFormPath, frameEdit(FieldFrameCols, 40),
+			"cell: want x in [0, 40) and y in [0, 24), got x 40, y 12"},
+		{"rows shrunk below a position's cell", everyFormPath, frameEdit(FieldFrameRows, 12),
+			"cell: want x in [0, 80) and y in [0, 12), got x 40, y 12"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src, err := os.ReadFile(tc.path)
+			if err != nil {
+				t.Fatalf("read %s: %v", tc.path, err)
+			}
+			before := bytes.Clone(src)
+
+			got, _, err := Apply(src, tc.path, tc.edit)
+
+			var invalid *ValidationError
+			if !errors.As(err, &invalid) {
+				t.Fatalf("Apply(%+v) = %v, want a *ValidationError", tc.edit, err)
+			}
+			if !strings.Contains(err.Error(), tc.message) {
+				t.Errorf("Apply(%+v) = %q, want it to hold %q", tc.edit, err, tc.message)
+			}
+			if got != nil || !bytes.Equal(src, before) {
+				t.Errorf("Apply(%+v) returned %q and left the source %q, want no source and it unchanged",
+					tc.edit, got, src)
 			}
 		})
 	}

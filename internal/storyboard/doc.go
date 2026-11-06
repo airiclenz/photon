@@ -12,19 +12,19 @@
 // positions' text targets on a take's screens (package compose's New).
 //
 // [Apply] changes one field by a typed [Edit] — a beat's duration, hold or cut, the clip's
-// frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width or frame.fps, a
-// camera position's start, hold — or both at once — ease, cell or text target, the edges of the
-// camera transition into a position, a camera zoom's
-// start, length, ease or factor, or a caption's start, end — or both at once, shifted — text,
-// place, align, font, colours, box or fade, or adds or removes a camera position or zoom, or
-// adds, removes or reorders a caption — splicing the
+// frame.cols, frame.rows, frame.padding, frame.font_size, frame.line_height, frame.scale,
+// frame.width, frame.fps or frame.max_colors, a camera position's start, hold — or both at once
+// — ease, cell or text target, the edges of the camera transition into a position, a camera
+// zoom's start, length, ease or factor, or a caption's start, end — or both at once, shifted —
+// text, place, align, font, colours, box or fade, or adds or removes a camera position or zoom,
+// or adds, removes or reorders a caption — splicing the
 // new value into the source so only the edited key's text changes, a new key placed by the order
 // of the storyboard's yaml struct tags, and refuses an edit whose result fails Parse. A value
 // equal to what an absent key means — a position's hold of 0, an ease of smooth — deletes its
 // key, and a position's cell replaces its text, nth and area, and its target its cell.
 // [Fields] describes every field of a storyboard's owners as photon tune's page shows them: each
-// editable field an Edit names and the frame's read-only fields, with its [FieldKind], an enum's
-// choices and the default an absent key means.
+// field an Edit names, the frame's among them, with its [FieldKind], an enum's choices and the
+// default an absent key means.
 //
 // It imports keys, to check that a `key` action names a key photon can send, and yamledit, to
 // splice an edit into the source. Whether an area a target or expect names is declared in the
@@ -43,9 +43,9 @@
 //   - position.go: a camera [Position], its point, hold and ease, and its rules.
 //   - edit.go: an [Edit], [Apply] and the splicing every edit shares: field and owner checks,
 //     durations, moments, key order from yaml tags.
-//   - edit_beat.go: the beat and frame edits — duration, hold, cut, frame.padding,
-//     frame.font_size, frame.line_height, frame.scale, frame.width and frame.fps — and
-//     [Target.YAMLFlow].
+//   - edit_beat.go: the beat and frame edits — duration, hold, cut, frame.cols, frame.rows,
+//     frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width, frame.fps and
+//     frame.max_colors — and [Target.YAMLFlow].
 //   - edit_camera.go: the camera position and zoom edits — position.at, .hold, .span, .ease,
 //     .cell and .target, and zoom.at, .over, .ease and .to.
 //   - edit_transition.go: the camera transition edit, position.transition, which moves the end of
@@ -58,8 +58,7 @@
 //   - edit_list.go: the list edits that add, remove and reorder captions —
 //     caption.insert|remove|move — and add and remove camera positions and zooms —
 //     position.insert|remove and zoom.insert|remove.
-//   - fields.go: [Fields], each owner's editable and read-only [Field] with its [FieldKind],
-//     choices and default.
+//   - fields.go: [Fields], each owner's [Field] with its [FieldKind], choices and default.
 //   - clock.go: the clip's [OutputClock], from [Storyboard.Clock]: section starts, moments and
 //     length.
 //   - caption.go: a [Caption], its [CaptionFont] and [Weight], [Place], [Align], [Pixels],

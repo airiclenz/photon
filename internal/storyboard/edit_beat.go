@@ -32,7 +32,8 @@ var (
 )
 
 // editFrame sets one of the frame's edit fields: frame.font_size or frame.line_height, a decimal,
-// or frame.padding, frame.scale, frame.width or frame.fps, a whole number.
+// or frame.cols, frame.rows, frame.padding, frame.scale, frame.width, frame.fps or
+// frame.max_colors, a whole number.
 func (s *splicer) editFrame(edit Edit) error {
 	if edit.Owner.Index != 0 {
 		return fmt.Errorf("want the clip at index 0, got index %d", edit.Owner.Index)

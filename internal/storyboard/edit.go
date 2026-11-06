@@ -19,13 +19,16 @@ import (
 // Edit is one typed change to a storyboard field, as photon tune's page sends it:
 // {"owner": {"kind": "<kind>", "index": <n>}, "field": "<name>", "value": <JSON>}. Owner is
 // what the field edits: the beat by its id for a beat field, the clip with index 0 for
-// frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width and frame.fps, the
-// camera position or zoom by its index in the storyboard's camera.positions or camera.zooms list,
-// from 0, for a position or zoom field, and the caption by its index in the storyboard's captions
-// list, from 0, for a caption field. Value is typed per field:
+// frame.cols, frame.rows, frame.padding, frame.font_size, frame.line_height, frame.scale,
+// frame.width, frame.fps and frame.max_colors, the camera position or zoom by its index in the
+// storyboard's camera.positions or camera.zooms list, from 0, for a position or zoom field, and
+// the caption by its index in the storyboard's captions list, from 0, for a caption field. Value
+// is typed per field:
 //   - duration, hold: a whole number of milliseconds (1850);
 //   - cut: true or false;
-//   - frame.padding, frame.scale, frame.width, frame.fps: a whole number;
+//   - frame.cols, frame.rows, frame.padding, frame.scale, frame.width, frame.fps,
+//     frame.max_colors: a whole number, cols, rows, scale, width and fps at least 1 and
+//     max_colors in 2..256;
 //   - frame.font_size, frame.line_height: a number above 0, the font size in [6, 72];
 //   - position.at, zoom.at: a moment, which replaces the entry's whole at;
 //   - position.hold: a whole number of milliseconds, 0 removing the key;
@@ -97,12 +100,17 @@ const (
 	FieldFrameFontSize   = "frame.font_size"
 	FieldFrameLineHeight = "frame.line_height"
 	FieldFrameScale      = "frame.scale"
+
+	FieldFrameCols      = "frame.cols"
+	FieldFrameRows      = "frame.rows"
+	FieldFrameMaxColors = "frame.max_colors"
 )
 
 // editFields lists every field Apply takes, as the unknown-field error offers them.
 var editFields = []string{
 	FieldDuration, FieldHold, FieldCut, FieldFrameWidth, FieldFrameFPS, FieldFramePadding,
-	FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldPositionAt, FieldPositionHold,
+	FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldFrameCols, FieldFrameRows,
+	FieldFrameMaxColors, FieldPositionAt, FieldPositionHold,
 	FieldPositionSpan, FieldPositionTransition, FieldPositionEase, FieldPositionCell,
 	FieldPositionTarget, FieldZoomAt, FieldZoomOver, FieldZoomEase, FieldZoomTo,
 	FieldPositionInsert, FieldPositionRemove, FieldZoomInsert, FieldZoomRemove, FieldCaptionAt,

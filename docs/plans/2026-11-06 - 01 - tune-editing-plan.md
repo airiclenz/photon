@@ -45,7 +45,12 @@ frames; browser tests on macOS/Windows runners.
 - 7: decision applied and guard folded (reselect destination, refused-move setup, axis commit only for caption bars, README grep, clientY drag helper)
 - 8: guard folded (new `## Development` heading in README, required-browser env var, SKIP acceptance)
 
-## 1. storyboard: frame cols, rows and max_colors are edit fields
+## 1. storyboard: frame cols, rows and max_colors are edit fields — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): routing needed no editFrame change — Apply already sends every `frame.` field to editFrame, whose non-decimal branch decodes a count; only the Field* constants, editFields and comments changed in non-test code.
+NOTES (2026-11-06): TestSession_State_ReadOnlyClipFields_AreStateKeys renamed TestSession_State_NoReadOnlyClipFields (still matched by `-run 'ReadOnlyClipFields'`) and now asserts no clip field is read-only; full `go test ./internal/tune` passes.
+NOTES (2026-11-06): Field.IsReadOnly and clipFields' read-only branch are now never set for any storyboard field, kept because the tune page's read_only rendering (panels.js framePanel) still reads it; README line 172, `photon tune --help`, panels.js and internal/tune/state.go's Fields comment still describe cols/rows/max_colors as read-only — item 5 (tune page/docs) owns them.
+NOTES (2026-11-06): retry — rewrapped the Edit doc comment (internal/storyboard/edit.go) and the [Apply] paragraph (internal/storyboard/doc.go) to 100 columns; the two remaining >100 lines in those files (doc.go:56, edit.go:188) predate this item and are untouched.
 
 **What:**
 **Goal:** `storyboard.Apply` accepts `frame.cols`, `frame.rows` and `frame.max_colors`, splices

@@ -70,8 +70,8 @@ const (
 // and a hold of 0. A position's position.transition, which has no key either, defaults to the
 // transition into it as it stands, the edges that change nothing; only a position with another
 // starting before it has one. An editable field's Name is the field an [Edit] names; a read-only
-// field is one of the frame's keys photon tune shows but does not edit — cols, rows or
-// max_colors — named by that key alone.
+// field would be a frame key photon tune shows but does not edit, named by that key alone, and
+// every frame key is editable today.
 type Field struct {
 	Owner      Owner           `json:"owner"`
 	Name       string          `json:"name"`
@@ -111,13 +111,12 @@ var (
 	}
 )
 
-// Fields describes every field of board's owners, the editable and the read-only: the clip's
+// Fields describes every field of board's owners: the clip's
 // frame fields in the frame's key order, then each beat's, camera position's, camera zoom's and
 // caption's in storyboard order, each list's insert after its entries', owned by index 0,
-// whether or not the list holds an entry. The frame's cols and rows are read-only because they
-// size the terminal the take was recorded in, so a change needs a new `photon record`, and its
-// max_colors because the page draws its preview before the palette is quantized, so the preview
-// could not show a change.
+// whether or not the list holds an entry. Every frame field is editable, cols and rows too,
+// though they size the terminal the take was recorded in, so a take recorded at another size
+// needs a new `photon record` before `photon render` takes it.
 func Fields(board *Storyboard) []Field {
 	fields := clipFields()
 	for _, beat := range board.Beats {
@@ -191,9 +190,9 @@ func removeField(owner Owner, name string) Field {
 	return Field{Owner: owner, Name: name, Kind: KindRemoval, Default: raw(jsonNull)}
 }
 
-// clipFields describes the frame's fields in its field order, each keyed as its yaml tag names it:
-// frame.padding, frame.font_size, frame.line_height, frame.scale, frame.width and frame.fps,
-// which an [Edit] names, and the rest read-only under their bare key.
+// clipFields describes the frame's fields in its field order, each named frame.<key> after its
+// yaml tag, as an [Edit] names it; a frame field Apply did not take would be read-only under its
+// bare key, and none is.
 // A floating-point field is a decimal and every other a count; each defaults to zero.
 func clipFields() []Field {
 	frame := reflect.TypeFor[Frame]()

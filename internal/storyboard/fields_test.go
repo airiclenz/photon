@@ -49,13 +49,17 @@ func textOwner(index int) Owner { return Owner{Kind: OwnerCaption, Index: index}
 // with a valid sample of its kind for its owner: a position's cell and target default to null,
 // which Apply refuses, a position or zoom moved to the clip's start overlaps camera.positions[0]
 // or camera.zooms[0], a zoom inserted at the clip's start overlaps camera.zooms[0], and a zoom of
-// no length or factor 0 is invalid.
+// no length or factor 0 is invalid. The frame's counts default to 0, which the loader refuses; a
+// cols or rows sample keeps the camera position cell {x: 40, y: 12} on the grid.
 var defaultRefusals = map[fieldKey]json.RawMessage{
 	{clipOwner, FieldFrameWidth}:            typedValue(300),
 	{clipOwner, FieldFrameFPS}:              typedValue(12),
 	{clipOwner, FieldFrameFontSize}:         typedValue(16),
 	{clipOwner, FieldFrameLineHeight}:       typedValue(1.3),
 	{clipOwner, FieldFrameScale}:            typedValue(3),
+	{clipOwner, FieldFrameCols}:             typedValue(41),
+	{clipOwner, FieldFrameRows}:             typedValue(13),
+	{clipOwner, FieldFrameMaxColors}:        typedValue(64),
 	{beatOwner(1), FieldDuration}:           typedValue(2500),
 	{beatOwner(2), FieldDuration}:           typedValue(5000),
 	{beatOwner(3), FieldDuration}:           typedValue(7000),
@@ -158,7 +162,7 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		owner Owner
 		want  []string
 	}{
-		{clipOwner, []string{"cols", "rows", FieldFramePadding, FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldFrameWidth, FieldFrameFPS, "max_colors"}},
+		{clipOwner, []string{FieldFrameCols, FieldFrameRows, FieldFramePadding, FieldFrameFontSize, FieldFrameLineHeight, FieldFrameScale, FieldFrameWidth, FieldFrameFPS, FieldFrameMaxColors}},
 		{beatOwner(1), []string{FieldDuration, FieldHold, FieldCut}},
 		{beatOwner(2), []string{FieldDuration, FieldHold, FieldCut}},
 		{positionOwner(0), []string{FieldPositionAt, FieldPositionHold, FieldPositionSpan, FieldPositionEase, FieldPositionCell, FieldPositionTarget, FieldPositionRemove, FieldPositionInsert}},
@@ -181,10 +185,11 @@ func TestFields_DescribeEachOwnersFields(t *testing.T) {
 		defaults   string
 		isReadOnly bool
 	}{
-		{fieldKey{clipOwner, "cols"}, KindCount, nil, "0", true},
+		{fieldKey{clipOwner, FieldFrameCols}, KindCount, nil, "0", false},
+		{fieldKey{clipOwner, FieldFrameRows}, KindCount, nil, "0", false},
 		{fieldKey{clipOwner, FieldFrameLineHeight}, KindDecimal, nil, "0", false},
 		{fieldKey{clipOwner, FieldFramePadding}, KindCount, nil, "0", false},
-		{fieldKey{clipOwner, "max_colors"}, KindCount, nil, "0", true},
+		{fieldKey{clipOwner, FieldFrameMaxColors}, KindCount, nil, "0", false},
 		{fieldKey{clipOwner, FieldFrameFPS}, KindCount, nil, "0", false},
 		{fieldKey{beatOwner(1), FieldCut}, KindBool, nil, "false", false},
 		{fieldKey{positionOwner(0), FieldPositionAt}, KindMoment, nil, `{"beat":0,"offset_ms":0}`, false},
