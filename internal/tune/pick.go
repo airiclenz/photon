@@ -128,48 +128,58 @@ func (s *Session) Pick(
 	}, nil
 }
 
-// pickedCells returns the box and the text of the cells of row from column first to last
-// inclusive, blank cells at either edge dropped. A wide grapheme counts whole when the pick
-// touches any of its cells. It fails with [ErrNoProposal] when every picked cell is blank.
+// pickedCells returns the box and the text a pick of row from column first to last inclusive
+// covers on the screen's text layer, blank graphemes at either edge dropped. It reads the first
+// run, in reading order, whose box holds row and that shows a grapheme other than a blank within
+// the pick. A grapheme is picked when its columns meet [first, last], so a wide grapheme counts
+// whole when the pick touches any of its cells. It fails with [ErrNoProposal] when every picked
+// grapheme is blank.
 func pickedCells(screen take.Snapshot, row, first, last int) (take.Box, string, error) {
-	var cells []take.Cell
-	if row < len(screen.Cells) {
-		cells = screen.Cells[row]
-	}
-	// A pick that starts on the trailing cell of a wide grapheme starts on the grapheme.
-	for first > 0 && first < len(cells) && cells[first].Width == 0 {
-		first--
-	}
-	last = min(last, len(cells)-1)
-	for first <= last && isBlank(cells[first]) {
-		first++
-	}
-	for last >= first && isBlank(cells[last]) {
-		last--
-	}
-	if first > last {
-		return take.Box{}, "", fmt.Errorf(
-			"%w: the picked cells of row %d are blank", ErrNoProposal, row,
-		)
-	}
-	end := last + 1
-	for end < len(cells) && cells[end].Width == 0 {
-		end++
-	}
-	var text strings.Builder
-	for _, cell := range cells[first:end] {
-		if cell.Width == 0 {
+	for _, run := range screen.Text() {
+		if row < run.Box.Y || row >= run.Box.Y+run.Box.H {
 			continue
 		}
-		text.WriteString(cmp.Or(cell.Grapheme, " "))
+		if start, end, ok := pickedSpan(run, first, last); ok {
+			return run.Span(start, end), run.Text[start:end], nil
+		}
 	}
-	return take.Box{X: first, Y: row, W: end - first, H: 1}, text.String(), nil
+	return take.Box{}, "", fmt.Errorf(
+		"%w: the picked cells of row %d are blank", ErrNoProposal, row,
+	)
 }
 
-// isBlank reports whether cell shows nothing: an empty or space grapheme. The trailing cells of a
-// wide grapheme are not blank; they belong to it.
-func isBlank(cell take.Cell) bool {
-	return cell.Width != 0 && (cell.Grapheme == "" || cell.Grapheme == " ")
+// pickedSpan returns the byte span [start, end) of run's text from the first to the last grapheme
+// that is not blank and whose columns meet [first, last], and false when there is none. A
+// grapheme's columns run from its first byte's edge to the edge of the byte after it.
+func pickedSpan(run take.TextRun, first, last int) (start, end int, ok bool) {
+	start = -1
+	for at := 0; at < len(run.Text); {
+		next := graphemeEnd(run, at)
+		if run.Edges[at] <= last && run.Edges[next] > first && !isBlank(run.Text[at:next]) {
+			if start < 0 {
+				start = at
+			}
+			end = next
+		}
+		at = next
+	}
+	return start, end, start >= 0
+}
+
+// graphemeEnd returns the byte just past the grapheme of run that starts at byte at: the first
+// byte after it that starts on another column, or the end of the text. The bytes of one grapheme
+// share its edge.
+func graphemeEnd(run take.TextRun, at int) int {
+	next := at + 1
+	for next < len(run.Text) && run.Edges[next] == run.Edges[at] {
+		next++
+	}
+	return next
+}
+
+// isBlank reports whether grapheme shows nothing: it is empty or a space.
+func isBlank(grapheme string) bool {
+	return grapheme == "" || grapheme == " "
 }
 
 // proposer finds the target for one pick: text, the escaped picked text, resolved on screen to

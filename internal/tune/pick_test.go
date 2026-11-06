@@ -5,6 +5,7 @@ import (
 	"errors"
 	"image"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/airiclenz/photon/internal/render"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
+	"github.com/airiclenz/photon/internal/target"
 )
 
 // pickConfig declares the areas the pick tests search: list is rows 0–3, upper and pair are
@@ -335,6 +337,59 @@ func TestSession_Pick_FullView_MapsThroughTheWholeFrame(t *testing.T) {
 	}
 	if col, row, _ := frames.Cell(zoomedPickTime, from); col == 0 && row == 5 {
 		t.Errorf("the crop maps %v onto cell 0,5 too; the fixture does not tell the views apart", from)
+	}
+}
+
+func TestPickedCells_WideGrapheme_IsProposedWhole(t *testing.T) {
+	t.Parallel()
+	// The row reads "ab世cd": 世 is one wide grapheme on columns 2 and 3.
+	row := []take.Cell{
+		{Grapheme: "a", Width: 1}, {Grapheme: "b", Width: 1},
+		{Grapheme: "世", Width: 2}, {Width: 0},
+		{Grapheme: "c", Width: 1}, {Grapheme: "d", Width: 1},
+	}
+	screen := take.Snapshot{Cells: [][]take.Cell{row}}
+	resolver, err := target.New(nil)
+	if err != nil {
+		t.Fatalf("target.New: %v", err)
+	}
+	tests := []struct {
+		name        string
+		first, last int
+		wantText    string
+		wantBox     take.Box
+	}{
+		{name: "a pick starting on its trailing cell", first: 3, last: 4,
+			wantText: "世c", wantBox: take.Box{X: 2, Y: 0, W: 3, H: 1}},
+		{name: "a pick ending on its first cell", first: 0, last: 2,
+			wantText: "ab世", wantBox: take.Box{X: 0, Y: 0, W: 4, H: 1}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			picked, text, err := pickedCells(screen, 0, test.first, test.last)
+			if err != nil {
+				t.Fatalf("pickedCells: %v", err)
+			}
+			proposer := proposer{
+				resolver: resolver, screen: screen, picked: picked, text: regexp.QuoteMeta(text),
+			}
+			proposed, resolved, err := proposer.propose(nil)
+
+			if err != nil {
+				t.Fatalf("propose: %v", err)
+			}
+			if text != test.wantText || picked != test.wantBox {
+				t.Errorf("picked: want %q at %+v, got %q at %+v", test.wantText, test.wantBox, text, picked)
+			}
+			if want := (storyboard.Target{Text: test.wantText}); proposed != want {
+				t.Errorf("target: want %+v, got %+v", want, proposed)
+			}
+			if !covers(resolved, test.wantBox) {
+				t.Errorf("box %+v does not cover the whole grapheme's pick %+v", resolved, test.wantBox)
+			}
+		})
 	}
 }
 

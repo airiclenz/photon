@@ -102,7 +102,13 @@ internal/target/resolver_test.go — snapshotOf; internal/tune/pick.go — propo
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/target/`, then `GOMEMLIMIT=2GiB go test ./internal/tune/`, and `grep -n "\.Cells" internal/target/*.go | grep -v _test` prints nothing.
 **Commit:** `refactor(target): resolve targets and areas on the text layer`
 
-## 4. Move the resolver's readers onto the text layer
+## 4. Move the resolver's readers onto the text layer — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): re-derived from "tune proposer.areasHolding switches to Resolver.Area" and "check/compose need edits": item 3 already moved areasHolding to Resolver.Area with the y-band rule and box.H-then-name order, and check.judgement.seen, engine.screenSatisfies and compose's camera already compile against the resolver's API, so internal/check/check.go and internal/compose/camera.go are unchanged and absent from FILES.
+NOTES (2026-11-06): pickedCells applies the guard's "a byte is picked when its span [Edges[i], Edges[i+1]) intersects [first, last]" per grapheme, not per byte: the bytes of a multi-byte grapheme share one edge, so a byte's own span is empty; a grapheme's span runs from its edge to the next byte's edge on another column (pickedSpan/graphemeEnd), and the whole grapheme is picked or not.
+NOTES (2026-11-06): pickedCells reads the first run, in reading order, whose box holds the picked row and shows a non-blank grapheme within the pick; a pick across two runs of one browser line yields only the first run's text, since a target never spans runs (terminal: one run per row, unchanged).
+NOTES (2026-11-06): clampToScreen clamps into Snapshot.Bounds() (longest row by row count, offset by the bounds' origin), where it used the first row's width; terminal grids are rectangular, so behaviour is unchanged.
+NOTES (2026-11-06): the new wide-grapheme test drives pickedCells then proposer.propose on a hand-built cell snapshot (TestPickedCells_WideGrapheme_IsProposedWhole) rather than Session.Pick, because the pick session fixture's take holds only width-1 cells.
 
 **What:**
 **Goal:** outside `take`, `raster` and `terminal`, no non-test code reads `Snapshot.Cells`; check, the engine, tune's picker and compose's camera work through the resolver's new API and the text layer; terminal behaviour is unchanged.

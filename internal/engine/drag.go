@@ -191,15 +191,18 @@ func dragEase(progress float64) float64 {
 	return progress * progress * progress * (progress*(6*progress-15) + 10)
 }
 
-// clampToScreen moves cell onto the screen's grid: its column into [0, cols-1] and its row into
-// [0, rows-1], where rows is the snapshot's row count and cols its first row's width.
+// clampToScreen moves cell onto the screen's grid, the snapshot's [take.Snapshot.Bounds]: its
+// column into the bounds' columns and its row into their rows. An empty grid clamps every cell to
+// the origin.
 func clampToScreen(cell take.Point, screen take.Snapshot) take.Point {
-	rows := len(screen.Cells)
-	if rows == 0 || len(screen.Cells[0]) == 0 {
+	bounds := screen.Bounds()
+	if bounds.W == 0 || bounds.H == 0 {
 		return take.Point{}
 	}
-	cols := len(screen.Cells[0])
-	return take.Point{X: clampInt(cell.X, 0, cols-1), Y: clampInt(cell.Y, 0, rows-1)}
+	return take.Point{
+		X: clampInt(cell.X, bounds.X, bounds.X+bounds.W-1),
+		Y: clampInt(cell.Y, bounds.Y, bounds.Y+bounds.H-1),
+	}
 }
 
 // clampInt is value limited to [low, high].
