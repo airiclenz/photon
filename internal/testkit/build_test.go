@@ -47,10 +47,12 @@ func TestBuildFixtureWeb_ServesThePageOnPhotonPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET the page: %v", err)
 	}
-	defer response.Body.Close()
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		t.Fatalf("read the page: %v", err)
+	body, readErr := io.ReadAll(response.Body)
+	if err := response.Body.Close(); err != nil {
+		t.Fatalf("close the response: %v", err)
+	}
+	if readErr != nil {
+		t.Fatalf("read the page: %v", readErr)
 	}
 
 	if response.StatusCode != http.StatusOK {
