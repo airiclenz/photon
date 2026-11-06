@@ -34,7 +34,8 @@ func (f sessionFixture) frameAt(t *testing.T, out time.Duration) *image.RGBA {
 }
 
 // renderedFrame builds the frame at out from the files on disk alone, through the pipeline
-// `photon render` encodes from.
+// `photon render` encodes from, quantized to the storyboard's frame.max_colors as the session's
+// exact frame is.
 func (f sessionFixture) renderedFrame(t *testing.T, out time.Duration) *image.RGBA {
 	t.Helper()
 	loaded, err := clip.Load(f.boardPath, "", t.TempDir())
@@ -53,7 +54,7 @@ func (f sessionFixture) renderedFrame(t *testing.T, out time.Duration) *image.RG
 	if err != nil {
 		t.Fatalf("FrameAt(%s): %v", out, err)
 	}
-	return frame
+	return render.Quantize(frame, loaded.Storyboard.Frame.MaxColors)
 }
 
 // assertSameFrame fails the test unless got and want hold the same pixels.
@@ -98,6 +99,64 @@ func TestSession_Frame_AfterEditMatchesTheRenderOfTheSavedFile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSession_Frame_MaxColorsEdit_QuantizesTheExactFramesOnly(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixtureOf(t, cameraStoryboard)
+	const maxColors = 2
+	exactFrames := map[string]func(time.Duration) ([]byte, error){
+		"Frame":     fixture.session.Frame,
+		"FullFrame": fixture.session.FullFrame,
+	}
+	before := make(map[string]int, len(exactFrames))
+	for name, exactFrame := range exactFrames {
+		before[name] = colourCount(t, exactFrame, cameraFixtureTime)
+	}
+
+	fixture.apply(t, frameEdit(storyboard.FieldFrameMaxColors, maxColors))
+
+	for name, exactFrame := range exactFrames {
+		if got := colourCount(t, exactFrame, cameraFixtureTime); got > maxColors {
+			t.Errorf("%s holds %d colours after max_colors %d", name, got, maxColors)
+		}
+	}
+	draftFrames := map[string]func(time.Duration) ([]byte, error){
+		"DraftFrame":     fixture.session.DraftFrame,
+		"FullDraftFrame": fixture.session.FullDraftFrame,
+	}
+	for name, draftFrame := range draftFrames {
+		if got := colourCount(t, draftFrame, cameraFixtureTime); got <= maxColors {
+			t.Errorf("%s holds %d colours, want it unquantized", name, got)
+		}
+	}
+	if err := fixture.session.Undo(); err != nil {
+		t.Fatalf("Undo: %v", err)
+	}
+	for name, exactFrame := range exactFrames {
+		if got := colourCount(t, exactFrame, cameraFixtureTime); got != before[name] {
+			t.Errorf("%s holds %d colours after undo, want %d as before", name, got, before[name])
+		}
+	}
+}
+
+// colourCount returns the number of distinct colours in the frame drawFrame encodes at out.
+func colourCount(
+	t *testing.T,
+	drawFrame func(time.Duration) ([]byte, error),
+	out time.Duration,
+) int {
+	t.Helper()
+	encoded, err := drawFrame(out)
+	if err != nil {
+		t.Fatalf("draw the frame at %s: %v", out, err)
+	}
+	frame := decodedFrame(t, encoded)
+	colours := make(map[[4]uint8]struct{})
+	for offset := 0; offset < len(frame.Pix); offset += 4 {
+		colours[[4]uint8(frame.Pix[offset:offset+4])] = struct{}{}
+	}
+	return len(colours)
 }
 
 func TestSession_Frame_OutsideTheClip_IsRefused(t *testing.T) {
@@ -146,7 +205,7 @@ func TestSession_FullFrame_IsTheWholeFrameWhileZoomed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FullFrameAt: %v", err)
 	}
-	assertSameFrame(t, full, want)
+	assertSameFrame(t, full, render.Quantize(want, loaded.Storyboard.Frame.MaxColors))
 	if zoomed := fixture.frameAt(t, cameraFixtureTime); bytes.Equal(zoomed.Pix, full.Pix) {
 		t.Error("the full view shows the zoomed frame's pixels")
 	}

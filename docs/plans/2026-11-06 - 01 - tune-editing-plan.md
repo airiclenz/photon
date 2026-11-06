@@ -152,7 +152,10 @@ an image of more than max colours gives equal `Pix`.
 - `GOMEMLIMIT=2GiB go test ./internal/render -run 'Quantize|DocMap'`
 **Commit:** `feat(render): quantize a frame to max_colors for preview`
 
-## 4. tune: exact frames are quantized to the frame's max_colors
+## 4. tune: exact frames are quantized to the frame's max_colors — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the wrapper is a `pipeline.quantized` method that reads `board.Frame.MaxColors` from the same good-pipeline copy whose frames it wraps, so a frame and its colour limit always come from one build; the "render composes" sites are reworded so the grep in the regression guard comes up empty (doc.go now says "`photon render` builds").
+NOTES (2026-11-06): the `photon tune --help` sentence is reworded to "once stopped it settles on the exact frame, held to max_colors colours"; its read-only frame field list is left for item 5.
 
 **What:**
 **Goal:** `Session.Frame` and `Session.FullFrame` PNGs hold at most the storyboard's

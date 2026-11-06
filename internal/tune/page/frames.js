@@ -2,7 +2,8 @@
 // the frames it holds at hand, and putting one on screen. While the preview moves — playing, or a
 // scrub's pointer down — it asks for draft frames (/api/frame?t=<ms>&draft=1), which the server
 // draws fast from a raster at the shipped size; once the playhead settles it asks for the exact
-// frame `photon render` composes, showing a draft first unless the exact frame is already at hand.
+// frame: `photon render`'s composed frame quantized to frame.max_colors colours, showing a
+// draft first unless the exact frame is already at hand.
 // An exact frame shown is never replaced by a draft of the same state version and time. Every
 // frame is of the view marker.js asks: while a camera position is selected it is the full view
 // (/api/frame?t=<ms>&view=full, its drafts with &draft=1 too), the whole frame whatever the

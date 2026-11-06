@@ -16,9 +16,9 @@ import (
 const portFlag = "port"
 
 // newTuneCommand serves the timing editor: a page on this machine that previews a take, in draft
-// frames while playing or scrubbing and settled on the frame `photon render` composes once
-// stopped, and saves timing, camera position, zoom, caption and frame edits back into the
-// storyboard.
+// frames while playing or scrubbing and, once stopped, settled on the exact frame:
+// `photon render`'s composed frame held to frame.max_colors colours. It saves timing, camera
+// position, zoom, caption and frame edits back into the storyboard.
 func newTuneCommand() *cobra.Command {
 	var configPath, workPath string
 	var options tune.Options
@@ -27,8 +27,8 @@ func newTuneCommand() *cobra.Command {
 		Short: "Tune a storyboard's timing, camera positions and zooms, and frame against a take",
 		Long: "tune serves a page on 127.0.0.1 that previews the take: playing or scrubbing\n" +
 			"shows draft frames, drawn from a raster at the shipped size with a fast\n" +
-			"scaler, and the preview settles on the exact frame render composes once\n" +
-			"stopped. It edits each beat's duration, hold and cut on a timeline and the\n" +
+			"scaler, and once stopped it settles on the exact frame, held to max_colors\n" +
+			"colours. It edits each beat's duration, hold and cut on a timeline and the\n" +
 			"clip's frame.width, fps, font_size, line_height, padding and scale. Lanes\n" +
 			"under the beats show the camera's positions with the transitions between them,\n" +
 			"its zooms and the captions: a click opens one in the inspector, a drag moves it\n" +

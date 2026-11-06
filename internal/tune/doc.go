@@ -29,14 +29,16 @@
 // writes in place, refused while stale ([ErrStale]) or while an error other than the take's size
 // stands ([ErrInvalid]); `photon render`, and so [Session.Export], still refuses the mismatch.
 // [Session.State] reports everything the page shows — the beats, camera positions and zooms,
-// captions and schedule — and [Session.Frame] the PNG of the exact frame
-// `photon render` composes at an output time, from the last good pipeline, its rasterized snapshots
-// kept in a cache bounded at 1 GiB that a new take or raster geometry starts afresh;
+// captions and schedule — and [Session.Frame] the PNG of the exact frame at an output time: the
+// frame `photon render` builds, quantized to frame.max_colors colours by [render.Quantize] as
+// the preview's stand-in for the GIF's palette, from the last good pipeline, its rasterized
+// snapshots kept in a cache bounded at 1 GiB that a new take or raster geometry starts afresh;
 // [Session.DraftFrame] the PNG of the draft frame the page shows while it plays or scrubs, drawn
 // from a raster at the shipped size with a fast scaler and sent uncompressed, its draft rasters
 // kept in a draft cache bounded at 256 MiB that carries across rebuilds as the exact one does; once
-// stopped the page settles on the exact frame. [Session.FullFrame] is the PNG of the full view, the
-// whole frame at the exact frame's size whatever the camera's zoom and aim, and [Session.Camera]
+// stopped the page settles on the exact frame. Draft frames are never quantized.
+// [Session.FullFrame] is the PNG of the full view, the whole frame at the exact frame's size
+// whatever the camera's zoom and aim and quantized as the exact frame is, and [Session.Camera]
 // where the camera looks over it at an output time — its crop, the cell it centres on and the
 // grid's place — and the cell a camera position aims at. [Session.Pick] turns cells picked on the
 // camera's frame or on the full view into a [Proposal]: the picked text, escaped, as a target the

@@ -33,4 +33,5 @@ The terms code, flags, messages and docs use. One meaning each.
 - **Render**: a take turned into the shipped GIF.
 - **Draft frame**: a frame `photon tune` shows while playing or scrubbing: drawn from a raster at
   the shipped size with a fast scaler, at the exact frame's pixel size with its cursor and
-  captions; once stopped the preview settles on the exact frame `photon render` composes, which never draws one.
+  captions and never quantized; once stopped the preview settles on the exact frame,
+  `photon render`'s composed frame quantized to `frame.max_colors` colours, which never draws one.

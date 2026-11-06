@@ -29,9 +29,10 @@ type CameraView struct {
 	Aim *image.Point
 }
 
-// Frame returns the PNG of the frame `photon render` composes at output time out, before the
-// GIF's palette quantization, from the last pipeline that built in full: while an error stands,
-// the preview keeps showing the storyboard as it was before it. A snapshot is rasterized once
+// Frame returns the PNG of `photon render`'s composed frame at output time out, quantized to the
+// storyboard's frame.max_colors by [render.Quantize], the preview's stand-in for the GIF's
+// palette, from the last pipeline that built in full: while an error stands, the preview keeps
+// showing the storyboard as it was before it, max_colors included. A snapshot is rasterized once
 // and kept in the pipeline's raster cache, bounded at [rasterCacheBytes]. It fails with
 // [render.ErrOutsideClip] when out is not in [0, length) and when the take holds no snapshot to
 // show.
@@ -39,16 +40,17 @@ type CameraView struct {
 // The pipeline is taken under the session's lock and the frame drawn outside it, so frames are
 // served concurrently with each other and with edits. The PNG is compressed at [png.BestSpeed].
 func (s *Session) Frame(out time.Duration) ([]byte, error) {
-	return encodeFrame(s.goodPipeline().frames.FrameAt, png.BestSpeed, out)
+	good := s.goodPipeline()
+	return encodeFrame(good.quantized(good.frames.FrameAt), png.BestSpeed, out)
 }
 
 // DraftFrame returns the PNG of the draft frame at output time out, the preview's frame while it
 // plays or scrubs: drawn from a raster at the shipped size with a fast scaler, of
 // [Session.Frame]'s pixel size and with its cursor and captions, from the same last good
-// pipeline. A snapshot's draft raster is drawn once and kept in the pipeline's draft raster
-// cache, bounded at [draftCacheBytes]. The PNG is not compressed ([png.NoCompression]): encoding
-// it is then far faster, and the page fetches it from this machine. It fails as [Session.Frame]
-// does, and is served concurrently as it is.
+// pipeline, and not quantized to frame.max_colors. A snapshot's draft raster is drawn once and
+// kept in the pipeline's draft raster cache, bounded at [draftCacheBytes]. The PNG is not
+// compressed ([png.NoCompression]): encoding it is then far faster, and the page fetches it from
+// this machine. It fails as [Session.Frame] does, and is served concurrently as it is.
 func (s *Session) DraftFrame(out time.Duration) ([]byte, error) {
 	return encodeFrame(s.goodPipeline().frames.DraftAt, png.NoCompression, out)
 }
@@ -56,18 +58,20 @@ func (s *Session) DraftFrame(out time.Duration) ([]byte, error) {
 // FullFrame returns the PNG of the full view at output time out: the whole frame at
 // [Session.Frame]'s pixel size, with its cursor and captions, so the camera's zoom and aim never
 // enter; the page shows it while a camera position is edited. It is drawn from the same last good
-// pipeline and raster cache, fails as [Session.Frame] does, and is served concurrently as it is.
+// pipeline and raster cache, quantized to frame.max_colors as [Session.Frame] is, fails as it
+// does, and is served concurrently as it is.
 func (s *Session) FullFrame(out time.Duration) ([]byte, error) {
-	return encodeFrame(s.goodPipeline().frames.FullFrameAt, png.BestSpeed, out)
+	good := s.goodPipeline()
+	return encodeFrame(good.quantized(good.frames.FullFrameAt), png.BestSpeed, out)
 }
 
 // FullDraftFrame returns the PNG of the full view's draft frame at output time out, the full
 // view's frame while the preview plays or scrubs: [Session.FullFrame]'s whole frame, of its pixel
 // size and with its cursor and captions, drawn from the draft raster with the fast scaler as
 // [Session.DraftFrame] is, from the same last good pipeline and draft raster cache. Without a
-// draft rasterizer it is [Session.FullFrame]'s frame. It is not compressed, for
-// [Session.DraftFrame]'s reason, fails as [Session.Frame] does, and is served concurrently as it
-// is.
+// draft rasterizer it is the whole frame [Session.FullFrame] draws, unquantized. It is not
+// compressed, for [Session.DraftFrame]'s reason, fails as [Session.Frame] does, and is served
+// concurrently as it is.
 func (s *Session) FullDraftFrame(out time.Duration) ([]byte, error) {
 	return encodeFrame(s.goodPipeline().frames.FullDraftAt, png.NoCompression, out)
 }
@@ -108,6 +112,21 @@ func (s *Session) goodPipeline() pipeline {
 	defer s.mu.Unlock()
 
 	return s.good
+}
+
+// quantized returns drawFrame with each frame it draws quantized to the pipeline's
+// frame.max_colors by [render.Quantize], so a max_colors edit shows in the next exact frame.
+func (p pipeline) quantized(
+	drawFrame func(time.Duration) (*image.RGBA, error),
+) func(time.Duration) (*image.RGBA, error) {
+	maxColors := p.board.Frame.MaxColors
+	return func(out time.Duration) (*image.RGBA, error) {
+		frame, err := drawFrame(out)
+		if err != nil {
+			return nil, err
+		}
+		return render.Quantize(frame, maxColors), nil
+	}
 }
 
 // encodeFrame draws the frame at output time out with drawFrame and encodes it as a PNG at the
