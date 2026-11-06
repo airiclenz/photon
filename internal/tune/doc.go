@@ -55,8 +55,9 @@
 //   - edit.go: the [Edit], the storyboard.Edit the page sends and storyboard.Apply applies.
 //   - export.go: [Session.Export], the background render of the saved storyboard's GIF, and its
 //     [ExportState].
-//   - frame.go: [Session.Frame], [Session.DraftFrame] and [Session.FullFrame], one exact, draft or
-//     full-view frame of the preview as a PNG, and [Session.Camera], the camera's [CameraView].
+//   - frame.go: [Session.Frame], [Session.DraftFrame], [Session.FullFrame] and
+//     [Session.FullDraftFrame], one exact, draft, full-view or full-view draft frame of the
+//     preview as a PNG, and [Session.Camera], the camera's [CameraView].
 //   - history.go: a session's storyboard versions, for undo and redo.
 //   - pick.go: [Session.Pick], a resolver-checked target [Proposal] from picked cells.
 //   - run.go: [Run] and its [Options]: listen on 127.0.0.1, print the address, serve until done.
