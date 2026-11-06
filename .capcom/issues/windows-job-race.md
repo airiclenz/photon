@@ -1,9 +1,11 @@
 ---
 title: A Windows service's child can escape its Job object
-status: active
+status: done
 type: bug
 priority: 0
 created: 2026-11-06T12:51:40Z
+closed: 2026-11-06T12:56:53Z
+reason: Fixed in 3f40ed4; CI run 42221009379 green on windows-latest.
 ---
 
 joinGroup assigns the service's shell to its Job object only after the shell has started, so a child the shell launches first is outside the job: TerminateJobObject does not end it and Stop returns while it still runs. CI run 42219702722 hit it: TestStart_TCPReadiness_ServesUntilStop on windows-latest found the service still accepting connections after Stop.
