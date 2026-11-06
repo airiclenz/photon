@@ -14,8 +14,9 @@
 // lane is {name, draw(section, state), handles(section, state)}, where draw returns the nodes it
 // places for one section and handles the edges a drag moves. The lanes in the registry
 // window.tuneLanes, which lanes.js fills before this file runs, follow the whole state: such a
-// lane is {name, draw(state), add}, where draw returns its bars as data, {from, to, className,
-// label, title, entry, edges}, each placed from its from to its to and selecting its entry, {kind,
+// lane is {name, draw(state), add, rows}, where draw returns its bars as data, {from, to,
+// className, label, title, entry, edges, row}, each placed from its from to its to, in its row when
+// the lane's rows(state) stacks it that many rows tall, and selecting its entry, {kind,
 // index}, on a click, and add, {title, edit(state, ms)}, is a button beside the lane's name that
 // sends the edit edit(state, playhead) returns or resolves with and selects the entry the edit's
 // owner names; a lane without add has
@@ -197,6 +198,9 @@
   // grips on their edges above them, and its add button when it has one.
   function clipLaneRow(lane, state) {
     const track = element("div", { className: "lane-track" });
+    if (lane.rows) {
+      track.style.height = "calc(" + lane.rows(state) + " * var(--lane-height))";
+    }
     const bars = lane.draw(state);
     track.append(...bars.map((bar) => barNode(bar, track)));
     track.append(...bars.flatMap((bar) => (bar.edges || []).map((side) => gripNode(bar, side, track))));
@@ -226,6 +230,10 @@
     const node = span(bar.from, bar.to, "block draggable " + bar.className, bar.label);
     node.title = bar.title;
     node.dataset.entry = entryKey(bar.entry);
+    if (bar.row !== undefined) {
+      node.style.top = "calc(" + bar.row + " * var(--lane-height) + var(--lane-inset))";
+      node.style.height = "calc(var(--lane-height) - 2 * var(--lane-inset))";
+    }
     node.addEventListener("click", () => tune.selectEntry(bar.entry));
     attachShift(bar, node, track);
     return node;

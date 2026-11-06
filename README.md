@@ -177,7 +177,9 @@ with `photon record`; Save still writes it, and `photon render` refuses the mism
 storyboard's `camera.positions`, `camera.zooms` and `captions` show on lanes of their own under
 the beats. The position lane draws each position as a bar over its `hold`, or as a point when it
 has none, and each transition, the gap into the next position by start, as a bar in its own
-colour; the zoom lane draws one bar per zoom, labelled with the factor it zooms to. A click on a
+colour; the zoom lane draws one bar per zoom, labelled with the factor it zooms to; the captions
+lane draws each caption in a row of its own, in list order with the last listed, which the clip
+draws on top, in the top row. A click on a
 bar shows that entry in the inspector, which edits a position's `at`, `hold` and its `cell` or
 text target (`text`, `nth`, `area`), a transition's start, length and ease (the `ease` of the
 position it leads into), a zoom's `at`, `over`, `to` and `ease`, and a caption's `text`, `at`,

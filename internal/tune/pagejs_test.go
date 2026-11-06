@@ -631,6 +631,119 @@ func TestPageJS_DragAnUntilCaptionBar_SendsOneCaptionShift(t *testing.T) {
 	}
 }
 
+// stackedStoryboard is sessionStoryboard with three captions, the caption lane's rows; the
+// middle one, stackedShiftedCaption, starts at stackedShiftedStartMS and stops at
+// stackedShiftedStopMS.
+const stackedStoryboard = sessionStoryboard + `captions:
+  - {text: 'one', at: {beat: 1, offset: 100ms}, for: 500ms}
+  - {text: 'two', at: {beat: 1, offset: 300ms}, for: 500ms}
+  - {text: 'three', at: {beat: 2}, for: 800ms}
+`
+
+const (
+	stackedShiftedCaption = 1
+	stackedShiftedStartMS = 300
+	stackedShiftedStopMS  = 800
+)
+
+// captionLaneRows is the caption lane as drawn: its track's height, and the row each bar's top
+// places it in, by the entry it selects; a bar placed in no row is in row -1.
+func (p *pageHarness) captionLaneRows() (string, map[string]int) {
+	p.t.Helper()
+	encoded := p.eval(fmt.Sprintf(`{
+		const lane = document.getElementById(%q).querySelectorAll(".lane")
+			.find((row) => row.querySelectorAll(".lane-name")[0].textContent.startsWith(%q));
+		const track = lane.querySelectorAll(".lane-track")[0];
+		const rows = {};
+		for (const node of track.children.filter((child) => child.classList.contains("block"))) {
+			const row = /^calc\((\d+) \*/.exec(node.style.top || "");
+			rows[node.dataset.entry] = row ? Number(row[1]) : -1;
+		}
+		JSON.stringify({ height: track.style.height || "", rows });
+	}`, elementTimeline, laneCaptions)).String()
+	var lane struct {
+		Height string         `json:"height"`
+		Rows   map[string]int `json:"rows"`
+	}
+	if err := json.Unmarshal([]byte(encoded), &lane); err != nil {
+		p.t.Fatalf("decode the caption lane %s: %v", encoded, err)
+	}
+	return lane.Height, lane.Rows
+}
+
+func TestPageJS_CaptionLane_DrawsARowPerCaption_TheLastListedOnTop(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, stackedStoryboard).session
+	want := map[string]int{
+		entryValueOf(storyboard.OwnerCaption, 0): 2,
+		entryValueOf(storyboard.OwnerCaption, 1): 1,
+		entryValueOf(storyboard.OwnerCaption, 2): 0,
+	}
+
+	page := loadPage(t, session)
+
+	height, rows := page.captionLaneRows()
+	if !reflect.DeepEqual(rows, want) {
+		t.Errorf("the caption lane's rows: want %v, got %v", want, rows)
+	}
+	if want := "calc(3 * var(--lane-height))"; height != want {
+		t.Errorf("the caption lane's height: want %q, got %q", want, height)
+	}
+}
+
+func TestPageJS_CaptionLane_WithoutCaptions_IsOneRowTall(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixtureOf(t, sessionStoryboard).session)
+
+	height, rows := page.captionLaneRows()
+
+	if want := "calc(1 * var(--lane-height))"; height != want {
+		t.Errorf("the caption lane's height: want %q, got %q", want, height)
+	}
+	if len(rows) != 0 {
+		t.Errorf("the caption lane's bars: want none, got %v", rows)
+	}
+}
+
+func TestPageJS_CaptionLane_DragAStackedCaptionAcross_SendsOneCaptionShift(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, stackedStoryboard).session
+	page := loadPage(t, session)
+
+	page.dragBar(laneCaptions, storyboard.OwnerCaption, stackedShiftedCaption, captionGrabMS, captionReleaseMS)
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":%d},"field":%q,"value":%d}`,
+		storyboard.OwnerCaption, stackedShiftedCaption, storyboard.FieldCaptionShift, captionShiftMS))
+	shifted := session.State().Captions[stackedShiftedCaption]
+	if shifted.StartMS != stackedShiftedStartMS+captionShiftMS || shifted.StopMS != stackedShiftedStopMS+captionShiftMS {
+		t.Errorf("the dragged caption: want it from %dms to %dms, got %+v",
+			stackedShiftedStartMS+captionShiftMS, stackedShiftedStopMS+captionShiftMS, shifted)
+	}
+}
+
+func TestPageJS_TuneLanes_CaptionRowAndCaptionAtRow_InvertEachOther(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixtureOf(t, sessionStoryboard).session)
+
+	broken := page.eval(`{
+		const lanes = window.tuneLanes;
+		const broken = [];
+		for (let count = 1; count <= 4; count++) {
+			for (let index = 0; index < count; index++) {
+				const row = lanes.captionRow(index, count);
+				if (row < 0 || row >= count || lanes.captionAtRow(row, count) !== index) {
+					broken.push(index + " of " + count + " -> row " + row);
+				}
+			}
+		}
+		broken.join("; ");
+	}`).String()
+
+	if broken != "" {
+		t.Errorf("captionRow and captionAtRow do not invert each other: %s", broken)
+	}
+}
+
 func TestPageJS_ClickABarWithoutMoving_SelectsAndSendsNoEdit(t *testing.T) {
 	t.Parallel()
 	session := newSessionFixtureOf(t, captionedStoryboard).session

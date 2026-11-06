@@ -216,7 +216,11 @@ cmd/photon/tune.go — newTuneCommand; README.md — Tuning paragraph, Header ta
 **Commit:** `feat(tune): edit cols, rows and max_colors on the page`
 Depends on items 2 and 4.
 
-## 6. tune page: one caption row per caption in list order
+## 6. tune page: one caption row per caption in list order — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): consequential edit — README.md: made necessary by the caption lane drawing one row per caption (the Tuning paragraph describes each lane's bars).
+NOTES (2026-11-06): window.tuneLanes stays the frozen lane array, with captionRow(index, count) and captionAtRow(row, count) attached as properties of it for item 7; the caption lane gains rows(state) = max(captions, 1) and its bars a row. No script was split out; timeline.js grows by 8 lines (two guarded style assignments and one comment line).
+NOTES (2026-11-06): style.css gains a --lane-inset token (2px) that .block's top/bottom now use, so a stacked bar's calc() top/height share the inset with unstacked bars.
 
 **What:**
 **Goal:** the caption lane draws each caption in its own row, rows in list order with the last

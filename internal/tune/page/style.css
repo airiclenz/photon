@@ -24,6 +24,8 @@
   --pick-box: #f2b705;
   --lane-name-width: 104px;
   --lane-height: 26px;
+  /* A bar's gap to the top and bottom of its lane row. */
+  --lane-inset: 2px;
   --cut-marker-width: 10px;
   --point-width: 10px;
   --gap: 12px;
@@ -453,8 +455,8 @@ textarea {
 
 .block {
   position: absolute;
-  top: 2px;
-  bottom: 2px;
+  top: var(--lane-inset);
+  bottom: var(--lane-inset);
   padding: 0 4px;
   overflow: hidden;
   border: 1px solid var(--border);

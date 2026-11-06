@@ -3,11 +3,16 @@
 // from where it starts to where it ends on the output clock.
 //
 // The lanes register in window.tuneLanes, which timeline.js reads, so this file loads before it.
-// A lane here is {name, draw(state), add}: draw takes the whole state and returns the lane's bars
-// as plain data, {from, to, className, label, title, entry, edges}, which the timeline places on
-// its axis, makes selectable as entry, {kind, index}, the shape window.tune's selectEntry takes,
-// drags to shift that entry's start, and gives a grip on each edge edges names, "start" or "end",
-// which a drag resizes it by; a bar without edges has no grips. add, which a lane may leave
+// A lane here is {name, draw(state), add, rows}: draw takes the whole state and returns the lane's
+// bars as plain data, {from, to, className, label, title, entry, edges, row}, which the timeline
+// places on its axis, makes selectable as entry, {kind, index}, the shape window.tune's selectEntry
+// takes, drags to shift that entry's start, and gives a grip on each edge edges names, "start" or
+// "end", which a drag resizes it by; a bar without edges has no grips. rows, which a lane may leave
+// out to stay one row tall, is how many rows tall rows(state) makes it, and each of its bars draws
+// in the row its row names, counted from 0 at the top. The caption lane is one row per caption in
+// list order, the last listed, drawn on top in the clip, in the top row: window.tuneLanes'
+// captionRow(index, count) is the row of the caption at index of count, and captionAtRow(row,
+// count) the index of the caption in row. add, which a lane may leave
 // out, is the lane's add button, {title, edit(state, ms)}: edit resolves with the window.tune
 // edit that adds a new entry starting at ms on the output clock, its owner the entry it becomes,
 // and rejects when it cannot be built. A new position is a point on the cell the camera centres
@@ -105,8 +110,10 @@
     return zoom.factor + "×";
   }
 
-  // captionBars are state's captions, in storyboard order, each labelled with its text.
+  // captionBars are state's captions, in storyboard order, each labelled with its text and in its
+  // own row of the lane.
   function captionBars(state) {
+    const count = state.captions.length;
     return state.captions.map((caption) => ({
       from: caption.start_ms,
       to: caption.stop_ms,
@@ -114,7 +121,25 @@
       label: caption.text,
       title: ENTRY_CAPTION + " " + caption.index + " " + caption.text,
       entry: { kind: ENTRY_CAPTION, index: caption.index },
+      row: captionRow(caption.index, count),
     }));
+  }
+
+  // captionRows is how tall the caption lane is: a row per caption of state, and one with none.
+  function captionRows(state) {
+    return Math.max(state.captions.length, 1);
+  }
+
+  // captionRow is the lane row, from 0 at the top, of the caption at index of count captions: the
+  // last listed, which the clip draws over the others, takes the top row.
+  function captionRow(index, count) {
+    return count - 1 - index;
+  }
+
+  // captionAtRow is the index of the caption of count captions in the lane row row: captionRow's
+  // inverse.
+  function captionAtRow(row, count) {
+    return count - 1 - row;
   }
 
   // adding is the add button of a lane whose new entry, newEntry(at, ms) starting at the moment
@@ -141,8 +166,9 @@
     return { at, cell: camera.centre };
   }
 
-  // window.tuneLanes are the lanes timeline.js draws under its own, top to bottom.
-  window.tuneLanes = Object.freeze([
+  // window.tuneLanes are the lanes timeline.js draws under its own, top to bottom, with the caption
+  // lane's row of a caption and caption of a row.
+  window.tuneLanes = Object.freeze(Object.assign([
     {
       name: "position",
       draw: positionBars,
@@ -156,7 +182,8 @@
     {
       name: "captions",
       draw: captionBars,
+      rows: captionRows,
       add: adding("caption", ENTRY_CAPTION, "caption.insert", (at) => ({ kind: KIND_CAPTION, at })),
     },
-  ]);
+  ], { captionRow, captionAtRow }));
 })();
