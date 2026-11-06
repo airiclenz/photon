@@ -164,7 +164,7 @@ func TestPageOutput_DeviceScale_SizesTheFrameAndCaptions(t *testing.T) {
 			}
 			wantLayout := compose.Layout{
 				Size:  tt.wantSize,
-				Cell:  take.CellSize{W: tt.deviceScale, H: tt.deviceScale},
+				Cell:  take.CellSize{W: tt.deviceScale * 3, H: tt.deviceScale * 3},
 				Scale: frame.Scale,
 			}
 			if layout != wantLayout {
@@ -175,6 +175,55 @@ func TestPageOutput_DeviceScale_SizesTheFrameAndCaptions(t *testing.T) {
 			captionScale := unit * designScale * float64(layout.Size.X) / float64(frame.Width)
 			if want := tt.deviceScale * float64(frame.Scale); math.Abs(captionScale-want) > 1e-9 {
 				t.Errorf("caption scale = %g, want %g", captionScale, want)
+			}
+		})
+	}
+}
+
+func TestPageLayout_FrameScale_PlacesABoxAtThatScale(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		deviceScale float64
+		box         take.Box
+	}{
+		{name: "device scale 1", deviceScale: 1, box: take.Box{X: 10, Y: 4, W: 30, H: 12}},
+		{name: "device scale 1.5", deviceScale: 1.5, box: take.Box{X: 10, Y: 4, W: 30, H: 12}},
+		{name: "the whole viewport", deviceScale: 2, box: take.Box{X: 0, Y: 0, W: 100, H: 50}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			frame := storyboard.Frame{
+				Viewport:    storyboard.Viewport{Width: 100, Height: 50},
+				DeviceScale: tt.deviceScale,
+				Scale:       2,
+				Width:       200,
+			}
+
+			layout := pageLayout(frame)
+
+			// A box's corners are its CSS pixels at device_scale × frame.scale.
+			perCSSPixel := tt.deviceScale * 2
+			corners := []struct {
+				name      string
+				cells     int
+				cellSize  float64
+				wantPixel float64
+			}{
+				{"left", tt.box.X, layout.Cell.W, float64(tt.box.X) * perCSSPixel},
+				{"top", tt.box.Y, layout.Cell.H, float64(tt.box.Y) * perCSSPixel},
+				{"right", tt.box.X + tt.box.W, layout.Cell.W, float64(tt.box.X+tt.box.W) * perCSSPixel},
+				{"bottom", tt.box.Y + tt.box.H, layout.Cell.H, float64(tt.box.Y+tt.box.H) * perCSSPixel},
+			}
+			for _, c := range corners {
+				if got := float64(layout.Padding) + float64(c.cells)*c.cellSize; math.Abs(got-c.wantPixel) > 1e-9 {
+					t.Errorf("%s edge at pixel %g, want %g", c.name, got, c.wantPixel)
+				}
+			}
+			// The frame holds the whole viewport at that scale, edge to edge.
+			if right := float64(frame.Viewport.Width) * layout.Cell.W; right != float64(layout.Size.X) {
+				t.Errorf("viewport right edge at pixel %g, want the frame width %d", right, layout.Size.X)
 			}
 		})
 	}

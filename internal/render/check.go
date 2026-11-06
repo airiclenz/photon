@@ -57,17 +57,19 @@ func captionOutput(loaded *clip.Clip) (image.Point, float64, error) {
 }
 
 // pageLayout is where the cells of a frame with a viewport sit in its frames: one cell per CSS
-// pixel, frame.device_scale device pixels square, on a frame of the viewport in device pixels —
-// each side rounded — times frame.scale, without padding. Layout.Scale is frame.scale; the device
-// scale lives only in the cell size.
+// pixel, frame.device_scale × frame.scale pixels square, on a frame of the viewport in device
+// pixels — each side rounded — times frame.scale, without padding, so a box maps to the pixel
+// rectangle it covers at the frame's scale. Layout.Scale is frame.scale; the device scale enters
+// the unit only through [pageOutput].
 func pageLayout(frame storyboard.Frame) compose.Layout {
 	deviceScale := frame.Scaling()
+	cell := deviceScale * float64(frame.Scale)
 	return compose.Layout{
 		Size: image.Pt(
 			devicePixels(frame.Viewport.Width, deviceScale)*frame.Scale,
 			devicePixels(frame.Viewport.Height, deviceScale)*frame.Scale,
 		),
-		Cell:  take.CellSize{W: deviceScale, H: deviceScale},
+		Cell:  take.CellSize{W: cell, H: cell},
 		Scale: frame.Scale,
 	}
 }

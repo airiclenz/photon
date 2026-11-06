@@ -95,7 +95,9 @@ NOTES (2026-11-06): decodeTarget treats an empty text or selector string as abse
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard/`
 **Commit:** `fix(storyboard): position edits replace a selector target`
 
-## 4. Page cell geometry includes frame.scale
+## 4. Page cell geometry includes frame.scale — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): no CHANGELOG entry — pageOutput's size and unit are unchanged, so nothing a user runs today (url launches are still refused) observes the new cell size.
 
 **What:**
 **Goal:** on a viewport frame a box maps to the pixel rectangle at the frame's scale: `pageLayout(frame).Cell` is device_scale × frame.scale on each side.
