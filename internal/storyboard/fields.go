@@ -155,7 +155,7 @@ func insertField(kind OwnerKind, name string, kinds []string) Field {
 // positionInsertField describes the camera positions' insert, owned by the list's first index:
 // a point in time at the clip's start on the centre cell of frame's grid.
 func positionInsertField(frame Frame) Field {
-	cols, rows := frame.gridSize()
+	cols, rows := frame.GridSize()
 	centre := cellJSON(Cell{X: cols / 2, Y: rows / 2})
 	return Field{
 		Owner:   Owner{Kind: OwnerPosition},

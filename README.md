@@ -424,8 +424,8 @@ camera:                         # push in on beta
 | `ship` | Required. Where `photon render` writes the GIF, relative to the storyboard's folder. |
 | `frame` | The terminal size and the GIF's shape. Every field except `padding` is required. With `launch.url` the frame sets `viewport` instead of `cols`, `rows`, `padding`, `font_size` and `line_height`, which it then must not set. |
 | `frame.cols`, `frame.rows` | The pty's size in cells, ≥1. `render` refuses a take recorded at another size; `tune` edits them, previewing at the take's size with a re-record problem. |
-| `frame.viewport` | With `launch.url` only, and required there: the page's `width` and `height` in CSS pixels, `{width: 1280, height: 800}`, each ≥1. One CSS pixel is one cell, so a camera `cell` is a CSS pixel inside the viewport. A caption's `font.size` is then in CSS pixels, default 16. |
-| `frame.device_scale` | With `launch.url` only: device pixels per CSS pixel the page renders at, 1..4. Default 1. |
+| `frame.viewport` | With `launch.url` only, and required there: the page's `width` and `height` in CSS pixels, `{width: 1280, height: 800}`, each ≥1. One CSS pixel is one cell, so a camera `cell` is a CSS pixel inside the viewport. A caption's `font.size` is then in CSS pixels, default 16. `render` refuses a take recorded at another viewport, or a page's take under a frame without one. |
+| `frame.device_scale` | With `launch.url` only: device pixels per CSS pixel the page renders at, 1..4. Default 1. `render` refuses a take recorded at another device scale. |
 | `frame.padding` | Pixels of background around the grid, ≥0. |
 | `frame.font_size` | The font size in points, 6..72, the range a caption's `font.size` takes. A column is the width of Source Code Pro's `M`. A row is `font_size` × `line_height`. |
 | `frame.line_height` | Row height as a multiple of the font size, >0. |

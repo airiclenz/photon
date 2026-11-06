@@ -86,9 +86,9 @@ func (f Frame) Scaling() float64 {
 	return f.DeviceScale
 }
 
-// gridSize is the frame's grid in cells: the viewport's Width × Height on a frame that films a
+// GridSize is the frame's grid in cells: the viewport's Width × Height on a frame that films a
 // page, one CSS pixel to a cell, else the terminal's Cols × Rows.
-func (f Frame) gridSize() (cols, rows int) {
+func (f Frame) GridSize() (cols, rows int) {
 	if f.HasViewport() {
 		return f.Viewport.Width, f.Viewport.Height
 	}

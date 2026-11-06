@@ -402,10 +402,17 @@ func (s *Session) build(src []byte) (pipeline, error) {
 }
 
 // atTakeSize returns a copy of loaded whose storyboard frame is recorded's size, the one the take's
-// cells were laid out at; loaded itself is left as it is.
+// cells were laid out at: for a take recorded from a page, one that holds a cell size, the
+// viewport of its grid at the device scale of its cell, else cols × rows; loaded itself is left as
+// it is.
 func atTakeSize(loaded *clip.Clip, recorded *take.Take) *clip.Clip {
 	board := *loaded.Storyboard
-	board.Frame.Cols, board.Frame.Rows = recorded.Cols, recorded.Rows
+	if recorded.Cell != (take.CellSize{}) {
+		board.Frame.Viewport = storyboard.Viewport{Width: recorded.Cols, Height: recorded.Rows}
+		board.Frame.DeviceScale = recorded.Cell.W
+	} else {
+		board.Frame.Cols, board.Frame.Rows = recorded.Cols, recorded.Rows
+	}
 	previewed := *loaded
 	previewed.Storyboard = &board
 	return &previewed

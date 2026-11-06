@@ -33,8 +33,9 @@ type State struct {
 	Width     int             `json:"width"`
 
 	// The frame's other fields, which photon tune edits as frame.<key>. Cols and Rows are the
-	// storyboard's frame, not the take's: on another size than the take was recorded at, the
-	// preview draws at the take's and a clip problem stands until the take is re-recorded.
+	// storyboard's frame, not the take's: on another size than the take was recorded at — its
+	// cols×rows, or a page take's viewport and device scale — the preview draws at the take's
+	// and a clip problem stands until the take is re-recorded.
 	Cols       int     `json:"cols"`
 	Rows       int     `json:"rows"`
 	Padding    int     `json:"padding"`

@@ -273,7 +273,11 @@ NOTES (2026-11-06): README beyond the two refusal sentences: "How a take works" 
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/rig/`, then `GOMEMLIMIT=2GiB go test -tags browser -run Browser ./internal/rig/`
 **Commit:** `feat(rig): record a web app through the browser source`
 
-## 14. Check a browser take against its frame
+## 14. Check a browser take against its frame — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the tune test (`TestSession_Build_PageTakeOfAnotherViewport_BuildsAtTheTakesSize`) cannot build a page preview yet, since `raster.New` refuses a viewport frame until item 15; it drives `Session.build` through the `buildPipeline` seam and asserts the clip handed to render is at the take's viewport and device scale and that `render.CheckFrame` accepts it, with the size problem standing.
+NOTES (2026-11-06): a terminal take (zero Cell) under a frame with a viewport is refused too, with the viewport wording and the take named as "W×H terminal cells"; atTakeSize keeps writing cols×rows for such a take, so tune does not open on it.
+NOTES (2026-11-06): consequential edit — README.md: made necessary by CheckFrame's new viewport and device-scale refusals (the `frame.viewport` and `frame.device_scale` rows now say `render` refuses a take of another one).
 
 **What:**
 **Goal:** `render.CheckFrame` accepts a browser take whose grid is the viewport and whose cell is the frame's device scale, and refuses, with a message naming the keys, a viewport or device_scale that differs from the take's, or an image-layer take under a frame without a viewport.

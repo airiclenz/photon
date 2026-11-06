@@ -183,7 +183,7 @@ func (p Point) validate(field string, frame Frame, report reporter) {
 		keys("area: only a text point takes an area")
 	}
 	cell := *p.Cell
-	cols, rows := frame.gridSize()
+	cols, rows := frame.GridSize()
 	if cell.X < 0 || cell.X >= cols || cell.Y < 0 || cell.Y >= rows {
 		keys("cell: want x in [0, %d) and y in [0, %d), got x %d, y %d", cols, rows, cell.X, cell.Y)
 	}

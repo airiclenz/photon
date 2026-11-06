@@ -18,6 +18,7 @@ import (
 	"github.com/airiclenz/photon/internal/pixels"
 	"github.com/airiclenz/photon/internal/raster"
 	"github.com/airiclenz/photon/internal/schedule"
+	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
 	"github.com/airiclenz/photon/internal/target"
 )
@@ -190,6 +191,114 @@ func TestBuild_ATakeOfAnotherFrame_IsRefusedWithoutAPipeline(t *testing.T) {
 	}
 	if !errors.Is(err, ErrTakeSize) {
 		t.Errorf("want the refusal to wrap ErrTakeSize, got %v", err)
+	}
+}
+
+func TestCheckFrame_ATakeOfTheFramesSize_Passes(t *testing.T) {
+	t.Parallel()
+	_, imageTake, _ := loadImageTake(t)
+	terminalFrame := loadRenderClip(t).Storyboard.Frame
+	tests := []struct {
+		name     string
+		recorded *take.Take
+		frame    storyboard.Frame
+	}{
+		{name: "a terminal take", recorded: terminalTake(20, 4), frame: terminalFrame},
+		{name: "an image take of a terminal frame", recorded: imageTake, frame: terminalFrame},
+		{name: "a page take", recorded: pageTake(160, 100, 2), frame: viewportFrame(160, 100, 2)},
+		{
+			name: "a page take at the default device scale", recorded: pageTake(160, 100, 1),
+			frame: viewportFrame(160, 100, 0),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := CheckFrame("clip.take", tt.recorded, tt.frame)
+
+			if err != nil {
+				t.Errorf("CheckFrame: %v, want nil", err)
+			}
+		})
+	}
+}
+
+func TestCheckFrame_ATakeOfAnotherSize_IsRefusedNamingTheKeys(t *testing.T) {
+	t.Parallel()
+	terminalFrame := loadRenderClip(t).Storyboard.Frame
+	tests := []struct {
+		name     string
+		recorded *take.Take
+		frame    storyboard.Frame
+		want     string
+	}{
+		{
+			name: "a terminal take of other cols", recorded: terminalTake(30, 4), frame: terminalFrame,
+			want: "clip.take was recorded at 30×4 cells; the storyboard's frame is 20×4 — re-record it",
+		},
+		{
+			name: "a page take of another viewport", recorded: pageTake(120, 100, 2),
+			frame: viewportFrame(160, 100, 2),
+			want: "clip.take was recorded at a 120×100 viewport at device scale 2; the storyboard's " +
+				"frame.viewport is 160×100 at frame.device_scale 2 — re-record it",
+		},
+		{
+			name: "a page take at another device scale", recorded: pageTake(160, 100, 1.5),
+			frame: viewportFrame(160, 100, 2),
+			want: "clip.take was recorded at a 160×100 viewport at device scale 1.5; the " +
+				"storyboard's frame.viewport is 160×100 at frame.device_scale 2 — re-record it",
+		},
+		{
+			name: "a page take under a frame without a viewport", recorded: pageTake(20, 4, 1),
+			frame: terminalFrame,
+			want: "clip.take was recorded at a 20×4 viewport at device scale 1; the storyboard's " +
+				"frame sets no frame.viewport — re-record it",
+		},
+		{
+			name: "a terminal take under a frame with a viewport", recorded: terminalTake(160, 100),
+			frame: viewportFrame(160, 100, 1),
+			want: "clip.take was recorded at 160×100 terminal cells; the storyboard's " +
+				"frame.viewport is 160×100 at frame.device_scale 1 — re-record it",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := CheckFrame("clip.take", tt.recorded, tt.frame)
+
+			if err == nil || err.Error() != tt.want {
+				t.Fatalf("CheckFrame: want %q, got %v", tt.want, err)
+			}
+			if !errors.Is(err, ErrTakeSize) {
+				t.Errorf("want the refusal to wrap ErrTakeSize, got %v", err)
+			}
+		})
+	}
+}
+
+// terminalTake is a take recorded in a cols by rows terminal: no cell size.
+func terminalTake(cols, rows int) *take.Take {
+	return &take.Take{Cols: cols, Rows: rows, FPS: 10}
+}
+
+// pageTake is a take recorded from a cols by rows CSS-pixel viewport at deviceScale device
+// pixels per CSS pixel: one cell to a CSS pixel.
+func pageTake(cols, rows int, deviceScale float64) *take.Take {
+	return &take.Take{
+		Cols: cols, Rows: rows, FPS: 10,
+		Cell: take.CellSize{W: deviceScale, H: deviceScale},
+	}
+}
+
+// viewportFrame is a frame filming a width by height CSS-pixel page at deviceScale, zero for
+// unset.
+func viewportFrame(width, height int, deviceScale float64) storyboard.Frame {
+	return storyboard.Frame{
+		Viewport:    storyboard.Viewport{Width: width, Height: height},
+		DeviceScale: deviceScale,
+		Scale:       2, Width: width, FPS: 10, MaxColors: 16,
 	}
 }
 

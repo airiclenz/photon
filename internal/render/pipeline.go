@@ -315,16 +315,59 @@ func (p *Pipeline) captionFacesFrom(previous *Pipeline) (fonts.CaptionSet, error
 }
 
 // CheckFrame refuses a take recorded at another size than the storyboard's frame: its cells are
-// what the rasterizer lays out and its targets are resolved on. The refusal wraps [ErrTakeSize]
-// and names the take at takePath, both sizes and the remedy, re-recording the take.
+// what the rasterizer lays out and its targets are resolved on. A take recorded from a page — one
+// that holds a cell size — fits a frame with a viewport whose size is the take's grid and whose
+// device scale is the take's cell; a terminal take fits a frame without one whose cols × rows are
+// the take's. The refusal wraps [ErrTakeSize] and names the take at takePath, both sizes with the
+// frame's keys and the remedy, re-recording the take.
 func CheckFrame(takePath string, recorded *take.Take, frame storyboard.Frame) error {
-	if recorded.Cols == frame.Cols && recorded.Rows == frame.Rows {
+	isPageTake := recorded.Cell != (take.CellSize{})
+	switch {
+	case frame.HasViewport():
+		return checkViewport(takePath, recorded, frame, isPageTake)
+	case isPageTake:
+		return &takeSizeError{message: fmt.Sprintf(
+			"%s was recorded at %s; the storyboard's frame sets no frame.viewport — re-record it",
+			takePath, takeSize(recorded),
+		)}
+	case recorded.Cols == frame.Cols && recorded.Rows == frame.Rows:
 		return nil
 	}
 	return &takeSizeError{message: fmt.Sprintf(
 		"%s was recorded at %d×%d cells; the storyboard's frame is %d×%d — re-record it",
 		takePath, recorded.Cols, recorded.Rows, frame.Cols, frame.Rows,
 	)}
+}
+
+// checkViewport is [CheckFrame] on a frame with a viewport: the take fits when it was recorded
+// from a page at the frame's viewport and device scale.
+func checkViewport(
+	takePath string,
+	recorded *take.Take,
+	frame storyboard.Frame,
+	isPageTake bool,
+) error {
+	cols, rows := frame.GridSize()
+	scale := frame.Scaling()
+	isSameGrid := recorded.Cols == cols && recorded.Rows == rows
+	if isPageTake && isSameGrid && recorded.Cell == (take.CellSize{W: scale, H: scale}) {
+		return nil
+	}
+	return &takeSizeError{message: fmt.Sprintf(
+		"%s was recorded at %s; the storyboard's frame.viewport is %d×%d at frame.device_scale %g"+
+			" — re-record it",
+		takePath, takeSize(recorded), cols, rows, scale,
+	)}
+}
+
+// takeSize is how a refusal names the size recorded was taken at: a page's viewport and device
+// scale, or a terminal's cells.
+func takeSize(recorded *take.Take) string {
+	if recorded.Cell == (take.CellSize{}) {
+		return fmt.Sprintf("%d×%d terminal cells", recorded.Cols, recorded.Rows)
+	}
+	return fmt.Sprintf("a %d×%d viewport at device scale %g",
+		recorded.Cols, recorded.Rows, recorded.Cell.W)
 }
 
 // takeSizeError is [CheckFrame]'s refusal: its message alone, wrapping [ErrTakeSize].

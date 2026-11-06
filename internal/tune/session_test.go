@@ -60,6 +60,22 @@ const cameraStoryboard = sessionStoryboard + `camera:
     - {to: 2, at: 100ms, over: 400ms}
 `
 
+// pageSessionConfig is a session's photon config for a page: a url in place of a command.
+const pageSessionConfig = `name: tuned
+launch:
+  url: http://127.0.0.1:8080/
+`
+
+// pageSessionStoryboard is a storyboard filming a 16×10 CSS-pixel page at device scale 2.
+const pageSessionStoryboard = `clip: tuned
+ship: out/tuned.gif
+frame: {viewport: {width: 16, height: 10}, device_scale: 2, scale: 2, width: 32, fps: 10, max_colors: 16}
+beats:
+  - id: 1
+    title: typing
+    duration: 1s
+`
+
 // tooWideText is a caption's text whose box is wider than the session fixture's frame, so the
 // storyboard parses but its pipeline does not build: one word, which no wrap can break.
 var tooWideText = strings.Repeat("toowide", 20)
@@ -931,6 +947,60 @@ func TestSession_Undo_ClearsTheTakeSizeProblem(t *testing.T) {
 
 	if errs := f.session.State().Errors; len(errs) != 0 {
 		t.Errorf("errors after the undo: %+v", errs)
+	}
+}
+
+func TestSession_Build_PageTakeOfAnotherViewport_BuildsAtTheTakesSize(t *testing.T) {
+	t.Parallel()
+	project := t.TempDir()
+	writeTestFile(t, filepath.Join(project, "photon.yaml"), pageSessionConfig)
+	boardPath := filepath.Join(project, "tuned.yaml")
+	writeTestFile(t, boardPath, pageSessionStoryboard)
+	loaded, err := clip.Load(boardPath, "", t.TempDir())
+	if err != nil {
+		t.Fatalf("clip.Load: %v", err)
+	}
+	// A take of a 12×10 viewport at device scale 3, against the storyboard's 16×10 at 2.
+	recorded := &take.Take{
+		Cols: 12, Rows: 10, FPS: 10, Cell: take.CellSize{W: 3, H: 3},
+		Snapshots: []take.Snapshot{{At: 0}, {At: time.Second}},
+		Events:    []take.Event{{At: 0, Kind: take.EventBeatStart, Beat: 1}},
+	}
+	// The page pipeline itself is not built here: what is checked is the clip the build is
+	// handed, which render must accept at the take's size.
+	var built []storyboard.Frame
+	var checked []error
+	session := &Session{
+		path: boardPath, takePath: "tuned.take", base: loaded, recorded: recorded,
+		buildPipeline: func(
+			previewed *clip.Clip, takePath string, recorded *take.Take, _ render.BuildOptions,
+		) (*render.Pipeline, error) {
+			built = append(built, previewed.Storyboard.Frame)
+			checked = append(checked, render.CheckFrame(takePath, recorded, previewed.Storyboard.Frame))
+			return nil, nil
+		},
+	}
+
+	got, err := session.build([]byte(pageSessionStoryboard))
+
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if len(built) != 1 || checked[0] != nil {
+		t.Fatalf("builds %+v checked %v, want one build render accepts", built, checked)
+	}
+	want := storyboard.Viewport{Width: 12, Height: 10}
+	if built[0].Viewport != want || built[0].Scaling() != 3 {
+		t.Errorf("built at viewport %+v, device scale %g, want %+v at 3",
+			built[0].Viewport, built[0].Scaling(), want)
+	}
+	sizes := "a 12×10 viewport at device scale 3; the storyboard's frame.viewport is 16×10 at " +
+		"frame.device_scale 2 — re-record it with `photon record`"
+	if !errors.Is(got.sizeErr, render.ErrTakeSize) || !strings.Contains(got.sizeErr.Error(), sizes) {
+		t.Errorf("size problem %v, want ErrTakeSize naming %q", got.sizeErr, sizes)
+	}
+	if frame := got.loaded.Storyboard.Frame; frame.Viewport.Width != 16 || frame.Scaling() != 2 {
+		t.Errorf("the session's own frame changed to %+v", frame)
 	}
 }
 
