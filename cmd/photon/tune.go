@@ -32,8 +32,9 @@ func newTuneCommand() *cobra.Command {
 			"clip's frame.width, fps, font_size, line_height, padding and scale. Lanes\n" +
 			"under the beats show the camera's positions with the transitions between them,\n" +
 			"its zooms and the captions: a click opens one in the inspector, a drag moves it\n" +
-			"and a lane's + adds one. A selected position shows the full frame on the paused\n" +
-			"preview, with the camera's crop and a marker to drag onto the cell it aims at.\n" +
+			"and a lane's + adds one. A selected position shows the full frame, in drafts\n" +
+			"too while playing or scrubbing, and on the paused preview the camera's crop and\n" +
+			"a marker to drag onto the cell it aims at.\n" +
 			"Save writes the edits back into the storyboard in place, changing only the\n" +
 			"edited values; it is refused while an edit leaves the storyboard invalid or the\n" +
 			"file changed on disk since it was loaded. A target picker on the paused preview\n" +

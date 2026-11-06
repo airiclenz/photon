@@ -165,8 +165,8 @@ take, each service's log (`<work>/<service>.log`), and the clip's palette
 
 **Tuning** with `photon tune` prints the page's address, such as
 `photon tune: http://127.0.0.1:41234/`, and never opens a browser. The page previews the take:
-while it plays or scrubs it shows draft frames, drawn from a raster at the shipped size with a
-fast scaler, and once stopped it settles on the exact frame `photon render` composes. Its timeline edits
+while it plays or scrubs it shows draft frames, in either view, drawn from a raster at the
+shipped size with a fast scaler, and once stopped it settles on the exact frame `photon render` composes. Its timeline edits
 each beat's `duration`, `hold` and `cut`, and its inspector the clip's `frame.width`,
 `fps`, `font_size`, `line_height`, `padding` and `scale`; `cols`, `rows` and `max_colors` show read-only. The
 storyboard's `camera.positions`, `camera.zooms` and `captions` show on lanes of their own under
@@ -182,9 +182,9 @@ a transition shrunk to 0 is a hard cut. A transition has no grip on an edge that
 that edge moves with the point's marker. The zoom and captions lanes' `+` adds a zoom or a caption
 at the playhead; the position lane's `+` adds a point there on the cell the camera is centred on,
 so the camera does not move. The inspector removes the entry it shows, and moves a caption up or
-down its list. While a position is selected and the preview paused, the preview shows the full
-view: the whole frame, with the camera's crop drawn as a dashed rectangle and a marker on the
-cell the position aims at. Dragging the marker to another cell sets the position's `cell`.
+down its list. While a position is selected the preview shows the full view, the whole frame,
+in drafts too while it plays or scrubs; once paused it draws the camera's crop as a dashed
+rectangle and a marker on the cell the position aims at. Dragging the marker to another cell sets the position's `cell`.
 A pick on the paused preview proposes a target for the picked cells, ready to set as the selected
 position's text target with **Set as position target**, or to copy as a `click`, `seen` or `drag`
 end.

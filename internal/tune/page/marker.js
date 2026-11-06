@@ -1,7 +1,7 @@
 // photon tune's position marker: selecting a camera position seeks the preview to its start, and
-// while it stays selected the paused preview shows the full view, the whole frame whatever the
-// camera's zoom and aim, with the camera's crop drawn as a rectangle and a marker on the cell the
-// position aims at. Dragging the marker moves it cell by cell over any cell of the grid, clamped
+// while it stays selected the preview shows the full view, the whole frame whatever the camera's
+// zoom and aim, its drafts while it moves too; once paused it draws the camera's crop as a
+// rectangle and a marker on the cell the position aims at. Dragging the marker moves it cell by cell over any cell of the grid, clamped
 // to it, and dropping it on another cell sends one position.cell edit; the rectangle and the
 // marker then follow the camera's fresh answer for the new state. Selecting anything else returns
 // the preview to the camera's frame.
@@ -9,10 +9,10 @@
 // state() for the grid's cols and rows, camera(ms, position) for the crop, the grid and the aim,
 // edit(edit) for the drop, frameTime() for the frame shown and frame for the preview <img>. It
 // adds followSelection, which app.js calls on every selection, and wantsFullView, which frames.js
-// reads, to window.tunePage, the page's internal namespace, and reads frames.js's frameView and
-// settleFrames and transport.js's reportStatus from it. The overlay draws only while the frame
-// shown is the full view, so the camera's drafts while the preview moves, and a settle's draft
-// first, show without it. Nothing here maps a cell to pixels on its own: the camera answers the
+// reads, to window.tunePage, the page's internal namespace, and reads frames.js's frameView,
+// frameQuality and settleFrames and transport.js's reportStatus from it. The overlay draws, and
+// the camera is asked for it, only while the frame shown is the full view's exact frame, so the
+// drafts while the preview moves, and a settle's draft first, show without it. Nothing here maps a cell to pixels on its own: the camera answers the
 // crop and the grid's place in full-view pixels, scaled to the displayed <img> by its
 // displayed/natural size ratio; it loads after fit.js, so on a resize the <img> is fitted first.
 "use strict";
@@ -45,7 +45,7 @@
     return entry && entry.kind === page.ENTRY_POSITION ? entry.index : null;
   }
 
-  // wantsFullView says the settled preview shows the full view: while a position is selected.
+  // wantsFullView says the preview shows the full view: while a position is selected.
   function wantsFullView() {
     return selectedPosition() !== null;
   }
@@ -68,15 +68,21 @@
 
   // --- the camera answer ---
 
-  // refresh asks the camera for the frame shown while it shows the full view with a position
-  // selected, unless that answer is already asked for, then draws.
+  // isFullViewExact says the frame shown is the full view's exact frame, the only one the overlay
+  // draws over.
+  function isFullViewExact() {
+    return page.frameView() === page.VIEW_FULL && page.frameQuality() === page.QUALITY_EXACT;
+  }
+
+  // refresh asks the camera for the frame shown while it shows the full view's exact frame with a
+  // position selected, unless that answer is already asked for, then draws.
   function refresh() {
     if (followed !== null && selectedPosition() !== followed) {
       followed = null;
       drag = null;
     }
     const ms = tune.frameTime();
-    if (followed === null || ms === null || page.frameView() !== page.VIEW_FULL) {
+    if (followed === null || ms === null || !isFullViewExact()) {
       draw();
       return;
     }
@@ -100,11 +106,11 @@
   // --- drawing, in the <img>'s displayed pixels ---
 
   // shownCamera is the camera answer for the frame shown, or null while the overlay hides: no
-  // position is selected, the frame shown is not the full view, or no answer for it has come.
+  // position is selected, the frame shown is not the full view's exact frame, or no answer for it
+  // has come.
   function shownCamera() {
-    const isFull = page.frameView() === page.VIEW_FULL;
     const isAnswered = camera && camera.index === followed && camera.ms === tune.frameTime();
-    return followed !== null && isFull && isAnswered ? camera.answer : null;
+    return followed !== null && isFullViewExact() && isAnswered ? camera.answer : null;
   }
 
   // draw draws the crop rectangle and the marker on the aimed cell, or the dragged one, over the

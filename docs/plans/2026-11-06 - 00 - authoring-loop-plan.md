@@ -163,7 +163,10 @@ internal/tune/server_test.go — TestHandler_Frame_BadView_IsRefused; internal/c
 - `GOMEMLIMIT=2GiB go test ./internal/tune -run 'Frame|Draft'`
 **Commit:** `feat(tune): serve draft frames for the full view`
 
-## 4. Full-view draft frames on the page
+## 4. Full-view draft frames on the page — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): frames.js now exports QUALITY_EXACT beside frameQuality so marker.js can compare the shown frame's quality without a string literal; the overlay check lives in a new marker.js helper isFullViewExact, shared by refresh and shownCamera
+NOTES (2026-11-06): the new test is TestPageJS_PlayWithAPositionSelected_DraftsTheFullViewThenSettlesOnItsExactFrame (with a small cameraRequestsAfter helper); checked against the old marker.js it fails on the overlay and on one GET /api/camera during play
 
 **What:** Recast at the regression check (2026-11-06).
 **Goal:** While playing or scrubbing with the full view shown, the page requests

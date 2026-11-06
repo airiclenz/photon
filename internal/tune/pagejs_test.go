@@ -2507,7 +2507,7 @@ func TestPageJS_SelectAZoomAfterAPosition_ReturnsToTheCamerasFrame(t *testing.T)
 
 	page.clickBar(storyboard.OwnerZoom, cameraZoom)
 
-	page.assertFrames(mark, exactFrame(start))
+	page.assertFrames(mark, draftFrame(start), exactFrame(start))
 	if view := page.frameView(); view == viewFull {
 		t.Errorf("the view shown after selecting the zoom: want the camera's, got %s", view)
 	}
@@ -2548,8 +2548,8 @@ func TestPageJS_SettleWithAPositionSelected_HidesTheOverlayOnTheDraftFirst(t *te
 	page.releaseFrames()
 
 	page.assertFrameTime(stepped)
-	if view := page.frameView(); view == viewFull {
-		t.Errorf("the view of the draft first: want the camera's, got %s", view)
+	if view := page.frameView(); view != viewFull {
+		t.Errorf("the view of the draft first: want %s, got %s", viewFull, view)
 	}
 	page.assertNoOverlay()
 	page.releaseFrames()
@@ -2557,6 +2557,58 @@ func TestPageJS_SettleWithAPositionSelected_HidesTheOverlayOnTheDraftFirst(t *te
 		t.Errorf("the view once settled: want %s, got %s", viewFull, view)
 	}
 	camera := positionCamera(t, session, stepped, cameraCellPosition)
+	page.assertOverlay(camera, *camera.Aim)
+}
+
+// cameraAPIPrefix starts the path of every request for the camera.
+const cameraAPIPrefix = "/api/camera?"
+
+// frameQualityDraft is the quality of a draft frame, as frames.js's frameQuality names it.
+const frameQualityDraft = "draft"
+
+// cameraRequestsAfter is how many camera requests the page sent after its first mark requests.
+func (p *pageHarness) cameraRequestsAfter(mark int) int {
+	p.t.Helper()
+	count := 0
+	for _, request := range p.requests[mark:] {
+		if strings.HasPrefix(request.path, cameraAPIPrefix) {
+			count++
+		}
+	}
+	return count
+}
+
+func TestPageJS_PlayWithAPositionSelected_DraftsTheFullViewThenSettlesOnItsExactFrame(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixtureOf(t, cameraStoryboard).session
+	page := loadPage(t, session)
+	played := page.selectPosition(cameraCellPosition) + playedMS
+	mark := len(page.requests)
+
+	page.playFor(playedMS)
+
+	want := draftFramesFrom(played, prefetchFrames)
+	for i := range want {
+		want[i] += viewFullQuery
+	}
+	page.assertFrames(mark, want...)
+	if view := page.frameView(); view != viewFull {
+		t.Errorf("the view shown while playing: want %s, got %s", viewFull, view)
+	}
+	if quality := page.eval("window.tunePage.frameQuality()").String(); quality != frameQualityDraft {
+		t.Errorf("the quality shown while playing: want %s, got %s", frameQualityDraft, quality)
+	}
+	page.assertNoOverlay()
+	if got := page.cameraRequestsAfter(mark); got != 0 {
+		t.Errorf("the camera requests while playing: want none, got %d", got)
+	}
+	stopped := len(page.requests)
+
+	page.pressKey(keyPlay)
+	page.settle()
+
+	page.assertFrames(stopped, fullFrame(played))
+	camera := positionCamera(t, session, played, cameraCellPosition)
 	page.assertOverlay(camera, *camera.Aim)
 }
 
