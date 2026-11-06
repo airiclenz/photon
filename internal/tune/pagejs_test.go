@@ -2,10 +2,13 @@ package tune
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/png"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +22,8 @@ import (
 
 	"github.com/dop251/goja"
 
+	"github.com/airiclenz/photon/internal/clip"
+	"github.com/airiclenz/photon/internal/render"
 	"github.com/airiclenz/photon/internal/storyboard"
 )
 
@@ -2730,5 +2735,124 @@ func TestPageJS_SetAsPositionTarget_DisabledUntilAPositionIsSelected(t *testing.
 	if isDisabled, title := page.setTargetButton(); !isDisabled || title != noPositionTitle {
 		t.Errorf("with a zoom selected: want disabled, titled %q; got disabled %v, titled %q",
 			noPositionTitle, isDisabled, title)
+	}
+}
+
+// The transport bar's Export GIF button: its id, the export route it posts to, and the label it
+// shows while no export runs.
+const (
+	elementExport = "export"
+	exportAPI     = "/api/export"
+	exportLabel   = "Export GIF"
+)
+
+// exportFailure is the error a failing render seam returns.
+var exportFailure = errors.New("the encoder is gone")
+
+// isElementDisabled says the element of id is disabled.
+func (p *pageHarness) isElementDisabled(id string) bool {
+	p.t.Helper()
+	return p.eval(fmt.Sprintf(`document.getElementById(%q).disabled`, id)).ToBoolean()
+}
+
+// pollOnce runs the page's one-second poll once and settles the page.
+func (p *pageHarness) pollOnce() {
+	p.t.Helper()
+	p.call("runIntervals")
+	p.settle()
+}
+
+// stateVersion is the version of the state the page last took.
+func (p *pageHarness) stateVersion() int64 {
+	p.t.Helper()
+	return p.eval("window.tune.state().version").ToInteger()
+}
+
+func TestPageJS_ExportButton_DisabledWhileDirty(t *testing.T) {
+	t.Parallel()
+	page := loadPage(t, newSessionFixture(t).session)
+
+	isCleanDisabled := page.isElementDisabled(elementExport)
+	page.setField("fps", "value", "12")
+
+	if isCleanDisabled {
+		t.Error("Export GIF on a clean session: want it enabled, got it disabled")
+	}
+	if !page.isElementDisabled(elementExport) {
+		t.Error("Export GIF with an unsaved edit: want it disabled, got it enabled")
+	}
+}
+
+func TestPageJS_ExportButton_PostsShowsProgressAndReportsTheGIF(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixture(t).session
+	held := newHeldRender()
+	session.renderClip = held.render
+	isReleased := false
+	release := func() {
+		if !isReleased {
+			isReleased = true
+			close(held.release)
+			session.waitExport()
+		}
+	}
+	t.Cleanup(release)
+	page := loadPage(t, session)
+
+	page.dispatch(elementExport, "click", nil)
+	page.settle()
+	started := page.lastRequest(exportAPI)
+	startedText := page.text(elementExport)
+	isRunningDisabled := page.isElementDisabled(elementExport)
+	version := page.stateVersion()
+	session.export.progress(1, 2)
+	page.pollOnce()
+	progressText := page.text(elementExport)
+	progressVersion := page.stateVersion()
+	release()
+	page.pollOnce()
+
+	if started.method != http.MethodPost || started.status != http.StatusAccepted {
+		t.Errorf("the export request: want POST answered 202, got %s answered %d", started.method, started.status)
+	}
+	if startedText != "Exporting 0%" || !isRunningDisabled {
+		t.Errorf("Export GIF while running: want disabled %q, got %q, disabled %t",
+			"Exporting 0%", startedText, isRunningDisabled)
+	}
+	if progressText != "Exporting 50%" {
+		t.Errorf("Export GIF at 1 of 2 frames: want %q, got %q", "Exporting 50%", progressText)
+	}
+	if progressVersion != version {
+		t.Errorf("the state version after a progress tick: want %d, got %d", version, progressVersion)
+	}
+	want := "Exported " + session.export.snapshot().Out
+	if got := page.text(elementStatus); got != want {
+		t.Errorf("the status once exported: want %q, got %q", want, got)
+	}
+	if page.text(elementExport) != exportLabel || page.isElementDisabled(elementExport) {
+		t.Errorf("Export GIF once exported: want an enabled %q, got %q", exportLabel, page.text(elementExport))
+	}
+}
+
+func TestPageJS_ExportButton_ReportsAFailedRenderAndLeavesTheSessionClean(t *testing.T) {
+	t.Parallel()
+	session := newSessionFixture(t).session
+	session.renderClip = func(context.Context, *clip.Clip, render.Options, io.Writer, io.Writer) error {
+		return exportFailure
+	}
+	t.Cleanup(session.waitExport)
+	page := loadPage(t, session)
+
+	page.dispatch(elementExport, "click", nil)
+	page.settle()
+	session.waitExport()
+	page.pollOnce()
+
+	page.assertStatusFailure("Export failed: " + exportFailure.Error())
+	if page.isElementDisabled(elementExport) {
+		t.Error("Export GIF after a failed export: want it enabled, got it disabled")
+	}
+	if page.eval("window.tune.state().dirty").ToBoolean() {
+		t.Error("the session after a failed export: want it clean, got it dirty")
 	}
 }

@@ -268,7 +268,11 @@ newHandler, stateAfter, statusOf; internal/tune/run.go — Run; internal/tune/st
 Depends on item 5.
 **Commit:** `feat(tune): render the GIF from the session on request`
 
-## 7. Export button on the tune page
+## 7. Export button on the tune page — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the export UI is a new split script, `page/export.js` (in `splitScripts`, loaded after app.js, in doc.go's map). The `/api/export` route and its request live there, not as `API.export` + `post()` in app.js: app.js exposes `request` and `takeState` on `window.tunePage` instead, so a render that finishes before the POST answers still reports its outcome (post() would overwrite it with its own done text). app.js is at 395 lines.
+NOTES (2026-11-06): app.js hands `page.renderExport` every state it takes (from renderTransport) and every state its poll answers outside the stateKey/version gate, so progress redraws only the button and never invalidates the frame cache. The button shows `Exporting N%` as its own label; the status line carries "Exporting the GIF" on start and "Exported <out>" / "Export failed: <error>" on finish.
+NOTES (2026-11-06): cmd/photon/tune.go: the following picker sentence of the Long text was reflowed around the new Export GIF sentence; its wording is unchanged.
 
 **What:**
 **Goal:** The page has an Export GIF button beside Save. It is disabled while the session is

@@ -70,6 +70,7 @@
 //   - page/fit.js: the preview shrunk to fit a short window.
 //   - page/frames.js: the preview's frames at the playhead: drafts while it moves, then exact.
 //   - page/transport.js: the frame clock, the transport and its keys.
+//   - page/export.js: the transport bar's Export GIF button, its progress and outcome.
 //   - page/controls.js: the inspector's field controls and its error and refusal rows.
 //   - page/panels.js: the inspector's beat and frame panels.
 //   - page/entries.js: the inspector's position, transition, zoom and caption panels.

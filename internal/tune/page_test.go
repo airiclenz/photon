@@ -26,10 +26,10 @@ const pageScriptPattern = "*.js"
 var pageAssetNames = []string{"style.css"}
 
 // splitScripts are app.js, the scripts split from it, the timeline's pointer drag, the preview
-// fit and the preview's position marker, each kept under maxScriptLines.
+// fit, the preview's position marker and the GIF export, each kept under maxScriptLines.
 var splitScripts = []string{
 	"app.js", "kinds.js", "frames.js", "transport.js", "controls.js", "panels.js", "entries.js", "drag.js",
-	"fit.js", "marker.js",
+	"fit.js", "marker.js", "export.js",
 }
 
 // maxScriptLines is the file-size guide of Note coding-conventions a split script stays below.
@@ -440,5 +440,20 @@ func TestPage_App_WiresOnceEverySplitScriptHasRun(t *testing.T) {
 	}
 	if !strings.Contains(app, `document.addEventListener("DOMContentLoaded", wire)`) {
 		t.Error("app.js does not wire the page on DOMContentLoaded, after every split script has run")
+	}
+}
+
+func TestPage_Index_HasTheExportButtonBesideSave(t *testing.T) {
+	t.Parallel()
+	index := string(readPageFile(t, pageIndex))
+
+	save := strings.Index(index, `id="save"`)
+	export := strings.Index(index, `<button id="export" type="button" class="primary">`)
+
+	if export < 0 {
+		t.Fatal(`index.html has no primary <button id="export">`)
+	}
+	if save < 0 || save > export {
+		t.Errorf("index.html places #save at %d and #export at %d; want #export after #save", save, export)
 	}
 }

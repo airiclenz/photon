@@ -191,7 +191,11 @@ end.
 `pause` and the `do` actions show read-only: changing them needs a new `photon record`. Save
 writes the storyboard in place and changes only
 the edited values, so comments and layout stay. It is refused while an edit leaves the
-storyboard invalid, or when the file changed on disk since it was loaded. The transport bar's
+storyboard invalid, or when the file changed on disk since it was loaded. **Export GIF**, beside
+Save, renders the saved storyboard to its configured output, the same GIF `photon render` writes,
+and shows its progress on the button; the status then names the file written or why the render
+failed. It is disabled while edits are unsaved, an error stands, the file changed on disk, or an
+export runs. The transport bar's
 right end shows the build serving the page, the string `photon version` prints.
 
 **Exit status** is the same for every command:

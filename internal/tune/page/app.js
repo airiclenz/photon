@@ -31,8 +31,9 @@
 // load after it — kinds.js (the entry kinds and their lookups), frames.js (the preview's draft
 // and exact frames), transport.js (the frame clock, the transport and its status), controls.js
 // (the inspector's field controls and error rows), panels.js (the beat and frame panels),
-// entries.js (the position, transition, zoom and caption panels) and marker.js (the preview's
-// position marker, which adds followSelection and wantsFullView) — share its state through window.tunePage, an internal
+// entries.js (the position, transition, zoom and caption panels), marker.js (the preview's
+// position marker, which adds followSelection and wantsFullView) and export.js (the GIF export,
+// which adds renderExport, handed every state taken or polled) — share its state through window.tunePage, an internal
 // namespace no part of the contract: app.js puts in it the state they read and the helpers they build with, and each of them adds what it does. Of
 // the other scripts picker.js adds the standing pick's proposal, and timeline.js marks a scrub
 // through transport.js's beginScrub and endScrub and reports a refused or failed lane add or a
@@ -94,6 +95,8 @@
     frame: frameImage,
     state: () => current,
     refusal: () => refusal,
+    request,
+    takeState,
     applyEdit,
     isEntry,
     element,
@@ -167,7 +170,7 @@
     return String(index);
   }
 
-  // poll asks for the state every second, so outside writes and reloads show up.
+  // poll asks for the state every second, so outside writes, reloads and export progress show up.
   function poll() {
     request(API.state).then(
       (state) => {
@@ -176,6 +179,7 @@
           takeState(state);
         } else {
           renderBanner();
+          page.renderExport(state);
         }
       },
       () => {
@@ -185,7 +189,7 @@
     );
   }
 
-  // stateKey changes whenever anything the page shows changes.
+  // stateKey changes whenever anything the page shows changes, but for the export's progress.
   function stateKey(state) {
     return [state.version, state.dirty, state.stale, state.can_undo, state.can_redo].join("|");
   }
@@ -241,6 +245,7 @@
     view.revert.disabled = !current.dirty;
     view.save.disabled = !current.dirty || current.stale || hasErrors;
     view.save.title = hasErrors ? "Save refuses while an error stands" : "Write the storyboard";
+    page.renderExport(current);
     page.renderPlay();
     page.renderTime();
   }

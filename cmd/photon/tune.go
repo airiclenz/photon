@@ -37,9 +37,12 @@ func newTuneCommand() *cobra.Command {
 			"a marker to drag onto the cell it aims at.\n" +
 			"Save writes the edits back into the storyboard in place, changing only the\n" +
 			"edited values; it is refused while an edit leaves the storyboard invalid or the\n" +
-			"file changed on disk since it was loaded. A target picker on the paused preview\n" +
-			"proposes a target the resolver finds on the picked cells, ready to set as the\n" +
-			"selected position's text target.\npause and the do actions show read-only: " +
+			"file changed on disk since it was loaded. Export GIF renders the saved storyboard\n" +
+			"to its output, the GIF render writes, showing its progress; it is refused while\n" +
+			"edits are unsaved, an error stands, the file changed on disk or an export runs.\n" +
+			"A target picker on the paused preview proposes a target the resolver finds on\n" +
+			"the picked cells, ready to set as the selected position's text target.\n" +
+			"pause and the do actions show read-only: " +
 			"changing them needs photon record.\n" +
 			"tune listens on --port (default: any free port), prints the page's " +
 			"address, and runs\nuntil Ctrl-C. It never opens a browser. The take defaults to " +
