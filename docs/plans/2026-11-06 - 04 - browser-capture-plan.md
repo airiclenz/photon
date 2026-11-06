@@ -51,7 +51,9 @@
 - 18: guard folded (writer's decision plus the reviewer's test-file, config and ship guards)
 - 19: guard folded
 
-## 1. Refuse an explicit empty area selector
+## 1. Refuse an explicit empty area selector — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): internal/config/config_test.go is listed in Files but needed no change: no test there builds a `config.Area{Selector: ...}`; the reject and absent-selector cases live in area_test.go as the item's Tests line says (the absent case asserts the urlBase `thread` area loads with no selector and both edges, inside `TestLoadSelectorArea`).
 
 **What:**
 **Goal:** `areas.<name>.selector: ''` in `photon.yaml` is a config problem naming the area; an area without the key is still a whole-screen or edge area.

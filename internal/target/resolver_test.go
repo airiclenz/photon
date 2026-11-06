@@ -405,8 +405,9 @@ func selectorScreen() take.Snapshot {
 // snapshot recorded nothing for.
 func selectorAreas() map[string]config.Area {
 	areas := pageAreas()
-	areas["form"] = config.Area{Selector: "form"}
-	areas["gone"] = config.Area{Selector: "#gone"}
+	form, gone := "form", "#gone"
+	areas["form"] = config.Area{Selector: &form}
+	areas["gone"] = config.Area{Selector: &gone}
 	return areas
 }
 

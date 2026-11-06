@@ -13,11 +13,12 @@ import (
 // the target resolver, not here.
 //
 // On a url launch an area may instead be a Selector: the box a CSS selector's element had on
-// each snapshot, as the source recorded it. A selector area has no edges.
+// each snapshot, as the source recorded it. A selector area has no edges. Selector is nil when
+// the key is absent, so an explicit empty selector is told apart from none and refused.
 type Area struct {
 	Top      *Anchor `yaml:"top"`
 	Bottom   *Anchor `yaml:"bottom"`
-	Selector string  `yaml:"selector"`
+	Selector *string `yaml:"selector"`
 }
 
 // Anchor picks one screen row: the rows whose text Match (a regex) finds, the first or last of
@@ -53,7 +54,7 @@ var areaName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
 // validate checks the area's selector or its edges, isBrowser saying whether the config
 // launches by url.
 func (a Area) validate(isBrowser bool, report reporter) {
-	if a.Selector != "" {
+	if a.Selector != nil {
 		a.validateSelector(isBrowser, report)
 		return
 	}
@@ -66,7 +67,7 @@ func (a Area) validate(isBrowser bool, report reporter) {
 }
 
 // validateSelector checks a selector area: it goes with a url launch, has no edges, and its
-// selector has the shape [storyboard.CheckSelector] asks for.
+// selector, even an empty one, has the shape [storyboard.CheckSelector] asks for.
 func (a Area) validateSelector(isBrowser bool, report reporter) {
 	if !isBrowser {
 		report("selector: only a url launch takes a selector area")
@@ -74,7 +75,7 @@ func (a Area) validateSelector(isBrowser bool, report reporter) {
 	if a.Top != nil || a.Bottom != nil {
 		report("selector: want a selector or top and bottom edges, not both")
 	}
-	if err := storyboard.CheckSelector(a.Selector); err != nil {
+	if err := storyboard.CheckSelector(*a.Selector); err != nil {
 		report("selector: %v", err)
 	}
 }

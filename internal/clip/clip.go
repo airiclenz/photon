@@ -103,8 +103,8 @@ func (c *Clip) Selectors() []string {
 		}
 	}
 	for _, area := range c.Config.Areas {
-		if area.Selector != "" {
-			selectors = append(selectors, area.Selector)
+		if area.Selector != nil {
+			selectors = append(selectors, *area.Selector)
 		}
 	}
 	slices.Sort(selectors)

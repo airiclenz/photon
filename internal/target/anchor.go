@@ -18,8 +18,8 @@ type area struct {
 // compileArea compiles a declared area: a selector area keeps its selector, an anchor area has
 // both its edges compiled.
 func compileArea(spec config.Area) (area, error) {
-	if spec.Selector != "" {
-		return area{selector: spec.Selector}, nil
+	if spec.Selector != nil {
+		return area{selector: *spec.Selector}, nil
 	}
 	top, err := compileAnchor("top", spec.Top)
 	if err != nil {
