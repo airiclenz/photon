@@ -1,7 +1,8 @@
 // Package engine performs a storyboard's beats against a running program: it types (humanized
 // from a fixed, seeded profile, or flat), presses named keys, clicks on-screen targets with real
-// SGR mouse press and release reports, drags from one target to another target or an offset
-// with a press, eased held-button motion reports and a release, waits on the screen and pauses.
+// SGR mouse press and release reports of any button with any modifiers held, drags from one
+// target through any via points to another target or an offset with a press, eased held-button
+// motion reports along each segment and a release, waits on the screen and pauses.
 // Every beat start, action start and end, resolved target, clicked cell and drag's pressed,
 // moved-onto and released cell goes into the take's event log, where check and render read
 // them. A failing action ends the run with a [BeatError] naming the beat and the

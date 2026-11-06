@@ -5,9 +5,11 @@
 // row, a footer row and a hairline along the bottom row.
 //
 // Typed text echoes on the input row; enter shows "you typed: <text>" on the status row and a
-// left click on a list item shows "selected: <item>". A left-button press, at least one motion with
-// the button held and a release show "dragged: <x>,<y> to <x>,<y> after <n> moves", the 0-based
-// press and release cells and the motions between them. The first status reads "ready, terminal
+// left click on a list item shows "selected: <item>". A press of any button, at least one motion
+// with the button held and a release show "dragged: <x>,<y> to <x>,<y> after <n> moves", the
+// 0-based press and release cells and the motions between them; unless it was a plain left-button
+// drag, " with <button>[+<modifier>…]" follows, naming the button and each modifier held with it
+// (`with right+ctrl`). The first status reads "ready, terminal
 // answered" or "ready, terminal silent", so a test sees whether the DA1 query was answered. When
 // FIXTURE_INPUT_LOG names a file, every input chunk the fixture reads, less the DA1 answer, is
 // appended to it as one Go-quoted line. ctrl+c, or the end of its input, quits it.
@@ -18,6 +20,6 @@
 //   - doc.go: this package comment and file map.
 //   - main.go: the fixture: terminal setup, the DA1 query, input parsing, the screen and the
 //     click's item selection.
-//   - mouse.go: SGR mouse report parsing, the press, motion and release handling and the drag in
-//     progress.
+//   - mouse.go: SGR mouse report parsing, the button and modifier decoding, the press, motion and
+//     release handling and the drag in progress.
 package main

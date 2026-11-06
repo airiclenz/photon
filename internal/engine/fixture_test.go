@@ -4,6 +4,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -40,10 +41,25 @@ var (
 	gammaCentre = take.Point{X: 4, Y: 4}
 )
 
-// The fixture beats' drag: from alpha's centre dragOffset columns to the right in dragSteps steps.
+// The fixture beats' plain drag: from alpha's centre dragOffset columns to the right in dragSteps
+// steps, with the left button and no modifier.
 const (
 	dragOffset = 12
 	dragSteps  = 6
+)
+
+// The fixture beats' via drag: from alpha's centre with the right button and ctrl held, by
+// viaOffset to its via point, then by viaEndOffset to its release, dragSteps steps per segment.
+var (
+	viaOffset    = storyboard.Offset{X: 6, Y: 2}
+	viaEndOffset = storyboard.Offset{X: 6, Y: -1}
+	viaMouse     = keys.Mouse{Button: keys.RightButton, Mods: keys.Ctrl}
+)
+
+// The beat ids of the fixture beats' two drags.
+const (
+	plainDragBeat = 4
+	viaDragBeat   = 5
 )
 
 func waitFor(screen string) storyboard.Action {
@@ -74,9 +90,15 @@ func fixtureBeats() []storyboard.Beat {
 			{Pause: &storyboard.PauseAction{For: 50 * time.Millisecond}},
 			{Wait: &storyboard.WaitAction{Screen: "selected: beta", Gone: true, Timeout: fixtureWait}},
 		}},
-		{ID: 4, Title: "drag", Do: []storyboard.Action{
+		{ID: plainDragBeat, Title: "drag", Do: []storyboard.Action{
 			dragFromAlpha(),
-			waitFor("dragged: 4,2 to 16,2"),
+			waitFor(fmt.Sprintf("dragged: 4,2 to 16,2 after %d moves\n",
+				len(dragRoute([]take.Point{alphaCentre, dragEnd()}, dragSteps)))),
+		}},
+		{ID: viaDragBeat, Title: "drag via", Do: []storyboard.Action{
+			viaDragFromAlpha(),
+			waitFor(fmt.Sprintf(`dragged: 4,2 to 16,3 after %d moves with right\+ctrl\n`,
+				len(dragRoute(viaDragPoints(), dragSteps)))),
 		}},
 	}
 }
@@ -90,9 +112,27 @@ func dragFromAlpha() storyboard.Action {
 	}}
 }
 
-// dragEnd is the cell the fixture beats' drag releases at.
+// dragEnd is the cell the fixture beats' plain drag releases at.
 func dragEnd() take.Point {
 	return take.Point{X: alphaCentre.X + dragOffset, Y: alphaCentre.Y}
+}
+
+func viaDragFromAlpha() storyboard.Action {
+	steps := dragSteps
+	return storyboard.Action{Drag: &storyboard.DragAction{
+		From:  storyboard.Target{Text: "alpha"},
+		Via:   []storyboard.DragEnd{{Offset: &viaOffset}},
+		To:    storyboard.DragEnd{Offset: &viaEndOffset},
+		Steps: &steps,
+		Press: storyboard.Press{Button: "right", With: "ctrl"},
+	}}
+}
+
+// viaDragPoints are the cells the fixture beats' via drag presses at, passes and releases at.
+func viaDragPoints() []take.Point {
+	via := take.Point{X: alphaCentre.X + viaOffset.X, Y: alphaCentre.Y + viaOffset.Y}
+	end := take.Point{X: via.X + viaEndOffset.X, Y: via.Y + viaEndOffset.Y}
+	return []take.Point{alphaCentre, via, end}
 }
 
 func TestEngine_Run_FixtureTUI(t *testing.T) {
@@ -123,17 +163,25 @@ func assertFixtureInput(t *testing.T, inputLog string) {
 	press := func(cell take.Point) string {
 		return string(keys.Click(cell.X, cell.Y)) + string(keys.Release(cell.X, cell.Y))
 	}
-	drag := string(keys.Click(alphaCentre.X, alphaCentre.Y))
-	for _, move := range dragPath(alphaCentre, dragEnd(), dragSteps) {
-		drag += string(keys.Motion(move.cell.X, move.cell.Y))
-	}
-	drag += string(keys.Release(dragEnd().X, dragEnd().Y))
 	want := "hello xy" + strings.Repeat(keyBytes(t, "backspace"), 3) + keyBytes(t, "enter") +
-		press(betaCentre) + press(gammaCentre) + press(gammaCentre) + drag
+		press(betaCentre) + press(gammaCentre) + press(gammaCentre) +
+		dragBytes([]take.Point{alphaCentre, dragEnd()}, keys.Mouse{}) +
+		dragBytes(viaDragPoints(), viaMouse)
 
 	if got := readInputLog(t, inputLog); got != want {
 		t.Errorf("the fixture read %q, want %q", got, want)
 	}
+}
+
+// dragBytes is the press at the first of points, a motion to every cell of the eased route through
+// them and the release at the last, each report carrying mouse's button and modifiers.
+func dragBytes(points []take.Point, mouse keys.Mouse) string {
+	from, to := points[0], points[len(points)-1]
+	drag := string(keys.MousePress(from.X, from.Y, mouse))
+	for _, move := range dragRoute(points, dragSteps) {
+		drag += string(keys.MouseMotion(move.cell.X, move.cell.Y, mouse))
+	}
+	return drag + string(keys.MouseRelease(to.X, to.Y, mouse))
 }
 
 // readInputLog joins the input chunks the fixture logged, one Go-quoted chunk per line.
@@ -155,8 +203,8 @@ func readInputLog(t *testing.T, path string) string {
 }
 
 // assertFixtureEvents checks the take's event log: every beat started, every action started and
-// ended, the clicks landed on the cells the targets resolved to, and the drag pressed, moved and
-// released in that order.
+// ended, the clicks landed on the cells the targets resolved to, and each drag pressed, moved and
+// released in that order, only the via drag marking a move as reaching its via point.
 func assertFixtureEvents(t *testing.T, events []take.Event, beats []storyboard.Beat) {
 	t.Helper()
 	counts := map[take.EventKind]int{}
@@ -179,41 +227,59 @@ func assertFixtureEvents(t *testing.T, events []take.Event, beats []storyboard.B
 		t.Errorf("%d action-start and %d action-end events, want %d of each",
 			counts[take.EventActionStart], counts[take.EventActionEnd], actions)
 	}
-	if counts[take.EventTarget] != 3 {
-		t.Errorf("%d target events, want 3", counts[take.EventTarget])
+	if counts[take.EventTarget] != 4 {
+		t.Errorf("%d target events, want 4", counts[take.EventTarget])
 	}
 	if want := []take.Point{betaCentre, gammaCentre, gammaCentre}; !slices.Equal(cells, want) {
 		t.Errorf("clicked %v, want %v", cells, want)
 	}
-	assertDragOrder(t, events)
+	plainPoints, viaPoints := []take.Point{alphaCentre, dragEnd()}, viaDragPoints()
+	assertDragGesture(t, events, plainDragBeat, plainPoints[0], plainPoints[1], nil)
+	assertDragGesture(t, events, viaDragBeat, viaPoints[0], viaPoints[2], viaPoints[1:2])
 }
 
-// assertDragOrder checks that the log holds one press at alpha's centre, then at least one move,
-// then one release at the drag's end, with no other gesture event between them.
-func assertDragOrder(t *testing.T, events []take.Event) {
+// assertDragGesture checks that beat's events hold one press at from, then at least one move, then
+// one release at to, with no other gesture event between them, and that the moves marked
+// [take.MoveVia] land on vias, in order.
+func assertDragGesture(
+	t *testing.T,
+	events []take.Event,
+	beat int,
+	from, to take.Point,
+	vias []take.Point,
+) {
 	t.Helper()
 	var gesture []take.Event
 	for _, event := range events {
 		switch event.Kind {
 		case take.EventPress, take.EventMove, take.EventRelease:
-			gesture = append(gesture, event)
+			if event.Beat == beat {
+				gesture = append(gesture, event)
+			}
 		}
 	}
 
 	if len(gesture) < 3 {
-		t.Fatalf("%d press, move and release events, want a press, at least one move and a release",
-			len(gesture))
+		t.Fatalf("beat %d: %d press, move and release events, want a press, a move and a release",
+			beat, len(gesture))
 	}
 	first, last := gesture[0], gesture[len(gesture)-1]
-	if first.Kind != take.EventPress || *first.Cell != alphaCentre {
-		t.Errorf("the drag began with %s at %v, want press at %v", first.Kind, *first.Cell, alphaCentre)
+	if first.Kind != take.EventPress || *first.Cell != from {
+		t.Errorf("beat %d: the drag began with %s at %v, want press at %v", beat, first.Kind, *first.Cell, from)
 	}
-	if last.Kind != take.EventRelease || *last.Cell != dragEnd() {
-		t.Errorf("the drag ended with %s at %v, want release at %v", last.Kind, *last.Cell, dragEnd())
+	if last.Kind != take.EventRelease || *last.Cell != to {
+		t.Errorf("beat %d: the drag ended with %s at %v, want release at %v", beat, last.Kind, *last.Cell, to)
 	}
+	var gotVias []take.Point
 	for _, move := range gesture[1 : len(gesture)-1] {
 		if move.Kind != take.EventMove {
-			t.Errorf("%s between the press and the release, want only moves", move.Kind)
+			t.Errorf("beat %d: %s between the press and the release, want only moves", beat, move.Kind)
 		}
+		if move.Text == take.MoveVia {
+			gotVias = append(gotVias, *move.Cell)
+		}
+	}
+	if !slices.Equal(gotVias, vias) {
+		t.Errorf("beat %d: via moves at %v, want %v", beat, gotVias, vias)
 	}
 }

@@ -134,10 +134,14 @@ func (e *Engine) pressKey(ctx context.Context, action storyboard.KeyAction) erro
 	return nil
 }
 
-// click resolves the target on the screen as it stands, logs the box, then sends Times left
-// clicks (once for a Times of 0) at its centre cell — each an SGR press and, clickHoldGap later,
-// its release — logging the cell before each press.
+// click resolves the target on the screen as it stands, logs the box, then sends Times clicks
+// (once for a Times of 0) of the action's button, its modifiers held, at its centre cell — each
+// an SGR press and, clickHoldGap later, its release — logging the cell before each press.
 func (e *Engine) click(ctx context.Context, step take.Event, action storyboard.ClickAction) error {
+	mouse, err := action.Mouse()
+	if err != nil {
+		return fmt.Errorf("click: %w", err)
+	}
 	box, err := e.resolver.Target(e.term.Current(), action.Target)
 	if err != nil {
 		return fmt.Errorf("click: %w", err)
@@ -156,7 +160,7 @@ func (e *Engine) click(ctx context.Context, step take.Event, action storyboard.C
 		clicked := step
 		clicked.Cell = &centre
 		e.logStep(take.EventClick, clicked)
-		if err := e.sendClick(ctx, centre); err != nil {
+		if err := e.sendClick(ctx, centre, mouse); err != nil {
 			return err
 		}
 	}
@@ -169,15 +173,16 @@ func centreOf(box take.Box) take.Point {
 	return take.Point{X: box.X + (box.W-1)/2, Y: box.Y + (box.H-1)/2}
 }
 
-// sendClick sends one left click at cell: the press, clickHoldGap, then the release.
-func (e *Engine) sendClick(ctx context.Context, cell take.Point) error {
-	if err := e.term.Send(keys.Click(cell.X, cell.Y)); err != nil {
+// sendClick sends one click of mouse's button, its modifiers held, at cell: the press,
+// clickHoldGap, then the release.
+func (e *Engine) sendClick(ctx context.Context, cell take.Point, mouse keys.Mouse) error {
+	if err := e.term.Send(keys.MousePress(cell.X, cell.Y, mouse)); err != nil {
 		return err
 	}
 	if err := sleepContext(ctx, clickHoldGap); err != nil {
 		return err
 	}
-	return e.term.Send(keys.Release(cell.X, cell.Y))
+	return e.term.Send(keys.MouseRelease(cell.X, cell.Y, mouse))
 }
 
 // wait polls the whole screen until the regex matches it (or, with Gone, no longer does). The

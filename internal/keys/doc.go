@@ -2,7 +2,8 @@
 // sends. A storyboard's `key` action and the config's end keys name a key; this package turns
 // the name into the xterm bytes a real terminal would write, so the filmed program reads them
 // through its own input parser exactly as it would from a person at the keyboard. A click is the
-// SGR (mode 1006) mouse report for a left-button press and its release at a cell.
+// SGR (mode 1006) mouse report for a press and its release at a cell, of the left button or any
+// other with any modifier keys held; a drag adds the held-button motion reports between them.
 //
 // It is a leaf: it imports nothing from photon.
 //

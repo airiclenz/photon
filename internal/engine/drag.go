@@ -10,85 +10,112 @@ import (
 	"github.com/airiclenz/photon/internal/take"
 )
 
-// The Text of a drag's two target events, naming which end of the drag the Box is.
+// The Text of a drag's target events, naming which point of the drag the Box is.
 const (
 	dragFromText = "from"
+	dragViaText  = "via"
 	dragToText   = "to"
 )
 
-// dragMove is one cell of a drag's path and the 1-based step it lands on.
+// dragMove is one cell of a drag's path, the 1-based step it lands on, counted across all of the
+// drag's segments, and whether it is the move that reaches a via point.
 type dragMove struct {
-	step int
-	cell take.Point
+	step  int
+	cell  take.Point
+	isVia bool
 }
 
-// drag resolves the From target on the screen as it stands and logs its box, works out the end
-// cell — a resolved To target's centre (its box logged too) or the press cell moved by the
-// Offset — clamps both cells to the screen, then sends the press, the eased motion reports and
-// the release, logging each cell before it is sent. A target that does not resolve fails the
-// drag before anything is sent.
+// drag resolves every point of the drag on the screen as it stands at the press — the From
+// target, each via point and the to end, an offset counting from the point before it — clamps
+// each to the screen and logs each resolved target's box, then sends the press with the drag's
+// button and modifiers, the eased motion reports through every via point and the release,
+// logging each cell before it is sent. A point that does not resolve fails the drag before
+// anything is sent.
 func (e *Engine) drag(ctx context.Context, step take.Event, action storyboard.DragAction) error {
+	mouse, err := action.Mouse()
+	if err != nil {
+		return fmt.Errorf("drag: %w", err)
+	}
 	screen := e.term.Current()
 	fromBox, err := e.resolver.Target(screen, action.From)
 	if err != nil {
 		return fmt.Errorf("drag: from: %w", err)
 	}
 	e.logTarget(step, dragFromText, fromBox)
-	from := clampToScreen(centreOf(fromBox), screen)
+	points := make([]take.Point, 0, len(action.Via)+2)
+	points = append(points, clampToScreen(centreOf(fromBox), screen))
 
-	to, err := e.dragEnd(screen, step, from, action.To)
-	if err != nil {
-		return err
+	for index, via := range action.Via {
+		point, err := e.dragPoint(screen, step, points[len(points)-1], via, dragViaText)
+		if err != nil {
+			return fmt.Errorf("drag: via[%d]: %w", index, err)
+		}
+		points = append(points, clampToScreen(point, screen))
 	}
-	return e.sendDrag(ctx, step, from, clampToScreen(to, screen), action.StepCount())
+	to, err := e.dragPoint(screen, step, points[len(points)-1], action.To, dragToText)
+	if err != nil {
+		return fmt.Errorf("drag: to: %w", err)
+	}
+	points = append(points, clampToScreen(to, screen))
+	return e.sendDrag(ctx, step, points, mouse, action.StepCount())
 }
 
-// dragEnd is the cell a drag pressed at from releases at, before clamping: from moved by the
-// end's Offset, or the centre of its target resolved on screen, whose box it logs.
-func (e *Engine) dragEnd(
+// dragPoint is the cell a drag point resolves to, before clamping: previous, the point before it,
+// moved by its Offset, or the centre of its target resolved on screen, whose box it logs with
+// text naming the point.
+func (e *Engine) dragPoint(
 	screen take.Snapshot,
 	step take.Event,
-	from take.Point,
-	end storyboard.DragEnd,
+	previous take.Point,
+	point storyboard.DragEnd,
+	text string,
 ) (take.Point, error) {
-	if end.Offset != nil {
-		return take.Point{X: from.X + end.Offset.X, Y: from.Y + end.Offset.Y}, nil
+	if point.Offset != nil {
+		return take.Point{X: previous.X + point.Offset.X, Y: previous.Y + point.Offset.Y}, nil
 	}
-	toBox, err := e.resolver.Target(screen, end.Target)
+	box, err := e.resolver.Target(screen, point.Target)
 	if err != nil {
-		return take.Point{}, fmt.Errorf("drag: to: %w", err)
+		return take.Point{}, err
 	}
-	e.logTarget(step, dragToText, toBox)
-	return centreOf(toBox), nil
+	e.logTarget(step, text, box)
+	return centreOf(box), nil
 }
 
-// sendDrag presses the left button at from, then over steps steps each dragStepGap apart moves
-// it along the eased path to to, and dragStepGap after the last step releases it at to. A step
-// whose cell repeats the last one sends nothing but still waits its gap, so the timing stays
-// even and the ease reads in the motion.
+// sendDrag presses mouse's button, its modifiers held, at the first of points, then moves it
+// along each segment between one point and the next in turn — steps steps per segment, each
+// dragStepGap apart, on the path [dragRoute] eases — and dragStepGap after the last step releases
+// it at the last point. A step whose cell repeats the last one sends nothing but still waits its
+// gap, so the timing stays even and the ease reads in the motion. The move that reaches a via
+// point is logged with the Text [take.MoveVia]. points holds at least two cells.
 func (e *Engine) sendDrag(
 	ctx context.Context,
 	step take.Event,
-	from, to take.Point,
+	points []take.Point,
+	mouse keys.Mouse,
 	steps int,
 ) error {
+	from, to := points[0], points[len(points)-1]
 	e.logCell(take.EventPress, step, from)
-	if err := e.term.Send(keys.Click(from.X, from.Y)); err != nil {
+	if err := e.term.Send(keys.MousePress(from.X, from.Y, mouse)); err != nil {
 		return err
 	}
 
-	moves := dragPath(from, to, steps)
-	for index := 1; index <= steps; index++ {
+	moves := dragRoute(points, steps)
+	for index := 1; index <= steps*(len(points)-1); index++ {
 		if err := sleepContext(ctx, dragStepGap); err != nil {
 			return err
 		}
 		if len(moves) == 0 || moves[0].step != index {
 			continue
 		}
-		cell := moves[0].cell
+		move := moves[0]
 		moves = moves[1:]
-		e.logCell(take.EventMove, step, cell)
-		if err := e.term.Send(keys.Motion(cell.X, cell.Y)); err != nil {
+		moved := step
+		if move.isVia {
+			moved.Text = take.MoveVia
+		}
+		e.logCell(take.EventMove, moved, move.cell)
+		if err := e.term.Send(keys.MouseMotion(move.cell.X, move.cell.Y, mouse)); err != nil {
 			return err
 		}
 	}
@@ -97,7 +124,7 @@ func (e *Engine) sendDrag(
 		return err
 	}
 	e.logCell(take.EventRelease, step, to)
-	return e.term.Send(keys.Release(to.X, to.Y))
+	return e.term.Send(keys.MouseRelease(to.X, to.Y, mouse))
 }
 
 // logTarget logs a drag's target event: the resolved box, with text naming the end it is.
@@ -113,6 +140,26 @@ func (e *Engine) logCell(kind take.EventKind, step take.Event, cell take.Point) 
 	sent := step
 	sent.Cell = &cell
 	e.logStep(kind, sent)
+}
+
+// dragRoute is the moves of a drag through points, steps steps per segment between one point and
+// the next: each segment's [dragPath], its steps numbered on from the segments before it, and the
+// last move of every segment but the final one marked as reaching a via point. A segment that
+// moves no cell adds no move, so it marks no via point.
+func dragRoute(points []take.Point, steps int) []dragMove {
+	segments := len(points) - 1
+	moves := make([]dragMove, 0, steps*segments)
+	for segment := range segments {
+		path := dragPath(points[segment], points[segment+1], steps)
+		for _, move := range path {
+			move.step += segment * steps
+			moves = append(moves, move)
+		}
+		if len(path) > 0 && segment < segments-1 {
+			moves[len(moves)-1].isVia = true
+		}
+	}
+	return moves
 }
 
 // dragPath is the cells a drag from one cell to another moves onto in steps steps: step i of n

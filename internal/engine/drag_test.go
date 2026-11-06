@@ -29,6 +29,9 @@ func TestEngine_Run_Drag(t *testing.T) {
 	betaBox := take.Box{X: 2, Y: 2, W: 4, H: 1}
 	alphaCentre, betaCentre := take.Point{X: 4, Y: 1}, take.Point{X: 3, Y: 2}
 	rightEdge := take.Point{X: fakeCols - 1, Y: 1}
+	viaCell := take.Point{X: 8, Y: 3}
+	rightCtrl := keys.Mouse{Button: keys.RightButton, Mods: keys.Ctrl}
+	viaMove := dragEvent(take.EventMove, take.MoveVia, nil, &viaCell)
 
 	tests := []struct {
 		name       string
@@ -71,6 +74,50 @@ func TestEngine_Run_Drag(t *testing.T) {
 				dragEvent(take.EventPress, "", nil, &alphaCentre),
 				dragEvent(take.EventMove, "", nil, &rightEdge),
 				dragEvent(take.EventRelease, "", nil, &rightEdge),
+			),
+		},
+		{
+			name: "through a via offset with the right button and ctrl",
+			action: storyboard.DragAction{
+				From:  storyboard.Target{Text: "alpha"},
+				Via:   []storyboard.DragEnd{{Offset: &storyboard.Offset{X: 4, Y: 2}}},
+				To:    storyboard.DragEnd{Target: storyboard.Target{Text: "beta"}},
+				Steps: stepsOf(1),
+				Press: storyboard.Press{Button: "right", With: "ctrl"},
+			},
+			wantSent: []string{
+				string(keys.MousePress(4, 1, rightCtrl)),
+				string(keys.MouseMotion(8, 3, rightCtrl)),
+				string(keys.MouseMotion(3, 2, rightCtrl)),
+				string(keys.MouseRelease(3, 2, rightCtrl)),
+			},
+			wantEvents: stepEvents(formDrag, "",
+				dragEvent(take.EventTarget, dragFromText, &alphaBox, nil),
+				dragEvent(take.EventTarget, dragToText, &betaBox, nil),
+				dragEvent(take.EventPress, "", nil, &alphaCentre),
+				viaMove,
+				dragEvent(take.EventMove, "", nil, &betaCentre),
+				dragEvent(take.EventRelease, "", nil, &betaCentre),
+			),
+		},
+		{
+			name: "a via target logs its box, and a segment that moves no cell marks no via",
+			action: storyboard.DragAction{
+				From:  storyboard.Target{Text: "alpha"},
+				Via:   []storyboard.DragEnd{{Target: storyboard.Target{Text: "alpha"}}},
+				To:    storyboard.DragEnd{Target: storyboard.Target{Text: "beta"}},
+				Steps: stepsOf(1),
+			},
+			wantSent: []string{
+				string(keys.Click(4, 1)), string(keys.Motion(3, 2)), string(keys.Release(3, 2)),
+			},
+			wantEvents: stepEvents(formDrag, "",
+				dragEvent(take.EventTarget, dragFromText, &alphaBox, nil),
+				dragEvent(take.EventTarget, dragViaText, &alphaBox, nil),
+				dragEvent(take.EventTarget, dragToText, &betaBox, nil),
+				dragEvent(take.EventPress, "", nil, &alphaCentre),
+				dragEvent(take.EventMove, "", nil, &betaCentre),
+				dragEvent(take.EventRelease, "", nil, &betaCentre),
 			),
 		},
 		{
@@ -125,6 +172,16 @@ func TestEngine_Run_DragFailures(t *testing.T) {
 			},
 			wantMsg:    "drag: from: target /delta/",
 			wantEvents: 2,
+		},
+		{
+			name: "missing via target",
+			action: storyboard.DragAction{
+				From: storyboard.Target{Text: "alpha"},
+				Via:  []storyboard.DragEnd{{Target: storyboard.Target{Text: "delta"}}},
+				To:   storyboard.DragEnd{Target: storyboard.Target{Text: "beta"}},
+			},
+			wantMsg:    "drag: via[0]: target /delta/",
+			wantEvents: 3,
 		},
 		{
 			name: "missing to target",
@@ -208,6 +265,54 @@ func TestDragPath(t *testing.T) {
 
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("dragPath(%v, %v, %d) = %+v, want %+v", tt.from, tt.to, tt.steps, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDragRoute(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		points []take.Point
+		steps  int
+		want   []dragMove
+	}{
+		{
+			name:   "one segment is its path, with no via",
+			points: []take.Point{{}, {X: 10}},
+			steps:  4,
+			want:   dragPath(take.Point{}, take.Point{X: 10}, 4),
+		},
+		{
+			name:   "two segments number their steps on and mark the corner via",
+			points: []take.Point{{}, {X: 4}, {X: 4, Y: 4}},
+			steps:  2,
+			want: []dragMove{
+				{step: 1, cell: take.Point{X: 2}},
+				{step: 2, cell: take.Point{X: 4}, isVia: true},
+				{step: 3, cell: take.Point{X: 4, Y: 2}},
+				{step: 4, cell: take.Point{X: 4, Y: 4}},
+			},
+		},
+		{
+			name:   "a segment that moves no cell adds no move and marks no via",
+			points: []take.Point{{}, {}, {X: 2}},
+			steps:  2,
+			want: []dragMove{
+				{step: 3, cell: take.Point{X: 1}},
+				{step: 4, cell: take.Point{X: 2}},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := dragRoute(tt.points, tt.steps)
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("dragRoute(%v, %d) = %+v, want %+v", tt.points, tt.steps, got, tt.want)
 			}
 		})
 	}

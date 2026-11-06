@@ -190,7 +190,13 @@ internal/clip/clip_test.go — TestLoad_UndeclaredAreaFailsNamingIt; cmd/photon/
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/storyboard/ && GOMEMLIMIT=2GiB go test ./internal/clip/ && GOMEMLIMIT=2GiB go test ./cmd/photon/ -run README`
 **Commit:** `feat(storyboard): name a mouse button, modifiers and drag via points`
 
-## 6. Perform clicks and drags with buttons, modifiers and via points
+## 6. Perform clicks and drags with buttons, modifiers and via points — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): consequential edit — internal/engine/doc.go: made necessary by click and drag now sending any button with modifiers and dragging through via points (the package comment described left-only, straight drags)
+NOTES (2026-11-06): consequential edit — internal/engine/engine_test.go: made necessary by sendClick taking the click's keys.Mouse (added a middle-button + shift click case to TestEngine_Run_ActionForms, where the click cases live; there is no action_test.go)
+NOTES (2026-11-06): the multi-segment route is a new pure function dragRoute (per-segment dragPath, steps numbered across segments, last move of each non-final segment marked isVia on dragMove); "dragPath over two segments" is tested as TestDragRoute. A via point that is a target logs a target event with Text `via` (engine constant dragViaText) beside `from`/`to`; take.MoveVia (= "via") marks the move only
+NOTES (2026-11-06): fixture TUI status suffix for a non-plain drag is " with <button>[+shift][+alt][+ctrl]" (e.g. "with right+ctrl"); any button's press starts a gesture, only a left press selects; wheel reports (bit 64) and button bits 3 are ignored. Fixture beats gain beat 5 "drag via" (right+ctrl, one via offset); target-event count pinned 3 -> 4
+NOTES (2026-11-06): internal/compose/doc.go:26 ("from the press cell to the drag's final move") is left for item 7, whose guard grep names it
 
 **What:** Depends on item 5.
 **Goal:** the engine sends each click and drag with its declared button and modifiers and drags through every via point, `steps` eased moves per segment; the fixture TUI reports what it decoded.

@@ -193,6 +193,18 @@ func TestEngine_Run_ActionForms(t *testing.T) {
 			wantEvents: stepEvents(formClick, "", targetEvent, clickEvent, clickEvent),
 		},
 		{
+			name: "click with the middle button and shift",
+			action: storyboard.Action{Click: &storyboard.ClickAction{
+				Target: storyboard.Target{Text: "beta"},
+				Press:  storyboard.Press{Button: "middle", With: "shift"},
+			}},
+			wantSent: []string{
+				string(keys.MousePress(3, 2, keys.Mouse{Button: keys.MiddleButton, Mods: keys.Shift})),
+				string(keys.MouseRelease(3, 2, keys.Mouse{Button: keys.MiddleButton, Mods: keys.Shift})),
+			},
+			wantEvents: stepEvents(formClick, "", targetEvent, clickEvent),
+		},
+		{
 			name: "wait for a shown screen records it",
 			action: storyboard.Action{Wait: &storyboard.WaitAction{
 				Screen: `(?m)^ready$`, Timeout: time.Second,
