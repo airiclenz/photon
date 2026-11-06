@@ -56,7 +56,7 @@ the browser launch, area and selector keys in config and storyboard.
 - 11 (re-check): decision applied (Files line corrected); guard folded (clipFields describes viewport and device_scale; Target.validate wording)
 - 13 (re-check): recast (url-clip geometry in one internal/render helper)
 
-## 1. Record the grid-surfaces decision
+## 1. Record the grid-surfaces decision — ✅ DONE (2026-11-06)
 
 **What:**
 **Goal:** a decision Note `grid-surfaces` states the two-layer grid model and every ratified call in this header; Notes `extension-model`, `package-layout` and `glossary` agree with it; `capcom check` is clean.

@@ -44,3 +44,13 @@ in `raster`.
 The root package exists only because `go:embed` reaches no file above a package's directory and
 `VERSION` sits at the module root; it holds `Version()` and `Build()` and nothing else. A release
 updates `VERSION` and nothing in Go code.
+
+
+
+**Grid surfaces (Note `grid-surfaces`, 2026-11-06).** A snapshot carries a text layer and an
+image layer on one grid. `take` owns both layers, text runs, recorded selector boxes and the
+cell geometry, and stays free of image code; a new `internal/pixels` owns encoding, decoding and
+seeking the image layer's frames; a planned `internal/browser`, the Chromium capture source,
+imports `take`, `pixels` and `keys`. The engine's `Terminal` interface becomes `Source` (the pty
+terminal and the browser are its two adapters, plus a test fake); `engine` never imports
+`terminal` or `browser`. The rows above change as each package's imports change.

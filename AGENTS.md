@@ -79,5 +79,6 @@ Knowledge tree, top level:
 - `coding-conventions`: Before writing code: house conventions from coding-standards
 - `extension-model`: Decision: one generic CLI, projects plug in through commands and services
 - `glossary`: Domain glossary: clip, storyboard, take, beat, target, area and the rest
+- `grid-surfaces`: Decision: one grid, a text layer and an image layer, for terminal and browser takes
 - `package-layout`: Package map and dependency direction
 <!-- END CAPCOM -->

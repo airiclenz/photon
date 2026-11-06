@@ -13,14 +13,23 @@ The terms code, flags, messages and docs use. One meaning each.
 - **Stage**: the state the filmed program works on (a repo, a home dir), reset before each take.
 - **Service**: a helper process photon starts for a take and stops after (a fake backend).
 - **Take**: one recording, written to `<work>/<clip>.take`: snapshots plus the event log.
-- **Snapshot**: the full cell grid at one moment of a take, with its time.
+- **Snapshot**: the full grid at one moment of a take, with its time: a text layer and an image
+  layer on that grid (Note `grid-surfaces`).
+- **Text layer**: what a snapshot shows as text with its place on the grid; what targets,
+  `wait: screen`, `seen` and areas search. A terminal derives it from its cells; a browser from
+  the page's layout, as text runs.
+- **Image layer**: what a snapshot shows as pixels; what render and tune draw. A terminal
+  derives it from its cells; a browser stores screenshot frames.
+- **Text run**: a stretch of a browser page's text with its Box on the grid.
+- **Capture source**: what a take is recorded from: the pty terminal, or headless Chromium.
 - **Beat**: one step of a storyboard: its actions, section timing and expects.
 - **Action**: one thing a beat does: `type`, `key`, `click`, `drag`, `wait`, `pause`.
 - **Target**: a place on screen, found by regex, `nth` and area; what a click, drag or camera
   position aims at.
-- **Cell**: one cell of the terminal grid, `{x, y}` counted from 0; a fixed place a camera
-  position can aim at instead of a target.
-- **Area**: a band of rows a target is searched in, defined in the config by row anchors.
+- **Cell**: one cell of the grid, `{x, y}` counted from 0: a terminal character cell, or one CSS
+  pixel on a browser take; a fixed place a camera position can aim at instead of a target.
+- **Area**: a band of rows a target is searched in, defined in the config by row anchors or, on a
+  browser clip, by a CSS selector's recorded box.
 - **Expect**: what a keeper take must show, judged PASS or FAIL by `check`.
 - **Position**: one place the camera aims at on the clip's clock, a cell or a target, from its
   `at` for its `hold`; a hold of 0 makes it a point in time. A text target is found on the screen
