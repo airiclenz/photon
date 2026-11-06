@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/chromedp/chromedp"
@@ -23,11 +24,13 @@ const (
 )
 
 // The viewport the test asks for: small, to keep a Pi host's memory in bounds, and a device
-// scale other than 1, so a scale left at the browser's default shows.
+// scale other than 1, so a scale left at the browser's default shows; and the most snapshots a
+// second the take keeps.
 const (
 	viewportWidth  = 640
 	viewportHeight = 480
 	deviceScale    = 2
+	testFPS        = 24
 )
 
 // testTitle is the title of testPage, the page the test loads; it tells the page apart from
@@ -36,6 +39,9 @@ const (
 	testTitle = "photon browser test"
 	testPage  = `<!doctype html><title>` + testTitle + `</title><p>hello</p>`
 )
+
+// refusedSelector is a selector every page refuses as invalid.
+const refusedSelector = "button >"
 
 func TestBrowser_Start_LoadsThePageAtTheViewportAndScale(t *testing.T) {
 	execPath := browserOrSkip(t)
@@ -50,12 +56,13 @@ func TestBrowser_Start_LoadsThePageAtTheViewportAndScale(t *testing.T) {
 		Width:       viewportWidth,
 		Height:      viewportHeight,
 		DeviceScale: deviceScale,
+		FPS:         testFPS,
 	})
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := b.Close(); err != nil {
+		if _, err := b.Close(); err != nil {
 			t.Errorf("Close: %v", err)
 		}
 	})
@@ -71,6 +78,36 @@ func TestBrowser_Start_LoadsThePageAtTheViewportAndScale(t *testing.T) {
 		got.Height != viewportHeight || got.Scale != deviceScale {
 		t.Errorf("page = %+v, want the test page at %dx%d, scale %d",
 			got, viewportWidth, viewportHeight, deviceScale)
+	}
+}
+
+func TestBrowser_Start_RefusedSelectorFailsNamingIt(t *testing.T) {
+	execPath := browserOrSkip(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := fmt.Fprint(w, testPage); err != nil {
+			t.Errorf("serve the page: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	b, err := Start(context.Background(), Options{
+		URL:         server.URL,
+		ExecPath:    execPath,
+		Width:       viewportWidth,
+		Height:      viewportHeight,
+		DeviceScale: deviceScale,
+		FPS:         testFPS,
+		Selectors:   []string{"p", refusedSelector},
+	})
+
+	if err == nil {
+		if _, closeErr := b.Close(); closeErr != nil {
+			t.Errorf("Close: %v", closeErr)
+		}
+		t.Fatalf("Start succeeded, want an error naming selector %q", refusedSelector)
+	}
+	if !strings.Contains(err.Error(), `selector "`+refusedSelector+`"`) {
+		t.Errorf("Start error = %v, want one naming selector %q", err, refusedSelector)
 	}
 }
 

@@ -118,12 +118,13 @@ func startAt(t *testing.T, page string) *Browser {
 		Width:       viewportWidth,
 		Height:      viewportHeight,
 		DeviceScale: deviceScale,
+		FPS:         testFPS,
 	})
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := b.Close(); err != nil {
+		if _, err := b.Close(); err != nil {
 			t.Errorf("Close: %v", err)
 		}
 	})
