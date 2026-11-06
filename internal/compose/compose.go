@@ -206,6 +206,14 @@ func (c *Compositor) ComposeDraft(t time.Duration, src *image.RGBA) *image.RGBA 
 	return c.compose(t, src, c.crop(t), draw.ApproxBiLinear)
 }
 
+// ComposeFullDraft builds a draft of the full view at output time t: the frame
+// [Compositor.ComposeFull] builds, at exactly [Compositor.Size] and with the same cursor and
+// captions, but with the whole of src scaled by the fast [draw.ApproxBiLinear], as
+// [Compositor.ComposeDraft] scales the camera's crop. src may be of any size and is only read.
+func (c *Compositor) ComposeFullDraft(t time.Duration, src *image.RGBA) *image.RGBA {
+	return c.compose(t, src, c.fullCrop(), draw.ApproxBiLinear)
+}
+
 // compose builds the shipped frame at output time t from src with scaler: crop, in layout
 // pixels, mapped onto src by src's size against the layout's per axis and scaled to the shipped
 // width, then the cursor through crop and the captions in output space.

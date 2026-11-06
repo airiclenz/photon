@@ -273,6 +273,24 @@ func TestHandler_Frame_FullView_IsTheSessionsFullFrame(t *testing.T) {
 	}
 }
 
+func TestHandler_Frame_FullViewDraft_IsTheSessionsFullDraftFrame(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixtureOf(t, cameraStoryboard)
+	handler := newHandler(fixture.session, testAddr)
+	full := frameOf(t, handler, "1000&view=full")
+
+	draft := frameOf(t, handler, "1000&view=full&draft=1")
+
+	assertSameSize(t, draft, full)
+	want, err := fixture.session.FullDraftFrame(time.Second)
+	if err != nil {
+		t.Fatalf("FullDraftFrame: %v", err)
+	}
+	if !bytes.Equal(draft, want) {
+		t.Error("the served frame is not the session's full view draft")
+	}
+}
+
 func TestHandler_Frame_BadView_IsRefused(t *testing.T) {
 	t.Parallel()
 	handler := newHandler(newSessionFixture(t).session, testAddr)
@@ -281,7 +299,6 @@ func TestHandler_Frame_BadView_IsRefused(t *testing.T) {
 		query string
 	}{
 		{name: "unknown view", query: "t=500&view=crop"},
-		{name: "full view's draft", query: "t=500&view=full&draft=1"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

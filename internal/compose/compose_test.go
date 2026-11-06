@@ -777,6 +777,26 @@ func TestComposeFullEqualsAFactorOneComposition(t *testing.T) {
 	}
 }
 
+func TestComposeFullDraftEqualsAFactorOneDraft(t *testing.T) {
+	t.Parallel()
+	clicked := take.Box{X: 30, Y: 3, W: 6, H: 1}
+	_, recorded := zoomClickTake(t, clicked)
+	zoomed, _ := newTestCompositor(t, draftBoard(t, clicked, true), recorded)
+	unzoomed, _ := newTestCompositor(t, draftBoard(t, clicked, false), recorded)
+	src := stripedFrame()
+	// At 3s the zoomed board is pushed in 2× and the click's cursor and the caption both show.
+	const at = 3 * sec
+
+	got := zoomed.ComposeFullDraft(at, src)
+
+	if want := unzoomed.ComposeDraft(at, src); got.Rect != want.Rect || !bytes.Equal(got.Pix, want.Pix) {
+		t.Error("ComposeFullDraft: want the bytes of the same draft composed at a factor of 1, got different pixels")
+	}
+	if shipped := zoomed.ComposeDraft(at, src); bytes.Equal(got.Pix, shipped.Pix) {
+		t.Error("ComposeFullDraft: want the whole frame, got the zoomed crop")
+	}
+}
+
 func TestCompositorFullViewCellAndRect(t *testing.T) {
 	t.Parallel()
 	box := take.Box{X: 30, Y: 7, W: 1, H: 1}

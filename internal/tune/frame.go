@@ -61,6 +61,17 @@ func (s *Session) FullFrame(out time.Duration) ([]byte, error) {
 	return encodeFrame(s.goodPipeline().frames.FullFrameAt, png.BestSpeed, out)
 }
 
+// FullDraftFrame returns the PNG of the full view's draft frame at output time out, the full
+// view's frame while the preview plays or scrubs: [Session.FullFrame]'s whole frame, of its pixel
+// size and with its cursor and captions, drawn from the draft raster with the fast scaler as
+// [Session.DraftFrame] is, from the same last good pipeline and draft raster cache. Without a
+// draft rasterizer it is [Session.FullFrame]'s frame. It is not compressed, for
+// [Session.DraftFrame]'s reason, fails as [Session.Frame] does, and is served concurrently as it
+// is.
+func (s *Session) FullDraftFrame(out time.Duration) ([]byte, error) {
+	return encodeFrame(s.goodPipeline().frames.FullDraftAt, png.NoCompression, out)
+}
+
 // Camera returns where the camera looks at output time out, from the last good pipeline, and,
 // when position is not nil, the cell the position at that index in camera.positions aims at,
 // both from the same pipeline. It fails with [render.ErrOutsideClip] when out is not in

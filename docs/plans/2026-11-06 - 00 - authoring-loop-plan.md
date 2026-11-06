@@ -121,7 +121,11 @@ makes line 7 and line 3 both bad and checks the error names line 3.
 Depends on item 1.
 **Commit:** `perf(take): decode take lines in parallel`
 
-## 3. Full-view draft frames on the server
+## 3. Full-view draft frames on the server — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): consequential edit — internal/render/doc.go: made necessary by Pipeline.FullDraftAt (the package doc's draft-frame sentence now names it)
+NOTES (2026-11-06): internal/tune/page/frames.js header comment still says "the full view has no draft"; it describes the page's own behaviour, which item 4 (not yet done) changes, so it is left for item 4
+NOTES (2026-11-06): the BuildOptions doc in internal/render/pipeline.go now says FullDraftAt, like DraftAt, returns the exact frame without a DraftCache
 
 **What:**
 **Goal:** `GET /api/frame?view=full&draft=1&t=<ms>` returns 200 with a PNG at the full view's

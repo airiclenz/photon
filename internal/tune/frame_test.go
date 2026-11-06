@@ -266,6 +266,46 @@ func TestSession_DraftFrame_IsTheExactFramesSizeWithOtherPixels(t *testing.T) {
 	}
 }
 
+func TestSession_FullDraftFrame_IsTheFullFramesSizeAndTheWholeFrame(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixtureOf(t, cameraStoryboard)
+	full, err := fixture.session.FullFrame(cameraFixtureTime)
+	if err != nil {
+		t.Fatalf("FullFrame: %v", err)
+	}
+	zoomedDraft, err := fixture.session.DraftFrame(cameraFixtureTime)
+	if err != nil {
+		t.Fatalf("DraftFrame: %v", err)
+	}
+
+	draft, err := fixture.session.FullDraftFrame(cameraFixtureTime)
+	if err != nil {
+		t.Fatalf("FullDraftFrame: %v", err)
+	}
+
+	assertSameSize(t, draft, full)
+	if bytes.Equal(decodedFrame(t, draft).Pix, decodedFrame(t, full).Pix) {
+		t.Error("the full view's draft shows the exact full view's pixels on a scale-2 clip")
+	}
+	if bytes.Equal(decodedFrame(t, draft).Pix, decodedFrame(t, zoomedDraft).Pix) {
+		t.Error("the full view's draft shows the zoomed draft's pixels")
+	}
+}
+
+func TestSession_FullDraftFrame_OutsideTheClip_IsRefused(t *testing.T) {
+	t.Parallel()
+	fixture := newSessionFixture(t)
+	length := time.Duration(fixture.session.State().LengthMS) * time.Millisecond
+
+	for _, out := range []time.Duration{-time.Millisecond, length} {
+		_, err := fixture.session.FullDraftFrame(out)
+
+		if !errors.Is(err, render.ErrOutsideClip) {
+			t.Errorf("FullDraftFrame(%s) error = %v, want ErrOutsideClip", out, err)
+		}
+	}
+}
+
 func TestSession_DraftFrame_OutsideTheClip_IsRefused(t *testing.T) {
 	t.Parallel()
 	fixture := newSessionFixture(t)

@@ -280,7 +280,7 @@ func (s *server) handleState(w http.ResponseWriter, _ *http.Request) {
 
 // handleFrame answers the PNG of the frame at the output time ?t=, in whole milliseconds: the
 // draft frame with ?draft=1, the exact frame without it or with ?draft=0, and the full view's
-// exact frame with ?view=full. The full view has no draft, so ?view=full&draft=1 answers 400.
+// frame, draft or exact alike, with ?view=full.
 func (s *server) handleFrame(w http.ResponseWriter, r *http.Request) {
 	out, ok := frameTimeOf(w, r)
 	if !ok {
@@ -295,12 +295,10 @@ func (s *server) handleFrame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "view must be "+viewFull+" or absent")
 		return
 	}
-	if view == ViewFull && isDraft {
-		writeError(w, http.StatusBadRequest, "the full view has no draft frame")
-		return
-	}
 	encodeAt := s.session.Frame
 	switch {
+	case view == ViewFull && isDraft:
+		encodeAt = s.session.FullDraftFrame
 	case view == ViewFull:
 		encodeAt = s.session.FullFrame
 	case isDraft:

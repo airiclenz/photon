@@ -24,10 +24,11 @@
 // answers the full view alike ([Pipeline.FullFrameAt]: the whole frame at the shipped size, with
 // its cells and cell boxes), the camera's view over it at a time ([Pipeline.ViewAt]) and the cell
 // each camera position aims at ([Pipeline.PositionCell]); a render draws no full view.
-// Given a draft cache too, the pipeline answers draft frames ([Pipeline.DraftAt]): snapshots
-// rasterized at the shipped frame's size — padding and font size scaled by frame.width over the
-// exact raster's width, never up, the raster at most frame.width wide — kept in the draft cache
-// and scaled to the shipped frame by a fast interpolator; when the exact raster is no wider than
+// Given a draft cache too, the pipeline answers draft frames ([Pipeline.DraftAt], and the full
+// view's [Pipeline.FullDraftAt]): snapshots rasterized at the shipped frame's size — padding and
+// font size scaled by frame.width over the exact raster's width, never up, the raster at most
+// frame.width wide — kept in the draft cache and scaled to the shipped frame by a fast
+// interpolator; when the exact raster is no wider than
 // frame.width the draft stage is the exact stage, its rasterizer and raster cache. A render passes
 // no draft cache and draws none. [BuildOptions] may name an earlier pipeline to reuse: its
 // rasterizer and raster cache while the take, the raster geometry, the terminal fonts and the

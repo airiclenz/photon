@@ -74,9 +74,10 @@ type Pipeline struct {
 // BuildOptions is what [Build] is given beside the clip and its take. Cache keeps the rasterized
 // snapshots of a pipeline that builds its own rasterizer; it must not be nil. DraftCache keeps
 // the snapshots its draft rasterizer draws at the shipped frame's size; when nil the pipeline
-// builds no draft rasterizer and [Pipeline.DraftAt] returns the exact frame. When the exact
-// rasters are no wider than frame.width, the draft geometry is the exact one and the draft stage
-// is the exact stage, its rasterizer and Cache, so DraftCache is left unused.
+// builds no draft rasterizer and [Pipeline.DraftAt] and [Pipeline.FullDraftAt] return the exact
+// frames. When the exact rasters are no wider than frame.width, the draft geometry is the exact
+// one and the draft stage is the exact stage, its rasterizer and Cache, so DraftCache is left
+// unused.
 //
 // Reuse, when not nil, is an earlier pipeline whose parts the new one takes over where they come
 // out the same. Its rasterizer and its raster cache come first, while the take, the frame's raster
@@ -356,6 +357,23 @@ func (p *Pipeline) DraftAt(out time.Duration) (*image.RGBA, error) {
 	}
 	source := rasterAt(p.recorded, index, p.draftRasterizer, p.draftCache)
 	return p.compositor.ComposeDraft(out, source), nil
+}
+
+// FullDraftAt returns a draft of the full view at output time out, of [Pipeline.Size] and with
+// the same cursor and captions as [Pipeline.FullFrameAt]'s: the snapshot on screen then,
+// rasterized at the draft geometry or taken from the draft cache, composed at out by
+// [compose.Compositor.ComposeFullDraft]. Built without a draft cache it returns
+// [Pipeline.FullFrameAt]'s frame. It fails as [Pipeline.FrameAt] does.
+func (p *Pipeline) FullDraftAt(out time.Duration) (*image.RGBA, error) {
+	if p.draftRasterizer == nil {
+		return p.FullFrameAt(out)
+	}
+	index, err := p.screenIndexAt(out)
+	if err != nil {
+		return nil, err
+	}
+	source := rasterAt(p.recorded, index, p.draftRasterizer, p.draftCache)
+	return p.compositor.ComposeFullDraft(out, source), nil
 }
 
 // rasterAt returns the snapshot at index of recorded drawn by rasterizer: taken from cache when

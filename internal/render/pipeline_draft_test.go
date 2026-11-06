@@ -114,6 +114,54 @@ func TestPipeline_DraftAt_WithoutADraftCache_IsTheExactFrame(t *testing.T) {
 	}
 }
 
+func TestPipeline_FullDraftAt_EveryScheduledFrame_IsOfTheFullFramesSize(t *testing.T) {
+	t.Parallel()
+	loaded := loadRenderClipOf(t, zoomedCaptionedStoryboard)
+	takePath, recorded := loadRenderTake(t, 20)
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster(), DraftCache: newLastRaster()})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	frames := built.Schedule().Frames(loaded.Storyboard.Frame.FPS)
+	if len(frames) == 0 {
+		t.Fatal("the schedule holds no frames")
+	}
+
+	for _, frame := range frames {
+		draft, draftErr := built.FullDraftAt(frame.Out)
+		full, fullErr := built.FullFrameAt(frame.Out)
+
+		if draftErr != nil || fullErr != nil {
+			t.Fatalf("at %s: FullDraftAt: %v, FullFrameAt: %v", frame.Out, draftErr, fullErr)
+		}
+		if draft.Rect != full.Rect {
+			t.Errorf("FullDraftAt(%s) is %v, want FullFrameAt's %v", frame.Out, draft.Rect, full.Rect)
+		}
+	}
+}
+
+func TestPipeline_FullDraftAt_WithoutADraftCache_IsTheExactFullFrame(t *testing.T) {
+	t.Parallel()
+	loaded := loadRenderClipOf(t, zoomedCaptionedStoryboard)
+	takePath, recorded := loadRenderTake(t, 20)
+	built, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newLastRaster()})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	for _, frame := range built.Schedule().Frames(loaded.Storyboard.Frame.FPS) {
+		draft, draftErr := built.FullDraftAt(frame.Out)
+		full, fullErr := built.FullFrameAt(frame.Out)
+
+		if draftErr != nil || fullErr != nil {
+			t.Fatalf("at %s: FullDraftAt: %v, FullFrameAt: %v", frame.Out, draftErr, fullErr)
+		}
+		if draft.Rect != full.Rect || !bytes.Equal(draft.Pix, full.Pix) {
+			t.Errorf("FullDraftAt(%s) differs from FullFrameAt's frame", frame.Out)
+		}
+	}
+}
+
 // TestBuild_BothRasterizers_LoadTheTerminalFontsOnce counts the process-wide terminal-font loads,
 // so it runs before the parallel tests are let go.
 func TestBuild_BothRasterizers_LoadTheTerminalFontsOnce(t *testing.T) {
