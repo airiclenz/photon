@@ -30,8 +30,9 @@ var ErrTakeSize = errors.New("the take was recorded at another size than the sto
 // RasterCache keeps rasterized snapshots by their index in the take, so a snapshot shown by
 // several frames is rasterized once. A cache belongs to one rasterizer and take: a pipeline's
 // exact rasterizer keeps its rasters in [BuildOptions.Cache] and its draft rasterizer in
-// [BuildOptions.DraftCache]. Get reports false for an index it does not hold; Put may keep or drop
-// what it is given.
+// [BuildOptions.DraftCache]. A url-launch clip's caches belong to its take alone: they keep the
+// image layer's frames, which no rasterizer draws. Get reports false for an index it does not
+// hold; Put may keep or drop what it is given.
 type RasterCache interface {
 	Get(index int) (*image.RGBA, bool)
 	Put(index int, frame *image.RGBA)
@@ -101,8 +102,11 @@ type Pipeline struct {
 // the take, the draft geometry, the terminal fonts and the theme match, and — when its draft stage
 // was its exact stage — only along with that exact stage, so a draft stage never binds an exact
 // cache the new exact stage does not share. Its caption faces carry over while the config's
-// caption fonts match. A reused cache is then shared by both pipelines, so it must be safe for
-// both to use at once when they are. Its image layer decoder carries over while the take matches.
+// caption fonts match. Its image layer decoder carries over while the take matches. For a
+// url-launch clip, whose caches keep the take's image layer frames, an earlier url-launch
+// pipeline's raster cache carries over while the take matches, and its draft cache too when both
+// pipelines have one. A reused cache is then shared by both pipelines, so it must be safe for
+// both to use at once when they are.
 type BuildOptions struct {
 	Cache      RasterCache
 	DraftCache RasterCache
@@ -119,7 +123,8 @@ type BuildOptions struct {
 // and draft cache are taken over or a draft rasterizer draws at that size into it; the caption
 // fonts are loaded only when options.Reuse holds none that match (see [BuildOptions]). A
 // url-launch clip builds no rasterizer: its snapshots are drawn from the take's image layer into
-// options.Cache, and its drafts into options.DraftCache.
+// options.Cache, and its drafts into options.DraftCache, or into the caches of an
+// options.Reuse built over the same take.
 //
 // It fails with a nil pipeline when the frame sizes differ ([ErrTakeSize]) or the take does not
 // schedule. When a later stage fails — a font or an area that does not load, a target not on
@@ -197,9 +202,10 @@ var errNoImageLayer = errors.New(
 	"the take holds no image layer to draw the page's frames from — re-record it")
 
 // sourcesFrom returns the frame sources of p's clip. A url-launch clip's are the take's image
-// layer, with p's caches and its [composedPageLayout], so it builds no rasterizer and loads no
-// terminal font; it fails when the take has no image layer. A command-launch clip's are
-// [Pipeline.rasterSourcesFrom].
+// layer with its [composedPageLayout], so it builds no rasterizer and loads no terminal font, and
+// its caches are p's, or previous's where [Pipeline.canReusePageFrames] holds: previous's exact
+// cache, and its draft cache when both pipelines have one. It fails when the take has no image
+// layer. A command-launch clip's are [Pipeline.rasterSourcesFrom].
 func (p *Pipeline) sourcesFrom(previous *Pipeline) (frameSources, error) {
 	if !p.loaded.Config.IsBrowser() {
 		return p.rasterSourcesFrom(previous)
@@ -207,11 +213,18 @@ func (p *Pipeline) sourcesFrom(previous *Pipeline) (frameSources, error) {
 	if p.images == nil {
 		return frameSources{}, errNoImageLayer
 	}
-	return frameSources{
+	sources := frameSources{
 		cache:      p.cache,
 		draftCache: p.draftCache,
 		layout:     composedPageLayout(p.loaded.Storyboard.Frame),
-	}, nil
+	}
+	if p.canReusePageFrames(previous) {
+		sources.cache = previous.cache
+		if p.draftCache != nil && previous.draftCache != nil {
+			sources.draftCache = previous.draftCache
+		}
+	}
+	return sources, nil
 }
 
 // rasterSourcesFrom builds the rasterizer and the draft rasterizer from it, taking from previous
@@ -348,6 +361,15 @@ func (p *Pipeline) canReuseDraftRasters(
 	isSharedStage := previous.draftRasterizer == previous.rasterizer
 	return previous.draftGeometry == geometry &&
 		(!isSharedStage || previous.rasterizer == rasterizer)
+}
+
+// canReusePageFrames says previous is a url-launch clip's pipeline that built in full over p's
+// take, so the image layer frames in its caches hold for p: a page frame is the take's frame at
+// a snapshot index, unscaled in the exact and the draft cache alike, whatever the frame size,
+// fonts and theme.
+func (p *Pipeline) canReusePageFrames(previous *Pipeline) bool {
+	return previous != nil && previous.compositor != nil && previous.recorded == p.recorded &&
+		previous.loaded.Config.IsBrowser() && previous.images != nil
 }
 
 // drawsAlike says previous built in full over p's take, and a rasterizer built over p's clip

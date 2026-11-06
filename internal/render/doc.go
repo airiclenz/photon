@@ -39,7 +39,9 @@
 // A url-launch clip builds no rasterizer and loads no terminal font: each snapshot is its take's
 // image layer frame, laid out one cell per CSS pixel at frame.device_scale × frame.scale, the
 // cursor and the captions sized in CSS pixels as [CheckCaptions] lays them out, and its drafts are
-// those frames kept in the draft cache.
+// those frames kept in the draft cache. Reusing an earlier url-launch pipeline over the same take,
+// it takes over that pipeline's raster cache, and its draft cache when both have one, so a
+// rebuild decodes no page frame again.
 //
 // A storyboard is checked in three tiers. The static tier is [storyboard.Parse]: every rule the
 // file alone decides. The font-bound tier is [CheckCaptions]: the captions laid out with the
@@ -60,8 +62,8 @@
 //     paths), the exact and draft rasterizers, caption faces and compositor a pipeline is built
 //     from, and the summary.
 //   - pipeline.go: [Pipeline], [Build] and its [BuildOptions] with the reuse rules of the raster
-//     and draft caches, the frame-size check, [ErrOutsideClip], the [RasterCache] seam and the
-//     render's reuse-last cache.
+//     and draft caches, a url-launch clip's page frame caches among them, the frame-size check,
+//     [ErrOutsideClip], the [RasterCache] seam and the render's reuse-last cache.
 //   - check.go: [CheckCaptions], the font-bound caption check that needs no take, and a
 //     url clip's page geometry.
 //   - watch.go: [Watch] and its [WatchInputs]: the polling loop, the watched files and their

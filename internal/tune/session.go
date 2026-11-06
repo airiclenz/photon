@@ -389,7 +389,8 @@ func (s *Session) settle(built pipeline, err error) {
 // build parses src and builds the render pipeline on it against the take. On an error the
 // pipeline returned holds the stages built before it. The build is given the good pipeline to
 // reuse, so its rasterizer, raster cache, draft rasterizer, draft raster cache and caption faces
-// carry over where render finds them unchanged, and the caption fonts load once a session. A take
+// carry over where render finds them unchanged — a url-launch clip's page frame caches while the
+// take is the same — and the caption fonts load once a session. A take
 // recorded at another size than the storyboard's frame is no build error: the pipeline is built
 // at the take's size and the mismatch kept as the pipeline's sizeErr. A url-launch clip cannot
 // draw a terminal take, one with no cell size, at any size: its pipeline builds no frames, only

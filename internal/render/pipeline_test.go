@@ -1054,6 +1054,125 @@ func TestBuild_AURLClipReusingAURLPipeline_TakesOverItsImageLayerAndCaptionFaces
 	}
 }
 
+func TestBuild_AURLClipReusingAURLPipeline_TakesOverItsPageFrameCaches(t *testing.T) {
+	t.Parallel()
+	loaded := loadRenderClipWith(t, pageConfig, pageCameraStoryboard)
+	takePath, recorded := loadPageTake(t)
+	previous, err := Build(loaded, takePath, recorded, BuildOptions{
+		Cache: newCountingCache(), DraftCache: newCountingCache(),
+	})
+	if err != nil {
+		t.Fatalf("Build the previous pipeline: %v", err)
+	}
+	frames, want := pageOracleFrames(t, loaded, recorded)
+	last := frames[len(frames)-1].Out
+	if _, err := previous.FrameAt(last); err != nil {
+		t.Fatalf("FrameAt through the previous pipeline: %v", err)
+	}
+	if _, err := previous.DraftAt(last); err != nil {
+		t.Fatalf("DraftAt through the previous pipeline: %v", err)
+	}
+	exact, draft := previous.cache.(*countingCache), previous.draftCache.(*countingCache)
+	exactPuts, draftPuts := exact.puts, draft.puts
+	givenExact, givenDraft := newCountingCache(), newCountingCache()
+
+	built, err := Build(loaded, takePath, recorded, BuildOptions{
+		Cache: givenExact, DraftCache: givenDraft, Reuse: previous,
+	})
+
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if built.cache != previous.cache || built.draftCache != previous.draftCache {
+		t.Fatal("the rebuild did not take over the previous pipeline's exact and draft caches")
+	}
+	got, err := built.FrameAt(last)
+	if err != nil {
+		t.Fatalf("FrameAt: %v", err)
+	}
+	if _, err := built.DraftAt(last); err != nil {
+		t.Fatalf("DraftAt: %v", err)
+	}
+	if exact.puts != exactPuts || draft.puts != draftPuts || givenExact.puts+givenDraft.puts != 0 {
+		t.Errorf("redrawing a drawn frame put %d exact and %d draft frames, "+
+			"the given caches %d and %d; want none",
+			exact.puts-exactPuts, draft.puts-draftPuts, givenExact.puts, givenDraft.puts)
+	}
+	if !bytes.Equal(got.Pix, want[len(want)-1].Pix) {
+		t.Error("the rebuilt pipeline's last frame differs from the page oracle's")
+	}
+}
+
+func TestBuild_AURLClipReusingAPipelineWithoutADraftCache_KeepsTheGivenDraftCache(t *testing.T) {
+	t.Parallel()
+	loaded := loadRenderClipWith(t, pageConfig, pageCameraStoryboard)
+	takePath, recorded := loadPageTake(t)
+	previous, err := Build(loaded, takePath, recorded, BuildOptions{Cache: newCountingCache()})
+	if err != nil {
+		t.Fatalf("Build the previous pipeline: %v", err)
+	}
+	givenDraft := newCountingCache()
+
+	built, err := Build(loaded, takePath, recorded, BuildOptions{
+		Cache: newCountingCache(), DraftCache: givenDraft, Reuse: previous,
+	})
+
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if built.cache != previous.cache {
+		t.Error("the rebuild did not take over the previous pipeline's exact cache")
+	}
+	if built.draftCache != RasterCache(givenDraft) {
+		t.Error("the rebuild did not keep the draft cache it was given")
+	}
+}
+
+func TestBuild_AURLClipReusingAPipelineThatDoesNotHold_KeepsTheGivenCaches(t *testing.T) {
+	t.Parallel()
+	loaded := loadRenderClipWith(t, pageConfig, pageCameraStoryboard)
+	takePath, recorded := loadPageTake(t)
+	_, otherTake := loadPageTake(t)
+	otherPrevious, err := Build(loaded, takePath, otherTake, BuildOptions{
+		Cache: newCountingCache(), DraftCache: newCountingCache(),
+	})
+	if err != nil {
+		t.Fatalf("Build the pipeline over another take: %v", err)
+	}
+	lost := loadRenderClipWith(t, pageConfig, pageStoryboard+`camera:
+  positions:
+    - {text: 'nowhere', at: {beat: 2}}
+`)
+	partial, err := Build(lost, takePath, recorded, BuildOptions{
+		Cache: newCountingCache(), DraftCache: newCountingCache(),
+	})
+	if !errors.Is(err, target.ErrNotOnScreen) || partial == nil {
+		t.Fatalf("Build the partial pipeline: %v, want a target not on screen and a partial one", err)
+	}
+	frames, want := pageOracleFrames(t, loaded, recorded)
+
+	previousOf := map[string]*Pipeline{"another take": otherPrevious, "partial": partial}
+	for name, previous := range previousOf {
+		givenExact, givenDraft := newCountingCache(), newCountingCache()
+		built, err := Build(loaded, takePath, recorded, BuildOptions{
+			Cache: givenExact, DraftCache: givenDraft, Reuse: previous,
+		})
+		if err != nil {
+			t.Fatalf("%s: Build: %v", name, err)
+		}
+		if built.cache != RasterCache(givenExact) || built.draftCache != RasterCache(givenDraft) {
+			t.Errorf("%s: the rebuild did not keep the caches it was given", name)
+		}
+		got, err := built.FrameAt(frames[len(frames)-1].Out)
+		if err != nil {
+			t.Fatalf("%s: FrameAt: %v", name, err)
+		}
+		if !bytes.Equal(got.Pix, want[len(want)-1].Pix) {
+			t.Errorf("%s: the rebuilt pipeline's last frame differs from the page oracle's", name)
+		}
+	}
+}
+
 func TestBuild_AURLClipWithoutAnImageLayer_IsRefused(t *testing.T) {
 	t.Parallel()
 	loaded := loadRenderClipWith(t, pageConfig, pageStoryboard)

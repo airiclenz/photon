@@ -16,8 +16,9 @@ const draftCacheBytes = 256 << 20
 
 // rasterCache is the [render.RasterCache] of a session's pipelines: it keeps rasterized snapshots
 // by their index in the take, least recently used evicted first once their pixels pass capacity
-// bytes. A cache belongs to one take and one raster geometry: a pipeline built on another gets a
-// new cache, so a frame still being drawn against the old take can only refill the old one. It
+// bytes. A cache belongs to one take and one raster geometry — a url-launch clip's to its take
+// alone, its page frames drawn at no raster geometry: a pipeline built on another gets a new
+// cache, so a frame still being drawn against the old take can only refill the old one. It
 // is safe for concurrent use.
 type rasterCache struct {
 	mu sync.Mutex

@@ -29,7 +29,7 @@ pipeline's page frame caches, so `photon tune` stops decoding the page frames ag
 - Merging a url-launch pipeline's exact and draft caches into one.
 - Any change to tune's cache sizes or to command-launch reuse.
 
-## 1. Take over the page frame caches on a url-launch Reuse rebuild
+## 1. Take over the page frame caches on a url-launch Reuse rebuild — ✅ DONE (2026-11-06)
 
 **What**
 
