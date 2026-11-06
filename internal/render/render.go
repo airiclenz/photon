@@ -31,23 +31,34 @@ const (
 	// paletteSuffix ends the name of the palette file the palette pass writes into the work dir,
 	// after the clip's name.
 	paletteSuffix = ".palette.png"
+	// passCount is how many times the frames stream through ffmpeg: the palette pass, then the
+	// GIF pass.
+	passCount = 2
 )
 
 // Options is one render's command line. An empty Take is the clip's take path, an empty Out the
-// storyboard's ship path.
+// storyboard's ship path. A set Progress is called after each frame streamed into either ffmpeg
+// pass, with total twice the clip's frame count and done rising to it; a dry run never calls it.
 type Options struct {
-	Take   string
-	Out    string
-	DryRun bool
+	Take     string
+	Out      string
+	DryRun   bool
+	Progress func(done, total int)
 }
 
 // plan is everything a render needs once the clip and its take are read: the frame, the pipeline
 // that builds the frames, where the palette pass writes the palette and where the GIF goes.
+//
+// progress is the caller's [Options.Progress], or nil; streamed counts the frames written into
+// either pass so far and total is the frames both passes stream together.
 type plan struct {
 	frame    storyboard.Frame
 	pipeline *Pipeline
 	palette  string
 	out      string
+	progress func(done, total int)
+	streamed int
+	total    int
 }
 
 // Run renders loaded's take to its GIF and prints the summary to stdout: the GIF's path, size and
@@ -150,7 +161,17 @@ func newPlan(loaded *clip.Clip, options Options, stderr io.Writer) (*plan, error
 	if out == "" {
 		out = loaded.Storyboard.Ship
 	}
-	return &plan{frame: loaded.Storyboard.Frame, pipeline: frames, palette: palette, out: out}, nil
+	rendering := &plan{
+		frame:    loaded.Storyboard.Frame,
+		pipeline: frames,
+		palette:  palette,
+		out:      out,
+		progress: options.Progress,
+	}
+	if rendering.progress != nil {
+		rendering.total = passCount * len(frames.Schedule().Frames(rendering.frame.FPS))
+	}
+	return rendering, nil
 }
 
 // writeWarnings prints each of the schedule's warnings on its own `warning:` line.

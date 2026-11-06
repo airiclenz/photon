@@ -102,7 +102,9 @@ func (p *plan) encode(ctx context.Context, commandLine []string) error {
 	return closeErr
 }
 
-// writeFrames writes each output frame's pixels, in order, as the pipeline builds them.
+// writeFrames writes each output frame's pixels, in order, as the pipeline builds them, and
+// reports each written frame to the plan's progress callback when there is one. The count runs
+// on across calls, so the second pass's frames follow the first's.
 func (p *plan) writeFrames(w io.Writer) error {
 	for _, frame := range p.pipeline.Schedule().Frames(p.frame.FPS) {
 		composed, err := p.pipeline.FrameAt(frame.Out)
@@ -111,6 +113,10 @@ func (p *plan) writeFrames(w io.Writer) error {
 		}
 		if _, err := w.Write(composed.Pix); err != nil {
 			return err
+		}
+		p.streamed++
+		if p.progress != nil {
+			p.progress(p.streamed, p.total)
 		}
 	}
 	return nil

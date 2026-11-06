@@ -268,6 +268,43 @@ func TestRunWritesAGIFOfTheScheduledLength(t *testing.T) {
 	}
 }
 
+// wantFrames is how many frames the clip streams per pass: its 2.5s at the storyboard's 10 fps.
+const wantFrames = 25
+
+// TestRunReportsProgress renders with a progress callback: it hears every frame of both passes,
+// done rising by one from 1 to total, and total is twice the clip's frame count throughout.
+func TestRunReportsProgress(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath(ffmpegProgram); err != nil {
+		t.Skip("ffmpeg is not on PATH")
+	}
+	loaded := loadRenderClip(t)
+	var dones, totals []int
+	options := Options{
+		Take: saveRenderTake(t, t.TempDir(), 20),
+		Progress: func(done, total int) {
+			dones = append(dones, done)
+			totals = append(totals, total)
+		},
+	}
+	var stderr bytes.Buffer
+
+	err := Run(context.Background(), loaded, options, io.Discard, &stderr)
+
+	if err != nil {
+		t.Fatalf("Run: %v\n%s", err, stderr.String())
+	}
+	wantTotal := 2 * wantFrames
+	if len(dones) != wantTotal {
+		t.Fatalf("want %d progress calls, one per frame of both passes, got %d", wantTotal, len(dones))
+	}
+	for index, done := range dones {
+		if done != index+1 || totals[index] != wantTotal {
+			t.Fatalf("call %d: want (%d, %d), got (%d, %d)", index, index+1, wantTotal, done, totals[index])
+		}
+	}
+}
+
 // captionedStoryboard is renderStoryboard with two captions: a red-boxed one at the top over
 // [100ms, 800ms) and a blue-boxed one at the bottom from beat 2's start (1s) for 1s, fading in
 // and out over 300ms each.

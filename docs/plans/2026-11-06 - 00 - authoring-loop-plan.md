@@ -196,7 +196,9 @@ stay green.
 Depends on item 3.
 **Commit:** `feat(tune): draft the full view while playing or scrubbing`
 
-## 5. Render progress hook
+## 5. Render progress hook — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the pass offset is a running frame count on `plan` (`streamed`) that carries across both `encode` calls instead of an explicit pass index; `plan.encode`/`writeFrames` keep their signatures, so TestRunMatchesTheOnePassEncode is unchanged. `total` is computed only when Progress is set.
 
 **What:**
 **Goal:** `render.Options` has `Progress func(done, total int)`. When it is set, `render.Run`
