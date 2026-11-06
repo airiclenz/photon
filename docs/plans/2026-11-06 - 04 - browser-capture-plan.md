@@ -309,7 +309,12 @@ NOTES (2026-11-06): retry — rewrapped the Build doc comment's error paragraph 
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/render/`, then `GOMEMLIMIT=2GiB go test ./internal/compose/`
 **Commit:** `feat(render): render a browser take from its image layer`
 
-## 16. Tune a browser take
+## 16. Tune a browser take — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the refusal needed no code: `storyboard.Apply` re-parses the edited bytes and `Frame.validatePage` already reports "frame.<key>: a frame with a viewport takes no <key>", which `Session.Apply` returns (the server's existing 422); the tests pin it for all five keys and pin that `frame.padding: 0` is accepted.
+NOTES (2026-11-06): `State` gains `viewport` (omitted on a terminal frame) and `device_scale` (`Frame.Scaling()`, 1 when unset; 0 on a terminal frame); the page panel's viewport row and device scale row are editable (`frame.viewport`, `frame.device_scale`), as cols and rows are on a terminal frame, previewing at the take's size with the re-record problem.
+NOTES (2026-11-06): consequential edit — README.md: made necessary by the inspector showing viewport and device_scale on a url clip (the Tuning paragraph listed only the terminal frame fields).
+NOTES (2026-11-06): session_test.go's `newSessionFixtureOf` now delegates to a new `startSessionFixture(config, board, saveTake)` shared with `newPageSessionFixture`; the pixels package is imported there as `imagelayer` because pagejs_test.go declares a `pixels` helper in the same test package.
 
 **What:**
 **Goal:** `photon tune` opens a browser take, previews and saves timing, camera, zoom, caption, `max_colors` and scale edits, shows viewport and device_scale instead of the terminal-only frame fields, and refuses a reflow edit (`frame.font_size`, `line_height`, `cols`, `rows`, `padding`) with a problem that says a viewport frame takes no such key.

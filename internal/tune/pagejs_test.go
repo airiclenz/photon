@@ -1896,6 +1896,38 @@ func TestPageJS_ClipFrame_EditsTheFontFields(t *testing.T) {
 	}
 }
 
+func TestPageJS_ClipFrame_APageTake_ShowsItsViewportFields(t *testing.T) {
+	t.Parallel()
+	session := newPageSessionFixture(t, pageSessionStoryboard).session
+	page := loadPage(t, session)
+
+	for _, label := range []string{"width (px)", "fps", "viewport (w, h)", "device scale", "scale", "max_colors"} {
+		if !page.hasField(label) {
+			t.Errorf("the clip frame's inspector shows no %q field row", label)
+		}
+	}
+	for _, label := range []string{"font size", "line height", "padding (px)", "cols", "rows"} {
+		if got := page.fieldCount(label); got != 0 {
+			t.Errorf("the clip frame's inspector shows %d %q field rows, want none on a page", got, label)
+		}
+	}
+	page.setField("max_colors", "value", "8")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":0},"field":%q,"value":8}`,
+		storyboard.OwnerClip, storyboard.FieldFrameMaxColors))
+	if got := session.State().MaxColors; got != 8 {
+		t.Errorf("the frame's max_colors after the edit: want 8, got %d", got)
+	}
+	page.setField("viewport (w, h)", "value", "12")
+
+	page.assertEdit(fmt.Sprintf(`{"owner":{"kind":%q,"index":0},"field":%q,"value":{"width":12,"height":%d}}`,
+		storyboard.OwnerClip, storyboard.FieldFrameViewport, pageViewport.Height))
+	want := storyboard.Viewport{Width: 12, Height: pageViewport.Height}
+	if got := session.State().Viewport; got == nil || *got != want {
+		t.Errorf("the frame's viewport after the edit: want %+v, got %v", want, got)
+	}
+}
+
 func TestPageJS_ClipFrame_RefusedMaxColors_ShowsTheLoadersMessage(t *testing.T) {
 	t.Parallel()
 	session := newSessionFixture(t).session
@@ -2725,6 +2757,28 @@ func TestPageJS_DragThePositionMarker_ClampsToTheGridAndSendsOneCellEdit(t *test
 		t.Errorf("the position's aim after the drop: want %v, got %v", markerDropCell, *moved.Aim)
 	}
 	page.assertOverlay(moved, markerDropCell)
+}
+
+// pageCameraStoryboard is pageSessionStoryboard with one camera position: a cell held from
+// 200ms into beat 1.
+const pageCameraStoryboard = pageSessionStoryboard + `camera:
+  positions:
+    - {cell: {x: 3, y: 2}, at: {beat: 1, offset: 200ms}, hold: 300ms}
+`
+
+func TestPageJS_DragThePositionMarkerOnAPageTake_ClampsToTheViewport(t *testing.T) {
+	t.Parallel()
+	session := newPageSessionFixture(t, pageCameraStoryboard).session
+	page := loadPage(t, session)
+	start := page.selectPosition(0)
+	camera := positionCamera(t, session, start, 0)
+	aim := *camera.Aim
+
+	page.dispatch(elementCameraMarker, "pointerdown", pointerAt(fullViewCellPixel(t, session, aim.X, aim.Y)))
+	page.dispatch(elementCameraMarker, "pointermove", pointerAt(offGrid))
+	page.settle()
+
+	page.assertOverlay(camera, image.Point{X: pageViewport.Width - 1, Y: pageViewport.Height - 1})
 }
 
 func TestPageJS_DropThePositionMarkerOnItsAim_SendsNoEdit(t *testing.T) {

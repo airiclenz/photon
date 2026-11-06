@@ -32,17 +32,21 @@ type State struct {
 	FPS       int             `json:"fps"`
 	Width     int             `json:"width"`
 
-	// The frame's other fields, which photon tune edits as frame.<key>. Cols and Rows are the
-	// storyboard's frame, not the take's: on another size than the take was recorded at — its
-	// cols×rows, or a page take's viewport and device scale — the preview draws at the take's
-	// and a clip problem stands until the take is re-recorded.
-	Cols       int     `json:"cols"`
-	Rows       int     `json:"rows"`
-	Padding    int     `json:"padding"`
-	FontSize   float64 `json:"font_size"`
-	LineHeight float64 `json:"line_height"`
-	Scale      int     `json:"scale"`
-	MaxColors  int     `json:"max_colors"`
+	// The frame's other fields, which photon tune edits as frame.<key>. Cols, Rows, Viewport and
+	// DeviceScale are the storyboard's frame, not the take's: on another size than the take was
+	// recorded at — its cols×rows, or a page take's viewport and device scale — the preview draws
+	// at the take's and a clip problem stands until the take is re-recorded. A frame that films a
+	// page sends its Viewport and its DeviceScale, the one it renders at, 1 when it sets none; a
+	// terminal's sends no viewport and a DeviceScale of 0.
+	Cols        int                  `json:"cols"`
+	Rows        int                  `json:"rows"`
+	Viewport    *storyboard.Viewport `json:"viewport,omitempty"`
+	DeviceScale float64              `json:"device_scale"`
+	Padding     int                  `json:"padding"`
+	FontSize    float64              `json:"font_size"`
+	LineHeight  float64              `json:"line_height"`
+	Scale       int                  `json:"scale"`
+	MaxColors   int                  `json:"max_colors"`
 
 	// Fields describes every field of the storyboard's owners, a read-only frame field under the
 	// key it is sent as above.
@@ -204,7 +208,7 @@ func (s *Session) State() State {
 	if s.current.frames != nil {
 		clipSchedule = s.current.frames.Schedule()
 	}
-	return State{
+	state := State{
 		Version:    s.version,
 		Build:      s.photonBuild,
 		Beats:      beatStates(board),
@@ -231,6 +235,11 @@ func (s *Session) State() State {
 		CanRedo:    s.history.canRedo(),
 		Export:     s.export.snapshot(),
 	}
+	if frame := board.Frame; frame.HasViewport() {
+		viewport := frame.Viewport
+		state.Viewport, state.DeviceScale = &viewport, frame.Scaling()
+	}
+	return state
 }
 
 // beatStates lists board's beats in storyboard order.

@@ -6,7 +6,7 @@
 // marker then follow the camera's fresh answer for the new state. Selecting anything else returns
 // the preview to the camera's frame.
 // It builds on app.js's window.tune: selectedEntry() for the selection, seek(ms) to its start,
-// state() for the grid's cols and rows, camera(ms, position) for the crop, the grid and the aim,
+// state() for the grid's size in cells, camera(ms, position) for the crop, the grid and the aim,
 // edit(edit) for the drop, frameTime() for the frame shown and frame for the preview <img>. It
 // adds followSelection, which app.js calls on every selection, and wantsFullView, which frames.js
 // reads, to window.tunePage, the page's internal namespace, and reads frames.js's frameView,
@@ -210,14 +210,23 @@
     }
     const bounds = frameImage.getBoundingClientRect();
     const grid = answer.grid;
-    const state = tune.state();
+    const size = gridSize(tune.state());
     const x = (event.clientX - bounds.left) * ratio;
     const y = (event.clientY - bounds.top) * ratio;
     drag.cell = {
-      x: clamp(Math.floor((x - grid.x) / grid.cell_width), state.cols - 1),
-      y: clamp(Math.floor((y - grid.y) / grid.cell_height), state.rows - 1),
+      x: clamp(Math.floor((x - grid.x) / grid.cell_width), size.cols - 1),
+      y: clamp(Math.floor((y - grid.y) / grid.cell_height), size.rows - 1),
     };
     draw();
+  }
+
+  // gridSize is the grid of state's frame in cells, {cols, rows}: a page's viewport, one CSS
+  // pixel to a cell, or the terminal's cols and rows.
+  function gridSize(state) {
+    if (state.viewport) {
+      return { cols: state.viewport.width, rows: state.viewport.height };
+    }
+    return { cols: state.cols, rows: state.rows };
   }
 
   // clamp is value held in [0, last].

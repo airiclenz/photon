@@ -3,6 +3,7 @@ package tune
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/airiclenz/photon/internal/storyboard"
@@ -57,5 +58,67 @@ func TestSession_CaptionEdit_SwapsTheEndAndUndoes(t *testing.T) {
 	}
 	if caption := undone.Captions[1]; caption.ForMS != 0 || caption.Until == nil || undone.IsDirty {
 		t.Errorf("after the undo: captions[1] %+v, dirty %v; want the until back, the bytes on disk", caption, undone.IsDirty)
+	}
+}
+
+func TestSession_APageTake_RefusesAReflowEdit(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		field, key string
+		value      any
+	}{
+		{storyboard.FieldFrameFontSize, "font_size", 12},
+		{storyboard.FieldFrameLineHeight, "line_height", 1.2},
+		{storyboard.FieldFrameCols, "cols", 20},
+		{storyboard.FieldFrameRows, "rows", 4},
+		{storyboard.FieldFramePadding, "padding", 4},
+	}
+	for _, test := range tests {
+		t.Run(test.key, func(t *testing.T) {
+			t.Parallel()
+			f := newPageSessionFixture(t, pageSessionStoryboard)
+
+			err := f.session.Apply(frameEdit(test.field, test.value))
+
+			want := "a frame with a viewport takes no " + test.key
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("Apply(%s: %v): got %v, want a refusal naming %q", test.field, test.value, err, want)
+			}
+			if state := f.session.State(); state.IsDirty || state.CanUndo {
+				t.Errorf("after the refusal: dirty %v, can undo %v; want neither", state.IsDirty, state.CanUndo)
+			}
+		})
+	}
+}
+
+// A viewport frame refuses a terminal key only when it is set: a padding of 0 is the key left
+// unset, so the edit stands.
+func TestSession_APageTake_TakesAZeroPadding(t *testing.T) {
+	t.Parallel()
+	f := newPageSessionFixture(t, pageSessionStoryboard)
+
+	err := f.session.Apply(frameEdit(storyboard.FieldFramePadding, 0))
+
+	if err != nil {
+		t.Fatalf("Apply(frame.padding: 0): %v", err)
+	}
+	if state := f.session.State(); len(state.Errors) != 0 {
+		t.Errorf("errors after the zero padding: %+v", state.Errors)
+	}
+}
+
+func TestSession_APageTake_TakesMaxColorsAndScaleEdits(t *testing.T) {
+	t.Parallel()
+	f := newPageSessionFixture(t, pageSessionStoryboard)
+
+	f.apply(t, frameEdit(storyboard.FieldFrameMaxColors, 8))
+	f.apply(t, frameEdit(storyboard.FieldFrameScale, 3))
+
+	state := f.session.State()
+	if state.MaxColors != 8 || state.Scale != 3 || len(state.Errors) != 0 {
+		t.Errorf("max_colors %d, scale %d, errors %+v; want 8, 3, none", state.MaxColors, state.Scale, state.Errors)
+	}
+	if _, err := f.session.Frame(0); err != nil {
+		t.Errorf("Frame(0) after the edits: %v", err)
 	}
 }

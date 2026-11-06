@@ -189,7 +189,10 @@ shipped size with a fast scaler, and once stopped it settles on the exact frame:
 composed frame, quantized to `frame.max_colors` colours as the GIF is. Its timeline edits
 each beat's `duration`, `hold` and `cut`, and its inspector the clip's `frame.width`,
 `fps`, `font_size`, `line_height`, `padding`, `scale`, `cols`, `rows` and `max_colors`, each
-refused outside the range the loader takes. A `cols` or `rows` other than the take's keeps the
+refused outside the range the loader takes. On a `launch.url` clip it shows `viewport` and
+`device_scale` in place of `font_size`, `line_height`, `padding`, `cols` and `rows`, and refuses
+an edit that sets one of those five, since a frame with a viewport takes none of them. A `cols`
+or `rows` other than the take's, or a page's `viewport` or `device_scale`, keeps the
 preview at the take's recorded size and stands as a clip problem until the take is re-recorded
 with `photon record`; Save still writes it, and `photon render` refuses the mismatch. The
 storyboard's `camera.positions`, `camera.zooms` and `captions` show on lanes of their own under

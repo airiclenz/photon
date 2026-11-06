@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -15,6 +19,7 @@ import (
 	"time"
 
 	"github.com/airiclenz/photon/internal/clip"
+	imagelayer "github.com/airiclenz/photon/internal/pixels"
 	"github.com/airiclenz/photon/internal/render"
 	"github.com/airiclenz/photon/internal/storyboard"
 	"github.com/airiclenz/photon/internal/take"
@@ -76,6 +81,12 @@ beats:
     duration: 1s
 `
 
+// pageViewport and pageDeviceScale are pageSessionStoryboard's frame, which savePageTake's take
+// was recorded at.
+var pageViewport = storyboard.Viewport{Width: 16, Height: 10}
+
+const pageDeviceScale = 2
+
 // tooWideText is a caption's text whose box is wider than the session fixture's frame, so the
 // storyboard parses but its pipeline does not build: one word, which no wrap can break.
 var tooWideText = strings.Repeat("toowide", 20)
@@ -110,15 +121,34 @@ func newSessionFixture(t *testing.T) sessionFixture {
 // dir and starts a session on them.
 func newSessionFixtureOf(t *testing.T, board string) sessionFixture {
 	t.Helper()
+	return startSessionFixture(t, sessionConfig, board, func(t *testing.T, takePath string) {
+		t.Helper()
+		saveSessionTake(t, takePath, fixtureCols, time.Now())
+	})
+}
+
+// newPageSessionFixture writes pageSessionConfig, board as the storyboard and [savePageTake]'s
+// take into a fresh project dir and starts a session on them.
+func newPageSessionFixture(t *testing.T, board string) sessionFixture {
+	t.Helper()
+	return startSessionFixture(t, pageSessionConfig, board, savePageTake)
+}
+
+// startSessionFixture writes config, board as the storyboard and the take saveTake writes into a
+// fresh project dir and starts a session on them.
+func startSessionFixture(
+	t *testing.T, config, board string, saveTake func(t *testing.T, takePath string),
+) sessionFixture {
+	t.Helper()
 	project := t.TempDir()
-	writeTestFile(t, filepath.Join(project, "photon.yaml"), sessionConfig)
+	writeTestFile(t, filepath.Join(project, "photon.yaml"), config)
 	boardPath := filepath.Join(project, "tuned.yaml")
 	writeTestFile(t, boardPath, board)
 	if err := os.Chmod(boardPath, boardMode); err != nil {
 		t.Fatalf("chmod: %v", err)
 	}
 	takePath := filepath.Join(t.TempDir(), "tuned.take")
-	saveSessionTake(t, takePath, fixtureCols, time.Now())
+	saveTake(t, takePath)
 	loaded, err := clip.Load(boardPath, "", t.TempDir())
 	if err != nil {
 		t.Fatalf("clip.Load: %v", err)
@@ -160,6 +190,34 @@ func saveSessionTake(t *testing.T, path string, cols int, modTime time.Time) {
 	}
 	if err := os.Chtimes(path, modTime, modTime); err != nil {
 		t.Fatalf("chtimes: %v", err)
+	}
+}
+
+// savePageTake writes to path a take of pageSessionStoryboard's page: a 16×10 CSS-pixel viewport
+// at device scale 2 with an image layer, a dark frame from 0 and a light one from 500ms, beat 1
+// starting at 0.
+func savePageTake(t *testing.T, path string) {
+	t.Helper()
+	recorded := &take.Take{
+		Cols: pageViewport.Width, Rows: pageViewport.Height, FPS: 10,
+		Cell:   take.CellSize{W: pageDeviceScale, H: pageDeviceScale},
+		Events: []take.Event{{At: 0, Kind: take.EventBeatStart, Beat: 1}},
+	}
+	fills := []color.RGBA{{R: 0x10, G: 0x20, B: 0x30, A: 0xff}, {R: 0xe0, G: 0xe0, B: 0xd0, A: 0xff}}
+	bounds := image.Rect(0, 0, pageViewport.Width*pageDeviceScale, pageViewport.Height*pageDeviceScale)
+	var encoder imagelayer.Encoder
+	for index, fill := range fills {
+		at := time.Duration(index) * 500 * time.Millisecond
+		frame := image.NewRGBA(bounds)
+		draw.Draw(frame, bounds, image.NewUniform(fill), image.Point{}, draw.Src)
+		entry, err := encoder.Encode(at, frame)
+		if err != nil {
+			t.Fatalf("Encode the frame at %s: %v", at, err)
+		}
+		recorded.Snapshots = append(recorded.Snapshots, take.Snapshot{At: at, Image: entry})
+	}
+	if err := take.Save(path, recorded); err != nil {
+		t.Fatalf("take.Save: %v", err)
 	}
 }
 
@@ -1051,5 +1109,61 @@ func TestSession_ApplyAndState_RunInParallel(t *testing.T) {
 	}
 	if got := beatDuration(t, f.session.State(), 1); got != 1100 && got != 1200 {
 		t.Errorf("beat 1 duration %dms, want one of the applied", got)
+	}
+}
+
+func TestSession_State_APageTake_SendsItsViewportAndDeviceScale(t *testing.T) {
+	t.Parallel()
+	f := newPageSessionFixture(t, pageSessionStoryboard)
+
+	got := f.session.State()
+
+	if got.Viewport == nil || *got.Viewport != pageViewport || got.DeviceScale != pageDeviceScale {
+		t.Errorf("viewport %v at device scale %g, want %+v at %d",
+			got.Viewport, got.DeviceScale, pageViewport, pageDeviceScale)
+	}
+	if len(got.Errors) != 0 {
+		t.Errorf("errors on a take of the storyboard's page: %+v", got.Errors)
+	}
+}
+
+func TestSession_State_ATerminalTake_SendsNoViewport(t *testing.T) {
+	t.Parallel()
+	f := newSessionFixture(t)
+
+	got := f.session.State()
+
+	if got.Viewport != nil || got.DeviceScale != 0 {
+		t.Errorf("viewport %v at device scale %g, want none at 0", got.Viewport, got.DeviceScale)
+	}
+}
+
+func TestSession_APageTake_BuildsItsFramesAndSavesATimingEdit(t *testing.T) {
+	t.Parallel()
+	f := newPageSessionFixture(t, pageSessionStoryboard)
+
+	encoded, frameErr := f.session.Frame(0)
+	f.apply(t, beatEdit(1, storyboard.FieldDuration, 1200))
+	saveErr := f.session.Save()
+
+	if frameErr != nil {
+		t.Fatalf("Frame(0): %v", frameErr)
+	}
+	frame, err := png.Decode(bytes.NewReader(encoded))
+	if err != nil {
+		t.Fatalf("decode the frame at 0: %v", err)
+	}
+	if frame.Bounds().Empty() {
+		t.Error("the frame at 0 holds no pixels")
+	}
+	if saveErr != nil {
+		t.Fatalf("Save: %v", saveErr)
+	}
+	want := strings.Replace(pageSessionStoryboard, "duration: 1s\n", "duration: 1.2s\n", 1)
+	if got := f.readDisk(t); got != want {
+		t.Errorf("saved:\n%s\nwant:\n%s", got, want)
+	}
+	if state := f.session.State(); state.IsDirty || len(state.Errors) != 0 {
+		t.Errorf("after the save: dirty %v, errors %+v; want clean, none", state.IsDirty, state.Errors)
 	}
 }
