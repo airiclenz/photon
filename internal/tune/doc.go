@@ -43,9 +43,11 @@
 // grid's place — and the cell a camera position aims at. [Session.Pick] turns cells picked on the
 // camera's frame or on the full view into a [Proposal]: the picked text, escaped, as a target the
 // resolver resolves back onto them, with its area and nth, and its YAML for the camera, a click, a
-// seen expect and either end of a drag. [Session.Export] renders the GIF of the saved storyboard in
-// the background, as `photon render` renders it, refused while the storyboard changed on disk, has
-// unsaved edits or an error, or another export runs; the state reports its progress and outcome.
+// seen expect and either end of a drag; on a page it proposes beside it the clip's selector whose
+// smallest recorded box holds them, which no seen expect takes. [Session.Export] renders the GIF of
+// the saved storyboard in the background, as `photon render` renders it, refused while the
+// storyboard changed on disk, has unsaved edits or an error, or another export runs; the state
+// reports its progress and outcome.
 //
 // [Run] serves a session to a browser on this machine: it listens on 127.0.0.1 only, prints the
 // page's address, and serves the embedded page under page/ and a JSON API over the session — its

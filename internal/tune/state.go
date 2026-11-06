@@ -99,12 +99,14 @@ type ZoomState struct {
 	Factor  float64     `json:"factor"`
 }
 
-// TargetState is a position's text target: a regex over the screen's rows, which match counts
+// TargetState is a position's target: a regex over the screen's rows, or on a page the CSS
+// selector whose recorded box it aims at in its place (left out when empty), which match counts
 // (0 is the first, -1 the last) and the area searched (empty is the whole screen).
 type TargetState struct {
-	Text string `json:"text"`
-	Nth  int    `json:"nth"`
-	Area string `json:"area"`
+	Text     string `json:"text"`
+	Selector string `json:"selector,omitempty"`
+	Nth      int    `json:"nth"`
+	Area     string `json:"area"`
 }
 
 // PointState is where a camera position aims: a Target or a Cell, one of the two.
@@ -280,7 +282,9 @@ func pointState(point storyboard.Point) PointState {
 	if point.Cell != nil {
 		return PointState{Cell: &CellState{X: point.Cell.X, Y: point.Cell.Y}}
 	}
-	return PointState{Target: &TargetState{Text: point.Text, Nth: int(point.Nth), Area: point.Area}}
+	return PointState{Target: &TargetState{
+		Text: point.Text, Selector: point.Selector, Nth: int(point.Nth), Area: point.Area,
+	}}
 }
 
 // zoomStates lists board's camera zooms in storyboard order.

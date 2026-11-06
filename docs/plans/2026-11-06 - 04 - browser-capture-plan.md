@@ -327,7 +327,13 @@ NOTES (2026-11-06): session_test.go's `newSessionFixtureOf` now delegates to a n
 **Acceptance:** `GOMEMLIMIT=2GiB go test ./internal/tune/`
 **Commit:** `feat(tune): tune a browser take`
 
-## 17. Pick selector targets in tune
+## 17. Pick selector targets in tune — ✅ DONE (2026-11-06)
+
+NOTES (2026-11-06): the selector proposal names no area: its nth counts the picked box among the selector's matches over the whole screen, so the plan's "within the area if any" has no area to apply; the text proposal is still required, so a pick over blank cells inside a box stays a 422 as before.
+NOTES (2026-11-06): picker.js creates its "Use selector target" / "Use text target" switch button itself and appends it beside Set as position target, since index.html is not in the item's Files; the Copy seen button is disabled while the selector proposal stands.
+NOTES (2026-11-06): tests beyond the listed test files — internal/storyboard/edit_beat_test.go (new; the YAMLFlow test the item's Tests line asks for, edit_beat.go had no test file) and internal/tune/pagejs_test.go (one goja test of the picker's switch between the two proposals).
+NOTES (2026-11-06): consequential edit — internal/tune/doc.go: made necessary by Session.Pick proposing a selector target beside the text one
+NOTES (2026-11-06): consequential edit — README.md: made necessary by the picker's new selector proposal and its switch button (user-facing tune behaviour)
 
 **What:**
 **Goal:** tune's picker on a browser take proposes the text run under the pick and, when one of the clip's selectors has a recorded box holding the pick, that selector target (smallest box first); "set as position target" writes either.

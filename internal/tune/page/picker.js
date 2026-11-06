@@ -8,8 +8,11 @@
 // read the standing proposal's target. Nothing here maps pixels to cells or resolves a target: the
 // drag's two corners go to /api/pick in the shown frame's pixels, with view full while it shows
 // the full view, and the server answers the resolver-checked proposal: its target as an edit takes
-// it, its box in that frame's pixels and the YAML snippets that write it. Set as position target
-// sends that target as the selected position's position.target edit.
+// it, its box in that frame's pixels and the YAML snippets that write it — and, on a page whose
+// pick lies in a recorded box of one of the clip's selectors, the selector proposal beside it, in
+// the same shape with no seen snippet. A button shown only then switches the proposal the result
+// shows, the box draws, the copies write and Set as position target sends as the selected
+// position's position.target edit; a fresh pick shows the text proposal first.
 "use strict";
 
 (() => {
@@ -22,6 +25,8 @@
   const FIELD_POSITION_TARGET = "position.target";
   const SET_TARGET_TITLE = "Aim the selected position at the picked target";
   const NO_POSITION_TITLE = "Select a position to set its target";
+  const USE_SELECTOR_LABEL = "Use selector target";
+  const USE_TEXT_LABEL = "Use text target";
 
   const frameImage = tune.frame;
   const view = {
@@ -34,11 +39,15 @@
     target: document.getElementById("pick-target"),
     setTarget: document.getElementById("pick-set-target"),
     copies: document.querySelectorAll("#pick-result [data-snippet]"),
+    choose: Object.assign(document.createElement("button"), { type: "button", hidden: true }),
   };
 
   let isArmed = false;
   let drag = null;
+  // proposal is the pick's answer, the text proposal with any selector proposal on its selector;
+  // isSelectorChosen says which of the two stands.
   let proposal = null;
+  let isSelectorChosen = false;
   let proposalMs = null;
   let proposalView = null;
   // shownPosition is the selected position's index the set-target button was last enabled for,
@@ -177,15 +186,44 @@
 
   function showProposal(answer, ms, frameView) {
     proposal = answer;
+    isSelectorChosen = false;
     proposalMs = ms;
     proposalView = frameView;
-    view.target.textContent = answer.snippets[SNIPPET_ZOOM];
     view.result.hidden = false;
+    showChosen();
+  }
+
+  // chosen is the standing proposal: the text one, or the selector one once chosen; null while
+  // none stands.
+  function chosen() {
+    return proposal && isSelectorChosen ? proposal.selector : proposal;
+  }
+
+  // showChosen shows the standing proposal's target, enables the copies of the snippets it has and
+  // offers the other proposal while the pick has two.
+  function showChosen() {
+    const shown = chosen();
+    view.target.textContent = shown.snippets[SNIPPET_ZOOM];
+    view.choose.hidden = !proposal.selector;
+    view.choose.textContent = isSelectorChosen ? USE_TEXT_LABEL : USE_SELECTOR_LABEL;
+    for (const button of view.copies) {
+      button.disabled = !(button.dataset.snippet in shown.snippets);
+    }
     drawBox();
+  }
+
+  // switchProposal switches the standing proposal between the pick's text and selector ones.
+  function switchProposal() {
+    if (!proposal || !proposal.selector) {
+      return;
+    }
+    isSelectorChosen = !isSelectorChosen;
+    showChosen();
   }
 
   function clearProposal() {
     proposal = null;
+    isSelectorChosen = false;
     proposalMs = null;
     proposalView = null;
     view.result.hidden = true;
@@ -202,15 +240,16 @@
       view.box.hidden = true;
       return;
     }
-    const rect = proposal.rect;
+    const rect = chosen().rect;
     place(view.box, rect.x / ratio, rect.y / ratio, rect.w / ratio, rect.h / ratio);
   }
 
   function copySnippet(key) {
-    if (!proposal) {
+    const shown = chosen();
+    if (!shown || !(key in shown.snippets)) {
       return;
     }
-    navigator.clipboard.writeText(proposal.snippets[key]).then(
+    navigator.clipboard.writeText(shown.snippets[key]).then(
       () => report("Copied the " + key + " YAML", false),
       (error) => report("Copy failed: " + error.message, true),
     );
@@ -243,7 +282,7 @@
       return;
     }
     const owner = { kind: page.ENTRY_POSITION, index };
-    tune.edit({ owner, field: FIELD_POSITION_TARGET, value: proposal.target }).then(
+    tune.edit({ owner, field: FIELD_POSITION_TARGET, value: chosen().target }).then(
       () => report("The position aims at the picked target", false),
       (error) => report(error.message, true),
     );
@@ -289,13 +328,16 @@
       button.addEventListener("click", () => copySnippet(button.dataset.snippet));
     }
     view.setTarget.addEventListener("click", setPositionTarget);
+    view.setTarget.parentNode.append(view.choose);
+    view.choose.addEventListener("click", switchProposal);
     followPosition();
   }
 
   // pickProposal is the standing proposal's target, as an edit takes it, or null while none
   // stands.
   function pickProposal() {
-    return proposal ? proposal.target : null;
+    const shown = chosen();
+    return shown ? shown.target : null;
   }
 
   Object.assign(page, { pickProposal, reportPick: report });

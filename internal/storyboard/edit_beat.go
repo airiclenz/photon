@@ -145,10 +145,13 @@ func (s *splicer) setCut(beat yamledit.Path, value json.RawMessage) error {
 }
 
 // YAMLFlow writes t as a YAML flow mapping, the one spelling of a target that photon tune's pick
-// snippets write: the last match is nth: last, and an nth of first and an empty area are left
-// out.
+// snippets write: its selector in place of its text when it has one, the last match as
+// nth: last, and an nth of first and an empty area left out.
 func (t Target) YAMLFlow() string {
 	fields := []string{"text: " + yamledit.Quote(t.Text)}
+	if t.Selector != "" {
+		fields = []string{"selector: " + yamledit.Quote(t.Selector)}
+	}
 	switch {
 	case t.Nth == NthLast:
 		fields = append(fields, "nth: "+nthLastWord)

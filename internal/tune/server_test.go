@@ -607,6 +607,54 @@ func TestHandler_Pick_ReturnsTheProposal(t *testing.T) {
 	}
 }
 
+func TestHandler_PickOnAPage_AddsTheSelectorProposal(t *testing.T) {
+	t.Parallel()
+	session := newPickPageSession(t)
+	handler := newHandler(session, testAddr)
+	body := pickBody(t, 0, cellPixel(t, session, 2, 6), cellPixel(t, session, 5, 6))
+
+	response := post(t, handler, "/api/pick", body)
+
+	assertStatus(t, response, http.StatusOK)
+	var proposal pickResponse
+	decodeResponse(t, response, &proposal)
+	if want := (storyboard.Target{Text: "ab", Nth: 2}); proposal.Target != want {
+		t.Errorf("target: want the text proposal %+v, got %+v", want, proposal.Target)
+	}
+	selected := proposal.Selector
+	if selected == nil {
+		t.Fatalf("no selector proposal in %+v", proposal)
+	}
+	if want := (storyboard.Target{Selector: ".item", Nth: 2}); selected.Target != want {
+		t.Errorf("selector target: want %+v, got %+v", want, selected.Target)
+	}
+	if want := pickPageSelectors[".item"][1]; selected.Box != want {
+		t.Errorf("selector box: want %+v, got %+v", want, selected.Box)
+	}
+	if selected.Rect.W <= 0 || selected.Rect.H <= 0 {
+		t.Errorf("selector rect: want a non-empty rectangle, got %+v", selected.Rect)
+	}
+	if _, isSeen := selected.Snippets[snippetSeen]; isSeen || selected.Snippets[snippetZoom] == "" {
+		t.Errorf("selector snippets: want a zoom and no seen, got %v", selected.Snippets)
+	}
+}
+
+func TestHandler_PickOnATerminalTake_LeavesOutTheSelector(t *testing.T) {
+	t.Parallel()
+	session := newPickSession(t)
+	handler := newHandler(session, testAddr)
+	body := pickBody(t, 0, cellPixel(t, session, 0, 5), cellPixel(t, session, 5, 5))
+
+	response := post(t, handler, "/api/pick", body)
+
+	assertStatus(t, response, http.StatusOK)
+	var answer map[string]json.RawMessage
+	decodeResponse(t, response, &answer)
+	if selected, isSelected := answer["selector"]; isSelected {
+		t.Errorf("want no selector key, got %s", selected)
+	}
+}
+
 func TestHandler_Pick_FullView_MapsThroughTheFullView(t *testing.T) {
 	t.Parallel()
 	session := newPickSessionOf(t, zoomedPickStoryboard)

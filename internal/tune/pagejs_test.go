@@ -3152,3 +3152,52 @@ func TestPageJS_ExportButton_ReportsAFailedRenderAndLeavesTheSessionClean(t *tes
 		t.Error("the session after a failed export: want it clean, got it dirty")
 	}
 }
+
+func TestPageJS_PickOnAPage_SwitchesToTheSelectorProposal(t *testing.T) {
+	t.Parallel()
+	session := newPickPageSession(t)
+	page := loadPage(t, session)
+	proposedText := page.pickAcross(session, 6, 2, 5)
+	// switchProposal clicks the one button labelled label and settles the page.
+	switchProposal := func(label string) {
+		t.Helper()
+		found := page.eval(fmt.Sprintf(`{
+			const buttons = document.querySelectorAll("button").filter((node) => node.textContent === %q);
+			if (buttons.length === 1) {
+				buttons[0].dispatchEvent(new Event("click"));
+			}
+			buttons.length === 1;
+		}`, label)).ToBoolean()
+		if !found {
+			t.Fatalf("no one button labelled %q", label)
+		}
+		page.settle()
+	}
+	shownTarget := func() string {
+		return page.eval("JSON.stringify(window.tunePage.pickProposal())").String()
+	}
+
+	textShown := page.text("pick-target")
+	textTarget := shownTarget()
+	switchProposal("Use selector target")
+	selectorShown := page.text("pick-target")
+	selectorTarget := shownTarget()
+	switchProposal("Use text target")
+
+	if want := "{text: 'ab', nth: 2}"; textShown != want {
+		t.Errorf("first shown: want the text proposal %q, got %q", want, textShown)
+	}
+	if textTarget != string(proposedText) {
+		t.Errorf("first standing target: want %s, got %s", proposedText, textTarget)
+	}
+	if want := "{selector: '.item', nth: 2}"; selectorShown != want {
+		t.Errorf("after the switch: want the selector proposal %q, got %q", want, selectorShown)
+	}
+	if want := `{"text":"","selector":".item","nth":2}`; selectorTarget != want {
+		t.Errorf("standing target after the switch: want %s, got %s", want, selectorTarget)
+	}
+	if back := shownTarget(); back != textTarget {
+		t.Errorf("after switching back: want %s, got %s", textTarget, back)
+	}
+	page.assertQuiet()
+}

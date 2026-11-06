@@ -117,13 +117,15 @@ type pixelPoint struct {
 	Y int `json:"y"`
 }
 
-// pickResponse is a pick's answer: the target, the cell box it resolves to, that box in
-// output-frame pixels, and the snippets keyed by place.
+// pickResponse is a pick's answer: the text target, the cell box it resolves to, that box in
+// output-frame pixels, and the snippets keyed by place; on a page, Selector is the selector
+// target proposed beside it in the same shape, left out when there is none.
 type pickResponse struct {
 	Target   storyboard.Target `json:"target"`
 	Box      take.Box          `json:"box"`
 	Rect     pixelRect         `json:"rect"`
 	Snippets map[string]string `json:"snippets"`
+	Selector *pickResponse     `json:"selector,omitempty"`
 }
 
 // pickTargetOf is target as a pick proposes it on the wire: an nth of first becomes the zero nth,
@@ -449,15 +451,20 @@ func (s *server) handlePick(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, responseOf(proposal))
 }
 
-// responseOf is proposal as a pick answers it.
+// responseOf is proposal as a pick answers it, its selector proposal nested alike.
 func responseOf(proposal Proposal) pickResponse {
 	rect := proposal.Rect
-	return pickResponse{
+	response := pickResponse{
 		Target:   pickTargetOf(proposal.Target),
 		Box:      proposal.Box,
 		Rect:     pixelRect{X: rect.Min.X, Y: rect.Min.Y, W: rect.Dx(), H: rect.Dy()},
 		Snippets: proposal.Snippets,
 	}
+	if proposal.Selector != nil {
+		selector := responseOf(*proposal.Selector)
+		response.Selector = &selector
+	}
+	return response
 }
 
 // decodeBody decodes r's JSON body into into, refusing unknown fields and trailing data. On

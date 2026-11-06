@@ -70,11 +70,16 @@ func (v FrameView) rect(frames *render.Pipeline, out time.Duration, b take.Box) 
 //   - click: a click action, click: {target: {…}};
 //   - seen: an expect, seen: '…', or {seen: '…', area: '…'} when the target names an area;
 //   - drag-from and drag-to: a drag's two ends, from: {…} and to: {…}.
+//
+// Selector is the selector target a pick on a page proposes beside the text one, in the same
+// shape, nil when the pick lies in no recorded box of the clip's selectors. Its snippets have no
+// seen, which takes no selector, and it has no Selector of its own.
 type Proposal struct {
 	Target   storyboard.Target
 	Box      take.Box
 	Rect     image.Rectangle
 	Snippets map[string]string
+	Selector *Proposal
 }
 
 // Pick proposes a target for the cells a rectangle from from to to picks, in output-frame pixels on
@@ -85,7 +90,10 @@ type Proposal struct {
 // declared areas holding the row, fewest rows first and equal heights in name order, and the first
 // where it is the only match names its area; else the smallest such area — or the whole screen when
 // none holds the row — names it with nth counting to the picked match. The proposal is returned
-// only when the resolver resolves that target to a box covering the picked cells. It fails with
+// only when the resolver resolves that target to a box covering the picked cells. Its Selector is
+// the smallest box recorded for one of the clip's selectors that holds the picked cells, equal
+// sizes in selector order then reading order, as that selector with nth counting to the box over
+// the whole screen, resolver-checked alike; a terminal take records no boxes. It fails with
 // [render.ErrOutsideClip] when out is not in [0, length) and with [ErrNoProposal] when the pick
 // starts off the screen, picks only blanks or does not resolve.
 func (s *Session) Pick(
@@ -120,12 +128,31 @@ func (s *Session) Pick(
 	if err != nil {
 		return Proposal{}, err
 	}
+	proposal := proposalOf(shown.frames, out, view, proposed, resolved)
+
+	selected, selectedBox, isSelected, err := proposer.proposeSelector(shown.loaded.Selectors())
+	if err != nil {
+		return Proposal{}, err
+	}
+	if isSelected {
+		selectorProposal := proposalOf(shown.frames, out, view, selected, selectedBox)
+		proposal.Selector = &selectorProposal
+	}
+	return proposal, nil
+}
+
+// proposalOf is the proposal of target, resolved to box: box's rect on the frame view shows at
+// output time out, and target's snippets.
+func proposalOf(
+	frames *render.Pipeline, out time.Duration, view FrameView,
+	proposed storyboard.Target, box take.Box,
+) Proposal {
 	return Proposal{
 		Target:   proposed,
-		Box:      resolved,
-		Rect:     view.rect(shown.frames, out, resolved),
+		Box:      box,
+		Rect:     view.rect(frames, out, box),
 		Snippets: snippetsOf(proposed),
-	}, nil
+	}
 }
 
 // pickedCells returns the box and the text a pick of row from column first to last inclusive
@@ -207,7 +234,7 @@ func (p proposer) propose(areas map[string]config.Area) (storyboard.Target, take
 		return storyboard.Target{}, take.Box{}, err
 	}
 	for _, area := range candidates {
-		matches, err := p.matches(area.name)
+		matches, err := p.matches(storyboard.Target{Text: p.text, Area: area.name})
 		if err != nil {
 			return storyboard.Target{}, take.Box{}, err
 		}
@@ -220,7 +247,7 @@ func (p proposer) propose(areas map[string]config.Area) (storyboard.Target, take
 	if len(candidates) > 0 {
 		smallest = candidates[0].name
 	}
-	matches, err := p.matches(smallest)
+	matches, err := p.matches(storyboard.Target{Text: p.text, Area: smallest})
 	if err != nil {
 		return storyboard.Target{}, take.Box{}, err
 	}
@@ -260,12 +287,45 @@ func (p proposer) areasHolding(areas map[string]config.Area) ([]candidate, error
 	return holding, nil
 }
 
-// matches returns every match of the text in the area, in the resolver's reading order: the
+// proposeSelector returns the selector target for the smallest box, by area, that one of
+// selectors has on the screen holding the picked cells, equal sizes in the order selectors lists
+// them and then in reading order, and the box it resolves to. Its nth counts to that box among
+// the selector's matches over the whole screen, and it is checked by resolving it again. It
+// reports false when no box of selectors holds the picked cells.
+func (p proposer) proposeSelector(
+	selectors []string,
+) (storyboard.Target, take.Box, bool, error) {
+	var proposed storyboard.Target
+	smallest := take.Box{}
+	for _, selector := range selectors {
+		matches, err := p.matches(storyboard.Target{Selector: selector})
+		if err != nil {
+			return storyboard.Target{}, take.Box{}, false, err
+		}
+		for at, match := range matches {
+			isSmaller := proposed.Selector == "" || match.W*match.H < smallest.W*smallest.H
+			if !covers(match, p.picked) || !isSmaller {
+				continue
+			}
+			proposed, smallest = storyboard.Target{Selector: selector}, match
+			if at > 0 {
+				proposed.Nth = storyboard.Nth(at + 1)
+			}
+		}
+	}
+	if proposed.Selector == "" {
+		return storyboard.Target{}, take.Box{}, false, nil
+	}
+	checked, box, err := p.checked(proposed)
+	return checked, box, err == nil, err
+}
+
+// matches returns every match of wanted, whatever its nth, in the resolver's reading order: the
 // resolver is asked for the first, the second and on until it runs out.
-func (p proposer) matches(area string) ([]take.Box, error) {
+func (p proposer) matches(wanted storyboard.Target) ([]take.Box, error) {
 	var found []take.Box
 	for nth := storyboard.NthFirst; ; nth++ {
-		wanted := storyboard.Target{Text: p.text, Nth: nth, Area: area}
+		wanted.Nth = nth
 		box, err := p.resolver.Target(p.screen, wanted)
 		if errors.Is(err, target.ErrNotOnScreen) {
 			return found, nil
@@ -286,8 +346,8 @@ func (p proposer) checked(proposed storyboard.Target) (storyboard.Target, take.B
 	}
 	if !covers(box, p.picked) {
 		return storyboard.Target{}, take.Box{}, fmt.Errorf(
-			"%w: /%s/ resolves to %+v, not the picked cells %+v",
-			ErrNoProposal, proposed.Text, box, p.picked,
+			"%w: %s resolves to %+v, not the picked cells %+v",
+			ErrNoProposal, proposed.YAMLFlow(), box, p.picked,
 		)
 	}
 	return proposed, box, nil
@@ -300,18 +360,23 @@ func covers(box, inner take.Box) bool {
 }
 
 // snippetsOf writes proposed as YAML for each place a storyboard takes a target. A seen expect
-// has no nth: it passes on any match, so it carries the text and the area alone.
+// has no nth: it passes on any match, so it carries the text and the area alone, and it takes no
+// selector, so a selector target has no seen snippet.
 func snippetsOf(proposed storyboard.Target) map[string]string {
 	flow := proposed.YAMLFlow()
+	snippets := map[string]string{
+		snippetZoom:     flow,
+		snippetClick:    "click: {target: " + flow + "}",
+		snippetDragFrom: "from: " + flow,
+		snippetDragTo:   "to: " + flow,
+	}
+	if proposed.Selector != "" {
+		return snippets
+	}
 	seen := "seen: " + yamledit.Quote(proposed.Text)
 	if proposed.Area != "" {
 		seen = "{" + seen + ", area: " + yamledit.Quote(proposed.Area) + "}"
 	}
-	return map[string]string{
-		snippetZoom:     flow,
-		snippetClick:    "click: {target: " + flow + "}",
-		snippetSeen:     seen,
-		snippetDragFrom: "from: " + flow,
-		snippetDragTo:   "to: " + flow,
-	}
+	snippets[snippetSeen] = seen
+	return snippets
 }

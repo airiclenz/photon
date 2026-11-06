@@ -472,3 +472,157 @@ func TestSession_LastMatchTarget_RoundTripsThroughTheProposalAndItsApply(t *test
 		t.Errorf("errors after the edit: %+v", state.Errors)
 	}
 }
+
+// pickPageStoryboard is pageSessionStoryboard with two camera positions, one aimed at each
+// selector the page pick take records, so the clip names both.
+const pickPageStoryboard = pageSessionStoryboard + `camera:
+  positions:
+    - {selector: '.item', at: 0ms, hold: 200ms}
+    - {selector: '.list', at: 300ms, hold: 200ms}
+`
+
+// pickPageRuns is the page pick take's text layer: "ab" in each of the two .item boxes, and "z"
+// outside every recorded box. Each grapheme is two CSS pixels wide and every run two tall.
+var pickPageRuns = []take.TextRun{
+	{Text: "ab", Box: take.Box{X: 2, Y: 2, W: 4, H: 2}, Edges: []int{2, 4, 6}},
+	{Text: "ab", Box: take.Box{X: 2, Y: 6, W: 4, H: 2}, Edges: []int{2, 4, 6}},
+	{Text: "z", Box: take.Box{X: 13, Y: 2, W: 2, H: 2}, Edges: []int{13, 15}},
+}
+
+// pickPageSelectors is the page pick take's recorded boxes: two .item boxes, one under the other,
+// inside one .list box.
+var pickPageSelectors = map[string][]take.Box{
+	".item": {{X: 1, Y: 1, W: 8, H: 3}, {X: 1, Y: 5, W: 8, H: 3}},
+	".list": {{X: 0, Y: 0, W: 12, H: 9}},
+}
+
+// savePickPageTake writes to path savePageTake's take of pageSessionStoryboard's page, every
+// snapshot showing pickPageRuns and recording pickPageSelectors.
+func savePickPageTake(t *testing.T, path string) {
+	t.Helper()
+	savePageTake(t, path)
+	recorded, err := take.Load(path)
+	if err != nil {
+		t.Fatalf("take.Load: %v", err)
+	}
+	for index := range recorded.Snapshots {
+		recorded.Snapshots[index].Runs = pickPageRuns
+		recorded.Snapshots[index].Selectors = pickPageSelectors
+	}
+	if err := take.Save(path, recorded); err != nil {
+		t.Fatalf("take.Save: %v", err)
+	}
+}
+
+// newPickPageSession starts a session on pageSessionConfig, pickPageStoryboard and the page pick
+// take.
+func newPickPageSession(t *testing.T) *Session {
+	t.Helper()
+	return startSessionFixture(t, pageSessionConfig, pickPageStoryboard, savePickPageTake).session
+}
+
+// pickPageItem picks "ab" in the second .item box of the page pick take, across both its
+// graphemes.
+func pickPageItem(t *testing.T, session *Session) Proposal {
+	t.Helper()
+	proposal, err := session.Pick(0, ViewCamera, cellPixel(t, session, 2, 6), cellPixel(t, session, 5, 6))
+	if err != nil {
+		t.Fatalf("Pick: %v", err)
+	}
+	return proposal
+}
+
+func TestSession_Pick_OnAPage_ProposesTheSmallestSelectorBoxBeside(t *testing.T) {
+	t.Parallel()
+	session := newPickPageSession(t)
+
+	proposal := pickPageItem(t, session)
+
+	if want := (storyboard.Target{Text: "ab", Nth: 2}); proposal.Target != want {
+		t.Errorf("text target: want %+v, got %+v", want, proposal.Target)
+	}
+	assertSnippetsWrite(t, proposal)
+	selected := proposal.Selector
+	if selected == nil {
+		t.Fatalf("no selector proposal beside %+v", proposal.Target)
+	}
+	if want := (storyboard.Target{Selector: ".item", Nth: 2}); selected.Target != want {
+		t.Errorf("selector target: want %+v, got %+v", want, selected.Target)
+	}
+	if want := pickPageSelectors[".item"][1]; selected.Box != want {
+		t.Errorf("selector box: want the second .item box %+v, got %+v", want, selected.Box)
+	}
+	if want := session.goodPipeline().frames.Rect(0, selected.Box); selected.Rect != want {
+		t.Errorf("selector rect: want %v, got %v", want, selected.Rect)
+	}
+	if seen, isSeen := selected.Snippets[snippetSeen]; isSeen {
+		t.Errorf("selector proposal: want no seen snippet, got %q", seen)
+	}
+	flow := "{selector: '.item', nth: 2}"
+	if selected.Snippets[snippetZoom] != flow || selected.Snippets[snippetClick] != "click: {target: "+flow+"}" {
+		t.Errorf("selector snippets: want %q written, got %v", flow, selected.Snippets)
+	}
+	if selected.Selector != nil {
+		t.Errorf("selector proposal: want no selector of its own, got %+v", selected.Selector)
+	}
+}
+
+func TestSession_Pick_OnAPageOutsideEveryBox_ProposesNoSelector(t *testing.T) {
+	t.Parallel()
+	session := newPickPageSession(t)
+
+	proposal, err := session.Pick(0, ViewCamera, cellPixel(t, session, 13, 2), cellPixel(t, session, 14, 2))
+
+	if err != nil {
+		t.Fatalf("Pick: %v", err)
+	}
+	if want := (storyboard.Target{Text: "z"}); proposal.Target != want {
+		t.Errorf("text target: want %+v, got %+v", want, proposal.Target)
+	}
+	if proposal.Selector != nil {
+		t.Errorf("want no selector proposal, got %+v", proposal.Selector.Target)
+	}
+}
+
+func TestSession_Pick_OnATerminalTake_ProposesNoSelector(t *testing.T) {
+	t.Parallel()
+	session := newPickSession(t)
+
+	proposal, err := session.Pick(0, ViewCamera, cellPixel(t, session, 0, 5), cellPixel(t, session, 5, 5))
+
+	if err != nil {
+		t.Fatalf("Pick: %v", err)
+	}
+	if proposal.Selector != nil {
+		t.Errorf("want no selector proposal, got %+v", proposal.Selector.Target)
+	}
+}
+
+func TestSession_PickedSelector_AppliesAsAPositionTarget(t *testing.T) {
+	t.Parallel()
+	session := newPickPageSession(t)
+	selected := pickPageItem(t, session).Selector
+	if selected == nil {
+		t.Fatal("no selector proposal to apply")
+	}
+	encoded, err := json.Marshal(responseOf(*selected).Target)
+	if err != nil {
+		t.Fatalf("encode the selector target: %v", err)
+	}
+	owner := storyboard.Owner{Kind: storyboard.OwnerPosition, Index: 1}
+	edit := Edit{Owner: owner, Field: storyboard.FieldPositionTarget, Value: encoded}
+
+	err = session.Apply(edit)
+
+	if err != nil {
+		t.Fatalf("Apply %s as position.target: %v", encoded, err)
+	}
+	state := session.State()
+	want := TargetState{Selector: ".item", Nth: 2}
+	if position := state.Positions[1]; position.Target == nil || *position.Target != want {
+		t.Errorf("position 1: want the target %+v, got %+v", want, position.PointState)
+	}
+	if len(state.Errors) != 0 {
+		t.Errorf("errors after the edit: %+v", state.Errors)
+	}
+}

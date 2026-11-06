@@ -217,7 +217,9 @@ in drafts too while it plays or scrubs; once paused it draws the camera's crop a
 rectangle and a marker on the cell the position aims at. Dragging the marker to another cell sets the position's `cell`.
 A pick on the paused preview proposes a target for the picked cells, ready to set as the selected
 position's text target with **Set as position target**, or to copy as a `click`, `seen` or `drag`
-end.
+end. On a page, when the picked text lies in a recorded box of one of the clip's selectors, the
+pick also proposes that selector, the smallest such box's, with the `nth` of that box;
+**Use selector target** switches to it, and a selector has no `seen` to copy.
 `pause` and the `do` actions show read-only: changing them needs a new `photon record`. Save
 writes the storyboard in place and changes only
 the edited values, so comments and layout stay. It is refused while an edit leaves the
