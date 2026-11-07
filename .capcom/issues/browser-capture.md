@@ -1,12 +1,14 @@
 ---
 title: Film web apps as well as terminal apps, on one grid model
-status: open
+status: done
 type: feature
 priority: 3
 labels: [browser]
 deps: [film-tune-page]
 plan: 2026-11-06 - 04 - browser-capture-plan
 created: 2026-11-06T13:42:51Z
+closed: 2026-11-07T08:04:03Z
+reason: all 16 children closed; browser capture, render, tune and the tune-page clip landed
 ---
 
 Groups the work that lets photon film a web app in a browser, not only a terminal app in a pty.
